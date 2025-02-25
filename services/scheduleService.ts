@@ -62,7 +62,7 @@ export const DAYS_MAP = {
 } as const;
 
 // Initial reference date for week calculation (September 2, 2024)
-const REFERENCE_DATE = new Date(2024, 8, 2);
+const REFERENCE_DATE = new Date(2024, 8, 2); // Note: Month is 0-based, so 8 is September
 
 type SettingsListener = () => void;
 
@@ -123,6 +123,8 @@ export const scheduleService = {
       roomNumber: string;
       isEvenWeek?: boolean;
       group?: string;
+      _height?: number;
+      hasNextItem?: boolean;
     }> = [];
 
     // Process each period
@@ -160,14 +162,42 @@ export const scheduleService = {
       schedules.impar.forEach(item => processScheduleItem(item, false));
     });
 
-    return result.sort((a, b) => parseInt(a.period) - parseInt(b.period));
+    // Add test subject if it's Tuesday
+    if (dayName === 'tuesday') {
+      result.push({
+        period: '7',
+        startTime: '18:50',
+        endTime: '19:30',
+        className: 'Test Subject',
+        teacherName: 'Test Teacher',
+        roomNumber: 'Test Room',
+        isEvenWeek: undefined, // Show for both weeks
+        group: 'Clasă intreagă',
+      });
+    }
+
+    // Sort schedule by time
+    const sortedSchedule = result.sort((a, b) => {
+      const timeA = a.startTime.split(':').map(Number);
+      const timeB = b.startTime.split(':').map(Number);
+      return (timeA[0] * 60 + timeA[1]) - (timeB[0] * 60 + timeB[1]);
+    });
+
+    // Add hasNextItem flag
+    sortedSchedule.forEach((item, index) => {
+      item.hasNextItem = index < sortedSchedule.length - 1;
+    });
+
+    return sortedSchedule;
   },
 
   isEvenWeek(date: Date): boolean {
+    const d1 = date;
+    const d2 = REFERENCE_DATE;
     const perWeek = 7 * 24 * 60 * 60 * 1000;
-    const totalWeeks = Math.floor((date.valueOf() - REFERENCE_DATE.valueOf()) / perWeek + 1);
+    const totalWeeks = Math.floor((d1.valueOf() - d2.valueOf()) / perWeek + 1);
     return totalWeeks % 2 === 0;
   }
 };
 
-export const CLASS_ID = '6793abb21adedc068609b02b';
+export const CLASS_ID = '67bd74693a5ec4923ab77dea';

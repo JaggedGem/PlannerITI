@@ -1,41 +1,114 @@
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Dimensions, ViewStyle, TextStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { scheduleService, CLASS_ID, DAYS_MAP, ApiResponse } from '@/services/scheduleService';
 import { useTranslation } from '@/hooks/useTranslation';
+import { useTimeUpdate } from '@/hooks/useTimeUpdate';
+import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
+
+interface TimeIndicatorProps {
+  startTime: string;
+  endTime: string;
+  containerHeight: number;
+}
+
+type Styles = {
+  container: ViewStyle;
+  header: ViewStyle;
+  headerTop: ViewStyle;
+  monthYear: TextStyle;
+  weekDays: ViewStyle;
+  dayItem: ViewStyle;
+  selectedDay: ViewStyle;
+  dayName: TextStyle;
+  dayNumber: TextStyle;
+  selectedText: TextStyle;
+  scheduleList: ViewStyle;
+  scheduleItem: ViewStyle;
+  classCard: ViewStyle;
+  timeContainer: ViewStyle;
+  time: TextStyle;
+  classContent: ViewStyle;
+  className: TextStyle;
+  classDetails: ViewStyle;
+  teacherName: TextStyle;
+  roomNumber: TextStyle;
+  weekInfo: ViewStyle;
+  weekText: TextStyle;
+  noSchedule: ViewStyle;
+  noScheduleText: TextStyle;
+  timeIndicatorContainer: ViewStyle;
+  timeIndicator: ViewStyle;
+  timeIndicatorLine: ViewStyle;
+  timeIndicatorArrowContainer: ViewStyle;
+  timeIndicatorArrow: ViewStyle;
+  timeLeftText: TextStyle;
+};
+
+type ScheduleItem = {
+  isBreak?: boolean;
+  startTime: string;
+  endTime: string;
+  className: string;
+  teacherName: string;
+  roomNumber: string;
+  _height?: number;
+  hasNextItem?: boolean;
+};
 
 export default function Schedule() {
   const [scheduleData, setScheduleData] = useState<ApiResponse | null>(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [settings, setSettings] = useState(scheduleService.getSettings());
   const isEvenWeek = scheduleService.isEvenWeek(selectedDate);
   const { t, formatDate } = useTranslation();
-  const [settings, setSettings] = useState(scheduleService.getSettings());
 
-  useEffect(() => {
-    const unsubscribe = scheduleService.subscribe(() => {
-      setSettings(scheduleService.getSettings());
-    });
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    const fetchSchedule = async () => {
-      try {
-        const data = await scheduleService.getClassSchedule(CLASS_ID);
-        setScheduleData(data);
-      } catch (error) {
-        console.error('Failed to fetch schedule:', error);
-      }
-    };
-
-    fetchSchedule();
-  }, []);
-
+  const isWeekend = selectedDate.getDay() === 0 || selectedDate.getDay() === 6;
+  
   // Get the start of the week (Monday)
   const startOfWeek = new Date(selectedDate);
   startOfWeek.setDate(selectedDate.getDate() - selectedDate.getDay() + 1);
 
-  // Generate array of 5 days (Monday to Friday)
+  const getDaySchedule = useCallback(() => {
+    if (!scheduleData) return [];
+    const day = selectedDate.getDay();
+    if (day === 0 || day === 6) return []; // Return empty array for weekends
+    
+    const dayKey = DAYS_MAP[day as keyof typeof DAYS_MAP];
+    if (!dayKey) return [];
+    return scheduleService.getScheduleForDay(scheduleData, dayKey);
+  }, [scheduleData, selectedDate]);
+
+  const todaySchedule = getDaySchedule();
+  const currentTime = useTimeUpdate();
+
+  const isCurrentTimeSlot = (startTime: string, endTime: string): boolean => {
+    const [startHours, startMinutes] = startTime.split(':').map(Number);
+    const [endHours, endMinutes] = endTime.split(':').map(Number);
+    const currentHours = currentTime.getHours();
+    const currentMinutes = currentTime.getMinutes();
+
+    const currentTimeInMinutes = currentHours * 60 + currentMinutes;
+    const startTimeInMinutes = startHours * 60 + startMinutes;
+    const endTimeInMinutes = endHours * 60 + endMinutes;
+
+    return currentTimeInMinutes >= startTimeInMinutes && 
+           currentTimeInMinutes <= endTimeInMinutes;
+  };
+
+  const isCurrentTimeInSchedule = (item: ScheduleItem, nextItem: ScheduleItem | undefined): boolean => {
+    const [startHours, startMinutes] = item.startTime.split(':').map(Number);
+    const [endHours, endMinutes] = nextItem ? nextItem.startTime.split(':').map(Number) : item.endTime.split(':').map(Number);
+    const currentHours = currentTime.getHours();
+    const currentMinutes = currentTime.getMinutes();
+
+    const currentTimeInMinutes = currentHours * 60 + currentMinutes;
+    const startTimeInMinutes = startHours * 60 + startMinutes;
+    const endTimeInMinutes = endHours * 60 + endMinutes;
+
+    return currentTimeInMinutes >= startTimeInMinutes && currentTimeInMinutes <= endTimeInMinutes;
+  };
+
   const weekDays = Array.from({ length: 5 }, (_, i) => {
     const date = new Date(startOfWeek);
     date.setDate(startOfWeek.getDate() + i);
@@ -50,18 +123,110 @@ export default function Schedule() {
     setSelectedDate(date);
   };
 
-  const getDaySchedule = () => {
-    if (!scheduleData) return [];
-    const day = selectedDate.getDay();
-    if (day === 0 || day === 6) return []; // Return empty array for weekends
+  const TimeIndicator = useCallback((props: TimeIndicatorProps & { hasNextItem?: boolean }) => {
+    const animatedStyle = useAnimatedStyle(() => {
+      'worklet';
+      const now = new Date();
+      const currentHours = now.getHours();
+      const currentMinutes = now.getMinutes();
+      const currentSeconds = now.getSeconds();
+      const currentTimeInMinutes = currentHours * 60 + currentMinutes + (currentSeconds / 60);
     
-    const dayKey = DAYS_MAP[day as keyof typeof DAYS_MAP];
-    if (!dayKey) return [];
-    return scheduleService.getScheduleForDay(scheduleData, dayKey);
-  };
+      const [startHours, startMinutes] = props.startTime.split(':').map(Number);
+      const [endHours, endMinutes] = props.endTime.split(':').map(Number);
+      
+      const startTimeInMinutes = startHours * 60 + startMinutes;
+      const endTimeInMinutes = endHours * 60 + endMinutes;
+      const timeSlotDuration = endTimeInMinutes - startTimeInMinutes;
+    
+      if (currentTimeInMinutes < startTimeInMinutes) return { top: withTiming('0%') };
+      if (currentTimeInMinutes > endTimeInMinutes) return { top: withTiming('100%') };
+    
+      const progress = (currentTimeInMinutes - startTimeInMinutes) / timeSlotDuration;
+      return {
+        top: withTiming(`${progress * 100}%`, { duration: 1000 }),
+      };
+    }, []);
 
-  const todaySchedule = getDaySchedule();
-  const isWeekend = selectedDate.getDay() === 0 || selectedDate.getDay() === 6;
+    const animatedTimeStyle = useAnimatedStyle(() => {
+      'worklet';
+      const now = new Date();
+      const currentHours = now.getHours();
+      const currentMinutes = now.getMinutes();
+      const currentSeconds = now.getSeconds();
+      const currentTimeInMinutes = currentHours * 60 + currentMinutes + (currentSeconds / 60);
+    
+      const [startHours, startMinutes] = props.startTime.split(':').map(Number);
+      const [endHours, endMinutes] = props.endTime.split(':').map(Number);
+      
+      const startTimeInMinutes = startHours * 60 + startMinutes;
+      const endTimeInMinutes = endHours * 60 + endMinutes;
+      const timeSlotDuration = endTimeInMinutes - startTimeInMinutes;
+      const progress = (currentTimeInMinutes - startTimeInMinutes) / timeSlotDuration;
+      
+      const position = progress * props.containerHeight;
+      const showOnTop = position > props.containerHeight / 2;
+
+      return {
+        transform: [{ 
+          translateY: withTiming(showOnTop ? -24 : 24, { duration: 300 }) 
+        }],
+      };
+    }, [props.containerHeight]);
+
+    return (
+      <View style={styles.timeIndicatorContainer}>
+        <Animated.View style={[styles.timeIndicator, animatedStyle]}>
+          <View style={styles.timeIndicatorLine} />
+          <View style={styles.timeIndicatorArrowContainer}>
+            <View style={styles.timeIndicatorArrow} />
+          </View>
+          <Animated.Text style={[styles.timeLeftText, animatedTimeStyle]}>
+            {(() => {
+              const now = new Date();
+              const currentHours = now.getHours();
+              const currentMinutes = now.getMinutes();
+              const currentSeconds = now.getSeconds();
+              const [endHours, endMinutes] = props.endTime.split(':').map(Number);
+              
+              const endTime = new Date(
+                now.getFullYear(),
+                now.getMonth(),
+                now.getDate(),
+                endHours,
+                endMinutes
+              );
+
+              const diffInMinutes = Math.round(
+                (endTime.getTime() - now.getTime()) / 1000 / 60
+              );
+
+              // Don't show remaining time if this is the last item
+              if (!props.hasNextItem && diffInMinutes <= 0) {
+                return '';
+              }
+
+              return diffInMinutes > 0 ? `${diffInMinutes}m` : '';
+            })()}
+          </Animated.Text>
+        </Animated.View>
+      </View>
+    );
+  }, []);
+
+  // Add schedule data fetching effect
+  useEffect(() => {
+    const fetchSchedule = async () => {
+      try {
+        const data = await scheduleService.getClassSchedule(CLASS_ID);
+        setScheduleData(data);
+      } catch (error) {
+        console.error('Failed to fetch schedule:', error);
+      }
+    };
+
+    fetchSchedule();
+  }, []);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -117,23 +282,45 @@ export default function Schedule() {
           </View>
         ) : (
           todaySchedule.map((item, index) => {
-            // Skip items that don't match the current week type
             if (item.isEvenWeek !== undefined && item.isEvenWeek !== isEvenWeek) {
               return null;
             }
 
+            const nextItem = todaySchedule[index + 1];
+            const showTimeIndicator = isCurrentTimeInSchedule(item, nextItem);
+
             return (
-              <View key={index} style={styles.scheduleItem}>
-                <View style={styles.timeSlot}>
-                  <Text style={styles.time}>{item.startTime}</Text>
-                  <Text style={styles.time}>{item.endTime}</Text>
-                </View>
-                <View style={[styles.classCard, { borderLeftColor: getSubjectColor(item.className) }]}>
-                  <Text style={styles.className}>{item.className}</Text>
-                  <View style={styles.classDetails}>
-                    <Text style={styles.teacherName}>{item.teacherName}</Text>
-                    <Text style={styles.roomNumber}>{t('schedule').room} {item.roomNumber}</Text>
+              <View 
+                key={index} 
+                style={[styles.scheduleItem]}
+                onLayout={(event) => {
+                  item._height = event.nativeEvent.layout.height;
+                }}
+              >
+                <View style={[styles.classCard, {
+                  borderLeftColor: getSubjectColor(item.className)
+                }]}>
+                  <View style={[styles.timeContainer, {
+                    borderRightColor: 'rgba(138, 138, 141, 0.2)'
+                  }]}>
+                    <Text style={[styles.time, { marginBottom: 'auto' }]}>{item.startTime}</Text>
+                    <Text style={[styles.time, { marginTop: 'auto' }]}>{item.endTime}</Text>
                   </View>
+                  <View style={styles.classContent}>
+                    <Text style={styles.className}>{item.className}</Text>
+                    <View style={styles.classDetails}>
+                      <Text style={styles.teacherName}>{item.teacherName}</Text>
+                      <Text style={styles.roomNumber}>{t('schedule').room} {item.roomNumber}</Text>
+                    </View>
+                  </View>
+                  {showTimeIndicator && (
+                    <TimeIndicator 
+                      startTime={item.startTime} 
+                      endTime={nextItem ? nextItem.startTime : item.endTime}
+                      containerHeight={item._height || 100}
+                      hasNextItem={item.hasNextItem}
+                    />
+                  )}
                 </View>
               </View>
             );
@@ -170,7 +357,7 @@ function getSubjectColor(subjectName: string): string {
   return colors[index];
 }
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create<Styles>({
   container: {
     flex: 1,
     backgroundColor: '#1a1b26',
@@ -244,25 +431,37 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   scheduleItem: {
-    flexDirection: 'row',
-    marginBottom: 16,
+    marginBottom: 12, // Slightly reduced margin between items
   },
-  timeSlot: {
-    width: 60,
-    justifyContent: 'center',
+  classCard: {
+    backgroundColor: '#232433',
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 3,
+    flexDirection: 'row',
+    overflow: 'hidden',
+    minHeight: 100, // Default height for classes
+  },
+  timeContainer: {
+    width: 80,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderRightWidth: 1,
+    minHeight: 100,
   },
   time: {
     color: '#8A8A8D',
     fontSize: 12,
     fontWeight: '500',
   },
-  classCard: {
+  classContent: {
     flex: 1,
-    backgroundColor: '#232433',
-    borderRadius: 12,
     padding: 16,
-    marginLeft: 12,
-    borderLeftWidth: 4,
   },
   className: {
     color: 'white',
@@ -291,5 +490,74 @@ const styles = StyleSheet.create({
   noScheduleText: {
     color: '#8A8A8D',
     fontSize: 16,
+  },
+  timeIndicatorContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    pointerEvents: 'none',
+  },
+  timeIndicator: {
+    position: 'absolute',
+    left: 70,
+    right: 0,
+    height: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  timeIndicatorLine: {
+    position: 'absolute',
+    left: 6,
+    right: 0,
+    height: 2,
+    backgroundColor: '#FF3B30',
+    opacity: 0.5,
+  },
+  timeIndicatorArrowContainer: {
+    position: 'absolute',
+    left: 0,
+    width: 12,
+    height: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FF3B30',
+    borderRadius: 6,
+    shadowColor: '#FF3B30',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  timeIndicatorArrow: { // Added missing style
+    width: 0,
+    height: 0,
+    backgroundColor: 'transparent',
+    borderStyle: 'solid',
+    borderLeftWidth: 4,
+    borderRightWidth: 4,
+    borderBottomWidth: 4,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderBottomColor: '#FF3B30',
+    transform: [{ rotate: '180deg' }],
+  },
+  timeLeftText: {
+    position: 'absolute',
+    left: -30,
+    backgroundColor: '#FF3B30',
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    overflow: 'hidden',
+    shadowColor: '#FF3B30',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 3,
   },
 });
