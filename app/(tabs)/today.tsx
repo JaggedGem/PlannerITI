@@ -1,17 +1,71 @@
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Dimensions, ViewStyle, TextStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { scheduleService, CLASS_ID, DAYS_MAP, ApiResponse } from '@/services/scheduleService';
 import { useTranslation } from '@/hooks/useTranslation';
+import { useTimeUpdate } from '@/hooks/useTimeUpdate';
+import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
+
+interface TimeIndicatorProps {
+  startTime: string;
+  endTime: string;
+  containerHeight: number;
+  hasNextItem?: boolean;
+}
+
+type ScheduleItem = {
+  isBreak?: boolean;
+  startTime: string;
+  endTime: string;
+  className: string;
+  teacherName: string;
+  roomNumber: string;
+  _height?: number;
+  hasNextItem?: boolean;
+};
 
 export default function Today() {
   const [scheduleData, setScheduleData] = useState<ApiResponse | null>(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [settings, setSettings] = useState(scheduleService.getSettings());
   const currentDate = new Date();
   const isEvenWeek = scheduleService.isEvenWeek(selectedDate);
   const { t, formatDate } = useTranslation();
-  const [settings, setSettings] = useState(scheduleService.getSettings());
-  
+
+  const todaySchedule = scheduleData 
+    ? scheduleService.getScheduleForDay(scheduleData, DAYS_MAP[selectedDate.getDay() as keyof typeof DAYS_MAP])
+    : [];
+
+  const currentTime = useTimeUpdate();
+
+  const isCurrentTimeSlot = (startTime: string, endTime: string): boolean => {
+    const [startHours, startMinutes] = startTime.split(':').map(Number);
+    const [endHours, endMinutes] = endTime.split(':').map(Number);
+    const currentHours = currentTime.getHours();
+    const currentMinutes = currentTime.getMinutes();
+
+    const currentTimeInMinutes = currentHours * 60 + currentMinutes;
+    const startTimeInMinutes = startHours * 60 + startMinutes;
+    const endTimeInMinutes = endHours * 60 + endMinutes;
+
+    return currentTimeInMinutes >= startTimeInMinutes && 
+           currentTimeInMinutes <= endTimeInMinutes;
+  };
+
+  const isCurrentTimeInSchedule = (item: ScheduleItem, nextItem: ScheduleItem | undefined): boolean => {
+    const [startHours, startMinutes] = item.startTime.split(':').map(Number);
+    const [endHours, endMinutes] = nextItem ? nextItem.startTime.split(':').map(Number) : item.endTime.split(':').map(Number);
+    const currentHours = currentTime.getHours();
+    const currentMinutes = currentTime.getMinutes();
+
+    const currentTimeInMinutes = currentHours * 60 + currentMinutes;
+    const startTimeInMinutes = startHours * 60 + startMinutes;
+    const endTimeInMinutes = endHours * 60 + endMinutes;
+
+    return currentTimeInMinutes >= startTimeInMinutes && currentTimeInMinutes <= endTimeInMinutes;
+  };
+
+  // Settings subscription effect
   useEffect(() => {
     const unsubscribe = scheduleService.subscribe(() => {
       setSettings(scheduleService.getSettings());
@@ -19,17 +73,7 @@ export default function Today() {
     return () => unsubscribe();
   }, []);
 
-  // Generate 5 days starting from current day
-  const weekDates = Array.from({ length: 5 }, (_, i) => {
-    const date = new Date(currentDate);
-    date.setDate(currentDate.getDate() + i);
-    return {
-      date,
-      day: t('weekdays').short[date.getDay()],
-      dateNum: date.getDate(),
-    };
-  });
-
+  // Schedule data fetching effect
   useEffect(() => {
     const fetchSchedule = async () => {
       try {
@@ -43,16 +87,114 @@ export default function Today() {
     fetchSchedule();
   }, []);
 
+  // Generate 5 days starting from current day
+  const weekDates = Array.from({ length: 5 }, (_, i) => {
+    const date = new Date(currentDate);
+    date.setDate(currentDate.getDate() + i);
+    return {
+      date,
+      day: t('weekdays').short[date.getDay()],
+      dateNum: date.getDate(),
+    };
+  });
+
   const handleDatePress = (date: Date) => {
     setSelectedDate(date);
   };
 
-  const todaySchedule = scheduleData 
-    ? scheduleService.getScheduleForDay(scheduleData, DAYS_MAP[selectedDate.getDay() as keyof typeof DAYS_MAP])
-    : [];
-
   // Handle empty schedule differently for weekends
   const isWeekend = selectedDate.getDay() === 0 || selectedDate.getDay() === 6;
+
+  const TimeIndicator = useCallback((props: TimeIndicatorProps) => {
+    const animatedStyle = useAnimatedStyle(() => {
+      'worklet';
+      const now = new Date();
+      const currentHours = now.getHours();
+      const currentMinutes = now.getMinutes();
+      const currentSeconds = now.getSeconds();
+      const currentTimeInMinutes = currentHours * 60 + currentMinutes + (currentSeconds / 60);
+    
+      const [startHours, startMinutes] = props.startTime.split(':').map(Number);
+      const [endHours, endMinutes] = props.endTime.split(':').map(Number);
+      
+      const startTimeInMinutes = startHours * 60 + startMinutes;
+      const endTimeInMinutes = endHours * 60 + endMinutes;
+      const timeSlotDuration = endTimeInMinutes - startTimeInMinutes;
+    
+      if (currentTimeInMinutes < startTimeInMinutes) return { top: withTiming('0%') };
+      if (currentTimeInMinutes > endTimeInMinutes) return { top: withTiming('100%') };
+    
+      const progress = (currentTimeInMinutes - startTimeInMinutes) / timeSlotDuration;
+      return {
+        top: withTiming(`${progress * 100}%`, { duration: 1000 }),
+      };
+    }, []);
+
+    const animatedTimeStyle = useAnimatedStyle(() => {
+      'worklet';
+      const now = new Date();
+      const currentHours = now.getHours();
+      const currentMinutes = now.getMinutes();
+      const currentSeconds = now.getSeconds();
+      const currentTimeInMinutes = currentHours * 60 + currentMinutes + (currentSeconds / 60);
+    
+      const [startHours, startMinutes] = props.startTime.split(':').map(Number);
+      const [endHours, endMinutes] = props.endTime.split(':').map(Number);
+      
+      const startTimeInMinutes = startHours * 60 + startMinutes;
+      const endTimeInMinutes = endHours * 60 + endMinutes;
+      const timeSlotDuration = endTimeInMinutes - startTimeInMinutes;
+      const progress = (currentTimeInMinutes - startTimeInMinutes) / timeSlotDuration;
+      
+      const position = progress * props.containerHeight;
+      const showOnTop = position > props.containerHeight / 2;
+
+      return {
+        transform: [{ 
+          translateY: withTiming(showOnTop ? -24 : 24, { duration: 300 }) 
+        }],
+      };
+    }, [props.containerHeight]);
+
+    return (
+      <View style={styles.timeIndicatorContainer}>
+        <Animated.View style={[styles.timeIndicator, animatedStyle]}>
+          <View style={styles.timeIndicatorLine} />
+          <View style={styles.timeIndicatorArrowContainer}>
+            <View style={styles.timeIndicatorArrow} />
+          </View>
+          <Animated.Text style={[styles.timeLeftText, animatedTimeStyle]}>
+            {(() => {
+              const now = new Date();
+              const currentHours = now.getHours();
+              const currentMinutes = now.getMinutes();
+              const currentSeconds = now.getSeconds();
+              const [endHours, endMinutes] = props.endTime.split(':').map(Number);
+              
+              const endTime = new Date(
+                now.getFullYear(),
+                now.getMonth(),
+                now.getDate(),
+                endHours,
+                endMinutes
+              );
+
+              const diffInMinutes = Math.ceil(
+                (endTime.getTime() - now.getTime()) / 1000 / 60
+              );
+
+              // Don't show remaining time if this is the last item
+              if (!props.hasNextItem && diffInMinutes <= 0) {
+                return '';
+              }
+
+              return diffInMinutes > 0 ? `${diffInMinutes}m` : '';
+            })()}
+          </Animated.Text>
+        </Animated.View>
+      </View>
+    );
+  }, []);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -109,13 +251,29 @@ export default function Today() {
               return null;
             }
 
+            const nextItem = todaySchedule[index + 1];
+            const showTimeIndicator = isCurrentTimeInSchedule(item, nextItem);
+
             return (
-              <View key={index} style={styles.scheduleItem}>
-                <View style={styles.timeContainer}>
-                  <Text style={styles.time}>{item.startTime}</Text>
-                  <Text style={styles.time}>{item.endTime}</Text>
-                </View>
-                <View style={[styles.classInfo, { borderLeftColor: getSubjectColor(item.className) }]}>
+              <View 
+                key={index} 
+                style={[styles.scheduleItem]}
+                onLayout={(event) => {
+                  item._height = event.nativeEvent.layout.height;
+                }}
+              >
+                <View style={[styles.classCard, { 
+                  borderLeftColor: getSubjectColor(item.className),
+                  backgroundColor: '#232433',
+                  shadowOpacity: 0.1,
+                  minHeight: 100,
+                }]}>
+                  <View style={[styles.timeContainer, {
+                    borderRightColor: 'rgba(138, 138, 141, 0.2)'
+                  }]}>
+                    <Text style={[styles.time, { marginBottom: 'auto' }]}>{item.startTime}</Text>
+                    <Text style={[styles.time, { marginTop: 'auto' }]}>{item.endTime}</Text>
+                  </View>
                   <View style={styles.classContent}>
                     <Text style={styles.className}>{item.className}</Text>
                     <View style={styles.detailsContainer}>
@@ -127,6 +285,14 @@ export default function Today() {
                       </View>
                     </View>
                   </View>
+                  {showTimeIndicator && (
+                    <TimeIndicator 
+                      startTime={item.startTime} 
+                      endTime={nextItem ? nextItem.startTime : item.endTime}
+                      containerHeight={item._height || 100}
+                      hasNextItem={item.hasNextItem}
+                    />
+                  )}
                 </View>
               </View>
             );
@@ -165,7 +331,42 @@ function getSubjectColor(subjectName: string): string {
   return colors[index];
 }
 
-const styles = StyleSheet.create({
+type Styles = {
+  container: ViewStyle;
+  header: ViewStyle;
+  headerTop: ViewStyle;
+  headerTitle: TextStyle;
+  dateList: ViewStyle;
+  dateItem: ViewStyle;
+  activeDateItem: ViewStyle;
+  dateDay: TextStyle;
+  dateNumber: TextStyle;
+  activeDateText: TextStyle;
+  scheduleContainer: ViewStyle;
+  scheduleItem: ViewStyle;
+  classCard: ViewStyle;
+  timeContainer: ViewStyle;
+  time: TextStyle;
+  classContent: ViewStyle;
+  className: TextStyle;
+  roomContainer: ViewStyle;
+  roomNumber: TextStyle;
+  weekInfo: ViewStyle;
+  weekText: TextStyle;
+  detailsContainer: ViewStyle;
+  teacherContainer: ViewStyle; // Changed from TextStyle to ViewStyle
+  teacherName: TextStyle;
+  noSchedule: ViewStyle;
+  noScheduleText: TextStyle;
+  timeIndicatorContainer: ViewStyle;
+  timeIndicator: ViewStyle;
+  timeIndicatorLine: ViewStyle;
+  timeIndicatorArrowContainer: ViewStyle;
+  timeIndicatorArrow: ViewStyle;
+  timeLeftText: TextStyle;
+};
+
+const styles = StyleSheet.create<Styles>({
   container: {
     flex: 1,
     backgroundColor: '#1a1b26',
@@ -233,20 +434,9 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   scheduleItem: {
-    flexDirection: 'row',
-    marginBottom: 20,
+    marginBottom: 12, // Slightly reduced margin between items
   },
-  timeContainer: {
-    width: 80,
-    justifyContent: 'center',
-  },
-  time: {
-    color: '#8A8A8D',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  classInfo: {
-    flex: 1,
+  classCard: {
     backgroundColor: '#232433',
     borderRadius: 16,
     borderLeftWidth: 4,
@@ -255,8 +445,25 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 3.84,
     elevation: 3,
+    flexDirection: 'row',
+    overflow: 'hidden',
+    minHeight: 100,
+  },
+  timeContainer: {
+    width: 80,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderRightWidth: 1,
+    minHeight: 100,
+  },
+  time: {
+    color: '#8A8A8D',
+    fontSize: 14,
+    fontWeight: '500',
   },
   classContent: {
+    flex: 1,
     padding: 16,
   },
   className: {
@@ -323,5 +530,74 @@ const styles = StyleSheet.create({
     color: '#8A8A8D',
     fontSize: 16,
     fontWeight: '500',
+  },
+  timeIndicatorContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    pointerEvents: 'none',
+  },
+  timeIndicator: {
+    position: 'absolute',
+    left: 70,
+    right: 0,
+    height: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  timeIndicatorLine: {
+    position: 'absolute',
+    left: 6,
+    right: 0,
+    height: 2,
+    backgroundColor: '#FF3B30',
+    opacity: 0.5,
+  },
+  timeIndicatorArrowContainer: {
+    position: 'absolute',
+    left: 0,
+    width: 12,
+    height: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FF3B30',
+    borderRadius: 6,
+    shadowColor: '#FF3B30',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  timeIndicatorArrow: {
+    width: 0,
+    height: 0,
+    backgroundColor: 'transparent',
+    borderStyle: 'solid',
+    borderLeftWidth: 4,
+    borderRightWidth: 4,
+    borderBottomWidth: 4,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderBottomColor: '#FF3B30',
+    transform: [{ rotate: '180deg' }],
+  },
+  timeLeftText: {
+    position: 'absolute',
+    left: -30,
+    backgroundColor: '#FF3B30',
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    overflow: 'hidden',
+    shadowColor: '#FF3B30',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 3,
   },
 });
