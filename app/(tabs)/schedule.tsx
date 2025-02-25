@@ -1,6 +1,6 @@
 import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Dimensions, ViewStyle, TextStyle, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { scheduleService, CLASS_ID, DAYS_MAP, ApiResponse } from '@/services/scheduleService';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useTimeUpdate } from '@/hooks/useTimeUpdate';
@@ -101,14 +101,24 @@ export default function Schedule() {
   const [settings, setSettings] = useState(scheduleService.getSettings());
   const isEvenWeek = scheduleService.isEvenWeek(selectedDate);
   const { t, formatDate } = useTranslation();
-
-  const isWeekend = selectedDate.getDay() === 0 || selectedDate.getDay() === 6;
-  
-  // Get the start of the week (Monday)
-  const startOfWeek = new Date(selectedDate);
-  startOfWeek.setDate(selectedDate.getDate() - selectedDate.getDay() + 1);
-  
   const scrollViewRef = useRef<ScrollView>(null);
+
+  // Generate 7 days for the week view starting from Monday
+  const weekDays = useMemo(() => {
+    const startOfWeek = new Date(selectedDate);
+    startOfWeek.setDate(selectedDate.getDate() - selectedDate.getDay() + 1);
+
+    return Array.from({ length: 7 }, (_, i) => {
+      const date = new Date(startOfWeek);
+      date.setDate(startOfWeek.getDate() + i);
+      return {
+        date,
+        dayName: t('weekdays').short[date.getDay()],
+        dayNumber: date.getDate(),
+        isToday: date.toDateString() === new Date().toDateString()
+      };
+    });
+  }, [selectedDate, t]);
 
   const getDaySchedule = useCallback(() => {
     if (!scheduleData) return [];
@@ -150,18 +160,6 @@ export default function Schedule() {
     return currentTimeInMinutes >= startTimeInMinutes && currentTimeInMinutes <= endTimeInMinutes;
   };
 
-  // Generate 7 days for the week view
-  const weekDays = Array.from({ length: 7 }, (_, i) => {
-    const date = new Date(startOfWeek);
-    date.setDate(startOfWeek.getDate() + i);
-    return {
-      date,
-      dayName: t('weekdays').short[date.getDay()],
-      dayNumber: date.getDate(),
-      isToday: date.toDateString() === new Date().toDateString()
-    };
-  });
-
   // Scroll to today on mount
   useEffect(() => {
     if (scrollViewRef.current) {
@@ -178,25 +176,43 @@ export default function Schedule() {
         }, 100);
       }
     }
-  }, []);
+  }, [weekDays]);
 
-  const handleDayPress = (date: Date) => {
-    setSelectedDate(date);
-  };
+  const scrollToDate = useCallback((date: Date) => {
+    if (!scrollViewRef.current) return;
+    
+    const dateIndex = weekDays.findIndex(
+      d => d.date.toDateString() === date.toDateString()
+    );
+    
+    if (dateIndex !== -1) {
+      scrollViewRef.current.scrollTo({
+        x: dateIndex * ((Dimensions.get('window').width - 40) / 5),
+        animated: true
+      });
+    }
+  }, [weekDays]);
 
-  const handleNextDay = () => {
+  const handleNextDay = useCallback(() => {
     const nextDate = new Date(selectedDate);
     nextDate.setDate(selectedDate.getDate() + 1);
     setSelectedDate(nextDate);
-  };
+    scrollToDate(nextDate);
+  }, [selectedDate, scrollToDate]);
 
-  const handlePreviousDay = () => {
+  const handlePreviousDay = useCallback(() => {
     const prevDate = new Date(selectedDate);
     prevDate.setDate(selectedDate.getDate() - 1);
     setSelectedDate(prevDate);
-  };
+    scrollToDate(prevDate);
+  }, [selectedDate, scrollToDate]);
 
-  const panResponder = useHorizontalSwipe(handleNextDay, handlePreviousDay);
+  const handleDayPress = useCallback((date: Date) => {
+    setSelectedDate(date);
+    scrollToDate(date);
+  }, [scrollToDate]);
+
+  const { panResponder, animatedStyle } = useHorizontalSwipe(handleNextDay, handlePreviousDay);
 
   const TimeIndicator = useCallback((props: TimeIndicatorProps & { hasNextItem?: boolean }) => {
     const animatedStyle = useAnimatedStyle(() => {
@@ -432,6 +448,9 @@ export default function Schedule() {
     );
   }
 
+  // Handle empty schedule differently for weekends
+  const isWeekend = selectedDate.getDay() === 0 || selectedDate.getDay() === 6;
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.headerContainer}>
@@ -489,7 +508,7 @@ export default function Schedule() {
         </View>
       </View>
 
-      <View style={styles.contentContainer} {...panResponder.panHandlers}>
+      <Animated.View style={[styles.contentContainer, animatedStyle]} {...panResponder.panHandlers}>
         <ScrollView style={styles.scheduleList}>
           {isWeekend ? (
             <View style={styles.noSchedule}>
@@ -596,7 +615,7 @@ export default function Schedule() {
             })
           )}
         </ScrollView>
-      </View>
+      </Animated.View>
     </SafeAreaView>
   );
 }

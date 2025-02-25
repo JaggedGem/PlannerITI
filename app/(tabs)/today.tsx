@@ -1,6 +1,6 @@
 import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Dimensions, ViewStyle, TextStyle, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { scheduleService, CLASS_ID, DAYS_MAP, ApiResponse } from '@/services/scheduleService';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useTimeUpdate } from '@/hooks/useTimeUpdate';
@@ -55,6 +55,23 @@ export default function Today() {
   const currentDate = new Date();
   const isEvenWeek = scheduleService.isEvenWeek(selectedDate);
   const { t, formatDate } = useTranslation();
+
+  // Generate 7 days starting from 3 days before the selected date
+  const weekDates = useMemo(() => {
+    const startDate = new Date(selectedDate);
+    startDate.setDate(selectedDate.getDate() - 3); // Start 3 days before selected
+
+    return Array.from({ length: 7 }, (_, i) => {
+      const date = new Date(startDate);
+      date.setDate(startDate.getDate() + i);
+      return {
+        date,
+        day: t('weekdays').short[date.getDay()],
+        dateNum: date.getDate(),
+        isToday: date.toDateString() === currentDate.toDateString()
+      };
+    });
+  }, [selectedDate, currentDate, t]);
 
   const todaySchedule = scheduleData 
     ? scheduleService.getScheduleForDay(scheduleData, DAYS_MAP[selectedDate.getDay() as keyof typeof DAYS_MAP])
@@ -116,19 +133,41 @@ export default function Today() {
     fetchSchedule();
   }, []);
 
-  // Generate 7 days starting from 3 days ago
-  const weekDates = Array.from({ length: 7 }, (_, i) => {
-    const date = new Date(currentDate);
-    date.setDate(currentDate.getDate() - 3 + i); // Start 3 days before current
-    return {
-      date,
-      day: t('weekdays').short[date.getDay()],
-      dateNum: date.getDate(),
-      isToday: date.toDateString() === currentDate.toDateString()
-    };
-  });
-
   const scrollViewRef = useRef<ScrollView>(null);
+  
+  const scrollToDate = useCallback((date: Date) => {
+    if (!scrollViewRef.current) return;
+    
+    const dateIndex = weekDates.findIndex(
+      d => d.date.toDateString() === date.toDateString()
+    );
+    
+    if (dateIndex !== -1) {
+      scrollViewRef.current.scrollTo({
+        x: dateIndex * ((Dimensions.get('window').width - 40) / 5),
+        animated: true
+      });
+    }
+  }, [weekDates]);
+
+  const handleDatePress = useCallback((date: Date) => {
+    setSelectedDate(date);
+    scrollToDate(date);
+  }, [scrollToDate]);
+
+  const handleNextDay = useCallback(() => {
+    const nextDate = new Date(selectedDate);
+    nextDate.setDate(selectedDate.getDate() + 1);
+    setSelectedDate(nextDate);
+    scrollToDate(nextDate);
+  }, [selectedDate, scrollToDate]);
+
+  const handlePreviousDay = useCallback(() => {
+    const prevDate = new Date(selectedDate);
+    prevDate.setDate(selectedDate.getDate() - 1);
+    setSelectedDate(prevDate);
+    scrollToDate(prevDate);
+  }, [selectedDate, scrollToDate]);
 
   // Scroll to today on mount
   useEffect(() => {
@@ -143,26 +182,10 @@ export default function Today() {
     }
   }, []);
 
-  const handleDatePress = (date: Date) => {
-    setSelectedDate(date);
-  };
-
   // Handle empty schedule differently for weekends
   const isWeekend = selectedDate.getDay() === 0 || selectedDate.getDay() === 6;
 
-  const handleNextDay = () => {
-    const nextDate = new Date(selectedDate);
-    nextDate.setDate(selectedDate.getDate() + 1);
-    setSelectedDate(nextDate);
-  };
-
-  const handlePreviousDay = () => {
-    const prevDate = new Date(selectedDate);
-    prevDate.setDate(selectedDate.getDate() - 1);
-    setSelectedDate(prevDate);
-  };
-
-  const panResponder = useHorizontalSwipe(handleNextDay, handlePreviousDay);
+  const { panResponder, animatedStyle } = useHorizontalSwipe(handleNextDay, handlePreviousDay);
 
   const TimeIndicator = useCallback((props: TimeIndicatorProps) => {
     const animatedStyle = useAnimatedStyle(() => {
@@ -438,7 +461,7 @@ export default function Today() {
         </View>
       </View>
 
-      <View style={styles.contentContainer} {...panResponder.panHandlers}>
+      <Animated.View style={[styles.contentContainer, animatedStyle]} {...panResponder.panHandlers}>
         <ScrollView style={styles.scheduleContainer}>
           {isWeekend ? (
             <View style={styles.noSchedule}>
@@ -548,7 +571,7 @@ export default function Today() {
             })
           )}
         </ScrollView>
-      </View>
+      </Animated.View>
     </SafeAreaView>
   );
 }
