@@ -162,16 +162,26 @@ export const scheduleService = {
       schedules.impar.forEach(item => processScheduleItem(item, false));
     });
 
-    // Add test subject if it's Tuesday
+    // todo: remove this test data
     if (dayName === 'tuesday') {
       result.push({
         period: '7',
-        startTime: '18:50',
-        endTime: '19:30',
+        startTime: '20:10',
+        endTime: '21:00',
         className: 'Test Subject',
         teacherName: 'Test Teacher',
         roomNumber: 'Test Room',
         isEvenWeek: undefined, // Show for both weeks
+        group: 'Clasă intreagă',
+      });
+      result.push({
+        period: '8',
+        startTime: '21:10',
+        endTime: '22:00',
+        className: 'Test Subject 2',
+        teacherName: 'Test Teacher 2',
+        roomNumber: 'Test Room 2',
+        isEvenWeek: undefined,
         group: 'Clasă intreagă',
       });
     }
