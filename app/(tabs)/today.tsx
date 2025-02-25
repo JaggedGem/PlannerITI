@@ -1,4 +1,4 @@
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Dimensions, ViewStyle, TextStyle } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Dimensions, ViewStyle, TextStyle, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useEffect, useState, useCallback } from 'react';
 import { scheduleService, CLASS_ID, DAYS_MAP, ApiResponse } from '@/services/scheduleService';
@@ -47,6 +47,8 @@ type ScheduleItem = {
 
 export default function Today() {
   const [scheduleData, setScheduleData] = useState<ApiResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [settings, setSettings] = useState(scheduleService.getSettings());
   const currentDate = new Date();
@@ -98,10 +100,15 @@ export default function Today() {
   useEffect(() => {
     const fetchSchedule = async () => {
       try {
+        setIsLoading(true);
+        setError(null);
         const data = await scheduleService.getClassSchedule(CLASS_ID);
         setScheduleData(data);
       } catch (error) {
+        setError('Unable to load schedule. Please try again later.');
         console.error('Failed to fetch schedule:', error);
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -210,6 +217,109 @@ export default function Today() {
       </View>
     );
   }, []);
+
+  if (isLoading && !scheduleData) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <View style={styles.headerTop}>
+            <Text style={styles.headerTitle}>
+              {formatDate(selectedDate, { 
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric'
+              })}
+            </Text>
+            <View style={styles.weekInfo}>
+              <Text style={styles.weekText}>
+                {isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.dateList}>
+            {weekDates.map((date, index) => (
+              <TouchableOpacity 
+                key={index} 
+                onPress={() => handleDatePress(date.date)}
+                style={[
+                  styles.dateItem,
+                  date.dateNum === selectedDate.getDate() && styles.activeDateItem
+                ]}
+              >
+                <Text style={[
+                  styles.dateDay, 
+                  date.dateNum === selectedDate.getDate() && styles.activeDateText
+                ]}>
+                  {date.day}
+                </Text>
+                <Text style={[
+                  styles.dateNumber, 
+                  date.dateNum === selectedDate.getDate() && styles.activeDateText
+                ]}>
+                  {date.dateNum}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#3478F6" />
+          <Text style={styles.loadingText}>Loading schedule...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error && !scheduleData) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <View style={styles.headerTop}>
+            <Text style={styles.headerTitle}>
+              {formatDate(selectedDate, { 
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric'
+              })}
+            </Text>
+            <View style={styles.weekInfo}>
+              <Text style={styles.weekText}>
+                {isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.dateList}>
+            {weekDates.map((date, index) => (
+              <TouchableOpacity 
+                key={index} 
+                onPress={() => handleDatePress(date.date)}
+                style={[
+                  styles.dateItem,
+                  date.dateNum === selectedDate.getDate() && styles.activeDateItem
+                ]}
+              >
+                <Text style={[
+                  styles.dateDay, 
+                  date.dateNum === selectedDate.getDate() && styles.activeDateText
+                ]}>
+                  {date.day}
+                </Text>
+                <Text style={[
+                  styles.dateNumber, 
+                  date.dateNum === selectedDate.getDate() && styles.activeDateText
+                ]}>
+                  {date.dateNum}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -434,6 +544,10 @@ type Styles = {
   classHeaderRow: ViewStyle;
   statusText: TextStyle;
   activeStatusText: TextStyle;
+  loadingContainer: ViewStyle;
+  loadingText: TextStyle;
+  errorContainer: ViewStyle;
+  errorText: TextStyle;
 };
 
 const styles = StyleSheet.create<Styles>({
@@ -699,5 +813,26 @@ const styles = StyleSheet.create<Styles>({
   },
   activeStatusText: {
     color: '#3478F6',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: '#8A8A8D',
+    fontSize: 16,
+    marginTop: 12,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorText: {
+    color: '#FF3B30',
+    fontSize: 16,
+    textAlign: 'center',
   },
 });
