@@ -1,10 +1,11 @@
 import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Dimensions, ViewStyle, TextStyle, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { scheduleService, CLASS_ID, DAYS_MAP, ApiResponse } from '@/services/scheduleService';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useTimeUpdate } from '@/hooks/useTimeUpdate';
 import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
+import { useHorizontalSwipe } from '@/hooks/useHorizontalSwipe';
 
 const formatTimeByLocale = (time: string, isEnglish: boolean) => {
   if (!isEnglish) return time;
@@ -115,16 +116,32 @@ export default function Today() {
     fetchSchedule();
   }, []);
 
-  // Generate 5 days starting from current day
-  const weekDates = Array.from({ length: 5 }, (_, i) => {
+  // Generate 7 days starting from 3 days ago
+  const weekDates = Array.from({ length: 7 }, (_, i) => {
     const date = new Date(currentDate);
-    date.setDate(currentDate.getDate() + i);
+    date.setDate(currentDate.getDate() - 3 + i); // Start 3 days before current
     return {
       date,
       day: t('weekdays').short[date.getDay()],
       dateNum: date.getDate(),
+      isToday: date.toDateString() === currentDate.toDateString()
     };
   });
+
+  const scrollViewRef = useRef<ScrollView>(null);
+
+  // Scroll to today on mount
+  useEffect(() => {
+    if (scrollViewRef.current) {
+      // Wait for layout to complete
+      setTimeout(() => {
+        scrollViewRef.current?.scrollTo({
+          x: (3 * (Dimensions.get('window').width - 40) / 5),
+          animated: false
+        });
+      }, 100);
+    }
+  }, []);
 
   const handleDatePress = (date: Date) => {
     setSelectedDate(date);
@@ -132,6 +149,20 @@ export default function Today() {
 
   // Handle empty schedule differently for weekends
   const isWeekend = selectedDate.getDay() === 0 || selectedDate.getDay() === 6;
+
+  const handleNextDay = () => {
+    const nextDate = new Date(selectedDate);
+    nextDate.setDate(selectedDate.getDate() + 1);
+    setSelectedDate(nextDate);
+  };
+
+  const handlePreviousDay = () => {
+    const prevDate = new Date(selectedDate);
+    prevDate.setDate(selectedDate.getDate() - 1);
+    setSelectedDate(prevDate);
+  };
+
+  const panResponder = useHorizontalSwipe(handleNextDay, handlePreviousDay);
 
   const TimeIndicator = useCallback((props: TimeIndicatorProps) => {
     const animatedStyle = useAnimatedStyle(() => {
@@ -221,45 +252,59 @@ export default function Today() {
   if (isLoading && !scheduleData) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <View style={styles.headerTop}>
-            <Text style={styles.headerTitle}>
-              {formatDate(selectedDate, { 
-                month: 'long',
-                day: 'numeric',
-                year: 'numeric'
-              })}
-            </Text>
-            <View style={styles.weekInfo}>
-              <Text style={styles.weekText}>
-                {isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
+        <View style={styles.headerContainer}>
+          <View style={styles.header}>
+            <View style={styles.headerTop}>
+              <Text style={styles.headerTitle}>
+                {formatDate(selectedDate, { 
+                  month: 'long',
+                  day: 'numeric',
+                  year: 'numeric'
+                })}
               </Text>
+              <View style={styles.weekInfo}>
+                <Text style={styles.weekText}>
+                  {isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
+                </Text>
+              </View>
             </View>
-          </View>
-          <View style={styles.dateList}>
-            {weekDates.map((date, index) => (
-              <TouchableOpacity 
-                key={index} 
-                onPress={() => handleDatePress(date.date)}
-                style={[
-                  styles.dateItem,
-                  date.dateNum === selectedDate.getDate() && styles.activeDateItem
-                ]}
-              >
-                <Text style={[
-                  styles.dateDay, 
-                  date.dateNum === selectedDate.getDate() && styles.activeDateText
-                ]}>
-                  {date.day}
-                </Text>
-                <Text style={[
-                  styles.dateNumber, 
-                  date.dateNum === selectedDate.getDate() && styles.activeDateText
-                ]}>
-                  {date.dateNum}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            <ScrollView 
+              ref={scrollViewRef}
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              decelerationRate="fast"
+              snapToInterval={(Dimensions.get('window').width - 40) / 5}
+              style={styles.dateList}
+              contentContainerStyle={styles.dateListContent}
+            >
+              {weekDates.map((date, index) => (
+                <TouchableOpacity 
+                  key={index} 
+                  onPress={() => handleDatePress(date.date)}
+                  style={[
+                    styles.dateItem,
+                    date.date.getDate() === selectedDate.getDate() && styles.selectedDay,
+                    date.isToday && date.date.getDate() !== selectedDate.getDate() && styles.todayDateItem
+                  ]}
+                >
+                  <Text style={[
+                    styles.dateDay, 
+                    date.date.getDate() === selectedDate.getDate() && styles.selectedDayText,
+                    date.isToday && date.date.getDate() !== selectedDate.getDate() && styles.todayText
+                  ]}>
+                    {date.day}
+                  </Text>
+                  <Text style={[
+                    styles.dateNumber, 
+                    date.date.getDate() === selectedDate.getDate() && styles.selectedDayText,
+                    date.isToday && date.date.getDate() !== selectedDate.getDate() && styles.todayText
+                  ]}>
+                    {date.dateNum}
+                  </Text>
+                  {date.isToday && date.date.getDate() !== selectedDate.getDate() && <View style={styles.todayDot} />}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           </View>
         </View>
         <View style={styles.loadingContainer}>
@@ -273,6 +318,71 @@ export default function Today() {
   if (error && !scheduleData) {
     return (
       <SafeAreaView style={styles.container}>
+        <View style={styles.headerContainer}>
+          <View style={styles.header}>
+            <View style={styles.headerTop}>
+              <Text style={styles.headerTitle}>
+                {formatDate(selectedDate, { 
+                  month: 'long',
+                  day: 'numeric',
+                  year: 'numeric'
+                })}
+              </Text>
+              <View style={styles.weekInfo}>
+                <Text style={styles.weekText}>
+                  {isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
+                </Text>
+              </View>
+            </View>
+            <ScrollView 
+              ref={scrollViewRef}
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              decelerationRate="fast"
+              snapToInterval={(Dimensions.get('window').width - 40) / 5}
+              style={styles.dateList}
+              contentContainerStyle={styles.dateListContent}
+            >
+              {weekDates.map((date, index) => (
+                <TouchableOpacity 
+                  key={index} 
+                  onPress={() => handleDatePress(date.date)}
+                  style={[
+                    styles.dateItem,
+                    date.date.getDate() === selectedDate.getDate() && styles.selectedDay,
+                    date.isToday && date.date.getDate() !== selectedDate.getDate() && styles.todayDateItem
+                  ]}
+                >
+                  <Text style={[
+                    styles.dateDay, 
+                    date.date.getDate() === selectedDate.getDate() && styles.selectedDayText,
+                    date.isToday && date.date.getDate() !== selectedDate.getDate() && styles.todayText
+                  ]}>
+                    {date.day}
+                  </Text>
+                  <Text style={[
+                    styles.dateNumber, 
+                    date.date.getDate() === selectedDate.getDate() && styles.selectedDayText,
+                    date.isToday && date.date.getDate() !== selectedDate.getDate() && styles.todayText
+                  ]}>
+                    {date.dateNum}
+                  </Text>
+                  {date.isToday && date.date.getDate() !== selectedDate.getDate() && <View style={styles.todayDot} />}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.headerContainer}>
         <View style={styles.header}>
           <View style={styles.headerTop}>
             <Text style={styles.headerTitle}>
@@ -288,192 +398,157 @@ export default function Today() {
               </Text>
             </View>
           </View>
-          <View style={styles.dateList}>
+          <ScrollView 
+            ref={scrollViewRef}
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            decelerationRate="fast"
+            snapToInterval={(Dimensions.get('window').width - 40) / 5}
+            style={styles.dateList}
+            contentContainerStyle={styles.dateListContent}
+          >
             {weekDates.map((date, index) => (
               <TouchableOpacity 
                 key={index} 
                 onPress={() => handleDatePress(date.date)}
                 style={[
                   styles.dateItem,
-                  date.dateNum === selectedDate.getDate() && styles.activeDateItem
+                  date.date.getDate() === selectedDate.getDate() && styles.selectedDay,
+                  date.isToday && date.date.getDate() !== selectedDate.getDate() && styles.todayDateItem
                 ]}
               >
                 <Text style={[
                   styles.dateDay, 
-                  date.dateNum === selectedDate.getDate() && styles.activeDateText
+                  date.date.getDate() === selectedDate.getDate() && styles.selectedDayText,
+                  date.isToday && date.date.getDate() !== selectedDate.getDate() && styles.todayText
                 ]}>
                   {date.day}
                 </Text>
                 <Text style={[
                   styles.dateNumber, 
-                  date.dateNum === selectedDate.getDate() && styles.activeDateText
+                  date.date.getDate() === selectedDate.getDate() && styles.selectedDayText,
+                  date.isToday && date.date.getDate() !== selectedDate.getDate() && styles.todayText
                 ]}>
                   {date.dateNum}
                 </Text>
+                {date.isToday && date.date.getDate() !== selectedDate.getDate() && <View style={styles.todayDot} />}
               </TouchableOpacity>
             ))}
-          </View>
-        </View>
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <Text style={styles.headerTitle}>
-            {formatDate(selectedDate, { 
-              month: 'long',
-              day: 'numeric',
-              year: 'numeric'
-            })}
-          </Text>
-          <View style={styles.weekInfo}>
-            <Text style={styles.weekText}>
-              {isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
-            </Text>
-          </View>
-        </View>
-        <View style={styles.dateList}>
-          {weekDates.map((date, index) => (
-            <TouchableOpacity 
-              key={index} 
-              onPress={() => handleDatePress(date.date)}
-              style={[
-                styles.dateItem,
-                date.dateNum === selectedDate.getDate() && styles.activeDateItem
-              ]}
-            >
-              <Text style={[
-                styles.dateDay, 
-                date.dateNum === selectedDate.getDate() && styles.activeDateText
-              ]}>
-                {date.day}
-              </Text>
-              <Text style={[
-                styles.dateNumber, 
-                date.dateNum === selectedDate.getDate() && styles.activeDateText
-              ]}>
-                {date.dateNum}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          </ScrollView>
         </View>
       </View>
 
-      <ScrollView style={styles.scheduleContainer}>
-        {isWeekend ? (
-          <View style={styles.noSchedule}>
-            <Text style={styles.noScheduleText}>{t('schedule').noClassesWeekend}</Text>
-          </View>
-        ) : (
-          todaySchedule.map((item, index) => {
-            if (item.isEvenWeek !== undefined && item.isEvenWeek !== isEvenWeek) {
-              return null;
-            }
+      <View style={styles.contentContainer} {...panResponder.panHandlers}>
+        <ScrollView style={styles.scheduleContainer}>
+          {isWeekend ? (
+            <View style={styles.noSchedule}>
+              <Text style={styles.noScheduleText}>{t('schedule').noClassesWeekend}</Text>
+            </View>
+          ) : (
+            todaySchedule.map((item, index) => {
+              if (item.isEvenWeek !== undefined && item.isEvenWeek !== isEvenWeek) {
+                return null;
+              }
 
-            const nextItem = todaySchedule[index + 1];
-            const showTimeIndicator = isCurrentTimeInSchedule(item, nextItem);
+              const nextItem = todaySchedule[index + 1];
+              const showTimeIndicator = isCurrentTimeInSchedule(item, nextItem);
 
-            return (
-              <View 
-                key={index} 
-                style={[styles.scheduleItem]}
-                onLayout={(event) => {
-                  item._height = event.nativeEvent.layout.height;
-                }}
-              >
-                <View style={[styles.classCard, { 
-                  borderLeftColor: getSubjectColor(item.className),
-                  backgroundColor: '#232433',
-                  shadowOpacity: 0.1,
-                  minHeight: 100,
-                }]}>
-                  <View style={[styles.timeContainer, {
-                    borderRightColor: 'rgba(138, 138, 141, 0.2)'
+              return (
+                <View 
+                  key={index} 
+                  style={[styles.scheduleItem]}
+                  onLayout={(event) => {
+                    item._height = event.nativeEvent.layout.height;
+                  }}
+                >
+                  <View style={[styles.classCard, { 
+                    borderLeftColor: getSubjectColor(item.className),
+                    backgroundColor: '#232433',
+                    shadowOpacity: 0.1,
+                    minHeight: 100,
                   }]}>
-                    <View style={styles.timeWrapper}>
-                      <View style={[styles.timeDot, { backgroundColor: getSubjectColor(item.className) }]} />
-                      <Text style={[styles.time, { marginBottom: 'auto' }]}>
-                        {formatTimeByLocale(item.startTime, settings.language === 'en')}
+                    <View style={[styles.timeContainer, {
+                      borderRightColor: 'rgba(138, 138, 141, 0.2)'
+                    }]}>
+                      <View style={styles.timeWrapper}>
+                        <View style={[styles.timeDot, { backgroundColor: getSubjectColor(item.className) }]} />
+                        <Text style={[styles.time, { marginBottom: 'auto' }]}>
+                          {formatTimeByLocale(item.startTime, settings.language === 'en')}
+                        </Text>
+                      </View>
+                      <Text style={[styles.time, { marginTop: 'auto' }]}>
+                        {formatTimeByLocale(item.endTime, settings.language === 'en')}
                       </Text>
                     </View>
-                    <Text style={[styles.time, { marginTop: 'auto' }]}>
-                      {formatTimeByLocale(item.endTime, settings.language === 'en')}
-                    </Text>
-                  </View>
-                  <View style={styles.classContent}>
-                    <View style={styles.classHeaderRow}>
-                      <Text style={styles.className}>{item.className}</Text>
-                      <Text style={[styles.statusText, showTimeIndicator && styles.activeStatusText]}>
-                        {showTimeIndicator ? 'Now' : 
-                          (() => {
-                            const currentTimeMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
-                            const [startHours, startMinutes] = item.startTime.split(':').map(Number);
-                            const startTimeMinutes = startHours * 60 + startMinutes;
-                            
-                            if (currentTimeMinutes < startTimeMinutes) {
-                              const previousItem = index > 0 ? todaySchedule[index - 1] : null;
-                              if (previousItem && isCurrentTimeInSchedule(previousItem, item)) {
-                                // Calculate minutes until start and round up (so 59 seconds = 1 minute)
-                                const now = new Date();
-                                const target = new Date(
-                                  now.getFullYear(),
-                                  now.getMonth(),
-                                  now.getDate(),
-                                  startHours,
-                                  startMinutes
-                                );
-                                const diffInMs = target.getTime() - now.getTime();
-                                const minutesUntilStart = Math.ceil(diffInMs / (1000 * 60));
-                                return `In ${minutesUntilStart}m`;
-                              } else if (!previousItem && currentTimeMinutes < startTimeMinutes) {
-                                // If this is the first class and it hasn't started
-                                const now = new Date();
-                                const target = new Date(
-                                  now.getFullYear(),
-                                  now.getMonth(),
-                                  now.getDate(),
-                                  startHours,
-                                  startMinutes
-                                );
-                                const diffInMs = target.getTime() - now.getTime();
-                                const minutesUntilStart = Math.ceil(diffInMs / (1000 * 60));
-                                return `In ${minutesUntilStart}m`;
+                    <View style={styles.classContent}>
+                      <View style={styles.classHeaderRow}>
+                        <Text style={styles.className}>{item.className}</Text>
+                        <Text style={[styles.statusText, showTimeIndicator && styles.activeStatusText]}>
+                          {showTimeIndicator ? 'Now' : 
+                            (() => {
+                              const currentTimeMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
+                              const [startHours, startMinutes] = item.startTime.split(':').map(Number);
+                              const startTimeMinutes = startHours * 60 + startMinutes;
+                              
+                              if (currentTimeMinutes < startTimeMinutes) {
+                                const previousItem = index > 0 ? todaySchedule[index - 1] : null;
+                                if (previousItem && isCurrentTimeInSchedule(previousItem, item)) {
+                                  // Calculate minutes until start and round up (so 59 seconds = 1 minute)
+                                  const now = new Date();
+                                  const target = new Date(
+                                    now.getFullYear(),
+                                    now.getMonth(),
+                                    now.getDate(),
+                                    startHours,
+                                    startMinutes
+                                  );
+                                  const diffInMs = target.getTime() - now.getTime();
+                                  const minutesUntilStart = Math.ceil(diffInMs / (1000 * 60));
+                                  return `In ${minutesUntilStart}m`;
+                                } else if (!previousItem && currentTimeMinutes < startTimeMinutes) {
+                                  // If this is the first class and it hasn't started
+                                  const now = new Date();
+                                  const target = new Date(
+                                    now.getFullYear(),
+                                    now.getMonth(),
+                                    now.getDate(),
+                                    startHours,
+                                    startMinutes
+                                  );
+                                  const diffInMs = target.getTime() - now.getTime();
+                                  const minutesUntilStart = Math.ceil(diffInMs / (1000 * 60));
+                                  return `In ${minutesUntilStart}m`;
+                                }
                               }
-                            }
-                            return '';
-                          })()
-                        }
-                      </Text>
-                    </View>
-                    <View style={styles.detailsContainer}>
-                      <View style={styles.teacherContainer}>
-                        <Text style={styles.teacherName}>{item.teacherName}</Text>
+                              return '';
+                            })()
+                          }
+                        </Text>
                       </View>
-                      <View style={styles.roomContainer}>
-                        <Text style={styles.roomNumber}>{t('schedule').room} {item.roomNumber}</Text>
+                      <View style={styles.detailsContainer}>
+                        <View style={styles.teacherContainer}>
+                          <Text style={styles.teacherName}>{item.teacherName}</Text>
+                        </View>
+                        <View style={styles.roomContainer}>
+                          <Text style={styles.roomNumber}>{t('schedule').room} {item.roomNumber}</Text>
+                        </View>
                       </View>
                     </View>
+                    {showTimeIndicator && (
+                      <TimeIndicator 
+                        startTime={item.startTime} 
+                        endTime={item.endTime} // Use item's end time for the period indicator
+                        containerHeight={item._height || 100}
+                        hasNextItem={item.hasNextItem}
+                      />
+                    )}
                   </View>
-                  {showTimeIndicator && (
-                    <TimeIndicator 
-                      startTime={item.startTime} 
-                      endTime={item.endTime} // Use item's end time for the period indicator
-                      containerHeight={item._height || 100}
-                      hasNextItem={item.hasNextItem}
-                    />
-                  )}
                 </View>
-              </View>
-            );
-          })
-        )}
-      </ScrollView>
+              );
+            })
+          )}
+        </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
@@ -512,11 +587,15 @@ type Styles = {
   headerTop: ViewStyle;
   headerTitle: TextStyle;
   dateList: ViewStyle;
+  dateListContent: ViewStyle;
   dateItem: ViewStyle;
   activeDateItem: ViewStyle;
+  todayDateItem: ViewStyle;
   dateDay: TextStyle;
   dateNumber: TextStyle;
   activeDateText: TextStyle;
+  todayText: TextStyle;
+  todayDot: ViewStyle;
   scheduleContainer: ViewStyle;
   scheduleItem: ViewStyle;
   classCard: ViewStyle;
@@ -548,81 +627,136 @@ type Styles = {
   loadingText: TextStyle;
   errorContainer: ViewStyle;
   errorText: TextStyle;
+  weekInfo2: ViewStyle;
+  weekText2: TextStyle;
+  headerContainer: ViewStyle;
+  contentContainer: ViewStyle;
+  selectedDayText: TextStyle;  // Added missing style
+  selectedDay: ViewStyle;
 };
 
 const styles = StyleSheet.create<Styles>({
   container: {
     flex: 1,
-    backgroundColor: '#1a1b26',
+    backgroundColor: '#0A0A0A', // Darker background for more contrast
   },
   header: {
     padding: 20,
-    backgroundColor: '#232433',
-    borderBottomRightRadius: 24,
-    borderBottomLeftRadius: 24,
+    backgroundColor: '#141414', // Subtle distinction from background
+    borderBottomRightRadius: 32,
+    borderBottomLeftRadius: 32,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+    zIndex: 10,
   },
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
   },
   headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: 'white',
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#FFFFFF',
     flex: 1,
     marginRight: 16,
+    letterSpacing: 0.5,
   },
-  dateList: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 10,
-  },
-  dateItem: {
-    alignItems: 'center',
-    padding: 12,
+  weekInfo: {
+    backgroundColor: '#2C3DCD', // More vibrant blue
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 16,
-    minWidth: 60,
   },
-  activeDateItem: {
-    backgroundColor: '#3478F6',
-    transform: [{ scale: 1.05 }],
-    shadowColor: '#3478F6',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4.65,
-    elevation: 6,
+  weekText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
-  dateDay: {
-    color: '#8A8A8D',
+  weekInfo2: {
+    backgroundColor: '#2C3DCD', // More vibrant blue for consistency
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  weekText2: {
+    color: 'white',
     fontSize: 14,
     fontWeight: '600',
   },
-  dateNumber: {
-    color: '#fff',
-    fontSize: 20,
+  dateList: {
+    marginHorizontal: -20,
+  },
+  dateListContent: {
+    paddingHorizontal: 16,
+  },
+  dateItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 16,
+    width: (Dimensions.get('window').width - 40) / 5,
+    backgroundColor: '#1A1A1A',
+    marginHorizontal: 4,
+    height: 80,
+  },
+  activeDateItem: {
+    backgroundColor: '#2C3DCD',
+    transform: [{ scale: 1.05 }],
+    shadowColor: '#2C3DCD',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  todayDateItem: {
+    borderColor: '#2C3DCD',
+    borderWidth: 2,
+  },
+  dateDay: {
+    color: '#8A8A8D',
+    fontSize: 13,
     fontWeight: '600',
-    marginTop: 4,
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  dateNumber: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   activeDateText: {
-    color: '#fff',
+    color: '#FFFFFF',
+  },
+  todayText: {
+    color: '#2C3DCD',
+  },
+  todayDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#2C3DCD',
+    marginTop: 4,
   },
   scheduleContainer: {
     flex: 1,
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    backgroundColor: '#0A0A0A', // Ensure background color is consistent
   },
   scheduleItem: {
-    marginBottom: 12, // Slightly reduced margin between items
+    marginBottom: 16,
+    zIndex: 1,
   },
   classCard: {
     backgroundColor: '#232433',
-    borderRadius: 16,
+    borderRadius: 20,
     borderLeftWidth: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -632,6 +766,7 @@ const styles = StyleSheet.create<Styles>({
     flexDirection: 'row',
     overflow: 'hidden',
     minHeight: 100,
+    marginVertical: 4, // Add spacing to prevent shadow clipping
   },
   timeContainer: {
     width: 80,
@@ -678,17 +813,6 @@ const styles = StyleSheet.create<Styles>({
     fontSize: 12,
     fontWeight: '600',
   },
-  weekInfo: {
-    backgroundColor: '#3478F6',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  weekText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '600',
-  },
   detailsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -730,6 +854,7 @@ const styles = StyleSheet.create<Styles>({
     height: 2,
     flexDirection: 'row',
     alignItems: 'center',
+    zIndex: 2,
   },
   timeIndicatorLine: {
     position: 'absolute',
@@ -737,7 +862,7 @@ const styles = StyleSheet.create<Styles>({
     right: 0,
     height: 2,
     backgroundColor: '#FF3B30',
-    opacity: 0.5,
+    opacity: 0.7,
   },
   timeIndicatorArrowContainer: {
     position: 'absolute',
@@ -751,8 +876,8 @@ const styles = StyleSheet.create<Styles>({
     shadowColor: '#FF3B30',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
-    shadowRadius: 4,
-    elevation: 5,
+    shadowRadius: 6,
+    elevation: 8,
   },
   timeIndicatorArrow: {
     width: 0,
@@ -834,5 +959,24 @@ const styles = StyleSheet.create<Styles>({
     color: '#FF3B30',
     fontSize: 16,
     textAlign: 'center',
+  },
+  headerContainer: {
+    zIndex: 10,
+  },
+  contentContainer: {
+    flex: 1,
+    zIndex: 1,
+  },
+  selectedDayText: {
+    color: '#FFFFFF',
+  },
+  selectedDay: {
+    backgroundColor: '#2C3DCD',
+    transform: [{ scale: 1.05 }],
+    shadowColor: '#2C3DCD',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
 });

@@ -15,7 +15,8 @@ export default function TabLayout() {
     <Tabs
       initialRouteName="today"
       screenOptions={{
-        tabBarActiveTintColor: '#A0ADD8',
+        tabBarActiveTintColor: '#2C3DCD',
+        tabBarInactiveTintColor: '#8A8A8D',
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarBackground: TabBarBackground,
@@ -24,10 +25,19 @@ export default function TabLayout() {
             position: 'absolute',
             paddingTop: 16,
             height: 90,
+            backgroundColor: '#141414',
+            borderTopWidth: 0,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: -4 },
+            shadowOpacity: 0.1,
+            shadowRadius: 8,
           },
           default: {
             paddingTop: 16,
             height: 90,
+            backgroundColor: '#141414',
+            borderTopWidth: 0,
+            elevation: 8,
           },
         }),
       }}>
