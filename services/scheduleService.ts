@@ -85,7 +85,7 @@ const CACHE_KEYS = {
   GROUPS: 'groups_cache'
 };
 
-const CACHE_EXPIRY = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
+const CACHE_EXPIRY = 3 * 24 * 60 * 60 * 1000; // 3 days in milliseconds
 const DEFAULT_GROUP_ID = '67bd74693a5ec4923ab77dea';
 const DEFAULT_GROUP_NAME = 'P-2412';
 
