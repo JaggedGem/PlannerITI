@@ -15,6 +15,10 @@ type TranslationType = {
     evenWeek: string;
     oddWeek: string;
   };
+  subgroup: {
+    group1: string;
+    group2: string;
+  };
 };
 
 export const translations: Record<'en' | 'ro', TranslationType> = {
@@ -26,7 +30,7 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
     months: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
     settings: {
       language: 'Language',
-      group: 'Group',
+      group: 'Subgroup',
     },
     schedule: {
       noClassesWeekend: 'No classes on weekends',
@@ -34,6 +38,10 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
       room: 'Room',
       evenWeek: 'Even Week',
       oddWeek: 'Odd Week',
+    },
+    subgroup: {
+      group1: 'Subgroup 1',
+      group2: 'Subgroup 2',
     },
   },
   ro: {
@@ -44,7 +52,7 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
     months: ['Ianuarie', 'Februarie', 'Martie', 'Aprilie', 'Mai', 'Iunie', 'Iulie', 'August', 'Septembrie', 'Octombrie', 'Noiembrie', 'Decembrie'],
     settings: {
       language: 'Limbă',
-      group: 'Grupă',
+      group: 'Subgrupă',
     },
     schedule: {
       noClassesWeekend: 'Nu sunt cursuri în weekend',
@@ -52,6 +60,10 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
       room: 'Sala',
       evenWeek: 'Săptămână Pară',
       oddWeek: 'Săptămână Impară',
+    },
+    subgroup: {
+      group1: 'Subgrupa 1',
+      group2: 'Subgrupa 2',
     },
   },
 };

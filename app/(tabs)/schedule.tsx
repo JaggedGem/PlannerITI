@@ -79,6 +79,8 @@ type Styles = {
   todayDot: ViewStyle;
   headerContainer: ViewStyle;
   contentContainer: ViewStyle;
+  teacherContainer: ViewStyle;
+  groupName: TextStyle;
 };
 
 type ScheduleItem = {
@@ -587,7 +589,14 @@ export default function Schedule() {
                         </Text>
                       </View>
                       <View style={styles.classDetails}>
-                        <Text style={styles.teacherName}>{item.teacherName}</Text>
+                        <View style={styles.teacherContainer}>
+                          <Text style={styles.teacherName}>{item.teacherName}</Text>
+                          {item.group && item.group !== 'Clasă intreagă' && item.group !== 'Clas� intreag�' && (
+                            <Text style={styles.groupName}>
+                              {item.group === 'Subgroup 1' ? t('subgroup').group1 : t('subgroup').group2}
+                            </Text>
+                          )}
+                        </View>
                         <Text style={styles.roomNumber}>{t('schedule').room} {item.roomNumber}</Text>
                       </View>
                     </View>
@@ -929,5 +938,14 @@ const styles = StyleSheet.create<Styles>({
   contentContainer: {
     flex: 1,
     zIndex: 1,
+  },
+  teacherContainer: {
+    flex: 1,
+    marginRight: 8,
+  },
+  groupName: {
+    color: '#8A8A8D',
+    fontSize: 12,
+    marginTop: 4,
   },
 });

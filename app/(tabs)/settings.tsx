@@ -1,7 +1,7 @@
 import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useEffect } from 'react';
-import { scheduleService, GroupType, Language } from '@/services/scheduleService';
+import { scheduleService, SubGroupType, Language } from '@/services/scheduleService';
 import { useTranslation } from '@/hooks/useTranslation';
 
 const languages = {
@@ -9,7 +9,7 @@ const languages = {
   ro: 'Română'
 };
 
-const groups = ['Grupa 1', 'Grupa 2'] as const;
+const groups: SubGroupType[] = ['Subgroup 1', 'Subgroup 2'];
 
 export default function Settings() {
   const [settings, setSettings] = useState(scheduleService.getSettings());
@@ -26,7 +26,7 @@ export default function Settings() {
     scheduleService.updateSettings({ language });
   };
 
-  const handleGroupChange = (group: GroupType) => {
+  const handleGroupChange = (group: SubGroupType) => {
     scheduleService.updateSettings({ group });
   };
 
@@ -71,7 +71,7 @@ export default function Settings() {
                 styles.optionText,
                 settings.group === group && styles.selectedOptionText
               ]}>
-                {group}
+                {group === 'Subgroup 1' ? t('subgroup').group1 : t('subgroup').group2}
               </Text>
             </TouchableOpacity>
           ))}

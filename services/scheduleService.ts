@@ -46,11 +46,11 @@ export interface ApiResponse {
   periods: Period[];
 }
 
-export type GroupType = 'Grupa 1' | 'Grupa 2';
+export type SubGroupType = 'Subgroup 1' | 'Subgroup 2';
 export type Language = 'en' | 'ro';
 
 interface UserSettings {
-  group: GroupType;
+  group: SubGroupType;
   language: Language;
 }
 
@@ -80,7 +80,7 @@ type SettingsListener = () => void;
 export const scheduleService = {
   // Default settings
   settings: {
-    group: 'Grupa 2' as GroupType,
+    group: 'Subgroup 2' as SubGroupType,
     language: 'en' as Language,
   },
   
@@ -261,9 +261,14 @@ export const scheduleService = {
       const processScheduleItem = (item: ScheduleItem, isEvenWeek?: boolean) => {
         // Skip if item is for a different group
         const itemGroup = item.groupids.name;
-        if (itemGroup !== 'Clasă intreagă' && 
-            itemGroup !== this.settings.group && 
-            itemGroup !== 'Clas� intreag�') {
+        const entireClass = itemGroup === 'Clasă intreagă' || itemGroup === 'Clas� intreag�';
+        
+        // Convert old group names to new ones for comparison
+        const settingsGroup = this.settings.group === 'Subgroup 1' ? 'Grupa 1' : 'Grupa 2';
+        const compareItemGroup = itemGroup === 'Grupa 1' ? 'Subgroup 1' : itemGroup === 'Grupa 2' ? 'Subgroup 2' : itemGroup;
+
+        // Check if this item is for the current user's group
+        if (!entireClass && compareItemGroup !== this.settings.group) {
           return;
         }
 
