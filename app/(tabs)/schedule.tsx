@@ -31,6 +31,8 @@ interface TimeIndicatorProps {
   startTime: string;
   endTime: string;
   containerHeight: number;
+  hasNextItem?: boolean;
+  timestamp: number;
 }
 
 type Styles = {
@@ -151,7 +153,7 @@ export default function Schedule() {
 
   const isCurrentTimeInSchedule = (item: ScheduleItem, nextItem: ScheduleItem | undefined): boolean => {
     const [startHours, startMinutes] = item.startTime.split(':').map(Number);
-    const [endHours, endMinutes] = nextItem ? nextItem.startTime.split(':').map(Number) : item.endTime.split(':').map(Number);
+    const [endHours, endMinutes] = item.endTime.split(':').map(Number);
     const currentHours = currentTime.getHours();
     const currentMinutes = currentTime.getMinutes();
 
@@ -159,7 +161,7 @@ export default function Schedule() {
     const startTimeInMinutes = startHours * 60 + startMinutes;
     const endTimeInMinutes = endHours * 60 + endMinutes;
 
-    return currentTimeInMinutes >= startTimeInMinutes && currentTimeInMinutes <= endTimeInMinutes;
+    return currentTimeInMinutes >= startTimeInMinutes && currentTimeInMinutes < endTimeInMinutes;
   };
 
   // Schedule data fetching function
@@ -240,13 +242,15 @@ export default function Schedule() {
     scrollToDate(selectedDate);
   }, [selectedDate, scrollToDate]);
 
+  const currentTimestamp = currentTime.getTime();
+
   const TimeIndicator = useCallback((props: TimeIndicatorProps & { hasNextItem?: boolean }) => {
     const animatedStyle = useAnimatedStyle(() => {
       'worklet';
-      const now = new Date();
-      const currentHours = now.getHours();
-      const currentMinutes = now.getMinutes();
-      const currentSeconds = now.getSeconds();
+      const date = new Date(props.timestamp);
+      const currentHours = date.getHours();
+      const currentMinutes = date.getMinutes();
+      const currentSeconds = date.getSeconds();
       const currentTimeInMinutes = currentHours * 60 + currentMinutes + (currentSeconds / 60);
     
       const [startHours, startMinutes] = props.startTime.split(':').map(Number);
@@ -263,14 +267,14 @@ export default function Schedule() {
       return {
         top: withTiming(`${progress * 100}%`, { duration: 1000 }),
       };
-    }, []);
+    }, [props.timestamp]);
 
     const animatedTimeStyle = useAnimatedStyle(() => {
       'worklet';
-      const now = new Date();
-      const currentHours = now.getHours();
-      const currentMinutes = now.getMinutes();
-      const currentSeconds = now.getSeconds();
+      const date = new Date(props.timestamp);
+      const currentHours = date.getHours();
+      const currentMinutes = date.getMinutes();
+      const currentSeconds = date.getSeconds();
       const currentTimeInMinutes = currentHours * 60 + currentMinutes + (currentSeconds / 60);
     
       const [startHours, startMinutes] = props.startTime.split(':').map(Number);
@@ -289,7 +293,7 @@ export default function Schedule() {
           translateY: withTiming(showOnTop ? -24 : 24, { duration: 300 }) 
         }],
       };
-    }, [props.containerHeight]);
+    }, [props.timestamp, props.containerHeight]);
 
     return (
       <View style={styles.timeIndicatorContainer}>
@@ -584,7 +588,7 @@ export default function Schedule() {
                                   const minutesUntilStart = Math.ceil(diffInMs / (1000 * 60));
                                   return `In ${minutesUntilStart}m`;
                                 } else if (!previousItem && currentTimeMinutes < startTimeMinutes) {
-                                  // If this is the first class and it hasn't started
+                                  // If this is the first class and it hasn't started yet
                                   const now = new Date();
                                   const target = new Date(
                                     now.getFullYear(),
@@ -621,6 +625,7 @@ export default function Schedule() {
                         endTime={item.endTime} // Use item's end time for the period indicator
                         containerHeight={item._height || 100}
                         hasNextItem={item.hasNextItem}
+                        timestamp={currentTimestamp}
                       />
                     )}
                   </View>

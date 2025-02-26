@@ -32,6 +32,7 @@ interface TimeIndicatorProps {
   endTime: string;
   containerHeight: number;
   hasNextItem?: boolean;
+  timestamp: number;
 }
 
 type ScheduleItem = {
@@ -95,7 +96,7 @@ export default function Today() {
 
   const isCurrentTimeInSchedule = (item: ScheduleItem, nextItem: ScheduleItem | undefined): boolean => {
     const [startHours, startMinutes] = item.startTime.split(':').map(Number);
-    const [endHours, endMinutes] = nextItem ? nextItem.startTime.split(':').map(Number) : item.endTime.split(':').map(Number);
+    const [endHours, endMinutes] = item.endTime.split(':').map(Number);
     const currentHours = currentTime.getHours();
     const currentMinutes = currentTime.getMinutes();
 
@@ -103,7 +104,7 @@ export default function Today() {
     const startTimeInMinutes = startHours * 60 + startMinutes;
     const endTimeInMinutes = endHours * 60 + endMinutes;
 
-    return currentTimeInMinutes >= startTimeInMinutes && currentTimeInMinutes <= endTimeInMinutes;
+    return currentTimeInMinutes >= startTimeInMinutes && currentTimeInMinutes < endTimeInMinutes;
   };
 
   // Settings subscription effect
@@ -184,13 +185,15 @@ export default function Today() {
   // Handle empty schedule differently for weekends
   const isWeekend = selectedDate.getDay() === 0 || selectedDate.getDay() === 6;
 
+  const currentTimestamp = currentTime.getTime();
+
   const TimeIndicator = useCallback((props: TimeIndicatorProps) => {
     const animatedStyle = useAnimatedStyle(() => {
       'worklet';
-      const now = new Date();
-      const currentHours = now.getHours();
-      const currentMinutes = now.getMinutes();
-      const currentSeconds = now.getSeconds();
+      const date = new Date(props.timestamp);
+      const currentHours = date.getHours();
+      const currentMinutes = date.getMinutes();
+      const currentSeconds = date.getSeconds();
       const currentTimeInMinutes = currentHours * 60 + currentMinutes + (currentSeconds / 60);
     
       const [startHours, startMinutes] = props.startTime.split(':').map(Number);
@@ -207,14 +210,14 @@ export default function Today() {
       return {
         top: withTiming(`${progress * 100}%`, { duration: 1000 }),
       };
-    }, []);
+    }, [props.timestamp]);
 
     const animatedTimeStyle = useAnimatedStyle(() => {
       'worklet';
-      const now = new Date();
-      const currentHours = now.getHours();
-      const currentMinutes = now.getMinutes();
-      const currentSeconds = now.getSeconds();
+      const date = new Date(props.timestamp);
+      const currentHours = date.getHours();
+      const currentMinutes = date.getMinutes();
+      const currentSeconds = date.getSeconds();
       const currentTimeInMinutes = currentHours * 60 + currentMinutes + (currentSeconds / 60);
     
       const [startHours, startMinutes] = props.startTime.split(':').map(Number);
@@ -233,7 +236,7 @@ export default function Today() {
           translateY: withTiming(showOnTop ? -24 : 24, { duration: 300 }) 
         }],
       };
-    }, [props.containerHeight]);
+    }, [props.timestamp, props.containerHeight]);
 
     return (
       <View style={styles.timeIndicatorContainer}>
@@ -565,6 +568,7 @@ export default function Today() {
                         endTime={item.endTime} // Use item's end time for the period indicator
                         containerHeight={item._height || 100}
                         hasNextItem={item.hasNextItem}
+                        timestamp={currentTimestamp}
                       />
                     )}
                   </View>
