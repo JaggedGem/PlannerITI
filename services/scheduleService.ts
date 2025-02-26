@@ -290,17 +290,17 @@ export const scheduleService = {
     });
 
     // // todo: remove this test data
-    // if (dayName === 'tuesday') {
-    //   result.push({
-    //     period: '7',
-    //     startTime: '20:10',
-    //     endTime: '21:00',
-    //     className: 'Test Subject',
-    //     teacherName: 'Test Teacher',
-    //     roomNumber: 'Test Room',
-    //     isEvenWeek: undefined, // Show for both weeks
-    //     group: 'Clasă intreagă',
-    //   });
+    if (dayName === 'wednesday') {
+      result.push({
+        period: '6',
+        startTime: '16:40',
+        endTime: '16:43',
+        className: 'Test Subject',
+        teacherName: 'Test Teacher',
+        roomNumber: 'Test Room',
+        isEvenWeek: undefined, // Show for both weeks
+        group: 'Clasă intreagă',
+      });
     //   result.push({
     //     period: '8',
     //     startTime: '21:10',
@@ -311,7 +311,7 @@ export const scheduleService = {
     //     isEvenWeek: undefined,
     //     group: 'Clasă intreagă',
     //   });
-    // }
+    }
 
     // Sort schedule by time
     const sortedSchedule = result.sort((a, b) => {

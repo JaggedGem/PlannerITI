@@ -5,7 +5,6 @@ import { scheduleService, CLASS_ID, DAYS_MAP, ApiResponse } from '@/services/sch
 import { useTranslation } from '@/hooks/useTranslation';
 import { useTimeUpdate } from '@/hooks/useTimeUpdate';
 import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
-import { useHorizontalSwipe } from '@/hooks/useHorizontalSwipe';
 
 const formatTimeByLocale = (time: string, isEnglish: boolean) => {
   if (!isEnglish) return time;
@@ -102,6 +101,7 @@ export default function Schedule() {
   const isEvenWeek = scheduleService.isEvenWeek(selectedDate);
   const { t, formatDate } = useTranslation();
   const scrollViewRef = useRef<ScrollView>(null);
+  const currentScrollIndex = useRef(3); // Default to center position
 
   // Generate 7 days for the week view starting from Monday
   const weekDays = useMemo(() => {
@@ -168,6 +168,7 @@ export default function Schedule() {
         day.date.toDateString() === today.toDateString()
       );
       if (dayIndex !== -1) {
+        currentScrollIndex.current = dayIndex; // Set initial index
         setTimeout(() => {
           scrollViewRef.current?.scrollTo({
             x: dayIndex * ((Dimensions.get('window').width - 40) / 5),
@@ -193,26 +194,15 @@ export default function Schedule() {
     }
   }, [weekDays]);
 
-  const handleNextDay = useCallback(() => {
-    const nextDate = new Date(selectedDate);
-    nextDate.setDate(selectedDate.getDate() + 1);
-    setSelectedDate(nextDate);
-    scrollToDate(nextDate);
-  }, [selectedDate, scrollToDate]);
-
-  const handlePreviousDay = useCallback(() => {
-    const prevDate = new Date(selectedDate);
-    prevDate.setDate(selectedDate.getDate() - 1);
-    setSelectedDate(prevDate);
-    scrollToDate(prevDate);
-  }, [selectedDate, scrollToDate]);
-
   const handleDayPress = useCallback((date: Date) => {
     setSelectedDate(date);
     scrollToDate(date);
   }, [scrollToDate]);
 
-  const { panResponder, animatedStyle } = useHorizontalSwipe(handleNextDay, handlePreviousDay);
+  // Update weekDays when selectedDate changes
+  useEffect(() => {
+    scrollToDate(selectedDate);
+  }, [selectedDate, scrollToDate]);
 
   const TimeIndicator = useCallback((props: TimeIndicatorProps & { hasNextItem?: boolean }) => {
     const animatedStyle = useAnimatedStyle(() => {
@@ -508,7 +498,7 @@ export default function Schedule() {
         </View>
       </View>
 
-      <Animated.View style={[styles.contentContainer, animatedStyle]} {...panResponder.panHandlers}>
+      <View style={styles.contentContainer}>
         <ScrollView style={styles.scheduleList}>
           {isWeekend ? (
             <View style={styles.noSchedule}>
@@ -615,7 +605,7 @@ export default function Schedule() {
             })
           )}
         </ScrollView>
-      </Animated.View>
+      </View>
     </SafeAreaView>
   );
 }
