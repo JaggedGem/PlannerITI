@@ -1,7 +1,7 @@
 import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Dimensions, ViewStyle, TextStyle, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { scheduleService, CLASS_ID, DAYS_MAP, ApiResponse } from '@/services/scheduleService';
+import { scheduleService, DAYS_MAP, ApiResponse } from '@/services/scheduleService';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useTimeUpdate } from '@/hooks/useTimeUpdate';
 import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
@@ -109,29 +109,35 @@ export default function Today() {
   // Settings subscription effect
   useEffect(() => {
     const unsubscribe = scheduleService.subscribe(() => {
-      setSettings(scheduleService.getSettings());
+      const newSettings = scheduleService.getSettings();
+      setSettings(newSettings);
+      
+      // Refresh schedule data when the group changes
+      if (newSettings.selectedGroupId !== settings.selectedGroupId) {
+        fetchSchedule(newSettings.selectedGroupId);
+      }
     });
     return () => unsubscribe();
-  }, []);
+  }, [settings.selectedGroupId]);
 
   // Schedule data fetching effect
   useEffect(() => {
-    const fetchSchedule = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-        const data = await scheduleService.getClassSchedule(CLASS_ID);
-        setScheduleData(data);
-      } catch (error) {
-        setError('Unable to load schedule. Please try again later.');
-        console.error('Failed to fetch schedule:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     fetchSchedule();
   }, []);
+
+  const fetchSchedule = async (groupId?: string) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const data = await scheduleService.getClassSchedule(groupId);
+      setScheduleData(data);
+    } catch (error) {
+      setError('Unable to load schedule. Please try again later.');
+      console.error('Failed to fetch schedule:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const scrollViewRef = useRef<ScrollView>(null);
   
