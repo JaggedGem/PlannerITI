@@ -351,6 +351,17 @@ export const scheduleService = {
       hasNextItem?: boolean;
     }> = [];
 
+    // Add test period
+    // result.push({
+    //   period: "test",
+    //   startTime: "21:48",
+    //   endTime: "22:01",
+    //   className: "Test Period",
+    //   teacherName: "Test Teacher",
+    //   roomNumber: "Test Room",
+    //   group: "Clasă intreagă"
+    // });
+
     // Process each period
     Object.entries(daySchedule).forEach(([period, schedules]) => {
       const periodData = data.periods[parseInt(period) - 1];
