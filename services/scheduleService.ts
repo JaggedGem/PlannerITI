@@ -86,7 +86,6 @@ const CACHE_KEYS = {
 };
 
 const CACHE_EXPIRY = 3 * 24 * 60 * 60 * 1000; // 3 days in milliseconds
-const DEFAULT_GROUP_ID = '67bd74693a5ec4923ab77dea';
 const DEFAULT_GROUP_NAME = 'P-2412';
 
 type SettingsListener = () => void;
@@ -96,12 +95,12 @@ export const scheduleService = {
   settings: {
     group: 'Subgroup 2' as SubGroupType,
     language: 'en' as Language,
-    selectedGroupId: DEFAULT_GROUP_ID,
+    selectedGroupId: '',  // Will be set dynamically after fetching groups
     selectedGroupName: DEFAULT_GROUP_NAME
   },
   
   listeners: new Set<SettingsListener>(),
-  cachedGroups: [] as Group[], // Changed from null to empty array
+  cachedGroups: [] as Group[],
 
   subscribe(listener: SettingsListener) {
     this.listeners.add(listener);
@@ -120,6 +119,11 @@ export const scheduleService = {
       if (savedSettings) {
         this.settings = { ...this.settings, ...JSON.parse(savedSettings) };
         this.notifyListeners();
+      }
+      
+      // If we have a group name but no ID, try to fetch the ID
+      if (!this.settings.selectedGroupId && this.settings.selectedGroupName) {
+        await this.findAndSetDefaultGroup(this.settings.selectedGroupName);
       }
     } catch (error) {
       console.warn('Failed to load settings:', error);
@@ -189,6 +193,12 @@ export const scheduleService = {
       
       if (cachedGroups) {
         this.cachedGroups = JSON.parse(cachedGroups);
+        
+        // If we have a group name but no ID, set it now that we have groups data
+        if (!this.settings.selectedGroupId && this.settings.selectedGroupName) {
+          await this.findAndSetDefaultGroup(this.settings.selectedGroupName);
+        }
+        
         return this.cachedGroups;
       }
       
@@ -204,15 +214,19 @@ export const scheduleService = {
       await AsyncStorage.setItem(CACHE_KEYS.GROUPS, JSON.stringify(groups));
       this.cachedGroups = groups;
       
+      // Set default group ID if needed
+      if (!this.settings.selectedGroupId && this.settings.selectedGroupName) {
+        await this.findAndSetDefaultGroup(this.settings.selectedGroupName);
+      }
+      
       return groups;
     } catch (error) {
       console.error('Error fetching groups:', error);
-      // Return empty array instead of null to fix type error
       return [];
     }
   },
 
-  async findAndSetDefaultGroup(targetName: string = 'P-2412') {
+  async findAndSetDefaultGroup(targetName: string = DEFAULT_GROUP_NAME) {
     try {
       const groups = await this.getGroups();
       const targetGroup = groups.find(group => group.name === targetName);
@@ -224,6 +238,16 @@ export const scheduleService = {
         });
         return true;
       }
+      
+      // If we couldn't find the target group, use the first group
+      if (groups.length > 0) {
+        this.updateSettings({
+          selectedGroupId: groups[0]._id,
+          selectedGroupName: groups[0].name
+        });
+        return true;
+      }
+      
       return false;
     } catch (error) {
       console.error('Error setting default group:', error);
@@ -353,7 +377,7 @@ export const scheduleService = {
           teacherName: item.teacherids.name,
           roomNumber: item.classroomids.name,
           isEvenWeek,
-          group: itemGroup,
+          group: compareItemGroup, // Use normalized group name for display
         });
       };
 
