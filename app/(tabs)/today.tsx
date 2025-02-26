@@ -542,6 +542,11 @@ export default function Today() {
                       <View style={styles.detailsContainer}>
                         <View style={styles.teacherContainer}>
                           <Text style={styles.teacherName}>{item.teacherName}</Text>
+                          {item.group && item.group !== 'Clasă intreagă' && item.group !== 'Clas� intreag�' && (
+                            <Text style={styles.groupName}>
+                              {item.group === 'Subgroup 1' ? t('subgroup').group1 : t('subgroup').group2}
+                            </Text>
+                          )}
                         </View>
                         <View style={styles.roomContainer}>
                           <Text style={styles.roomNumber}>{t('schedule').room} {item.roomNumber}</Text>
@@ -647,6 +652,7 @@ type Styles = {
   contentContainer: ViewStyle;
   selectedDayText: TextStyle;  // Added missing style
   selectedDay: ViewStyle;
+  groupName: TextStyle; // Added missing style
 };
 
 const styles = StyleSheet.create<Styles>({
@@ -992,5 +998,10 @@ const styles = StyleSheet.create<Styles>({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
+  },
+  groupName: {
+    color: '#8A8A8D',
+    fontSize: 12,
+    marginTop: 4,
   },
 });
