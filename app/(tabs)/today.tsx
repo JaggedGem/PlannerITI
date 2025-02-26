@@ -5,7 +5,6 @@ import { scheduleService, CLASS_ID, DAYS_MAP, ApiResponse } from '@/services/sch
 import { useTranslation } from '@/hooks/useTranslation';
 import { useTimeUpdate } from '@/hooks/useTimeUpdate';
 import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
-import { useHorizontalSwipe } from '@/hooks/useHorizontalSwipe';
 
 const formatTimeByLocale = (time: string, isEnglish: boolean) => {
   if (!isEnglish) return time;
@@ -56,10 +55,11 @@ export default function Today() {
   const isEvenWeek = scheduleService.isEvenWeek(selectedDate);
   const { t, formatDate } = useTranslation();
 
-  // Generate 7 days starting from 3 days before the selected date
+  // Generate 7 days centered around today
   const weekDates = useMemo(() => {
-    const startDate = new Date(selectedDate);
-    startDate.setDate(selectedDate.getDate() - 3); // Start 3 days before selected
+    const today = new Date();
+    const startDate = new Date(today);
+    startDate.setDate(today.getDate() - 3); // Start 3 days before today
 
     return Array.from({ length: 7 }, (_, i) => {
       const date = new Date(startDate);
@@ -71,7 +71,7 @@ export default function Today() {
         isToday: date.toDateString() === currentDate.toDateString()
       };
     });
-  }, [selectedDate, currentDate, t]);
+  }, [currentDate, t]);
 
   const todaySchedule = scheduleData 
     ? scheduleService.getScheduleForDay(scheduleData, DAYS_MAP[selectedDate.getDay() as keyof typeof DAYS_MAP])
@@ -151,25 +151,18 @@ export default function Today() {
   }, [weekDates]);
 
   const handleDatePress = useCallback((date: Date) => {
-    setSelectedDate(date);
-    scrollToDate(date);
-  }, [scrollToDate]);
+    // Only allow selecting dates within the 7-day range
+    const dateTime = date.getTime();
+    const minDate = weekDates[0].date.getTime();
+    const maxDate = weekDates[6].date.getTime();
+    
+    if (dateTime >= minDate && dateTime <= maxDate) {
+      setSelectedDate(date);
+      scrollToDate(date);
+    }
+  }, [scrollToDate, weekDates]);
 
-  const handleNextDay = useCallback(() => {
-    const nextDate = new Date(selectedDate);
-    nextDate.setDate(selectedDate.getDate() + 1);
-    setSelectedDate(nextDate);
-    scrollToDate(nextDate);
-  }, [selectedDate, scrollToDate]);
-
-  const handlePreviousDay = useCallback(() => {
-    const prevDate = new Date(selectedDate);
-    prevDate.setDate(selectedDate.getDate() - 1);
-    setSelectedDate(prevDate);
-    scrollToDate(prevDate);
-  }, [selectedDate, scrollToDate]);
-
-  // Scroll to today on mount
+  // Initial scroll to today, only once on mount
   useEffect(() => {
     if (scrollViewRef.current) {
       // Wait for layout to complete
@@ -180,12 +173,10 @@ export default function Today() {
         });
       }, 100);
     }
-  }, []);
+  }, []); // Empty dependency array ensures this only runs once
 
   // Handle empty schedule differently for weekends
   const isWeekend = selectedDate.getDay() === 0 || selectedDate.getDay() === 6;
-
-  const { panResponder, animatedStyle } = useHorizontalSwipe(handleNextDay, handlePreviousDay);
 
   const TimeIndicator = useCallback((props: TimeIndicatorProps) => {
     const animatedStyle = useAnimatedStyle(() => {
@@ -461,7 +452,7 @@ export default function Today() {
         </View>
       </View>
 
-      <Animated.View style={[styles.contentContainer, animatedStyle]} {...panResponder.panHandlers}>
+      <View style={styles.contentContainer}>
         <ScrollView style={styles.scheduleContainer}>
           {isWeekend ? (
             <View style={styles.noSchedule}>
@@ -571,7 +562,7 @@ export default function Today() {
             })
           )}
         </ScrollView>
-      </Animated.View>
+      </View>
     </SafeAreaView>
   );
 }
