@@ -1,168 +1,210 @@
 import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Dimensions, ViewStyle, TextStyle, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { scheduleService, DAYS_MAP, ApiResponse } from '@/services/scheduleService';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useTimeUpdate } from '@/hooks/useTimeUpdate';
-import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 
-const formatTimeByLocale = (time: string, isEnglish: boolean) => {
-  if (!isEnglish) return time;
+// Get week start (Monday) from current date
+const getWeekStart = (date: Date): Date => {
+  const result = new Date(date);
+  const day = result.getDay() || 7; // Convert Sunday (0) to 7
+  if (day !== 1) { // If not Monday
+    result.setHours(-24 * (day - 1)); // Go back to Monday
+  }
+  return result;
+};
+
+// Format hour in 12h or 24h format based on locale
+const formatHourByLocale = (hour: number, isEnglish: boolean) => {
+  if (!isEnglish) return hour.toString();
   
-  const [hours, minutes] = time.split(':').map(Number);
-  const period = hours >= 12 ? 'PM' : 'AM';
-  const hour12 = hours % 12 || 12;
-  return `${hour12}:${minutes.toString().padStart(2, '0')} ${period}`;
+  const period = hour >= 12 ? 'PM' : 'AM';
+  const hour12 = hour % 12 || 12;
+  return { hour: hour12.toString(), period };
 };
 
-const getMinutesBetween = (currentTime: Date, targetTime: string) => {
-  const [hours, minutes] = targetTime.split(':').map(Number);
-  const target = new Date(
-    currentTime.getFullYear(),
-    currentTime.getMonth(),
-    currentTime.getDate(),
-    hours,
-    minutes
+// Get minimum and maximum hours from all periods
+const getTimeRange = (schedule: Record<string, any[]>): { min: number, max: number } => {
+  let min = 24;
+  let max = 0;
+
+  Object.values(schedule).forEach(dayItems => {
+    dayItems.forEach(item => {
+      const startHour = parseInt(item.startTime.split(':')[0]);
+      const endHour = parseInt(item.endTime.split(':')[0]);
+      if (startHour < min) min = startHour;
+      if (endHour > max) max = endHour;
+    });
+  });
+
+  // Add padding
+  return { min: Math.max(7, min - 1), max: Math.min(22, max + 1) };
+};
+
+// Calculate position and height for a schedule item
+const calculateItemPosition = (
+  startTime: string,
+  endTime: string,
+  hourHeight: number,
+  firstHour: number
+): { top: number, height: number } => {
+  const [startHours, startMinutes] = startTime.split(':').map(Number);
+  const [endHours, endMinutes] = endTime.split(':').map(Number);
+
+  const startTimeInMinutes = (startHours - firstHour) * 60 + startMinutes;
+  const endTimeInMinutes = (endHours - firstHour) * 60 + endMinutes;
+  const durationInMinutes = endTimeInMinutes - startTimeInMinutes;
+
+  const top = (startTimeInMinutes / 60) * hourHeight;
+  const height = (durationInMinutes / 60) * hourHeight;
+  
+  return { top, height };
+};
+
+// Generate time slots for the timetable
+const generateTimeSlots = (startHour: number, endHour: number): number[] => {
+  const slots = [];
+  for (let hour = startHour; hour <= endHour; hour++) {
+    slots.push(hour);
+  }
+  return slots;
+};
+
+interface TimetableItemProps {
+  item: {
+    startTime: string;
+    endTime: string;
+    className: string;
+    roomNumber: string;
+  };
+  top: number;
+  height: number;
+  color: string;
+  isActive: boolean;
+  timeFormat: string;
+}
+
+const TimetableItem = ({ item, top, height, color, isActive, timeFormat }: TimetableItemProps) => {
+  // Create time display with just hours (no minutes)
+  const startHour = parseInt(item.startTime.split(':')[0]);
+  const endHour = parseInt(item.endTime.split(':')[0]);
+  const timeDisplay = `${startHour}–${endHour}`;
+  
+  return (
+    <View 
+      style={[
+        styles.timetableItem, 
+        { 
+          top, 
+          height: Math.max(height, 35), // Slightly taller minimum height
+        }
+      ]}
+    >
+      <LinearGradient
+        colors={isActive 
+          ? [color, `${color}CC`] // More opacity for active
+          : [`${color}99`, `${color}66`]} // Less opacity for inactive
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.itemGradient}
+      >
+        <Text style={styles.className} numberOfLines={1}>
+          {item.className}
+        </Text>
+        <View style={styles.itemFooter}>
+          <Text style={styles.roomNumber} numberOfLines={1}>
+            {item.roomNumber}
+          </Text>
+        </View>
+      </LinearGradient>
+    </View>
   );
-  return Math.round((target.getTime() - currentTime.getTime()) / 1000 / 60);
 };
 
-interface TimeIndicatorProps {
-  startTime: string;
-  endTime: string;
-  containerHeight: number;
-  hasNextItem?: boolean;
+interface CurrentTimeIndicatorProps {
+  hourHeight: number;
+  firstHour: number;
   timestamp: number;
 }
 
+const CurrentTimeIndicator = ({ hourHeight, firstHour, timestamp }: CurrentTimeIndicatorProps) => {
+  const currentTime = new Date(timestamp);
+  const hours = currentTime.getHours();
+  const minutes = currentTime.getMinutes();
+  
+  const totalMinutesSinceFirstHour = (hours - firstHour) * 60 + minutes;
+  const position = (totalMinutesSinceFirstHour / 60) * hourHeight;
+
+  if (hours < firstHour) return null;
+  
+  return (
+    <View style={[styles.currentTimeIndicator, { top: position }]}>
+      <View style={styles.currentTimeIndicatorDot} />
+      <View style={styles.currentTimeIndicatorLine} />
+    </View>
+  );
+};
+
 type Styles = {
   container: ViewStyle;
+  content: ViewStyle;
+  headerContainer: ViewStyle;
   header: ViewStyle;
-  headerTop: ViewStyle;
-  monthYear: TextStyle;
-  weekDays: ViewStyle;
-  dayItem: ViewStyle;
-  selectedDay: ViewStyle;
-  dayName: TextStyle;
-  dayNumber: TextStyle;
-  selectedText: TextStyle;
-  scheduleList: ViewStyle;
-  scheduleItem: ViewStyle;
-  classCard: ViewStyle;
-  timeContainer: ViewStyle;
-  time: TextStyle;
-  classContent: ViewStyle;
-  className: TextStyle;
-  classDetails: ViewStyle;
-  teacherName: TextStyle;
-  roomNumber: TextStyle;
+  pageTitle: TextStyle;
   weekInfo: ViewStyle;
   weekText: TextStyle;
-  noSchedule: ViewStyle;
-  noScheduleText: TextStyle;
-  timeIndicatorContainer: ViewStyle;
-  timeIndicator: ViewStyle;
-  timeIndicatorLine: ViewStyle;
-  timeIndicatorArrowContainer: ViewStyle;
-  timeIndicatorArrow: ViewStyle;
-  timeLeftText: TextStyle;
-  timeWrapper: ViewStyle;
-  timeDot: ViewStyle;
-  classHeaderRow: ViewStyle;
-  statusText: TextStyle;
-  activeStatusText: TextStyle;
+  daysHeader: ViewStyle;
+  dayColumn: ViewStyle;
+  dayName: TextStyle;
+  dateText: TextStyle;
+  timetableContainer: ViewStyle;
+  timeColumn: ViewStyle;
+  timeSlot: ViewStyle;
+  timeHour: TextStyle;
+  timePeriod: TextStyle;
+  gridContainer: ViewStyle;
+  dayContent: ViewStyle;
+  timetableItem: ViewStyle;
+  itemGradient: ViewStyle;
+  className: TextStyle;
+  roomNumber: TextStyle;
+  itemFooter: ViewStyle;
+  navigationControls: ViewStyle;
+  navButton: ViewStyle;
+  navButtonText: TextStyle;
+  currentTimeIndicator: ViewStyle;
+  currentTimeIndicatorLine: ViewStyle;
+  currentTimeIndicatorDot: ViewStyle;
+  emptySchedule: TextStyle;
   loadingContainer: ViewStyle;
   loadingText: TextStyle;
   errorContainer: ViewStyle;
   errorText: TextStyle;
-  weekDaysContent: ViewStyle;
-  todayItem: ViewStyle;
-  todayText: TextStyle;
-  todayDot: ViewStyle;
-  headerContainer: ViewStyle;
-  contentContainer: ViewStyle;
-  teacherContainer: ViewStyle;
-  groupName: TextStyle;
-};
-
-type ScheduleItem = {
-  isBreak?: boolean;
-  startTime: string;
-  endTime: string;
-  className: string;
-  teacherName: string;
-  roomNumber: string;
-  _height?: number;
-  hasNextItem?: boolean;
+  todayColumn: ViewStyle;
+  gridLine: ViewStyle;
+  currentHourHighlight: ViewStyle;
 };
 
 export default function Schedule() {
   const [scheduleData, setScheduleData] = useState<ApiResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedDate, setSelectedDate] = useState(new Date());
   const [settings, setSettings] = useState(scheduleService.getSettings());
-  const isEvenWeek = scheduleService.isEvenWeek(selectedDate);
+  const [weekOffset, setWeekOffset] = useState(0);
   const { t, formatDate } = useTranslation();
-  const scrollViewRef = useRef<ScrollView>(null);
-  const currentScrollIndex = useRef(3); // Default to center position
-
-  // Generate 7 days for the week view starting from Monday
-  const weekDays = useMemo(() => {
-    const startOfWeek = new Date(selectedDate);
-    startOfWeek.setDate(selectedDate.getDate() - selectedDate.getDay() + 1);
-
-    return Array.from({ length: 7 }, (_, i) => {
-      const date = new Date(startOfWeek);
-      date.setDate(startOfWeek.getDate() + i);
-      return {
-        date,
-        dayName: t('weekdays').short[date.getDay()],
-        dayNumber: date.getDate(),
-        isToday: date.toDateString() === new Date().toDateString()
-      };
-    });
-  }, [selectedDate, t]);
-
-  const getDaySchedule = useCallback(() => {
-    if (!scheduleData) return [];
-    const day = selectedDate.getDay();
-    if (day === 0 || day === 6) return []; // Return empty array for weekends
-    
-    const dayKey = DAYS_MAP[day as keyof typeof DAYS_MAP];
-    if (!dayKey) return [];
-    return scheduleService.getScheduleForDay(scheduleData, dayKey);
-  }, [scheduleData, selectedDate]);
-
-  const todaySchedule = getDaySchedule();
   const currentTime = useTimeUpdate();
+  const verticalScrollRef = useRef<ScrollView>(null);
 
-  const isCurrentTimeSlot = (startTime: string, endTime: string): boolean => {
-    const [startHours, startMinutes] = startTime.split(':').map(Number);
-    const [endHours, endMinutes] = endTime.split(':').map(Number);
-    const currentHours = currentTime.getHours();
-    const currentMinutes = currentTime.getMinutes();
-
-    const currentTimeInMinutes = currentHours * 60 + currentMinutes;
-    const startTimeInMinutes = startHours * 60 + startMinutes;
-    const endTimeInMinutes = endHours * 60 + endMinutes;
-
-    return currentTimeInMinutes >= startTimeInMinutes && 
-           currentTimeInMinutes <= endTimeInMinutes;
-  };
-
-  const isCurrentTimeInSchedule = (item: ScheduleItem, nextItem: ScheduleItem | undefined): boolean => {
-    const [startHours, startMinutes] = item.startTime.split(':').map(Number);
-    const [endHours, endMinutes] = item.endTime.split(':').map(Number);
-    const currentHours = currentTime.getHours();
-    const currentMinutes = currentTime.getMinutes();
-
-    const currentTimeInMinutes = currentHours * 60 + currentMinutes;
-    const startTimeInMinutes = startHours * 60 + startMinutes;
-    const endTimeInMinutes = endHours * 60 + endMinutes;
-
-    return currentTimeInMinutes >= startTimeInMinutes && currentTimeInMinutes < endTimeInMinutes;
-  };
+  // Calculate current week start date (Monday)
+  const weekStartDate = new Date();
+  weekStartDate.setDate(weekStartDate.getDate() + (weekOffset * 7));
+  const weekStart = getWeekStart(weekStartDate);
+  
+  // Check if current week is even
+  const isEvenWeek = scheduleService.isEvenWeek(weekStartDate);
 
   // Schedule data fetching function
   const fetchSchedule = async (groupId?: string) => {
@@ -179,26 +221,46 @@ export default function Schedule() {
     }
   };
 
-  // Scroll to today on mount
-  useEffect(() => {
-    if (scrollViewRef.current) {
-      const today = new Date();
-      const dayIndex = weekDays.findIndex(day => 
-        day.date.toDateString() === today.toDateString()
-      );
-      if (dayIndex !== -1) {
-        currentScrollIndex.current = dayIndex; // Set initial index
-        setTimeout(() => {
-          scrollViewRef.current?.scrollTo({
-            x: dayIndex * ((Dimensions.get('window').width - 40) / 5),
-            animated: false
-          });
-        }, 100);
-      }
-    }
-  }, [weekDays]);
+  // Calculate day dates for the week
+  const dayDates = Array.from({ length: 5 }, (_, i) => {
+    const date = new Date(weekStart);
+    date.setDate(weekStart.getDate() + i);
+    return {
+      date,
+      dayName: t('weekdays').short[date.getDay()],
+      dayNumber: date.getDate(),
+      isToday: date.toDateString() === new Date().toDateString()
+    };
+  });
 
-  // Settings subscription effect
+  // Get schedule for all days in selected week
+  const weekSchedule = {
+    monday: scheduleData ? scheduleService.getScheduleForDay(scheduleData, 'monday') : [],
+    tuesday: scheduleData ? scheduleService.getScheduleForDay(scheduleData, 'tuesday') : [],
+    wednesday: scheduleData ? scheduleService.getScheduleForDay(scheduleData, 'wednesday') : [],
+    thursday: scheduleData ? scheduleService.getScheduleForDay(scheduleData, 'thursday') : [],
+    friday: scheduleData ? scheduleService.getScheduleForDay(scheduleData, 'friday') : [],
+  };
+
+  // Calculate time range
+  const { min: firstHour, max: lastHour } = scheduleData
+    ? getTimeRange(weekSchedule)
+    : { min: 8, max: 17 };
+
+  // Generate time slots
+  const timeSlots = generateTimeSlots(firstHour, lastHour);
+
+  // Calculate timetable dimensions
+  const windowWidth = Dimensions.get('window').width;
+  const hourHeight = 65; // Slightly more compact
+  const timeColumnWidth = 30; // Even narrower time column
+  const dayColumnWidth = (windowWidth - timeColumnWidth - 16) / 5; // Account for padding
+  const timetableHeight = (lastHour - firstHour + 1) * hourHeight;
+
+  // Get current hour for highlighting
+  const nowHour = new Date().getHours();
+
+  // Effects for settings, data fetching, etc.
   useEffect(() => {
     const unsubscribe = scheduleService.subscribe(() => {
       const newSettings = scheduleService.getSettings();
@@ -217,176 +279,92 @@ export default function Schedule() {
     fetchSchedule();
   }, []);
 
-  const scrollToDate = useCallback((date: Date) => {
-    if (!scrollViewRef.current) return;
-    
-    const dateIndex = weekDays.findIndex(
-      d => d.date.toDateString() === date.toDateString()
-    );
-    
-    if (dateIndex !== -1) {
-      scrollViewRef.current.scrollTo({
-        x: dateIndex * ((Dimensions.get('window').width - 40) / 5),
-        animated: true
-      });
-    }
-  }, [weekDays]);
-
-  const handleDayPress = useCallback((date: Date) => {
-    setSelectedDate(date);
-    scrollToDate(date);
-  }, [scrollToDate]);
-
-  // Update weekDays when selectedDate changes
+  // Scroll to current time on mount
   useEffect(() => {
-    scrollToDate(selectedDate);
-  }, [selectedDate, scrollToDate]);
-
-  const currentTimestamp = currentTime.getTime();
-
-  const TimeIndicator = useCallback((props: TimeIndicatorProps & { hasNextItem?: boolean }) => {
-    const animatedStyle = useAnimatedStyle(() => {
-      'worklet';
-      const date = new Date(props.timestamp);
-      const currentHours = date.getHours();
-      const currentMinutes = date.getMinutes();
-      const currentSeconds = date.getSeconds();
-      const currentTimeInMinutes = currentHours * 60 + currentMinutes + (currentSeconds / 60);
+    const scrollToCurrentTime = () => {
+      if (verticalScrollRef.current && currentTime) {
+        const now = new Date();
+        const currentHour = now.getHours();
+        
+        if (currentHour >= firstHour && currentHour <= lastHour) {
+          const scrollPosition = (currentHour - firstHour - 1) * hourHeight;
+          verticalScrollRef.current.scrollTo({
+            y: Math.max(0, scrollPosition),
+            animated: true
+          });
+        }
+      }
+    };
     
-      const [startHours, startMinutes] = props.startTime.split(':').map(Number);
-      const [endHours, endMinutes] = props.endTime.split(':').map(Number);
-      
-      const startTimeInMinutes = startHours * 60 + startMinutes;
-      const endTimeInMinutes = endHours * 60 + endMinutes;
-      const timeSlotDuration = endTimeInMinutes - startTimeInMinutes;
+    // Wait for layout to complete
+    setTimeout(scrollToCurrentTime, 500);
+  }, [firstHour, lastHour, scheduleData]);
+
+  // Function to check if an item is currently active
+  const isCurrentTimeSlot = (startTime: string, endTime: string): boolean => {
+    const [startHours, startMinutes] = startTime.split(':').map(Number);
+    const [endHours, endMinutes] = endTime.split(':').map(Number);
+    const currentHours = currentTime.getHours();
+    const currentMinutes = currentTime.getMinutes();
+
+    const currentTimeInMinutes = currentHours * 60 + currentMinutes;
+    const startTimeInMinutes = startHours * 60 + startMinutes;
+    const endTimeInMinutes = endHours * 60 + endMinutes;
+
+    return currentTimeInMinutes >= startTimeInMinutes && 
+          currentTimeInMinutes <= endTimeInMinutes;
+  };
+
+  // Function to navigate between weeks
+  const navigateWeek = (direction: number) => {
+    setWeekOffset(prev => prev + direction);
+  };
+
+  // Function to get color for a subject with improved color palette
+  const getSubjectColor = (subjectName: string): string => {
+    // More vibrant, design-friendly color palette
+    const colors = [
+      '#4361EE', // Royal Blue
+      '#F72585', // Pink
+      '#4CC9F0', // Cyan
+      '#7209B7', // Purple
+      '#3A86FF', // Blue
+      '#FB5607', // Orange
+      '#06D6A0', // Teal
+      '#FFBE0B', // Yellow
+      '#8338EC', // Violet
+      '#FF006E', // Hot Pink
+      '#38B000', // Green
+      '#FF5400', // Orange Red
+    ];
     
-      if (currentTimeInMinutes < startTimeInMinutes) return { top: withTiming('0%') };
-      if (currentTimeInMinutes > endTimeInMinutes) return { top: withTiming('100%') };
+    let hash = 0;
+    for (let i = 0; i < subjectName.length; i++) {
+      hash = subjectName.charCodeAt(i) + ((hash << 5) - hash);
+    }
     
-      const progress = (currentTimeInMinutes - startTimeInMinutes) / timeSlotDuration;
-      return {
-        top: withTiming(`${progress * 100}%`, { duration: 1000 }),
-      };
-    }, [props.timestamp]);
+    const index = Math.abs(hash) % colors.length;
+    return colors[index];
+  };
 
-    const animatedTimeStyle = useAnimatedStyle(() => {
-      'worklet';
-      const date = new Date(props.timestamp);
-      const currentHours = date.getHours();
-      const currentMinutes = date.getMinutes();
-      const currentSeconds = date.getSeconds();
-      const currentTimeInMinutes = currentHours * 60 + currentMinutes + (currentSeconds / 60);
-    
-      const [startHours, startMinutes] = props.startTime.split(':').map(Number);
-      const [endHours, endMinutes] = props.endTime.split(':').map(Number);
-      
-      const startTimeInMinutes = startHours * 60 + startMinutes;
-      const endTimeInMinutes = endHours * 60 + endMinutes;
-      const timeSlotDuration = endTimeInMinutes - startTimeInMinutes;
-      const progress = (currentTimeInMinutes - startTimeInMinutes) / timeSlotDuration;
-      
-      const position = progress * props.containerHeight;
-      const showOnTop = position > props.containerHeight / 2;
+  // Format week display text
+  const weekDisplayText = () => {
+    const weekStartFormatted = formatDate(weekStart, { day: 'numeric', month: 'short' });
+    const weekEndDate = new Date(weekStart);
+    weekEndDate.setDate(weekStart.getDate() + 4);
+    const weekEndFormatted = formatDate(weekEndDate, { day: 'numeric', month: 'short' });
+    return `${weekStartFormatted} - ${weekEndFormatted}`;
+  };
 
-      return {
-        transform: [{ 
-          translateY: withTiming(showOnTop ? -24 : 24, { duration: 300 }) 
-        }],
-      };
-    }, [props.timestamp, props.containerHeight]);
+  // Reset to current week
+  const goToCurrentWeek = () => {
+    setWeekOffset(0);
+  };
 
-    return (
-      <View style={styles.timeIndicatorContainer}>
-        <Animated.View style={[styles.timeIndicator, animatedStyle]}>
-          <View style={styles.timeIndicatorLine} />
-          <View style={styles.timeIndicatorArrowContainer}>
-            <View style={styles.timeIndicatorArrow} />
-          </View>
-          <Animated.Text style={[styles.timeLeftText, animatedTimeStyle]}>
-            {(() => {
-              const now = new Date();
-              // Use item's end time to show minutes until current period ends
-              const [endHours, endMinutes] = props.endTime.split(':').map(Number);
-              
-              const endTime = new Date(
-                now.getFullYear(),
-                now.getMonth(),
-                now.getDate(),
-                endHours,
-                endMinutes
-              );
-
-              // Calculate minutes remaining in current period
-              const diffInMinutes = Math.ceil(
-                (endTime.getTime() - now.getTime()) / (1000 * 60)
-              );
-
-              return diffInMinutes > 0 ? `${diffInMinutes}m` : '';
-            })()}
-          </Animated.Text>
-        </Animated.View>
-      </View>
-    );
-  }, []);
-
-  // Add error and loading states to the render
+  // Show loading state
   if (isLoading && !scheduleData) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.headerContainer}>
-          <View style={styles.header}>
-            <View style={styles.headerTop}>
-              <Text style={styles.monthYear}>
-                {formatDate(selectedDate, { 
-                  month: 'long',
-                  year: 'numeric'
-                })}
-              </Text>
-              <View style={styles.weekInfo}>
-                <Text style={styles.weekText}>
-                  {isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
-                </Text>
-              </View>
-            </View>
-            <ScrollView 
-              ref={scrollViewRef}
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              decelerationRate="fast"
-              snapToInterval={(Dimensions.get('window').width - 40) / 5}
-              style={styles.weekDays}
-              contentContainerStyle={styles.weekDaysContent}
-            >
-              {weekDays.map((day, index) => (
-                <TouchableOpacity 
-                  key={index} 
-                  onPress={() => handleDayPress(day.date)}
-                  style={[
-                    styles.dayItem,
-                    day.date.getDate() === selectedDate.getDate() && styles.selectedDay,
-                    day.isToday && day.date.getDate() !== selectedDate.getDate() && styles.todayItem
-                  ]}
-                >
-                  <Text style={[
-                    styles.dayName,
-                    day.date.getDate() === selectedDate.getDate() && styles.selectedText,
-                    day.isToday && day.date.getDate() !== selectedDate.getDate() && styles.todayText
-                  ]}>
-                    {day.dayName}
-                  </Text>
-                  <Text style={[
-                    styles.dayNumber,
-                    day.date.getDate() === selectedDate.getDate() && styles.selectedText,
-                    day.isToday && day.date.getDate() !== selectedDate.getDate() && styles.todayText
-                  ]}>
-                    {day.dayNumber}
-                  </Text>
-                  {day.isToday && day.date.getDate() !== selectedDate.getDate() && <View style={styles.todayDot} />}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#3478F6" />
           <Text style={styles.loadingText}>Loading schedule...</Text>
@@ -395,61 +373,16 @@ export default function Schedule() {
     );
   }
 
+  // Show error state
   if (error && !scheduleData) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.headerContainer}>
-          <View style={styles.header}>
-            <View style={styles.headerTop}>
-              <Text style={styles.monthYear}>
-                {formatDate(selectedDate, { 
-                  month: 'long',
-                  year: 'numeric'
-                })}
-              </Text>
-              <View style={styles.weekInfo}>
-                <Text style={styles.weekText}>
-                  {isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
-                </Text>
-              </View>
-            </View>
-            <ScrollView 
-              ref={scrollViewRef}
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              decelerationRate="fast"
-              snapToInterval={(Dimensions.get('window').width - 40) / 5}
-              style={styles.weekDays}
-              contentContainerStyle={styles.weekDaysContent}
-            >
-              {weekDays.map((day, index) => (
-                <TouchableOpacity 
-                  key={index} 
-                  onPress={() => handleDayPress(day.date)}
-                  style={[
-                    styles.dayItem,
-                    day.date.getDate() === selectedDate.getDate() && styles.selectedDay,
-                    day.isToday && day.date.getDate() !== selectedDate.getDate() && styles.todayItem
-                  ]}
-                >
-                  <Text style={[
-                    styles.dayName,
-                    day.date.getDate() === selectedDate.getDate() && styles.selectedText,
-                    day.isToday && day.date.getDate() !== selectedDate.getDate() && styles.todayText
-                  ]}>
-                    {day.dayName}
-                  </Text>
-                  <Text style={[
-                    styles.dayNumber,
-                    day.date.getDate() === selectedDate.getDate() && styles.selectedText,
-                    day.isToday && day.date.getDate() !== selectedDate.getDate() && styles.todayText
-                  ]}>
-                    {day.dayNumber}
-                  </Text>
-                  {day.isToday && day.date.getDate() !== selectedDate.getDate() && <View style={styles.todayDot} />}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+        <View style={styles.header}>
+          <Text style={styles.pageTitle}>{t('tabs').schedule}</Text>
+          <View style={styles.weekInfo}>
+            <Text style={styles.weekText}>
+              {isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
+            </Text>
           </View>
         </View>
         <View style={styles.errorContainer}>
@@ -459,210 +392,185 @@ export default function Schedule() {
     );
   }
 
-  // Handle empty schedule differently for weekends
-  const isWeekend = selectedDate.getDay() === 0 || selectedDate.getDay() === 6;
-
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.headerContainer}>
         <View style={styles.header}>
-          <View style={styles.headerTop}>
-            <Text style={styles.monthYear}>
-              {formatDate(selectedDate, { 
-                month: 'long',
-                year: 'numeric'
-              })}
+          <Text style={styles.pageTitle}>{t('tabs').schedule}</Text>
+          <View style={styles.weekInfo}>
+            <Text style={styles.weekText}>
+              {isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
             </Text>
-            <View style={styles.weekInfo}>
-              <Text style={styles.weekText}>
-                {isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
-              </Text>
-            </View>
           </View>
-          <ScrollView 
-            ref={scrollViewRef}
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            decelerationRate="fast"
-            snapToInterval={(Dimensions.get('window').width - 40) / 5}
-            style={styles.weekDays}
-            contentContainerStyle={styles.weekDaysContent}
-          >
-            {weekDays.map((day, index) => (
-              <TouchableOpacity 
-                key={index} 
-                onPress={() => handleDayPress(day.date)}
-                style={[
-                  styles.dayItem,
-                  day.date.getDate() === selectedDate.getDate() && styles.selectedDay,
-                  day.isToday && day.date.getDate() !== selectedDate.getDate() && styles.todayItem
-                ]}
-              >
-                <Text style={[
-                  styles.dayName,
-                  day.date.getDate() === selectedDate.getDate() && styles.selectedText,
-                  day.isToday && day.date.getDate() !== selectedDate.getDate() && styles.todayText
-                ]}>
-                  {day.dayName}
-                </Text>
-                <Text style={[
-                  styles.dayNumber,
-                  day.date.getDate() === selectedDate.getDate() && styles.selectedText,
-                  day.isToday && day.date.getDate() !== selectedDate.getDate() && styles.todayText
-                ]}>
-                  {day.dayNumber}
-                </Text>
-                {day.isToday && day.date.getDate() !== selectedDate.getDate() && <View style={styles.todayDot} />}
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+        </View>
+
+        {/* Week navigation controls */}
+        <View style={styles.navigationControls}>
+          <TouchableOpacity onPress={() => navigateWeek(-1)} style={styles.navButton}>
+            <Text style={styles.navButtonText}>◀ {t('schedule').prevWeek}</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity onPress={goToCurrentWeek} style={[styles.navButton, weekOffset === 0 && { opacity: 0.5 }]}>
+            <Text style={styles.navButtonText}>{weekDisplayText()}</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity onPress={() => navigateWeek(1)} style={styles.navButton}>
+            <Text style={styles.navButtonText}>{t('schedule').nextWeek} ▶</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Days header */}
+        <View style={styles.daysHeader}>
+          {/* Empty space for time column alignment */}
+          <View style={{ width: timeColumnWidth }} />
+          
+          {dayDates.map((day, index) => (
+            <View 
+              key={index} 
+              style={[
+                styles.dayColumn,
+                { width: dayColumnWidth }, 
+                day.isToday && styles.todayColumn
+              ]}
+            >
+              <Text style={styles.dayName}>{day.dayName}</Text>
+              <Text style={styles.dateText}>{day.dayNumber}</Text>
+            </View>
+          ))}
         </View>
       </View>
 
-      <View style={styles.contentContainer}>
-        <ScrollView style={styles.scheduleList}>
-          {isWeekend ? (
-            <View style={styles.noSchedule}>
-              <Text style={styles.noScheduleText}>{t('schedule').noClassesWeekend}</Text>
+      <View style={styles.content}>
+        <ScrollView
+          ref={verticalScrollRef}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ minHeight: timetableHeight + 20 }}
+        >
+          <View style={styles.timetableContainer}>
+            {/* Time slots column */}
+            <View style={[styles.timeColumn, { width: timeColumnWidth }]}>
+              {timeSlots.map((hour, index) => {
+                const formattedHour = formatHourByLocale(hour, settings.language === 'en');
+                const isCurrentHour = hour === nowHour && weekOffset === 0;
+                
+                return (
+                  <View 
+                    key={index} 
+                    style={[
+                      styles.timeSlot, 
+                      { height: hourHeight },
+                      isCurrentHour && styles.currentHourHighlight
+                    ]}
+                  >
+                    {typeof formattedHour === 'string' ? (
+                      <Text style={styles.timeHour}>{formattedHour}</Text>
+                    ) : (
+                      <>
+                        <Text style={styles.timeHour}>{formattedHour.hour}</Text>
+                        <Text style={styles.timePeriod}>{formattedHour.period}</Text>
+                      </>
+                    )}
+                  </View>
+                );
+              })}
             </View>
-          ) : todaySchedule.length === 0 ? (
-            <View style={styles.noSchedule}>
-              <Text style={styles.noScheduleText}>{t('schedule').noClassesDay}</Text>
-            </View>
-          ) : (
-            todaySchedule.map((item, index) => {
-              if (item.isEvenWeek !== undefined && item.isEvenWeek !== isEvenWeek) {
-                return null;
-              }
 
-              const nextItem = todaySchedule[index + 1];
-              const showTimeIndicator = isCurrentTimeInSchedule(item, nextItem);
-
-              return (
+            {/* Grid container - contains all days and grid lines */}
+            <View style={[styles.gridContainer, { width: windowWidth - timeColumnWidth - 8 }]}>
+              {/* Horizontal grid lines */}
+              {timeSlots.map((hour, index) => (
                 <View 
-                  key={index} 
-                  style={[styles.scheduleItem]}
-                  onLayout={(event) => {
-                    item._height = event.nativeEvent.layout.height;
-                  }}
-                >
-                  <View style={[styles.classCard, {
-                    borderLeftColor: getSubjectColor(item.className)
-                  }]}>
-                    <View style={[styles.timeContainer, {
-                      borderRightColor: 'rgba(138, 138, 141, 0.2)'
-                    }]}>
-                      <View style={styles.timeWrapper}>
-                        <View style={[styles.timeDot, { backgroundColor: getSubjectColor(item.className) }]} />
-                        <Text style={[styles.time, { marginBottom: 'auto' }]}>
-                          {formatTimeByLocale(item.startTime, settings.language === 'en')}
-                        </Text>
-                      </View>
-                      <Text style={[styles.time, { marginTop: 'auto' }]}>
-                        {formatTimeByLocale(item.endTime, settings.language === 'en')}
+                  key={`grid-${index}`} 
+                  style={[
+                    styles.gridLine,
+                    { 
+                      top: index * hourHeight,
+                      width: '100%'
+                    },
+                    hour === nowHour && weekOffset === 0 && { backgroundColor: 'rgba(52, 120, 246, 0.12)' }
+                  ]}
+                />
+              ))}
+
+              {/* Day columns */}
+              {['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].map((day, dayIndex) => {
+                const dayItems = weekSchedule[day as keyof typeof weekSchedule] || [];
+                const isToday = dayDates[dayIndex].isToday;
+
+                // Filter items based on current week (odd/even)
+                const filteredItems = dayItems.filter(item => 
+                  item.isEvenWeek === undefined || item.isEvenWeek === isEvenWeek
+                );
+
+                return (
+                  <View 
+                    key={day} 
+                    style={[
+                      styles.dayContent, 
+                      { 
+                        width: dayColumnWidth,
+                        height: timetableHeight,
+                        left: dayIndex * dayColumnWidth,
+                      },
+                      isToday && { backgroundColor: 'rgba(52, 120, 246, 0.03)' }
+                    ]}
+                  >
+                    {/* Render schedule items */}
+                    {filteredItems.map((item, itemIndex) => {
+                      const { top, height } = calculateItemPosition(
+                        item.startTime,
+                        item.endTime,
+                        hourHeight,
+                        firstHour
+                      );
+                      const color = getSubjectColor(item.className);
+                      const isActive = isToday && isCurrentTimeSlot(item.startTime, item.endTime);
+
+                      // Create simplified item with only necessary props
+                      const simplifiedItem = {
+                        startTime: item.startTime,
+                        endTime: item.endTime,
+                        className: item.className,
+                        roomNumber: item.roomNumber
+                      };
+
+                      return (
+                        <TimetableItem 
+                          key={itemIndex}
+                          item={simplifiedItem}
+                          top={top}
+                          height={height}
+                          color={color}
+                          isActive={isActive}
+                          timeFormat={settings.language}
+                        />
+                      );
+                    })}
+
+                    {/* If day is empty, show empty message */}
+                    {filteredItems.length === 0 && (
+                      <Text style={styles.emptySchedule}>
+                        {t('schedule').noClassesDay}
                       </Text>
-                    </View>
-                    <View style={styles.classContent}>
-                      <View style={styles.classHeaderRow}>
-                        <Text style={styles.className}>{item.className}</Text>
-                        <Text style={[styles.statusText, showTimeIndicator && styles.activeStatusText]}>
-                          {showTimeIndicator ? 'Now' : 
-                            (() => {
-                              const currentTimeMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
-                              const [startHours, startMinutes] = item.startTime.split(':').map(Number);
-                              const startTimeMinutes = startHours * 60 + startMinutes;
-                              
-                              if (currentTimeMinutes < startTimeMinutes) {
-                                const previousItem = index > 0 ? todaySchedule[index - 1] : null;
-                                if (previousItem && isCurrentTimeInSchedule(previousItem, item)) {
-                                  // Calculate minutes until start and round up (so 59 seconds = 1 minute)
-                                  const now = new Date();
-                                  const target = new Date(
-                                    now.getFullYear(),
-                                    now.getMonth(),
-                                    now.getDate(),
-                                    startHours,
-                                    startMinutes
-                                  );
-                                  const diffInMs = target.getTime() - now.getTime();
-                                  const minutesUntilStart = Math.ceil(diffInMs / (1000 * 60));
-                                  return `In ${minutesUntilStart}m`;
-                                } else if (!previousItem && currentTimeMinutes < startTimeMinutes) {
-                                  // If this is the first class and it hasn't started yet
-                                  const now = new Date();
-                                  const target = new Date(
-                                    now.getFullYear(),
-                                    now.getMonth(),
-                                    now.getDate(),
-                                    startHours,
-                                    startMinutes
-                                  );
-                                  const diffInMs = target.getTime() - now.getTime();
-                                  const minutesUntilStart = Math.ceil(diffInMs / (1000 * 60));
-                                  return `In ${minutesUntilStart}m`;
-                                }
-                              }
-                              return '';
-                            })()
-                          }
-                        </Text>
-                      </View>
-                      <View style={styles.classDetails}>
-                        <View style={styles.teacherContainer}>
-                          <Text style={styles.teacherName}>{item.teacherName}</Text>
-                          {item.group && item.group !== 'Clasă intreagă' && item.group !== 'Clas� intreag�' && (
-                            <Text style={styles.groupName}>
-                              {item.group === 'Subgroup 1' ? t('subgroup').group1 : t('subgroup').group2}
-                            </Text>
-                          )}
-                        </View>
-                        <Text style={styles.roomNumber}>{t('schedule').room} {item.roomNumber}</Text>
-                      </View>
-                    </View>
-                    {showTimeIndicator && (
-                      <TimeIndicator 
-                        startTime={item.startTime} 
-                        endTime={item.endTime} // Use item's end time for the period indicator
-                        containerHeight={item._height || 100}
-                        hasNextItem={item.hasNextItem}
-                        timestamp={currentTimestamp}
+                    )}
+
+                    {/* Show current time indicator if it's today */}
+                    {isToday && weekOffset === 0 && (
+                      <CurrentTimeIndicator 
+                        hourHeight={hourHeight}
+                        firstHour={firstHour}
+                        timestamp={currentTime.getTime()}
                       />
                     )}
                   </View>
-                </View>
-              );
-            })
-          )}
+                );
+              })}
+            </View>
+          </View>
         </ScrollView>
       </View>
     </SafeAreaView>
   );
-}
-
-// Function to generate consistent colors for subjects
-function getSubjectColor(subjectName: string): string {
-  const colors = [
-    '#4169E1', // Royal Blue
-    '#FF69B4', // Hot Pink
-    '#32CD32', // Lime Green
-    '#FF8C00', // Dark Orange
-    '#9370DB', // Medium Purple
-    '#20B2AA', // Light Sea Green
-    '#FF6347', // Tomato
-    '#4682B4', // Steel Blue
-    '#9ACD32', // Yellow Green
-    '#FF4500', // Orange Red
-    '#BA55D3', // Medium Orchid
-    '#2E8B57', // Sea Green
-  ];
-  
-  let hash = 0;
-  for (let i = 0; i < subjectName.length; i++) {
-    hash = subjectName.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  
-  const index = Math.abs(hash) % colors.length;
-  return colors[index];
 }
 
 const styles = StyleSheet.create<Styles>({
@@ -670,34 +578,35 @@ const styles = StyleSheet.create<Styles>({
     flex: 1,
     backgroundColor: '#0A0A0A',
   },
-  header: {
-    padding: 20,
+  content: {
+    flex: 1,
+  },
+  headerContainer: {
     backgroundColor: '#141414',
-    borderBottomRightRadius: 32,
-    borderBottomLeftRadius: 32,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    paddingBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
     elevation: 8,
-    zIndex: 10, // Added to ensure header stays on top
+    zIndex: 10,
   },
-  headerTop: {
+  header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    padding: 20,
   },
-  monthYear: {
+  pageTitle: {
     fontSize: 24,
     fontWeight: '700',
     color: '#FFFFFF',
-    flex: 1,
-    marginRight: 16,
     letterSpacing: 0.5,
   },
   weekInfo: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: '#3A86FF',
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 16,
@@ -708,228 +617,158 @@ const styles = StyleSheet.create<Styles>({
     fontWeight: '600',
     letterSpacing: 0.3,
   },
-  weekDays: {
-    marginHorizontal: -20,
+  navigationControls: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    marginBottom: 12,
   },
-  weekDaysContent: {
-    paddingHorizontal: 16,
-  },
-  dayItem: {
+  navButton: {
+    padding: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 12,
-    borderRadius: 16,
-    width: (Dimensions.get('window').width - 40) / 5,
-    backgroundColor: '#1A1A1A',
-    marginHorizontal: 4,
-    height: 80,
   },
-  selectedDay: {
-    backgroundColor: '#2C3DCD',
-    transform: [{ scale: 1.05 }],
-    shadowColor: '#2C3DCD',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+  navButtonText: {
+    color: '#3A86FF',
+    fontSize: 14,
+    fontWeight: '600',
   },
-  todayItem: {
-    borderColor: '#2C3DCD',
-    borderWidth: 2,
+  daysHeader: {
+    flexDirection: 'row',
+    paddingHorizontal: 8,
+    paddingBottom: 8,
+  },
+  dayColumn: {
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderRadius: 12,
+  },
+  todayColumn: {
+    backgroundColor: 'rgba(52, 120, 246, 0.1)',
   },
   dayName: {
     color: '#8A8A8D',
     fontSize: 13,
     fontWeight: '600',
     letterSpacing: 0.5,
-    marginBottom: 4,
   },
-  dayNumber: {
+  dateText: {
     color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    marginTop: 2,
   },
-  selectedText: {
-    color: '#FFFFFF',
-  },
-  todayText: {
-    color: '#2C3DCD',
-  },
-  todayDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#2C3DCD',
-    marginTop: 4,
-  },
-  scheduleList: {
-    flex: 1,
-    padding: 20,
-    marginTop: -20, // Pull content up slightly
-    backgroundColor: '#0A0A0A', // Ensure background color is consistent
-  },
-  scheduleItem: {
-    marginBottom: 12, // Slightly reduced margin between items
-    zIndex: 1, // Ensure cards are visible
-  },
-  classCard: {
-    backgroundColor: '#232433',
-    borderRadius: 12,
-    borderLeftWidth: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 3,
+  timetableContainer: {
     flexDirection: 'row',
-    overflow: 'hidden',
-    minHeight: 100, // Default height for classes
-    marginVertical: 4, // Add spacing to prevent shadow clipping
+    paddingTop: 8,
+    paddingHorizontal: 8,
   },
-  timeContainer: {
-    width: 80,
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 16,
-    borderRightWidth: 1,
-    minHeight: 100,
-  },
-  time: {
-    color: '#8A8A8D',
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  classContent: {
-    flex: 1,
-    padding: 16,
-  },
-  className: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  classDetails: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 8,
-  },
-  teacherName: {
-    color: '#8A8A8D',
-    fontSize: 14,
-    flex: 1,
-    marginRight: 8,
-  },
-  roomNumber: {
-    color: '#8A8A8D',
-    fontSize: 14,
-  },
-  noSchedule: {
-    padding: 20,
+  timeColumn: {
     alignItems: 'center',
   },
-  noScheduleText: {
-    color: '#8A8A8D',
-    fontSize: 16,
-  },
-  timeIndicatorContainer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    pointerEvents: 'none',
-  },
-  timeIndicator: {
-    position: 'absolute',
-    left: 70,
-    right: 0,
-    height: 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  timeIndicatorLine: {
-    position: 'absolute',
-    left: 6,
-    right: 0,
-    height: 2,
-    backgroundColor: '#FF3B30',
-    opacity: 0.5,
-  },
-  timeIndicatorArrowContainer: {
-    position: 'absolute',
-    left: 0,
-    width: 12,
-    height: 12,
+  timeSlot: {
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FF3B30',
-    borderRadius: 6,
-    shadowColor: '#FF3B30',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 4,
-    elevation: 5,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.05)',
   },
-  timeIndicatorArrow: { // Added missing style
-    width: 0,
-    height: 0,
-    backgroundColor: 'transparent',
-    borderStyle: 'solid',
-    borderLeftWidth: 4,
-    borderRightWidth: 4,
-    borderBottomWidth: 4,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderBottomColor: '#FF3B30',
-    transform: [{ rotate: '180deg' }],
-  },
-  timeLeftText: {
-    position: 'absolute',
-    left: -30,
-    backgroundColor: '#FF3B30',
-    color: 'white',
-    fontSize: 12,
-    fontWeight: 'bold',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+  currentHourHighlight: {
+    backgroundColor: 'rgba(52, 120, 246, 0.08)',
     borderRadius: 4,
-    overflow: 'hidden',
-    shadowColor: '#FF3B30',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 2,
-    elevation: 3,
   },
-  timeWrapper: {
+  timeHour: {
+    color: '#8A8A8D',
+    fontSize: 14,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  timePeriod: {
+    color: '#8A8A8D',
+    fontSize: 9,
+    fontWeight: '500',
+    textAlign: 'center',
+    marginTop: -3,
+  },
+  gridContainer: {
+    position: 'relative',
+    height: '100%',
+  },
+  gridLine: {
+    position: 'absolute',
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+  },
+  dayContent: {
+    position: 'absolute',
+    top: 0,
+    marginHorizontal: 2,
+    borderRadius: 8,
+  },
+  timetableItem: {
+    position: 'absolute',
+    left: 2,
+    right: 2,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  itemGradient: {
+    flex: 1,
+    padding: 6,
+    justifyContent: 'space-between',
+  },
+  className: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '600',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  itemFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  roomNumber: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '500',
+    opacity: 0.9,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  currentTimeIndicator: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 'auto',
+    zIndex: 50,
   },
-  timeDot: {
+  currentTimeIndicatorLine: {
+    flex: 1,
+    height: 2,
+    backgroundColor: '#FF3B30',
+    opacity: 0.7,
+  },
+  currentTimeIndicatorDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    marginRight: 6,
-    shadowColor: '#fff',
+    backgroundColor: '#FF3B30',
+    marginRight: 2,
+    shadowColor: '#FF3B30',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
     shadowRadius: 4,
-    elevation: 3,
   },
-  classHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  statusText: {
-    fontSize: 12,
+  emptySchedule: {
     color: '#8A8A8D',
-    fontWeight: '600',
-  },
-  activeStatusText: {
-    color: '#3478F6',
+    fontSize: 10,
+    textAlign: 'center',
+    marginTop: 30,
+    opacity: 0.7,
   },
   loadingContainer: {
     flex: 1,
@@ -951,21 +790,5 @@ const styles = StyleSheet.create<Styles>({
     color: '#FF3B30',
     fontSize: 16,
     textAlign: 'center',
-  },
-  headerContainer: {
-    zIndex: 10,
-  },
-  contentContainer: {
-    flex: 1,
-    zIndex: 1,
-  },
-  teacherContainer: {
-    flex: 1,
-    marginRight: 8,
-  },
-  groupName: {
-    color: '#8A8A8D',
-    fontSize: 12,
-    marginTop: 4,
   },
 });

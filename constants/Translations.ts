@@ -14,10 +14,18 @@ type TranslationType = {
     room: string;
     evenWeek: string;
     oddWeek: string;
+    prevWeek: string;
+    nextWeek: string;
   };
   subgroup: {
     group1: string;
     group2: string;
+  };
+  tabs: {
+    today: string;
+    schedule: string;
+    assignments: string;
+    settings: string;
   };
 };
 
@@ -38,10 +46,18 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
       room: 'Room',
       evenWeek: 'Even Week',
       oddWeek: 'Odd Week',
+      prevWeek: 'Prev',
+      nextWeek: 'Next',
     },
     subgroup: {
       group1: 'Subgroup 1',
       group2: 'Subgroup 2',
+    },
+    tabs: {
+      today: 'Today',
+      schedule: 'Schedule',
+      assignments: 'Assignments',
+      settings: 'Settings',
     },
   },
   ro: {
@@ -60,10 +76,18 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
       room: 'Sala',
       evenWeek: 'Săptămână Pară',
       oddWeek: 'Săptămână Impară',
+      prevWeek: 'Prec',
+      nextWeek: 'Urm',
     },
     subgroup: {
       group1: 'Subgrupa 1',
       group2: 'Subgrupa 2',
+    },
+    tabs: {
+      today: 'Astăzi',
+      schedule: 'Orar',
+      assignments: 'Teme',
+      settings: 'Setări',
     },
   },
 };
