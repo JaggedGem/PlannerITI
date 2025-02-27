@@ -46,7 +46,7 @@ type ScheduleItem = {
   hasNextItem?: boolean;
 };
 
-export default function Today() {
+export default function DayView() {
   const [scheduleData, setScheduleData] = useState<ApiResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

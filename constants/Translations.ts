@@ -16,6 +16,9 @@ type TranslationType = {
     oddWeek: string;
     prevWeek: string;
     nextWeek: string;
+    currentWeek: string;
+    loading: string;
+    error: string;
   };
   subgroup: {
     group1: string;
@@ -48,6 +51,9 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
       oddWeek: 'Odd Week',
       prevWeek: 'Prev',
       nextWeek: 'Next',
+      currentWeek: 'Current Week',
+      loading: 'Loading schedule...',
+      error: 'Unable to load schedule. Please try again later.',
     },
     subgroup: {
       group1: 'Subgroup 1',
@@ -78,6 +84,9 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
       oddWeek: 'Săptămână Impară',
       prevWeek: 'Prec',
       nextWeek: 'Urm',
+      currentWeek: 'Săptămâna Curentă',
+      loading: 'Se încarcă orarul...',
+      error: 'Nu s-a putut încărca orarul. Încercați din nou mai târziu.',
     },
     subgroup: {
       group1: 'Subgrupa 1',
