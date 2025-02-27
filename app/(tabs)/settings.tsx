@@ -103,10 +103,6 @@ export default function Settings() {
     setSearchQuery('');
   }, []);
 
-  const handleScheduleViewChange = useCallback((view: 'day' | 'week') => {
-    scheduleService.updateSettings({ scheduleView: view });
-  }, []);
-
   const keyExtractor = useCallback((item: Group) => item._id, []);
 
   const getItemLayout = useCallback((data: ArrayLike<Group> | null | undefined, index: number) => ({
@@ -312,41 +308,6 @@ export default function Settings() {
               </Text>
             </TouchableOpacity>
           ))}
-        </View>
-      </View>
-
-      {/* Schedule View Selection Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Schedule View</Text>
-        <View style={styles.optionsContainer}>
-          <TouchableOpacity
-            style={[
-              styles.optionButton,
-              settings.scheduleView === 'day' && styles.selectedOption
-            ]}
-            onPress={() => handleScheduleViewChange('day')}
-          >
-            <Text style={[
-              styles.optionText,
-              settings.scheduleView === 'day' && styles.selectedOptionText
-            ]}>
-              Day View
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.optionButton,
-              settings.scheduleView === 'week' && styles.selectedOption
-            ]}
-            onPress={() => handleScheduleViewChange('week')}
-          >
-            <Text style={[
-              styles.optionText,
-              settings.scheduleView === 'week' && styles.selectedOptionText
-            ]}>
-              Week View
-            </Text>
-          </TouchableOpacity>
         </View>
       </View>
 
