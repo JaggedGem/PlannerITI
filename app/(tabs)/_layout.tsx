@@ -2,6 +2,7 @@ import { Tabs } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import React from 'react';
 import { Platform } from 'react-native';
+import { useTranslation } from '@/hooks/useTranslation';
 
 import { HapticTab } from '@/components/HapticTab';
 import TabBarBackground from '@/components/ui/TabBarBackground';
@@ -10,10 +11,11 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const { t } = useTranslation();
 
   return (
     <Tabs
-      initialRouteName="today"
+      initialRouteName="schedule"
       screenOptions={{
         tabBarActiveTintColor: '#2C3DCD',
         tabBarInactiveTintColor: '#8A8A8D',
@@ -42,18 +44,10 @@ export default function TabLayout() {
         }),
       }}>
       <Tabs.Screen
-        name="today"
-        options={{
-          title: 'Today',
-          tabBarIcon: ({ color }) => (
-            <MaterialIcons name="today" size={24} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="schedule"
         options={{
-          title: 'Schedule',
+          title: t('tabs').schedule,
+          href: '/schedule',
           tabBarIcon: ({ color }) => (
             <MaterialIcons name="calendar-month" size={24} color={color} />
           ),
@@ -62,7 +56,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="assignments"
         options={{
-          title: 'Assignments',
+          title: t('tabs').assignments,
           tabBarIcon: ({ color }) => (
             <MaterialIcons name="assignment" size={24} color={color} />
           ),
@@ -71,7 +65,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="settings"
         options={{
-          title: 'Settings',
+          title: t('tabs').settings,
           tabBarIcon: ({ color }) => (
             <MaterialIcons name="settings" size={24} color={color} />
           ),
