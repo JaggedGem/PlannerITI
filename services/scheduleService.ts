@@ -57,12 +57,14 @@ export interface Group {
 
 export type SubGroupType = 'Subgroup 1' | 'Subgroup 2';
 export type Language = 'en' | 'ro';
+export type ScheduleView = 'day' | 'week';
 
 interface UserSettings {
   group: SubGroupType;
   language: Language;
   selectedGroupId: string;
   selectedGroupName: string;
+  scheduleView: ScheduleView;
 }
 
 const API_BASE_URL = 'https://orar-api.ceiti.md/v1';
@@ -96,7 +98,8 @@ export const scheduleService = {
     group: 'Subgroup 2' as SubGroupType,
     language: 'en' as Language,
     selectedGroupId: '',  // Will be set dynamically after fetching groups
-    selectedGroupName: DEFAULT_GROUP_NAME
+    selectedGroupName: DEFAULT_GROUP_NAME,
+    scheduleView: 'day' as ScheduleView
   },
   
   listeners: new Set<SettingsListener>(),
