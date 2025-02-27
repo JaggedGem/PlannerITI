@@ -133,9 +133,10 @@ interface CurrentTimeIndicatorProps {
   hourHeight: number;
   firstHour: number;
   timestamp: number;
+  schedule: Record<string, any[]>;
 }
 
-const CurrentTimeIndicator = ({ hourHeight, firstHour, timestamp }: CurrentTimeIndicatorProps) => {
+const CurrentTimeIndicator = ({ hourHeight, firstHour, timestamp, schedule }: CurrentTimeIndicatorProps) => {
   const currentTime = new Date(timestamp);
   const hours = currentTime.getHours();
   const minutes = currentTime.getMinutes();
@@ -143,8 +144,25 @@ const CurrentTimeIndicator = ({ hourHeight, firstHour, timestamp }: CurrentTimeI
   const totalMinutesSinceFirstHour = (hours - firstHour) * 60 + minutes;
   const position = (totalMinutesSinceFirstHour / 60) * hourHeight;
 
+  // Don't show indicator if before first hour
   if (hours < firstHour) return null;
   
+  // Get latest end time for the day
+  const now = new Date();
+  const currentDay = DAYS_MAP[now.getDay() as keyof typeof DAYS_MAP];
+  const todaySchedule = schedule[currentDay as keyof typeof schedule] || [];
+  
+  if (todaySchedule.length > 0) {
+    const latestEndTime = todaySchedule.reduce((latest: number, item: { endTime: string }) => {
+      const [endHour, endMinute] = item.endTime.split(':').map(Number);
+      const endTimeInMinutes = endHour * 60 + endMinute;
+      return Math.max(latest, endTimeInMinutes);
+    }, 0);
+    
+    const currentTimeInMinutes = hours * 60 + minutes;
+    if (currentTimeInMinutes > latestEndTime) return null;
+  }
+
   return (
     <View style={[styles.currentTimeIndicator, { top: position }]}>
       <View style={styles.currentTimeIndicatorDot} />
@@ -565,6 +583,7 @@ export default function WeekView() {
                           hourHeight={hourHeight}
                           firstHour={firstHour}
                           timestamp={currentTime.getTime()}
+                          schedule={weekSchedule}
                         />
                       )}
                     </View>
