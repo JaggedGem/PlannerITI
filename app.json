@@ -33,6 +33,12 @@
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
         }
+      ],
+      [
+        "@react-native-community/datetimepicker",
+        {
+          "androidPackage": "com.reactcommunity.rndatetimepicker"
+        }
       ]
     ],
     "experiments": {

@@ -1,9 +1,11 @@
-import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator, FlatList, Modal, TextInput } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator, FlatList, Modal, TextInput, Switch, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useEffect, useRef, useCallback, memo, useMemo } from 'react';
-import { scheduleService, SubGroupType, Language, Group } from '@/services/scheduleService';
+import { scheduleService, SubGroupType, Language, Group, CustomPeriod } from '@/services/scheduleService';
 import { useTranslation } from '@/hooks/useTranslation';
 import { MaterialIcons } from '@expo/vector-icons';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import ColorPicker from 'react-native-wheel-color-picker';
 
 const languages = {
   en: 'English',
@@ -80,6 +82,17 @@ export default function Settings() {
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [initialScrollDone, setInitialScrollDone] = useState(false);
+  const [showPeriodModal, setShowPeriodModal] = useState(false);
+  const [editingPeriod, setEditingPeriod] = useState<CustomPeriod | null>(null);
+  const [periodName, setPeriodName] = useState('');
+  const [startTime, setStartTime] = useState(new Date());
+  const [endTime, setEndTime] = useState(new Date());
+  const [selectedDays, setSelectedDays] = useState<number[]>([]);
+  const [selectedColor, setSelectedColor] = useState('#2C3DCD');
+  const [isEnabled, setIsEnabled] = useState(true);
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [showEndPicker, setShowEndPicker] = useState(false);
 
   // Callback functions
   const handleLanguageChange = useCallback((language: Language) => {
@@ -245,6 +258,74 @@ export default function Settings() {
     </View>
   ), [searchQuery]);
 
+  const resetPeriodForm = useCallback(() => {
+    setPeriodName('');
+    setStartTime(new Date());
+    setEndTime(new Date());
+    setSelectedDays([]);
+    setSelectedColor('#2C3DCD');
+    setIsEnabled(true);
+    setEditingPeriod(null);
+  }, []);
+
+  const handleAddPeriod = useCallback(() => {
+    resetPeriodForm();
+    setShowPeriodModal(true);
+  }, [resetPeriodForm]);
+
+  const handleEditPeriod = useCallback((period: CustomPeriod) => {
+    setEditingPeriod(period);
+    setPeriodName(period.name || '');
+    setStartTime(new Date(`2000-01-01T${period.starttime}`));
+    setEndTime(new Date(`2000-01-01T${period.endtime}`));
+    setSelectedDays(period.daysOfWeek || []);
+    setSelectedColor(period.color || '#2C3DCD');
+    setIsEnabled(period.isEnabled);
+    setShowPeriodModal(true);
+  }, []);
+
+  const handleDeletePeriod = useCallback((periodId: string) => {
+    scheduleService.deleteCustomPeriod(periodId);
+  }, []);
+
+  const handleSavePeriod = useCallback(() => {
+    const periodData = {
+      name: periodName,
+      starttime: startTime.toTimeString().slice(0, 5),
+      endtime: endTime.toTimeString().slice(0, 5),
+      daysOfWeek: selectedDays,
+      color: selectedColor,
+      isEnabled,
+      isCustom: true
+    };
+
+    if (editingPeriod) {
+      scheduleService.updateCustomPeriod(editingPeriod._id, periodData);
+    } else {
+      scheduleService.addCustomPeriod(periodData);
+    }
+
+    setShowPeriodModal(false);
+    resetPeriodForm();
+  }, [periodName, startTime, endTime, selectedDays, selectedColor, isEnabled, editingPeriod, resetPeriodForm]);
+
+  const toggleDay = useCallback((day: number) => {
+    setSelectedDays(prev => 
+      prev.includes(day) 
+        ? prev.filter(d => d !== day)
+        : [...prev, day].sort()
+    );
+  }, []);
+
+  const handleTimePickerChange = (type: 'start' | 'end') => (event: DateTimePickerEvent, date?: Date) => {
+    if (Platform.OS === 'android') {
+      type === 'start' ? setShowStartPicker(false) : setShowEndPicker(false);
+    }
+    if (event.type === 'set' && date) {
+      type === 'start' ? setStartTime(date) : setEndTime(date);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Class Selection Section */}
@@ -308,6 +389,64 @@ export default function Settings() {
               </Text>
             </TouchableOpacity>
           ))}
+        </View>
+      </View>
+
+      {/* Custom Periods Section */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Custom Periods</Text>
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={handleAddPeriod}
+          >
+            <MaterialIcons name="add" size={24} color="white" />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.periodsListContainer}>
+          {settings.customPeriods.map((period) => (
+            <View key={period._id} style={styles.periodItem}>
+              <View style={styles.periodItemHeader}>
+                <View style={[styles.colorDot, { backgroundColor: period.color || '#2C3DCD' }]} />
+                <Text style={styles.periodName}>{period.name || 'Custom Period'}</Text>
+                <Switch
+                  value={period.isEnabled}
+                  onValueChange={(value) => {
+                    scheduleService.updateCustomPeriod(period._id, { isEnabled: value });
+                  }}
+                />
+              </View>
+              
+              <View style={styles.periodItemContent}>
+                <Text style={styles.periodTime}>
+                  {period.starttime} - {period.endtime}
+                </Text>
+                <Text style={styles.periodDays}>
+                  {period.daysOfWeek?.map(day => t('weekdays').short[day - 1]).join(', ') || 'All weekdays'}
+                </Text>
+              </View>
+
+              <View style={styles.periodItemActions}>
+                <TouchableOpacity
+                  style={styles.periodAction}
+                  onPress={() => handleEditPeriod(period)}
+                >
+                  <MaterialIcons name="edit" size={20} color="#8A8A8D" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.periodAction}
+                  onPress={() => handleDeletePeriod(period._id)}
+                >
+                  <MaterialIcons name="delete" size={20} color="#ff6b6b" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+          
+          {settings.customPeriods.length === 0 && (
+            <Text style={styles.noPeriods}>No custom periods added yet</Text>
+          )}
         </View>
       </View>
 
@@ -395,6 +534,180 @@ export default function Settings() {
           </View>
         </View>
       </Modal>
+
+      {/* Custom Period Modal */}
+      <Modal
+        visible={showPeriodModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => {
+          setShowPeriodModal(false);
+          resetPeriodForm();
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {editingPeriod ? 'Edit Period' : 'Add New Period'}
+              </Text>
+              <TouchableOpacity onPress={() => {
+                setShowPeriodModal(false);
+                resetPeriodForm();
+              }}>
+                <MaterialIcons name="close" size={24} color="white" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.formContainer}>
+              {/* Name Input */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Name</Text>
+                <TextInput
+                  style={styles.formInput}
+                  value={periodName}
+                  onChangeText={setPeriodName}
+                  placeholder="Enter period name"
+                  placeholderTextColor="#8A8A8D"
+                />
+              </View>
+
+              {/* Time Selection */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Time</Text>
+                <View style={styles.timeContainer}>
+                  <TouchableOpacity
+                    style={styles.timeButton}
+                    onPress={() => setShowStartPicker(true)}
+                  >
+                    <Text style={styles.timeButtonText}>
+                      {startTime.toTimeString().slice(0, 5)}
+                    </Text>
+                  </TouchableOpacity>
+                  <Text style={styles.timeSeparator}>-</Text>
+                  <TouchableOpacity
+                    style={styles.timeButton}
+                    onPress={() => setShowEndPicker(true)}
+                  >
+                    <Text style={styles.timeButtonText}>
+                      {endTime.toTimeString().slice(0, 5)}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Days Selection */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Days</Text>
+                <View style={styles.daysContainer}>
+                  {[1, 2, 3, 4, 5].map((day) => (
+                    <TouchableOpacity
+                      key={day}
+                      style={[
+                        styles.dayButton,
+                        selectedDays.includes(day) && styles.selectedDayButton
+                      ]}
+                      onPress={() => toggleDay(day)}
+                    >
+                      <Text style={[
+                        styles.dayButtonText,
+                        selectedDays.includes(day) && styles.selectedDayButtonText
+                      ]}>
+                        {t('weekdays').short[day]}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Color Selection */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Color</Text>
+                <TouchableOpacity
+                  style={[styles.colorPreview, { backgroundColor: selectedColor }]}
+                  onPress={() => setShowColorPicker(true)}
+                />
+              </View>
+
+              {/* Enabled Toggle */}
+              <View style={styles.formGroup}>
+                <View style={styles.switchContainer}>
+                  <Text style={styles.formLabel}>Enabled</Text>
+                  <Switch value={isEnabled} onValueChange={setIsEnabled} />
+                </View>
+              </View>
+
+              {/* Save Button */}
+              <TouchableOpacity
+                style={styles.saveButton}
+                onPress={handleSavePeriod}
+              >
+                <Text style={styles.saveButtonText}>Save Period</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Color Picker Modal */}
+      <Modal
+        visible={showColorPicker}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowColorPicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.colorPickerModal}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Choose Color</Text>
+              <TouchableOpacity onPress={() => setShowColorPicker(false)}>
+                <MaterialIcons name="close" size={24} color="white" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.colorPickerContainer}>
+              <ColorPicker
+                color={selectedColor}
+                onColorChange={setSelectedColor}
+                thumbSize={30}
+                sliderSize={30}
+                noSnap={true}
+                row={false}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Time Pickers */}
+      {(showStartPicker || showEndPicker) && (Platform.OS === 'android' ? (
+        <DateTimePicker
+          value={showStartPicker ? startTime : endTime}
+          mode="time"
+          is24Hour={true}
+          onChange={handleTimePickerChange(showStartPicker ? 'start' : 'end')}
+        />
+      ) : Platform.OS === 'ios' && (
+        <>
+          {showStartPicker && (
+            <DateTimePicker
+              value={startTime}
+              mode="time"
+              is24Hour={true}
+              onChange={handleTimePickerChange('start')}
+              display="spinner"
+            />
+          )}
+          {showEndPicker && (
+            <DateTimePicker
+              value={endTime}
+              mode="time"
+              is24Hour={true}
+              onChange={handleTimePickerChange('end')}
+              display="spinner"
+            />
+          )}
+        </>
+      ))}
     </SafeAreaView>
   );
 }
@@ -543,5 +856,165 @@ const styles = StyleSheet.create({
     color: '#ff6b6b',
     textAlign: 'center',
     fontSize: 16,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  addButton: {
+    backgroundColor: '#2C3DCD',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  periodsListContainer: {
+    gap: 12,
+  },
+  periodItem: {
+    backgroundColor: '#232433',
+    borderRadius: 12,
+    padding: 16,
+  },
+  periodItemHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  colorDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 8,
+  },
+  periodName: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+    flex: 1,
+  },
+  periodItemContent: {
+    marginBottom: 12,
+  },
+  periodTime: {
+    color: '#8A8A8D',
+    fontSize: 14,
+    marginBottom: 4,
+  },
+  periodDays: {
+    color: '#8A8A8D',
+    fontSize: 14,
+  },
+  periodItemActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 16,
+  },
+  periodAction: {
+    padding: 4,
+  },
+  noPeriods: {
+    color: '#8A8A8D',
+    textAlign: 'center',
+    padding: 20,
+  },
+  formContainer: {
+    gap: 20,
+  },
+  formGroup: {
+    gap: 8,
+  },
+  formLabel: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  formInput: {
+    backgroundColor: '#232433',
+    borderRadius: 12,
+    padding: 16,
+    color: 'white',
+    fontSize: 16,
+  },
+  timeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  timeButton: {
+    flex: 1,
+    backgroundColor: '#232433',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+  },
+  timeButtonText: {
+    color: 'white',
+    fontSize: 16,
+  },
+  timeSeparator: {
+    color: 'white',
+    fontSize: 20,
+  },
+  daysContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  dayButton: {
+    flex: 1,
+    backgroundColor: '#232433',
+    borderRadius: 12,
+    padding: 12,
+    alignItems: 'center',
+  },
+  selectedDayButton: {
+    backgroundColor: '#2C3DCD',
+  },
+  dayButtonText: {
+    color: '#8A8A8D',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  selectedDayButtonText: {
+    color: 'white',
+  },
+  colorPreview: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: '#232433',
+  },
+  switchContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  saveButton: {
+    backgroundColor: '#2C3DCD',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  saveButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  colorPickerModal: {
+    backgroundColor: '#1a1b26',
+    borderRadius: 20,
+    padding: 20,
+    width: '90%',
+    maxWidth: 400,
+    alignSelf: 'center',
+  },
+  colorPickerContainer: {
+    height: 300,
+    padding: 20,
   },
 });

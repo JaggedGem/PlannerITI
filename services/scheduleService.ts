@@ -7,6 +7,14 @@ export interface Period {
   endtime: string;
 }
 
+export interface CustomPeriod extends Period {
+  name?: string;
+  isCustom: boolean;
+  isEnabled: boolean;
+  color?: string;
+  daysOfWeek?: number[]; // 1-5 for Monday-Friday
+}
+
 export interface ScheduleItem {
   _id: string;
   subjectid: {
@@ -65,6 +73,7 @@ interface UserSettings {
   selectedGroupId: string;
   selectedGroupName: string;
   scheduleView: ScheduleView;
+  customPeriods: CustomPeriod[];
 }
 
 const API_BASE_URL = 'https://orar-api.ceiti.md/v1';
@@ -99,7 +108,8 @@ export const scheduleService = {
     language: 'en' as Language,
     selectedGroupId: '',  // Will be set dynamically after fetching groups
     selectedGroupName: DEFAULT_GROUP_NAME,
-    scheduleView: 'day' as ScheduleView
+    scheduleView: 'day' as ScheduleView,
+    customPeriods: [] as CustomPeriod[]
   },
   
   listeners: new Set<SettingsListener>(),
@@ -352,20 +362,29 @@ export const scheduleService = {
       group?: string;
       _height?: number;
       hasNextItem?: boolean;
+      isCustom?: boolean;
+      color?: string;
     }> = [];
 
-    // Add test period
-    // result.push({
-    //   period: "test",
-    //   startTime: "15:25",
-    //   endTime: "16:25",
-    //   className: "Test Period",
-    //   teacherName: "Test Teacher",
-    //   roomNumber: "Test Room",
-    //   group: "Clasă intreagă"
-    // });
+    // Add custom periods for this day
+    const dayIndex = Object.keys(DAYS_MAP).findIndex(key => DAYS_MAP[Number(key) as keyof typeof DAYS_MAP] === dayName) + 1;
+    
+    this.settings.customPeriods.forEach(customPeriod => {
+      if (customPeriod.isEnabled && (!customPeriod.daysOfWeek || customPeriod.daysOfWeek.includes(dayIndex))) {
+        result.push({
+          period: customPeriod._id,
+          startTime: customPeriod.starttime,
+          endTime: customPeriod.endtime,
+          className: customPeriod.name || 'Custom Period',
+          teacherName: '',
+          roomNumber: '',
+          isCustom: true,
+          color: customPeriod.color,
+        });
+      }
+    });
 
-    // Process each period
+    // Process regular periods
     Object.entries(daySchedule).forEach(([period, schedules]) => {
       const periodData = data.periods[parseInt(period) - 1];
       
@@ -426,7 +445,44 @@ export const scheduleService = {
     const perWeek = 7 * 24 * 60 * 60 * 1000;
     const totalWeeks = Math.floor((d1.valueOf() - d2.valueOf()) / perWeek + 1);
     return totalWeeks % 2 === 0;
-  }
+  },
+
+  // Custom period management
+  addCustomPeriod(period: Omit<CustomPeriod, '_id'>) {
+    const newPeriod = {
+      ...period,
+      _id: `custom_${Date.now()}`
+    };
+    this.settings.customPeriods.push(newPeriod);
+    this.saveSettings();
+    this.notifyListeners();
+    return newPeriod;
+  },
+
+  updateCustomPeriod(periodId: string, updates: Partial<CustomPeriod>) {
+    const index = this.settings.customPeriods.findIndex(p => p._id === periodId);
+    if (index !== -1) {
+      this.settings.customPeriods[index] = {
+        ...this.settings.customPeriods[index],
+        ...updates
+      };
+      this.saveSettings();
+      this.notifyListeners();
+      return true;
+    }
+    return false;
+  },
+
+  deleteCustomPeriod(periodId: string) {
+    const index = this.settings.customPeriods.findIndex(p => p._id === periodId);
+    if (index !== -1) {
+      this.settings.customPeriods.splice(index, 1);
+      this.saveSettings();
+      this.notifyListeners();
+      return true;
+    }
+    return false;
+  },
 };
 
 // Initialize settings from storage

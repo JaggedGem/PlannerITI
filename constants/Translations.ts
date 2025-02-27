@@ -7,6 +7,19 @@ type TranslationType = {
   settings: {
     language: string;
     group: string;
+    customPeriods: {
+      title: string;
+      add: string;
+      edit: string;
+      name: string;
+      time: string;
+      days: string;
+      color: string;
+      enabled: string;
+      save: string;
+      noPeriodsYet: string;
+      colorPicker: string;
+    };
   };
   schedule: {
     noClassesWeekend: string;
@@ -42,6 +55,19 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
     settings: {
       language: 'Language',
       group: 'Subgroup',
+      customPeriods: {
+        title: 'Custom Periods',
+        add: 'Add New Period',
+        edit: 'Edit Period',
+        name: 'Name',
+        time: 'Time',
+        days: 'Days',
+        color: 'Color',
+        enabled: 'Enabled',
+        save: 'Save Period',
+        noPeriodsYet: 'No custom periods added yet',
+        colorPicker: 'Choose Color',
+      },
     },
     schedule: {
       noClassesWeekend: 'No classes on weekends',
@@ -75,6 +101,19 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
     settings: {
       language: 'Limbă',
       group: 'Subgrupă',
+      customPeriods: {
+        title: 'Perioade Personalizate',
+        add: 'Adaugă Perioadă',
+        edit: 'Editează Perioada',
+        name: 'Nume',
+        time: 'Timp',
+        days: 'Zile',
+        color: 'Culoare',
+        enabled: 'Activat',
+        save: 'Salvează Perioada',
+        noPeriodsYet: 'Nu există perioade personalizate',
+        colorPicker: 'Alege Culoarea',
+      },
     },
     schedule: {
       noClassesWeekend: 'Nu sunt cursuri în weekend',
