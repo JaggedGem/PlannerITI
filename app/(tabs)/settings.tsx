@@ -35,7 +35,7 @@ const GroupItem = memo(({
   // Memoize styles to prevent unnecessary recalculations
   const itemStyle = useMemo(() => [
     styles.groupItem,
-    isSelected && styles.selectedGroupItem
+    isSelected && { ...styles.selectedOption, backgroundColor: '#2C3DCD' }
   ], [isSelected]);
 
   const textStyle = useMemo(() => [
@@ -426,7 +426,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   selectedOption: {
-    backgroundColor: '#3478F6',
+    backgroundColor: '#2C3DCD',
   },
   optionText: {
     color: '#8A8A8D',
