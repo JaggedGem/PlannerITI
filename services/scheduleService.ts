@@ -354,8 +354,8 @@ export const scheduleService = {
     // Add test period
     // result.push({
     //   period: "test",
-    //   startTime: "21:48",
-    //   endTime: "22:01",
+    //   startTime: "15:25",
+    //   endTime: "16:25",
     //   className: "Test Period",
     //   teacherName: "Test Teacher",
     //   roomNumber: "Test Room",

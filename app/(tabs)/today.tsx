@@ -95,6 +95,13 @@ export default function Today() {
   };
 
   const isCurrentTimeInSchedule = (item: ScheduleItem, nextItem: ScheduleItem | undefined): boolean => {
+    // First check if selected date is today
+    const today = new Date();
+    const isSelectedDateToday = selectedDate.toDateString() === today.toDateString();
+    
+    // If not today, don't show the time indicator
+    if (!isSelectedDateToday) return false;
+    
     const [startHours, startMinutes] = item.startTime.split(':').map(Number);
     const [endHours, endMinutes] = item.endTime.split(':').map(Number);
     const currentHours = currentTime.getHours();
@@ -529,7 +536,7 @@ export default function Today() {
                                   const minutesUntilStart = Math.ceil(diffInMs / (1000 * 60));
                                   return `In ${minutesUntilStart}m`;
                                 } else if (!previousItem && currentTimeMinutes < startTimeMinutes) {
-                                  // If this is the first class and it hasn't started
+                                  // If this is the first class and it hasn't started yet
                                   const now = new Date();
                                   const target = new Date(
                                     now.getFullYear(),
