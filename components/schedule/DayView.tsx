@@ -5,6 +5,7 @@ import { scheduleService, DAYS_MAP, ApiResponse } from '@/services/scheduleServi
 import { useTranslation } from '@/hooks/useTranslation';
 import { useTimeUpdate } from '@/hooks/useTimeUpdate';
 import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
+import ViewModeMenu from './ViewModeMenu';
 
 const formatTimeByLocale = (time: string, isEnglish: boolean) => {
   if (!isEnglish) return time;
@@ -52,6 +53,7 @@ export default function DayView() {
   const [error, setError] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [settings, setSettings] = useState(scheduleService.getSettings());
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const currentDate = new Date();
   const isEvenWeek = scheduleService.isEvenWeek(selectedDate);
   const { t, formatDate } = useTranslation();
@@ -292,11 +294,14 @@ export default function DayView() {
                   year: 'numeric'
                 })}
               </Text>
-              <View style={styles.weekInfo}>
+              <TouchableOpacity 
+                style={styles.weekInfo}
+                onPress={() => setIsMenuOpen(true)}
+              >
                 <Text style={styles.weekText}>
                   {isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
                 </Text>
-              </View>
+              </TouchableOpacity>
             </View>
             <ScrollView 
               ref={scrollViewRef}
@@ -341,6 +346,13 @@ export default function DayView() {
           <ActivityIndicator size="large" color="#3478F6" />
           <Text style={styles.loadingText}>Loading schedule...</Text>
         </View>
+        <ViewModeMenu
+          isOpen={isMenuOpen}
+          onClose={() => setIsMenuOpen(false)}
+          isEvenWeek={isEvenWeek}
+          weekText={isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
+          currentView="day"
+        />
       </SafeAreaView>
     );
   }
@@ -358,11 +370,14 @@ export default function DayView() {
                   year: 'numeric'
                 })}
               </Text>
-              <View style={styles.weekInfo}>
+              <TouchableOpacity 
+                style={styles.weekInfo}
+                onPress={() => setIsMenuOpen(true)}
+              >
                 <Text style={styles.weekText}>
                   {isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
                 </Text>
-              </View>
+              </TouchableOpacity>
             </View>
             <ScrollView 
               ref={scrollViewRef}
@@ -406,6 +421,13 @@ export default function DayView() {
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>{error}</Text>
         </View>
+        <ViewModeMenu
+          isOpen={isMenuOpen}
+          onClose={() => setIsMenuOpen(false)}
+          isEvenWeek={isEvenWeek}
+          weekText={isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
+          currentView="day"
+        />
       </SafeAreaView>
     );
   }
@@ -422,11 +444,14 @@ export default function DayView() {
                 year: 'numeric'
               })}
             </Text>
-            <View style={styles.weekInfo}>
+            <TouchableOpacity 
+              style={styles.weekInfo}
+              onPress={() => setIsMenuOpen(true)}
+            >
               <Text style={styles.weekText}>
                 {isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
               </Text>
-            </View>
+            </TouchableOpacity>
           </View>
           <ScrollView 
             ref={scrollViewRef}
@@ -585,6 +610,13 @@ export default function DayView() {
           )}
         </ScrollView>
       </View>
+      <ViewModeMenu
+        isOpen={isMenuOpen}
+        onClose={() => setIsMenuOpen(false)}
+        isEvenWeek={isEvenWeek}
+        weekText={isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
+        currentView="day"
+      />
     </SafeAreaView>
   );
 }

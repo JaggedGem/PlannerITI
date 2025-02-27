@@ -6,6 +6,7 @@ import { useTranslation } from '@/hooks/useTranslation';
 import { useTimeUpdate } from '@/hooks/useTimeUpdate';
 import Animated from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
+import ViewModeMenu from './ViewModeMenu';
 
 // Get week start (Monday) from current date
 const getWeekStart = (date: Date): Date => {
@@ -220,6 +221,7 @@ export default function WeekView() {
     const { t, formatDate } = useTranslation();
     const currentTime = useTimeUpdate();
     const verticalScrollRef = useRef<ScrollView>(null);
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
   
     // Calculate current week start date (Monday)
     const weekStartDate = new Date();
@@ -420,11 +422,14 @@ export default function WeekView() {
         <View style={styles.headerContainer}>
           <View style={styles.header}>
             <Text style={styles.pageTitle}>{t('tabs').schedule}</Text>
-            <View style={styles.weekInfo}>
+            <TouchableOpacity 
+              style={styles.weekInfo}
+              onPress={() => setIsMenuOpen(true)}
+            >
               <Text style={styles.weekText}>
                 {isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
               </Text>
-            </View>
+            </TouchableOpacity>
           </View>
   
           {/* Week navigation controls */}
@@ -593,6 +598,14 @@ export default function WeekView() {
             </View>
           </ScrollView>
         </View>
+
+        <ViewModeMenu
+          isOpen={isMenuOpen}
+          onClose={() => setIsMenuOpen(false)}
+          isEvenWeek={isEvenWeek}
+          weekText={isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
+          currentView="week"
+        />
       </SafeAreaView>
     );
   }
