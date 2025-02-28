@@ -1,12 +1,14 @@
-import { StyleSheet, View, Text, TouchableOpacity, FlatList, RefreshControl, Modal, TextInput, Platform } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, FlatList, RefreshControl, Modal, TextInput, Platform, KeyboardAvoidingView, ActivityIndicator, DeviceEventEmitter } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { MaterialIcons } from '@expo/vector-icons';
 import Animated, { FadeInUp, Layout } from 'react-native-reanimated';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from '@/hooks/useTranslation';
+import React from 'react';
 
 // Types for grades
 type GradeCategory = 'exam' | 'test' | 'homework' | 'project' | 'other';
@@ -21,7 +23,75 @@ interface Grade {
   notes?: string;
 }
 
-export default function Grades() {
+const IDNP_KEY = '@planner_idnp';
+const IDNP_UPDATE_EVENT = 'idnp_updated';
+
+// Separate the IDNPScreen into its own component to avoid conditional hook rendering
+const IDNPScreen = ({ onSave }: { onSave: (idnp: string, shouldSave: boolean) => void }) => {
+  const [idnp, setIdnp] = useState('');
+  const [error, setError] = useState('');
+  const { t } = useTranslation();
+
+  const handleSubmit = () => {
+    if (!/^\d{13}$/.test(idnp)) {
+      setError('IDNP must be exactly 13 digits');
+      return;
+    }
+    setError('');
+    onSave(idnp, true); // Always save to local storage
+  };
+
+  return (
+    <KeyboardAvoidingView 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={styles.idnpContainer}
+    >
+      <View style={styles.idnpContent}>
+        <Text style={styles.idnpTitle}>{t('grades').idnp.title}</Text>
+        <Text style={styles.idnpDescription}>
+          {t('grades').idnp.description}
+        </Text>
+        
+        <TextInput
+          style={styles.idnpInput}
+          value={idnp}
+          onChangeText={(text) => {
+            setIdnp(text.replace(/[^0-9]/g, ''));
+            setError('');
+          }}
+          placeholder={t('grades').idnp.placeholder}
+          placeholderTextColor="#8A8A8D"
+          keyboardType="numeric"
+          maxLength={13}
+        />
+        
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+        <Text style={styles.disclaimerText}>
+          {t('grades').idnp.disclaimer}
+        </Text>
+
+        <TouchableOpacity
+          style={[styles.submitButton, !/^\d{13}$/.test(idnp) && styles.submitButtonDisabled]}
+          onPress={handleSubmit}
+          disabled={!/^\d{13}$/.test(idnp)}
+        >
+          <Text style={styles.submitButtonText}>{t('grades').idnp.continue}</Text>
+        </TouchableOpacity>
+      </View>
+    </KeyboardAvoidingView>
+  );
+};
+
+// Loading screen component
+const LoadingScreen = () => (
+  <View style={styles.loadingContainer}>
+    <ActivityIndicator size="large" color="#2C3DCD" />
+  </View>
+);
+
+// Main Grades component
+const GradesScreen = ({ idnp }: { idnp: string }) => {
   const { t } = useTranslation();
   const [grades, setGrades] = useState<Grade[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -386,6 +456,62 @@ export default function Grades() {
       )}
     </SafeAreaView>
   );
+};
+
+// Main container component to handle state and loading
+export default function Grades() {
+  const [idnp, setIdnp] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const loadIdnp = async () => {
+      try {
+        const savedIdnp = await AsyncStorage.getItem(IDNP_KEY);
+        setIdnp(savedIdnp);
+        setIsLoading(false);
+      } catch (error) {
+        console.error('Error loading IDNP:', error);
+        setIsLoading(false);
+      }
+    };
+
+    // Listen for IDNP clear events and reset state
+    const subscription = DeviceEventEmitter.addListener(IDNP_UPDATE_EVENT, (newIdnp: string | null) => {
+      setIdnp(newIdnp);
+    });
+
+    loadIdnp();
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
+  const handleSaveIdnp = async (newIdnp: string, shouldSave: boolean) => {
+    try {
+      if (shouldSave) {
+        await AsyncStorage.setItem(IDNP_KEY, newIdnp);
+      }
+      setIdnp(newIdnp);
+      
+      // Emit an event to notify settings screen that IDNP has been updated
+      DeviceEventEmitter.emit(IDNP_UPDATE_EVENT, newIdnp);
+      
+      // Here you would fetch the grades using the IDNP
+    } catch (error) {
+      console.error('Error saving IDNP:', error);
+    }
+  };
+
+  if (isLoading) {
+    return <LoadingScreen />;
+  }
+
+  if (!idnp) {
+    return <IDNPScreen onSave={handleSaveIdnp} />;
+  }
+
+  return <GradesScreen idnp={idnp} />;
 }
 
 const styles = StyleSheet.create({
@@ -601,5 +727,73 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
+  },
+  idnpContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#1a1b26',
+    padding: 20,
+  },
+  idnpContent: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: '#232433',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+  },
+  idnpTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: 'white',
+    marginBottom: 16,
+  },
+  idnpDescription: {
+    color: '#8A8A8D',
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  idnpInput: {
+    backgroundColor: '#1a1b26',
+    borderRadius: 12,
+    padding: 16,
+    color: 'white',
+    fontSize: 16,
+    width: '100%',
+    marginBottom: 16,
+  },
+  errorText: {
+    color: '#FF6B6B',
+    fontSize: 14,
+    marginBottom: 16,
+  },
+  disclaimerText: {
+    color: '#8A8A8D',
+    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  submitButton: {
+    backgroundColor: '#2C3DCD',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    width: '100%',
+  },
+  submitButtonDisabled: {
+    backgroundColor: '#8A8A8D',
+  },
+  submitButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#1a1b26',
   },
 });
