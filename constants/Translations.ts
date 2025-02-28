@@ -7,6 +7,14 @@ type TranslationType = {
   settings: {
     language: string;
     group: string;
+    idnp: {
+      title: string;
+      clearButton: string;
+      clearConfirmTitle: string;
+      clearConfirmMessage: string;
+      clearConfirmCancel: string;
+      clearConfirmConfirm: string;
+    };
     customPeriods: {
       title: string;
       add: string;
@@ -70,6 +78,14 @@ type TranslationType = {
       notes: string;
       save: string;
     };
+    idnp: {
+      title: string;
+      description: string;
+      placeholder: string;
+      disclaimer: string;
+      continue: string;
+      error: string;
+    };
   };
 };
 
@@ -83,6 +99,14 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
     settings: {
       language: 'Language',
       group: 'Subgroup',
+      idnp: {
+        title: 'IDNP Settings',
+        clearButton: 'Clear Saved IDNP',
+        clearConfirmTitle: 'Clear Saved IDNP',
+        clearConfirmMessage: 'Are you sure you want to clear your saved IDNP? You will need to enter it again to access your grades.',
+        clearConfirmCancel: 'Cancel',
+        clearConfirmConfirm: 'Clear',
+      },
       customPeriods: {
         title: 'Custom Periods',
         add: 'Add New Period',
@@ -145,7 +169,15 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
         date: 'Date',
         notes: 'Notes',
         save: 'Save Grade'
-      }
+      },
+      idnp: {
+        title: 'Enter your IDNP',
+        description: 'Please enter your 13-digit IDNP to access your grades',
+        placeholder: 'Enter 13-digit IDNP',
+        disclaimer: 'Your IDNP will only be stored locally on your device.',
+        continue: 'Continue',
+        error: 'IDNP must be exactly 13 digits',
+      },
     },
   },
   ro: {
@@ -157,6 +189,14 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
     settings: {
       language: 'Limbă',
       group: 'Subgrupă',
+      idnp: {
+        title: 'Setări IDNP',
+        clearButton: 'Șterge IDNP salvat',
+        clearConfirmTitle: 'Șterge IDNP salvat',
+        clearConfirmMessage: 'Sigur doriți să ștergeți IDNP-ul salvat? Va trebui să îl introduceți din nou pentru a accesa notele.',
+        clearConfirmCancel: 'Anulează',
+        clearConfirmConfirm: 'Șterge',
+      },
       customPeriods: {
         title: 'Perioade Personalizate',
         add: 'Adaugă Perioadă',
@@ -219,7 +259,15 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
         date: 'Data',
         notes: 'Observații',
         save: 'Salvează Nota'
-      }
+      },
+      idnp: {
+        title: 'Introduceți IDNP-ul',
+        description: 'Vă rugăm să introduceți IDNP-ul format din 13 cifre pentru a accesa notele',
+        placeholder: 'Introduceți IDNP-ul (13 cifre)',
+        disclaimer: 'IDNP-ul dvs. va fi stocat doar local pe dispozitiv.',
+        continue: 'Continuă',
+        error: 'IDNP-ul trebuie să conțină exact 13 cifre',
+      },
     },
   },
 };
