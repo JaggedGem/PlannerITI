@@ -42,6 +42,34 @@ type TranslationType = {
     schedule: string;
     assignments: string;
     settings: string;
+    grades: string;
+  };
+  grades: {
+    title: string;
+    average: string;
+    noGrades: string;
+    categories: {
+      exam: string;
+      test: string;
+      homework: string;
+      project: string;
+      other: string;
+    };
+    sortOptions: {
+      date: string;
+      grade: string;
+      category: string;
+    };
+    add: string;
+    edit: string;
+    form: {
+      subject: string;
+      grade: string;
+      category: string;
+      date: string;
+      notes: string;
+      save: string;
+    };
   };
 };
 
@@ -90,6 +118,34 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
       schedule: 'Schedule',
       assignments: 'Assignments',
       settings: 'Settings',
+      grades: 'Grades'
+    },
+    grades: {
+      title: 'Grades',
+      average: 'Average',
+      noGrades: 'No grades recorded yet',
+      categories: {
+        exam: 'Exam',
+        test: 'Test',
+        homework: 'Homework',
+        project: 'Project',
+        other: 'Other'
+      },
+      sortOptions: {
+        date: 'Date',
+        grade: 'Grade',
+        category: 'Category'
+      },
+      add: 'Add Grade',
+      edit: 'Edit Grade',
+      form: {
+        subject: 'Subject',
+        grade: 'Grade',
+        category: 'Category',
+        date: 'Date',
+        notes: 'Notes',
+        save: 'Save Grade'
+      }
     },
   },
   ro: {
@@ -136,6 +192,34 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
       schedule: 'Orar',
       assignments: 'Teme',
       settings: 'Setări',
+      grades: 'Note'
+    },
+    grades: {
+      title: 'Note',
+      average: 'Media',
+      noGrades: 'Nicio notă înregistrată încă',
+      categories: {
+        exam: 'Examen',
+        test: 'Test',
+        homework: 'Temă',
+        project: 'Proiect',
+        other: 'Altele'
+      },
+      sortOptions: {
+        date: 'Data',
+        grade: 'Nota',
+        category: 'Categorie'
+      },
+      add: 'Adaugă Notă',
+      edit: 'Editează Nota',
+      form: {
+        subject: 'Materie',
+        grade: 'Notă',
+        category: 'Categorie',
+        date: 'Data',
+        notes: 'Observații',
+        save: 'Salvează Nota'
+      }
     },
   },
 };
