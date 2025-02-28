@@ -1,6 +1,6 @@
 import { StyleSheet, View, Text, TouchableOpacity, FlatList, RefreshControl, Modal, TextInput, Platform, KeyboardAvoidingView, ActivityIndicator, DeviceEventEmitter } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { MaterialIcons } from '@expo/vector-icons';
 import Animated, { FadeInUp, Layout } from 'react-native-reanimated';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -9,6 +9,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from '@/hooks/useTranslation';
 import React from 'react';
+import { WebView } from 'react-native-webview';
+import { fetchStudentInfo } from '@/services/gradesService';
 
 // Types for grades
 type GradeCategory = 'exam' | 'test' | 'homework' | 'project' | 'other';
@@ -27,18 +29,33 @@ const IDNP_KEY = '@planner_idnp';
 const IDNP_UPDATE_EVENT = 'idnp_updated';
 
 // Separate the IDNPScreen into its own component to avoid conditional hook rendering
-const IDNPScreen = ({ onSave }: { onSave: (idnp: string, shouldSave: boolean) => void }) => {
+const IDNPScreen = ({ onSave, errorMessage, isSubmitting }: { 
+  onSave: (idnp: string, shouldSave: boolean) => void, 
+  errorMessage?: string,
+  isSubmitting: boolean 
+}) => {
   const [idnp, setIdnp] = useState('');
-  const [error, setError] = useState('');
+  const [error, setError] = useState(errorMessage || '');
   const { t } = useTranslation();
+
+  useEffect(() => {
+    if (errorMessage) {
+      setError(errorMessage);
+      // Vibrate to notify user of error
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
+  }, [errorMessage]);
 
   const handleSubmit = () => {
     if (!/^\d{13}$/.test(idnp)) {
       setError('IDNP must be exactly 13 digits');
       return;
     }
+    
     setError('');
-    onSave(idnp, true); // Always save to local storage
+    
+    // Let the parent component handle the API call
+    onSave(idnp, true);
   };
 
   return (
@@ -53,7 +70,7 @@ const IDNPScreen = ({ onSave }: { onSave: (idnp: string, shouldSave: boolean) =>
         </Text>
         
         <TextInput
-          style={styles.idnpInput}
+          style={[styles.idnpInput, error ? styles.idnpInputError : null]}
           value={idnp}
           onChangeText={(text) => {
             setIdnp(text.replace(/[^0-9]/g, ''));
@@ -63,6 +80,7 @@ const IDNPScreen = ({ onSave }: { onSave: (idnp: string, shouldSave: boolean) =>
           placeholderTextColor="#8A8A8D"
           keyboardType="numeric"
           maxLength={13}
+          editable={!isSubmitting}
         />
         
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
@@ -71,12 +89,26 @@ const IDNPScreen = ({ onSave }: { onSave: (idnp: string, shouldSave: boolean) =>
           {t('grades').idnp.disclaimer}
         </Text>
 
+        {isSubmitting ? (
+          <View style={styles.loadingNotice}>
+            <ActivityIndicator size="small" color="#2C3DCD" />
+            <Text style={styles.loadingText}>
+              Connecting to the CEITI server. This might take some time, please be patient...
+            </Text>
+          </View>
+        ) : null}
+
         <TouchableOpacity
-          style={[styles.submitButton, !/^\d{13}$/.test(idnp) && styles.submitButtonDisabled]}
+          style={[
+            styles.submitButton, 
+            (!/^\d{13}$/.test(idnp) || isSubmitting) && styles.submitButtonDisabled
+          ]}
           onPress={handleSubmit}
-          disabled={!/^\d{13}$/.test(idnp)}
+          disabled={!/^\d{13}$/.test(idnp) || isSubmitting}
         >
-          <Text style={styles.submitButtonText}>{t('grades').idnp.continue}</Text>
+          <Text style={styles.submitButtonText}>
+            {isSubmitting ? 'Connecting...' : t('grades').idnp.continue}
+          </Text>
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -84,14 +116,25 @@ const IDNPScreen = ({ onSave }: { onSave: (idnp: string, shouldSave: boolean) =>
 };
 
 // Loading screen component
-const LoadingScreen = () => (
+const LoadingScreen = ({ message = 'Loading...' }: { message?: string }) => (
   <View style={styles.loadingContainer}>
     <ActivityIndicator size="large" color="#2C3DCD" />
+    <Text style={styles.loadingText}>{message}</Text>
+  </View>
+);
+
+// HTML Response component
+const HtmlResponseView = ({ html }: { html: string }) => (
+  <View style={styles.htmlContainer}>
+    <WebView
+      source={{ html }}
+      style={styles.webView}
+    />
   </View>
 );
 
 // Main Grades component
-const GradesScreen = ({ idnp }: { idnp: string }) => {
+const GradesScreen = ({ idnp, responseHtml }: { idnp: string, responseHtml: string }) => {
   const { t } = useTranslation();
   const [grades, setGrades] = useState<Grade[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -262,6 +305,9 @@ const GradesScreen = ({ idnp }: { idnp: string }) => {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* HTML Response on top */}
+      <HtmlResponseView html={responseHtml} />
+      
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>{t('grades').title}</Text>
@@ -460,17 +506,26 @@ const GradesScreen = ({ idnp }: { idnp: string }) => {
 
 // Main container component to handle state and loading
 export default function Grades() {
+  // Fix: Use a ref to prevent duplicate API requests
+  const fetchingRef = useRef(false);
+
   const [idnp, setIdnp] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isFetching, setIsFetching] = useState(false);
+  const [responseHtml, setResponseHtml] = useState<string>('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
+    // Only load stored IDNP, but don't fetch data automatically
     const loadIdnp = async () => {
       try {
         const savedIdnp = await AsyncStorage.getItem(IDNP_KEY);
-        setIdnp(savedIdnp);
-        setIsLoading(false);
+        if (savedIdnp) {
+          setIdnp(savedIdnp);
+        }
       } catch (error) {
-        console.error('Error loading IDNP:', error);
+        // Silently handle error
+      } finally {
         setIsLoading(false);
       }
     };
@@ -478,6 +533,9 @@ export default function Grades() {
     // Listen for IDNP clear events and reset state
     const subscription = DeviceEventEmitter.addListener(IDNP_UPDATE_EVENT, (newIdnp: string | null) => {
       setIdnp(newIdnp);
+      if (!newIdnp) {
+        setResponseHtml('');
+      }
     });
 
     loadIdnp();
@@ -487,31 +545,82 @@ export default function Grades() {
     };
   }, []);
 
-  const handleSaveIdnp = async (newIdnp: string, shouldSave: boolean) => {
+  const fetchStudentData = useCallback(async (studentIdnp: string) => {
+    // Prevent duplicate requests using ref
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
+    
+    setIsFetching(true);
+    setIsLoading(true);
+    setErrorMessage(null);
+    
     try {
-      if (shouldSave) {
-        await AsyncStorage.setItem(IDNP_KEY, newIdnp);
+      // Clear any previous response
+      setResponseHtml('');
+      
+      // Fetch student info - this handles both login and info retrieval
+      const htmlResponse = await fetchStudentInfo(studentIdnp);
+      
+      if (!htmlResponse || htmlResponse.trim() === '') {
+        throw new Error('Empty response received');
       }
-      setIdnp(newIdnp);
       
-      // Emit an event to notify settings screen that IDNP has been updated
-      DeviceEventEmitter.emit(IDNP_UPDATE_EVENT, newIdnp);
+      // If we got here, the fetch was successful
+      setResponseHtml(htmlResponse);
+
+      // Save the IDNP since it was successful
+      await AsyncStorage.setItem(IDNP_KEY, studentIdnp);
       
-      // Here you would fetch the grades using the IDNP
+      // Notify other components of the IDNP update
+      DeviceEventEmitter.emit(IDNP_UPDATE_EVENT, studentIdnp);
+      
     } catch (error) {
-      console.error('Error saving IDNP:', error);
+      // Clear the IDNP and show error
+      await AsyncStorage.removeItem(IDNP_KEY);
+      setIdnp(null);
+      setErrorMessage('Unable to retrieve data. Please check your IDNP and try again.');
+    } finally {
+      setIsLoading(false);
+      setIsFetching(false);
+      fetchingRef.current = false;
     }
-  };
+  }, []);
 
-  if (isLoading) {
-    return <LoadingScreen />;
+  const handleSaveIdnp = useCallback((newIdnp: string, shouldSave: boolean) => {
+    // Don't proceed if already fetching
+    if (fetchingRef.current) return;
+    
+    // Set the IDNP first to show loading screen
+    setIdnp(newIdnp);
+    
+    // Then fetch the data
+    fetchStudentData(newIdnp);
+  }, [fetchStudentData]);
+
+  // Handle initial fetch of data if IDNP is already set
+  useEffect(() => {
+    // When idnp changes from null to a value and there's no HTML loaded yet,
+    // fetch the data, but only once
+    if (idnp && !responseHtml && !fetchingRef.current && !errorMessage) {
+      fetchStudentData(idnp);
+    }
+  }, [idnp, responseHtml, errorMessage, fetchStudentData]);
+
+  if (isLoading && isFetching) {
+    return <LoadingScreen message="Connecting to CEITI server. This might take some time, please be patient..." />;
   }
 
-  if (!idnp) {
-    return <IDNPScreen onSave={handleSaveIdnp} />;
+  // Show IDNP screen if no IDNP or there was an error
+  if (!idnp || errorMessage) {
+    return <IDNPScreen 
+      onSave={handleSaveIdnp} 
+      errorMessage={errorMessage || undefined} 
+      isSubmitting={isFetching}
+    />;
   }
 
-  return <GradesScreen idnp={idnp} />;
+  // If we have IDNP and response HTML, show the grades screen
+  return <GradesScreen idnp={idnp} responseHtml={responseHtml} />;
 }
 
 const styles = StyleSheet.create({
@@ -768,6 +877,7 @@ const styles = StyleSheet.create({
     color: '#FF6B6B',
     fontSize: 14,
     marginBottom: 16,
+    textAlign: 'center',
   },
   disclaimerText: {
     color: '#8A8A8D',
@@ -795,5 +905,62 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#1a1b26',
+  },
+  loadingText: {
+    color: 'white',
+    marginTop: 12,
+    textAlign: 'center',
+  },
+  loadingNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#232433',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  // HTML response styles
+  htmlContainer: {
+    width: '100%',
+    height: '50%', // Take half of the screen
+    backgroundColor: 'white',
+  },
+  webView: {
+    flex: 1,
+  },
+  // Error styles
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#1a1b26',
+    padding: 20,
+  },
+  errorTitle: {
+    color: '#FF6B6B',
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 12,
+  },
+  errorMessage: {
+    color: 'white',
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  retryButton: {
+    backgroundColor: '#2C3DCD',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  idnpInputError: {
+    borderColor: '#FF6B6B',
+    borderWidth: 1,
   },
 });
