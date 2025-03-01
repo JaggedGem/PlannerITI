@@ -143,7 +143,8 @@ export default function DayView() {
       setScheduleData(data);
     } catch (error) {
       setError('Unable to load schedule. Please try again later.');
-      console.error('Failed to fetch schedule:', error);
+      // Silent error handling
+      setIsLoading(false);
     } finally {
       setIsLoading(false);
     }

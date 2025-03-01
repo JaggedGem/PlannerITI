@@ -108,10 +108,9 @@ export default function Settings() {
   useEffect(() => {
     const loadIdnp = async () => {
       try {
-        const idnp = await AsyncStorage.getItem(IDNP_KEY);
-        setSavedIdnp(idnp);
+        await AsyncStorage.getItem(IDNP_KEY);
       } catch (error) {
-        console.error('Error loading IDNP:', error);
+        // Silent error handling
       }
     };
     
@@ -146,7 +145,7 @@ export default function Settings() {
       // Use replace instead of push to force a screen refresh
       router.replace('/grades');
     } catch (error) {
-      console.error('Error clearing IDNP:', error);
+      // Silent error handling
     }
   }, [router]);
 
@@ -198,7 +197,6 @@ export default function Settings() {
     highestMeasuredFrameIndex: number;
     averageItemLength: number;
   }) => {
-    console.log('Scroll to index failed:', info);
     if (flatListRef.current) {
       flatListRef.current.scrollToOffset({
         offset: 0,
@@ -237,7 +235,6 @@ export default function Settings() {
         setFilteredGroups(groups);
       } catch (err) {
         setError('Failed to load groups. Please check your connection.');
-        console.error('Error fetching groups:', err);
       } finally {
         setIsLoading(false);
       }
@@ -289,7 +286,6 @@ export default function Settings() {
                     viewPosition: 0.5
                   });
                 } catch (e) {
-                  console.log('Fallback to offset scroll');
                   const itemHeight = 82;
                   flatListRef.current.scrollToOffset({
                     offset: selectedIndex * itemHeight,
