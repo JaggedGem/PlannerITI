@@ -33,8 +33,20 @@ interface Grade {
   notes?: string;
 }
 
+// Constants for AsyncStorage keys
 const IDNP_KEY = '@planner_idnp';
+const GRADES_DATA_KEY = '@planner_grades_data';
+const GRADES_TIMESTAMP_KEY = '@planner_grades_timestamp';
 const IDNP_UPDATE_EVENT = 'idnp_updated';
+
+// Number of days before data is considered stale
+const STALE_DATA_DAYS = 7;
+
+// Interface for storing grades data with timestamp
+interface StoredGradesData {
+  html: string;
+  timestamp: number;
+}
 
 // Separate the IDNPScreen into its own component to avoid conditional hook rendering
 const IDNPScreen = ({ onSave, errorMessage, isSubmitting }: { 
@@ -489,7 +501,17 @@ const StudentInfoHeader = ({ studentInfo }: { studentInfo: StudentInfo }) => (
 );
 
 // Main Grades component
-const GradesScreen = ({ idnp, responseHtml }: { idnp: string, responseHtml: string }) => {
+const GradesScreen = ({ 
+  idnp, 
+  responseHtml, 
+  lastUpdated,
+  onRefresh 
+}: { 
+  idnp: string, 
+  responseHtml: string,
+  lastUpdated: number | null,
+  onRefresh: () => Promise<void>
+}) => {
   const { t } = useTranslation();
 
   // Parse HTML data
@@ -514,6 +536,16 @@ const GradesScreen = ({ idnp, responseHtml }: { idnp: string, responseHtml: stri
   // Track expanded semester dropdowns and subjects
   const [expandedSemesters, setExpandedSemesters] = useState<Record<number, boolean>>({});
   const [expandedSubjects, setExpandedSubjects] = useState<Record<string, boolean>>({});
+
+  // Calculate if data is stale (older than STALE_DATA_DAYS)
+  const isDataStale = useMemo(() => {
+    if (!lastUpdated) return false;
+    
+    const now = Date.now();
+    const daysDifference = (now - lastUpdated) / (1000 * 60 * 60 * 24);
+    
+    return daysDifference >= STALE_DATA_DAYS;
+  }, [lastUpdated]);
 
   // Initialize both semesters expanded by default
   useEffect(() => {
@@ -574,12 +606,28 @@ const GradesScreen = ({ idnp, responseHtml }: { idnp: string, responseHtml: stri
   }, [studentGrades]);
 
   // Handle refresh
-  const onRefresh = useCallback(async () => {
+  const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    // Re-fetch data could be implemented here
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setRefreshing(false);
-  }, []);
+    try {
+      await onRefresh();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [onRefresh]);
+  
+  // Format last updated date
+  const lastUpdatedFormatted = useMemo(() => {
+    if (!lastUpdated) return 'Never';
+    
+    const date = new Date(lastUpdated);
+    return date.toLocaleDateString(undefined, { 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }, [lastUpdated]);
   
   // Toggle subject expand/collapse
   const toggleSubject = useCallback((subjectName: string, semesterNumber: number) => {
@@ -618,8 +666,42 @@ const GradesScreen = ({ idnp, responseHtml }: { idnp: string, responseHtml: stri
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Student Info */}
-      <StudentInfoHeader studentInfo={studentGrades.studentInfo} />
+      {/* Header with student info and refresh button */}
+      <View style={styles.headerContainer}>
+        <View style={styles.headerLeft}>
+          <Text style={styles.studentName}>
+            {studentGrades.studentInfo.firstName} {studentGrades.studentInfo.name}
+          </Text>
+          <Text style={styles.studentDetails}>
+            {studentGrades.studentInfo.group} | {studentGrades.studentInfo.specialization}
+          </Text>
+        </View>
+        <TouchableOpacity 
+          style={styles.refreshButton}
+          onPress={handleRefresh}
+          disabled={refreshing}
+        >
+          <MaterialIcons 
+            name="refresh" 
+            size={24} 
+            color="white" 
+            style={[refreshing && styles.refreshingIcon]}
+          />
+        </TouchableOpacity>
+      </View>
+      
+      {/* Data staleness warning */}
+      {isDataStale && (
+        <Animated.View 
+          entering={FadeInUp.springify()}
+          style={styles.warningBanner}
+        >
+          <MaterialIcons name="info-outline" size={24} color="#FFD700" />
+          <Text style={styles.warningText}>
+            Your data was last updated on {lastUpdatedFormatted} and might be outdated. Press the refresh button to update.
+          </Text>
+        </Animated.View>
+      )}
       
       {/* Tab Switcher */}
       <ViewModeSwitcher 
@@ -629,13 +711,6 @@ const GradesScreen = ({ idnp, responseHtml }: { idnp: string, responseHtml: stri
       
       {viewMode === 'grades' ? (
         <ScrollView
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor="#2C3DCD"
-            />
-          }
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollViewContent}
         >
@@ -734,6 +809,11 @@ const GradesScreen = ({ idnp, responseHtml }: { idnp: string, responseHtml: stri
           {studentGrades.currentGrades.length === 0 && (
             <Text style={styles.emptyText}>No grades data available</Text>
           )}
+          
+          {/* Last updated info at the bottom */}
+          <Text style={styles.lastUpdatedText}>
+            Last updated: {lastUpdatedFormatted}
+          </Text>
         </ScrollView>
       ) : (
         <ExamsView exams={studentGrades.exams} />
@@ -752,17 +832,34 @@ export default function Grades() {
   const [isFetching, setIsFetching] = useState(false);
   const [responseHtml, setResponseHtml] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<number | null>(null);
 
   useEffect(() => {
-    // Only load stored IDNP, but don't fetch data automatically
-    const loadIdnp = async () => {
+    // Load stored IDNP and cached grades data
+    const loadStoredData = async () => {
       try {
         const savedIdnp = await AsyncStorage.getItem(IDNP_KEY);
+        
         if (savedIdnp) {
           setIdnp(savedIdnp);
+          
+          // Try to load cached grades data
+          const gradesDataJson = await AsyncStorage.getItem(GRADES_DATA_KEY);
+          if (gradesDataJson) {
+            const gradesData: StoredGradesData = JSON.parse(gradesDataJson);
+            setResponseHtml(gradesData.html);
+            setLastUpdated(gradesData.timestamp);
+          }
+          
+          // Load last updated timestamp
+          const timestamp = await AsyncStorage.getItem(GRADES_TIMESTAMP_KEY);
+          if (timestamp) {
+            setLastUpdated(parseInt(timestamp, 10));
+          }
         }
       } catch (error) {
         // Silently handle error
+        console.error('Error loading stored data:', error);
       } finally {
         setIsLoading(false);
       }
@@ -773,10 +870,11 @@ export default function Grades() {
       setIdnp(newIdnp);
       if (!newIdnp) {
         setResponseHtml('');
+        setLastUpdated(null);
       }
     });
 
-    loadIdnp();
+    loadStoredData();
 
     return () => {
       subscription.remove();
@@ -789,13 +887,9 @@ export default function Grades() {
     fetchingRef.current = true;
     
     setIsFetching(true);
-    setIsLoading(true);
     setErrorMessage(null);
     
     try {
-      // Clear any previous response
-      setResponseHtml('');
-      
       // Fetch student info - this handles both login and info retrieval
       const htmlResponse = await fetchStudentInfo(studentIdnp);
       
@@ -809,20 +903,49 @@ export default function Grades() {
       // Save the IDNP since it was successful
       await AsyncStorage.setItem(IDNP_KEY, studentIdnp);
       
+      // Save the timestamp of the fetch
+      const timestamp = Date.now();
+      setLastUpdated(timestamp);
+      await AsyncStorage.setItem(GRADES_TIMESTAMP_KEY, timestamp.toString());
+      
+      // Store the grades HTML and timestamp for offline access
+      const gradesData: StoredGradesData = {
+        html: htmlResponse,
+        timestamp: timestamp
+      };
+      await AsyncStorage.setItem(GRADES_DATA_KEY, JSON.stringify(gradesData));
+      
       // Notify other components of the IDNP update
       DeviceEventEmitter.emit(IDNP_UPDATE_EVENT, studentIdnp);
       
+      // Show success notification
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      
     } catch (error) {
-      // Clear the IDNP and show error
-      await AsyncStorage.removeItem(IDNP_KEY);
-      setIdnp(null);
-      setErrorMessage('Unable to retrieve data. Please check your IDNP and try again.');
+      console.error('Error fetching student data:', error);
+      
+      // If this was a fresh login attempt, clear the IDNP
+      if (!responseHtml) {
+        await AsyncStorage.removeItem(IDNP_KEY);
+        setIdnp(null);
+        setErrorMessage('Unable to retrieve data. Please check your IDNP and try again.');
+      } else {
+        // If we have cached data, just show an error toast but keep the cached data
+        setErrorMessage('Network error. Using cached data from ' + new Date(lastUpdated || 0).toLocaleDateString());
+        
+        // Error notification
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        
+        // Clear the error after a few seconds if we're showing cached data
+        setTimeout(() => {
+          setErrorMessage(null);
+        }, 3000);
+      }
     } finally {
-      setIsLoading(false);
       setIsFetching(false);
       fetchingRef.current = false;
     }
-  }, []);
+  }, [responseHtml, lastUpdated]);
 
   const handleSaveIdnp = useCallback((newIdnp: string, shouldSave: boolean) => {
     // Don't proceed if already fetching
@@ -835,21 +958,29 @@ export default function Grades() {
     fetchStudentData(newIdnp);
   }, [fetchStudentData]);
 
-  // Handle initial fetch of data if IDNP is already set
+  // Handle initial fetch of data if IDNP is already set but no cached data
   useEffect(() => {
-    // When idnp changes from null to a value and there's no HTML loaded yet,
-    // fetch the data, but only once
+    // When IDNP is set but no data is loaded yet, and we're not already fetching
     if (idnp && !responseHtml && !fetchingRef.current && !errorMessage) {
-      fetchStudentData(idnp);
+      // Only auto-fetch if we don't have any cached data
+      AsyncStorage.getItem(GRADES_DATA_KEY).then(cached => {
+        if (!cached) {
+          fetchStudentData(idnp);
+        }
+      });
     }
-  }, [idnp, responseHtml, errorMessage, fetchStudentData]);
+  }, []);
 
-  if (isLoading && isFetching) {
+  if (isLoading && !responseHtml) {
+    return <LoadingScreen message="Loading your grades data..." />;
+  }
+
+  if (isFetching && !responseHtml) {
     return <LoadingScreen message="Connecting to CEITI server. This might take some time, please be patient..." />;
   }
 
-  // Show IDNP screen if no IDNP or there was an error
-  if (!idnp || errorMessage) {
+  // Show IDNP screen if no IDNP or there was an error with no cached data
+  if ((!idnp || (errorMessage && !responseHtml))) {
     return <IDNPScreen 
       onSave={handleSaveIdnp} 
       errorMessage={errorMessage || undefined} 
@@ -857,8 +988,29 @@ export default function Grades() {
     />;
   }
 
+  // Error notification at the top if there was a network error but we're showing cached data
+  const errorNotification = errorMessage && responseHtml ? (
+    <Animated.View 
+      entering={FadeInUp.springify()}
+      style={styles.errorNotification}
+    >
+      <MaterialIcons name="error-outline" size={24} color="#FF6B6B" />
+      <Text style={styles.errorNotificationText}>{errorMessage}</Text>
+    </Animated.View>
+  ) : null;
+
   // If we have IDNP and response HTML, show the grades screen
-  return <GradesScreen idnp={idnp} responseHtml={responseHtml} />;
+  return (
+    <>
+      {errorNotification}
+      <GradesScreen 
+        idnp={idnp} 
+        responseHtml={responseHtml} 
+        lastUpdated={lastUpdated}
+        onRefresh={() => fetchStudentData(idnp)}
+      />
+    </>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -1441,5 +1593,75 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 12,
     alignItems: 'center',
+  },
+  lastUpdatedText: {
+    color: '#8A8A8D',
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 16,
+  },
+  headerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+  },
+  headerLeft: {
+    flex: 1,
+    marginRight: 16,
+  },
+  refreshButton: {
+    backgroundColor: '#2C3DCD',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    alignSelf: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  refreshingIcon: {
+    transform: [{ rotate: '45deg' }],
+  },
+  warningBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+    padding: 12,
+    borderRadius: 8,
+    marginHorizontal: 20,
+    marginTop: 10,
+    marginBottom: 8,
+  },
+  warningText: {
+    color: '#FFD700',
+    fontSize: 14,
+    marginLeft: 8,
+    flex: 1,
+  },
+  errorNotification: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 107, 107, 0.15)',
+    padding: 12,
+    borderRadius: 8,
+    marginHorizontal: 20,
+    marginTop: 10,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+  },
+  errorNotificationText: {
+    color: '#FF6B6B',
+    fontSize: 14,
+    marginLeft: 8,
+    flex: 1,
   },
 });
