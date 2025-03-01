@@ -615,6 +615,9 @@ const GradesScreen = ({
     }
   }, [onRefresh]);
   
+  // Style modifier for text components when refreshing
+  const textOpacity = { opacity: refreshing ? 0.5 : 1 };
+  
   // Format last updated date
   const lastUpdatedFormatted = useMemo(() => {
     if (!lastUpdated) return 'Never';
@@ -667,12 +670,12 @@ const GradesScreen = ({
   return (
     <SafeAreaView style={styles.container}>
       {/* Header with student info and refresh button */}
-      <View style={styles.headerContainer}>
+      <View style={[styles.headerContainer, refreshing && { opacity: 0.7 }]}>
         <View style={styles.headerLeft}>
-          <Text style={styles.studentName}>
+          <Text style={[styles.studentName, textOpacity]}>
             {studentGrades.studentInfo.firstName} {studentGrades.studentInfo.name}
           </Text>
-          <Text style={styles.studentDetails}>
+          <Text style={[styles.studentDetails, textOpacity]}>
             {studentGrades.studentInfo.group} | {studentGrades.studentInfo.specialization}
           </Text>
         </View>
@@ -694,10 +697,10 @@ const GradesScreen = ({
       {isDataStale && (
         <Animated.View 
           entering={FadeInUp.springify()}
-          style={styles.warningBanner}
+          style={[styles.warningBanner, refreshing && { opacity: 0.5 }]}
         >
           <MaterialIcons name="info-outline" size={24} color="#FFD700" />
-          <Text style={styles.warningText}>
+          <Text style={[styles.warningText, textOpacity]}>
             Your data was last updated on {lastUpdatedFormatted} and might be outdated. Press the refresh button to update.
           </Text>
         </Animated.View>
@@ -718,10 +721,10 @@ const GradesScreen = ({
           {allSemestersAverages.length > 1 && (
             <Animated.View
               entering={FadeInUp.springify()}
-              style={styles.averageCard}
+              style={[styles.averageCard, refreshing && { opacity: 0.7 }]}
             >
-              <Text style={styles.averageLabel}>Overall Average</Text>
-              <Text style={styles.averageValue}>
+              <Text style={[styles.averageLabel, textOpacity]}>Overall Average</Text>
+              <Text style={[styles.averageValue, textOpacity]}>
                 {(allSemestersAverages.reduce((acc, item) => acc + parseFloat(item!.average), 0) / allSemestersAverages.length).toFixed(2)}
               </Text>
             </Animated.View>
@@ -732,20 +735,21 @@ const GradesScreen = ({
             <Animated.View 
               key={`semester-${semester.semester}`} 
               entering={FadeInUp.delay(index * 100).springify()}
-              style={styles.semesterSection}
+              style={[styles.semesterSection, refreshing && { opacity: 0.7 }]}
             >
               {/* Semester header with toggle */}
               <TouchableOpacity
                 style={styles.semesterHeader}
                 onPress={() => toggleSemester(semester.semester)}
+                disabled={refreshing}
               >
-                <Text style={styles.semesterTitle}>
+                <Text style={[styles.semesterTitle, textOpacity]}>
                   {semester.semester === 1 ? "Semester I" : semester.semester === 2 ? "Semester II" : `Semester ${semester.semester}`}
                 </Text>
                 <View style={styles.semesterHeaderRight}>
                   {/* Display semester average if available */}
                   {allSemestersAverages[index] && (
-                    <Text style={styles.semesterAverageText}>
+                    <Text style={[styles.semesterAverageText, textOpacity]}>
                       Avg: {allSemestersAverages[index]!.average}
                     </Text>
                   )}
@@ -753,6 +757,7 @@ const GradesScreen = ({
                     name={expandedSemesters[semester.semester] ? "keyboard-arrow-up" : "keyboard-arrow-down"}
                     size={24}
                     color="white"
+                    style={textOpacity}
                   />
                 </View>
               </TouchableOpacity>
@@ -765,16 +770,16 @@ const GradesScreen = ({
                 >
                   {/* Semester average and absences */}
                   {allSemestersAverages[index] && (
-                    <View style={styles.semesterAverageCard}>
-                      <Text style={styles.averageLabel}>Semester Average</Text>
-                      <Text style={styles.averageValue}>{allSemestersAverages[index]!.average}</Text>
+                    <View style={[styles.semesterAverageCard, refreshing && { opacity: 0.7 }]}>
+                      <Text style={[styles.averageLabel, textOpacity]}>Semester Average</Text>
+                      <Text style={[styles.averageValue, textOpacity]}>{allSemestersAverages[index]!.average}</Text>
                       
                       {/* Display absences if available */}
                       {semester.absences && (
                         <View style={styles.absencesContainer}>
-                          <Text style={styles.absencesLabel}>
-                            Absences: <Text style={styles.absencesValue}>{semester.absences.total}</Text>
-                            {' '}(Unexcused: <Text style={styles.absencesUnexcused}>
+                          <Text style={[styles.absencesLabel, textOpacity]}>
+                            Absences: <Text style={[styles.absencesValue, textOpacity]}>{semester.absences.total}</Text>
+                            {' '}(Unexcused: <Text style={[styles.absencesUnexcused, textOpacity]}>
                               {semester.absences.unexcused}
                             </Text>)
                           </Text>
@@ -796,7 +801,7 @@ const GradesScreen = ({
                   
                   {/* Empty state if no subjects */}
                   {semester.subjects.length === 0 && (
-                    <Text style={styles.emptyText}>
+                    <Text style={[styles.emptyText, textOpacity]}>
                       No subjects available for Semester {semester.semester}
                     </Text>
                   )}
@@ -807,16 +812,24 @@ const GradesScreen = ({
 
           {/* No data message if no semesters */}
           {studentGrades.currentGrades.length === 0 && (
-            <Text style={styles.emptyText}>No grades data available</Text>
+            <Text style={[styles.emptyText, textOpacity]}>No grades data available</Text>
           )}
           
           {/* Last updated info at the bottom */}
-          <Text style={styles.lastUpdatedText}>
+          <Text style={[styles.lastUpdatedText, textOpacity]}>
             Last updated: {lastUpdatedFormatted}
           </Text>
         </ScrollView>
       ) : (
         <ExamsView exams={studentGrades.exams} />
+      )}
+
+      {/* Overlay the content with a semi-transparent loading indicator when refreshing */}
+      {refreshing && (
+        <View style={styles.refreshOverlay}>
+          <ActivityIndicator size="large" color="#2C3DCD" />
+          <Text style={styles.refreshingText}>Refreshing data...</Text>
+        </View>
       )}
     </SafeAreaView>
   );
@@ -1663,5 +1676,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginLeft: 8,
     flex: 1,
+  },
+  refreshOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  refreshingText: {
+    color: 'white',
+    marginTop: 12,
+    textAlign: 'center',
   },
 });
