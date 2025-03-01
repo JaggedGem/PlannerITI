@@ -308,6 +308,13 @@ const ExamsView = ({
     return uniqueSemesters;
   }, [exams]);
 
+  // Helper function to convert semester number to year and semester
+  const formatSemesterLabel = (semesterNumber: number) => {
+    const year = Math.ceil(semesterNumber / 2);
+    const semesterInYear = semesterNumber % 2 === 0 ? 2 : 1;
+    return `Year ${year}, Semester ${semesterInYear}`;
+  };
+
   // Filter exams by semester if one is selected
   const filteredExams = useMemo(() => {
     if (selectedSemester === null) {
@@ -357,7 +364,7 @@ const ExamsView = ({
         >
           <Text style={styles.semesterDropdownButtonText}>
             {selectedSemester !== null 
-              ? `Semester ${selectedSemester}` 
+              ? formatSemesterLabel(selectedSemester)
               : "All Semesters"}
           </Text>
           <MaterialIcons
@@ -402,7 +409,7 @@ const ExamsView = ({
                   styles.semesterDropdownItemText,
                   selectedSemester === semester && styles.semesterDropdownItemTextActive
                 ]}>
-                  {`Semester ${semester}`}
+                  {formatSemesterLabel(semester)}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -421,10 +428,21 @@ const ExamsView = ({
                 entering={FadeInUp.delay(index * 100).springify()}
                 style={styles.examCard}
               >
-                <Text style={styles.examSubject}>{exam.name}</Text>
+                <View style={styles.examHeaderRow}>
+                  <Text style={styles.examSubject}>{exam.name}</Text>
+                </View>
                 <View style={styles.examDetails}>
-                  <Text style={styles.examSemester}>Semester {exam.semester}</Text>
-                  <Text style={styles.examGrade}>{exam.grade}</Text>
+                  <Text style={styles.examSemester}>
+                    {formatSemesterLabel(exam.semester)}
+                  </Text>
+                  {exam.isUpcoming ? (
+                    <View style={styles.upcomingIndicatorContainer}>
+                      <MaterialIcons name="schedule" size={18} color="#FFD700" />
+                      <Text style={styles.upcomingIndicatorText}>Upcoming</Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.examGrade}>{exam.grade}</Text>
+                  )}
                 </View>
               </Animated.View>
             ))}
@@ -434,7 +452,7 @@ const ExamsView = ({
         {Object.keys(examsByType).length === 0 && (
           <Text style={styles.emptyText}>
             {selectedSemester !== null 
-              ? `No exams for Semester ${selectedSemester}` 
+              ? `No exams for ${formatSemesterLabel(selectedSemester)}` 
               : "No exams data available"}
           </Text>
         )}
@@ -1687,5 +1705,27 @@ const styles = StyleSheet.create({
     color: 'white',
     marginTop: 12,
     textAlign: 'center',
+  },
+  examHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  upcomingIndicatorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  upcomingIndicatorText: {
+    color: '#FFD700',
+    fontSize: 12,
+    marginLeft: 4,
+  },
+  upcomingExamGrade: {
+    color: '#FFD700',
   },
 });

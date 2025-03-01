@@ -95,6 +95,7 @@ export interface Exam {
   type: string; // "Examen" | "Teza" | "Practică"
   grade: string;
   semester: number;
+  isUpcoming?: boolean;
 }
 
 export interface AnnualGrade {
@@ -634,14 +635,19 @@ const parseExams = (html: string): Exam[] => {
         const name = rowMatch[2].trim();
         const grade = rowMatch[3].trim();
         
-        // Skip placeholder grades
-        if (grade === '---') continue;
+        // Identify if this is an upcoming exam (grade is TBD, empty, or specific format)
+        const isUpcoming = grade === '---' || grade === '' || grade === 'TBD' || 
+                           grade.toLowerCase().includes('pending');
+        
+        // Skip completely empty grades (if needed - keeping them for now to show upcoming exams)
+        // if (grade === '---') continue;
         
         result.push({
           name,
           type,
-          grade,
-          semester: semesterIndex + 1  // Convert from 0-based to 1-based indexing
+          grade: isUpcoming ? 'TBD' : grade,
+          semester: semesterIndex + 1,  // Convert from 0-based to 1-based indexing
+          isUpcoming
         });
       }
       
@@ -652,8 +658,12 @@ const parseExams = (html: string): Exam[] => {
           const fullName = rowMatch[1].trim();
           const grade = rowMatch[2].trim();
           
-          // Skip placeholder grades or header rows
-          if (grade === '---' || fullName === 'Denumirea Obiectelor') continue;
+          // Skip header rows
+          if (fullName === 'Denumirea Obiectelor') continue;
+          
+          // Identify if this is an upcoming exam
+          const isUpcoming = grade === '---' || grade === '' || grade === 'TBD' || 
+                             grade.toLowerCase().includes('pending');
           
           // Try to extract the type from the name
           const typeMatch = fullName.match(/^\(([^)]+)\)/);
@@ -663,8 +673,9 @@ const parseExams = (html: string): Exam[] => {
           result.push({
             name,
             type,
-            grade,
-            semester: semesterIndex + 1
+            grade: isUpcoming ? 'TBD' : grade,
+            semester: semesterIndex + 1,
+            isUpcoming
           });
         }
       }
