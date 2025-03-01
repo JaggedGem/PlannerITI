@@ -86,6 +86,16 @@ type TranslationType = {
       continue: string;
       error: string;
     };
+    semesters: {
+      all: string;
+      yearSemester: string;
+      noData: string;
+      noDataSemester: string;
+    };
+    subjects: {
+      noExams: string;
+      upcoming: string;
+    };
   };
 };
 
@@ -178,6 +188,16 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
         continue: 'Continue',
         error: 'IDNP must be exactly 13 digits',
       },
+      semesters: {
+        all: 'All Semesters',
+        yearSemester: 'Year {{year}}, Semester {{semester}}',
+        noData: 'No exam data available',
+        noDataSemester: 'No exams available for Semester {{semester}}',
+      },
+      subjects: {
+        noExams: 'No exams available',
+        upcoming: 'Upcoming',
+      },
     },
   },
   ro: {
@@ -267,6 +287,16 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
         disclaimer: 'IDNP-ul dvs. va fi stocat doar local pe dispozitiv.',
         continue: 'Continuă',
         error: 'IDNP-ul trebuie să conțină exact 13 cifre',
+      },
+      semesters: {
+        all: 'Toate Semestrele',
+        yearSemester: 'Anul {{year}}, Semestrul {{semester}}',
+        noData: 'Nu există date despre examene',
+        noDataSemester: 'Nu există examene pentru Semestrul {{semester}}',
+      },
+      subjects: {
+        noExams: 'Nu există examene disponibile',
+        upcoming: 'În curând',
       },
     },
   },

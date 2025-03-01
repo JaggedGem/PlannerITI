@@ -48,6 +48,28 @@ interface StoredGradesData {
   timestamp: number;
 }
 
+/**
+ * Determine the current semester based on the date
+ * 1st semester: September 1 - December 19
+ * 2nd semester: December 20 - August 31
+ */
+const getCurrentSemester = (): number => {
+  const currentDate = new Date();
+  const month = currentDate.getMonth(); // 0-11 (Jan-Dec)
+  const day = currentDate.getDate();
+  
+  // First semester: Sept 1 - Dec 19
+  if ((month === 8 && day >= 1) || // September
+      month === 9 || // October
+      month === 10 || // November
+      (month === 11 && day < 20)) { // December 1-19
+    return 1;
+  } else {
+    // Second semester: Dec 20 - Aug 31
+    return 2;
+  }
+};
+
 // Separate the IDNPScreen into its own component to avoid conditional hook rendering
 const IDNPScreen = ({ onSave, errorMessage, isSubmitting }: { 
   onSave: (idnp: string, shouldSave: boolean) => void, 
@@ -295,8 +317,27 @@ const ExamsView = ({
 }: { 
   exams: Exam[] 
 }) => {
-  // Add state for selected semester
-  const [selectedSemester, setSelectedSemester] = useState<number | null>(null);
+  const { t } = useTranslation();
+  
+  // Handle empty exams array
+  if (!exams || exams.length === 0) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.emptyText}>{t('grades').subjects.noExams}</Text>
+      </View>
+    );
+  }
+
+  // Get current semester based on date
+  const currentSemesterNumber = getCurrentSemester();
+  
+  // Add state for selected semester - initialize with current semester if it exists in the data
+  const [selectedSemester, setSelectedSemester] = useState<number | null>(() => {
+    // Check if the current semester exists in the exams data
+    const hasSemester = exams.some(exam => exam.semester === currentSemesterNumber);
+    return hasSemester ? currentSemesterNumber : null;
+  });
+  
   const [isOpen, setIsOpen] = useState(false);
 
   // Get unique semesters from exams
@@ -312,7 +353,7 @@ const ExamsView = ({
   const formatSemesterLabel = (semesterNumber: number) => {
     const year = Math.ceil(semesterNumber / 2);
     const semesterInYear = semesterNumber % 2 === 0 ? 2 : 1;
-    return `Year ${year}, Semester ${semesterInYear}`;
+    return t('grades').semesters.yearSemester.replace('{{year}}', year.toString()).replace('{{semester}}', semesterInYear.toString());
   };
 
   // Filter exams by semester if one is selected
@@ -350,10 +391,6 @@ const ExamsView = ({
     Haptics.selectionAsync();
   };
 
-  if (exams.length === 0) {
-    return <Text style={styles.emptyText}>No exams data available</Text>;
-  }
-
   return (
     <View style={{ flex: 1 }}>
       {/* Semester selector */}
@@ -365,7 +402,7 @@ const ExamsView = ({
           <Text style={styles.semesterDropdownButtonText}>
             {selectedSemester !== null 
               ? formatSemesterLabel(selectedSemester)
-              : "All Semesters"}
+              : t('grades').semesters.all}
           </Text>
           <MaterialIcons
             name={isOpen ? "arrow-drop-up" : "arrow-drop-down"}
@@ -391,7 +428,7 @@ const ExamsView = ({
                 styles.semesterDropdownItemText,
                 selectedSemester === null && styles.semesterDropdownItemTextActive
               ]}>
-                All Semesters
+                {t('grades').semesters.all}
               </Text>
             </TouchableOpacity>
             
@@ -438,7 +475,9 @@ const ExamsView = ({
                   {exam.isUpcoming ? (
                     <View style={styles.upcomingIndicatorContainer}>
                       <MaterialIcons name="schedule" size={18} color="#FFD700" />
-                      <Text style={styles.upcomingIndicatorText}>Upcoming</Text>
+                      <Text style={styles.upcomingIndicatorText}>
+                        {t('grades').subjects.upcoming}
+                      </Text>
                     </View>
                   ) : (
                     <Text style={styles.examGrade}>{exam.grade}</Text>
@@ -452,8 +491,8 @@ const ExamsView = ({
         {Object.keys(examsByType).length === 0 && (
           <Text style={styles.emptyText}>
             {selectedSemester !== null 
-              ? `No exams for ${formatSemesterLabel(selectedSemester)}` 
-              : "No exams data available"}
+              ? t('grades').semesters.noDataSemester.replace('{{semester}}', selectedSemester.toString())
+              : t('grades').semesters.noData}
           </Text>
         )}
       </ScrollView>
@@ -518,6 +557,17 @@ const StudentInfoHeader = ({ studentInfo }: { studentInfo: StudentInfo }) => (
   </View>
 );
 
+// Error notification component
+const ErrorNotification = ({ message }: { message: string }) => (
+  <Animated.View 
+    entering={FadeInUp.springify()}
+    style={styles.errorNotification}
+  >
+    <MaterialIcons name="error-outline" size={24} color="#FF6B6B" />
+    <Text style={styles.errorNotificationText}>{message}</Text>
+  </Animated.View>
+);
+
 // Main Grades component
 const GradesScreen = ({ 
   idnp, 
@@ -565,13 +615,17 @@ const GradesScreen = ({
     return daysDifference >= STALE_DATA_DAYS;
   }, [lastUpdated]);
 
-  // Initialize both semesters expanded by default
+  // Initialize with only the current semester expanded
   useEffect(() => {
     if (studentGrades?.currentGrades?.length) {
-      // Create an object with all semesters expanded by default
+      // Get the current semester based on date
+      const currentSemester = getCurrentSemester();
+      
+      // Create an object with only current semester expanded
       const initialExpandedState: Record<number, boolean> = {};
       studentGrades.currentGrades.forEach(semester => {
-        initialExpandedState[semester.semester] = true;
+        // Only expand the current semester
+        initialExpandedState[semester.semester] = semester.semester === currentSemester;
       });
       setExpandedSemesters(initialExpandedState);
     }
@@ -1021,13 +1075,7 @@ export default function Grades() {
 
   // Error notification at the top if there was a network error but we're showing cached data
   const errorNotification = errorMessage && responseHtml ? (
-    <Animated.View 
-      entering={FadeInUp.springify()}
-      style={styles.errorNotification}
-    >
-      <MaterialIcons name="error-outline" size={24} color="#FF6B6B" />
-      <Text style={styles.errorNotificationText}>{errorMessage}</Text>
-    </Animated.View>
+    <ErrorNotification message={errorMessage} />
   ) : null;
 
   // If we have IDNP and response HTML, show the grades screen
@@ -1035,10 +1083,14 @@ export default function Grades() {
     <>
       {errorNotification}
       <GradesScreen 
-        idnp={idnp} 
+        idnp={idnp!}
         responseHtml={responseHtml} 
         lastUpdated={lastUpdated}
-        onRefresh={() => fetchStudentData(idnp)}
+        onRefresh={async () => {
+          if (idnp) {
+            await fetchStudentData(idnp);
+          }
+        }}
       />
     </>
   );
@@ -1727,5 +1779,12 @@ const styles = StyleSheet.create({
   },
   upcomingExamGrade: {
     color: '#FFD700',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#1a1b26',
+    padding: 20,
   },
 });
