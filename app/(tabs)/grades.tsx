@@ -202,12 +202,24 @@ const SemesterDropdown = ({
 const SubjectCard = ({ 
   subject, 
   expanded, 
-  onToggle 
+  onToggle,
+  semesterNumber // Add semester number to make subjects unique across semesters
 }: { 
   subject: GradeSubject, 
   expanded: boolean,
-  onToggle: () => void 
+  onToggle: () => void,
+  semesterNumber: number 
 }) => {
+  // Calculate grade quality color
+  const getGradeColor = (grade: string): string => {
+    const numGrade = parseFloat(grade.replace(',', '.'));
+    if (isNaN(numGrade)) return 'rgba(44, 61, 205, 0.5)'; // Default blue for non-numeric
+    if (numGrade < 5) return 'rgba(255, 107, 107, 0.5)'; // Red for failing
+    if (numGrade >= 9) return 'rgba(75, 181, 67, 0.5)';  // Green for excellent
+    if (numGrade >= 7) return 'rgba(255, 184, 0, 0.5)';  // Orange for good
+    return 'rgba(44, 61, 205, 0.5)';                     // Blue for average
+  };
+
   return (
     <Animated.View
       layout={Layout.springify()}
@@ -220,10 +232,14 @@ const SubjectCard = ({
       >
         <Text style={styles.subjectName}>{subject.name}</Text>
         <View style={styles.subjectHeaderRight}>
-          <Text style={styles.averageGrade}>
-            {subject.displayedAverage || 
-             (subject.average ? subject.average.toFixed(2) : "-")}
-          </Text>
+          {subject.displayedAverage && (
+            <Text style={[
+              styles.averageGrade,
+              parseFloat(subject.displayedAverage) < 5 && styles.failingGrade
+            ]}>
+              {subject.displayedAverage}
+            </Text>
+          )}
           {subject.grades.length > 0 && (
             <MaterialIcons
               name={expanded ? "keyboard-arrow-up" : "keyboard-arrow-down"}
@@ -240,19 +256,20 @@ const SubjectCard = ({
           style={styles.gradesContainer}
         >
           <View style={styles.gradesGrid}>
-            {subject.grades.map((grade, index) => (
-              <View 
-                key={index} 
-                style={[
-                  styles.gradeItem, 
-                  !isNaN(parseFloat(grade.replace(',', '.'))) && 
-                  parseFloat(grade.replace(',', '.')) < 5 && 
-                  styles.gradeItemFailing
-                ]}
-              >
-                <Text style={styles.gradeText}>{grade}</Text>
-              </View>
-            ))}
+            {subject.grades.map((grade, index) => {
+              const gradeColor = getGradeColor(grade);
+              return (
+                <View 
+                  key={index} 
+                  style={[
+                    styles.gradeItem, 
+                    { backgroundColor: gradeColor }
+                  ]}
+                >
+                  <Text style={styles.gradeText}>{grade}</Text>
+                </View>
+              );
+            })}
           </View>
         </Animated.View>
       )}
@@ -500,7 +517,22 @@ const GradesScreen = ({ idnp, responseHtml }: { idnp: string, responseHtml: stri
       ? studentGrades.currentGrades.findIndex(s => s.semester === studentGrades.currentSemester) 
       : 0
   );
+  
+  // Track expanded semester dropdowns and subjects
+  const [expandedSemesters, setExpandedSemesters] = useState<Record<number, boolean>>({});
   const [expandedSubjects, setExpandedSubjects] = useState<Record<string, boolean>>({});
+
+  // Initialize both semesters expanded by default
+  useEffect(() => {
+    if (studentGrades?.currentGrades?.length) {
+      // Create an object with all semesters expanded by default
+      const initialExpandedState: Record<number, boolean> = {};
+      studentGrades.currentGrades.forEach(semester => {
+        initialExpandedState[semester.semester] = true;
+      });
+      setExpandedSemesters(initialExpandedState);
+    }
+  }, [studentGrades?.currentGrades]);
 
   // Log when component renders
   console.log("GradesScreen rendering", 
@@ -536,6 +568,25 @@ const GradesScreen = ({ idnp, responseHtml }: { idnp: string, responseHtml: stri
     return (sum / validAverages.length).toFixed(2);
   }, [currentSemesterData]);
 
+  // Calculate average for all semesters
+  const allSemestersAverages = useMemo(() => {
+    if (!studentGrades || studentGrades.currentGrades.length === 0) return [];
+    
+    return studentGrades.currentGrades.map(semester => {
+      const validAverages = semester.subjects
+        .map(subject => subject.average)
+        .filter(avg => avg !== undefined) as number[];
+        
+      if (validAverages.length === 0) return null;
+      
+      const sum = validAverages.reduce((acc, val) => acc + val, 0);
+      return {
+        semester: semester.semester,
+        average: (sum / validAverages.length).toFixed(2)
+      };
+    }).filter(item => item !== null);
+  }, [studentGrades]);
+
   // Handle refresh
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -545,10 +596,22 @@ const GradesScreen = ({ idnp, responseHtml }: { idnp: string, responseHtml: stri
   }, []);
   
   // Toggle subject expand/collapse
-  const toggleSubject = useCallback((subjectName: string) => {
+  const toggleSubject = useCallback((subjectName: string, semesterNumber: number) => {
+    const key = `${semesterNumber}-${subjectName}`;
     setExpandedSubjects(prev => ({
       ...prev,
-      [subjectName]: !prev[subjectName]
+      [key]: !prev[key]
+    }));
+    
+    // Add haptic feedback when expanding/collapsing
+    Haptics.selectionAsync();
+  }, []);
+  
+  // Toggle semester dropdown
+  const toggleSemester = useCallback((semesterNumber: number) => {
+    setExpandedSemesters(prev => ({
+      ...prev,
+      [semesterNumber]: !prev[semesterNumber]
     }));
     
     // Add haptic feedback when expanding/collapsing
@@ -572,7 +635,7 @@ const GradesScreen = ({ idnp, responseHtml }: { idnp: string, responseHtml: stri
   console.log("Rendering with student data:", 
     studentGrades.studentInfo.firstName,
     studentGrades.studentInfo.name,
-    "Subjects:", currentSemesterData?.subjects?.length || 0
+    "Semesters:", studentGrades.currentGrades.length
   );
 
   return (
@@ -587,67 +650,113 @@ const GradesScreen = ({ idnp, responseHtml }: { idnp: string, responseHtml: stri
       />
       
       {viewMode === 'grades' ? (
-        <>
-          {/* Semester Dropdown */}
-          {studentGrades.currentGrades.length > 1 && (
-            <SemesterDropdown
-              semesters={studentGrades.currentGrades}
-              activeSemester={activeSemesterIndex}
-              onSemesterChange={setActiveSemesterIndex}
+        <ScrollView
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#2C3DCD"
             />
-          )}
-
-          {/* Average Grade Card */}
-          {semesterAverage && (
+          }
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollViewContent}
+        >
+          {/* Overall Average Card if there are multiple semesters */}
+          {allSemestersAverages.length > 1 && (
             <Animated.View
               entering={FadeInUp.springify()}
               style={styles.averageCard}
             >
-              <Text style={styles.averageLabel}>Semester Average</Text>
-              <Text style={styles.averageValue}>{semesterAverage}</Text>
-              
-              {currentSemesterData?.absences && (
-                <View style={styles.absencesContainer}>
-                  <Text style={styles.absencesLabel}>
-                    Absences: <Text style={styles.absencesValue}>{currentSemesterData.absences.total}</Text>
-                    {' '}(Unexcused: <Text style={styles.absencesUnexcused}>
-                      {currentSemesterData.absences.unexcused}
-                    </Text>)
-                  </Text>
-                </View>
-              )}
+              <Text style={styles.averageLabel}>Overall Average</Text>
+              <Text style={styles.averageValue}>
+                {(allSemestersAverages.reduce((acc, item) => acc + parseFloat(item!.average), 0) / allSemestersAverages.length).toFixed(2)}
+              </Text>
             </Animated.View>
           )}
 
-          {/* Subjects List */}
-          <FlatList
-            data={currentSemesterData?.subjects || []}
-            renderItem={({ item, index }) => (
-              <Animated.View
-                entering={FadeInUp.delay(index * 100).springify()}
+          {/* Render each semester as a collapsible section */}
+          {studentGrades.currentGrades.map((semester, index) => (
+            <Animated.View 
+              key={`semester-${semester.semester}`} 
+              entering={FadeInUp.delay(index * 100).springify()}
+              style={styles.semesterSection}
+            >
+              {/* Semester header with toggle */}
+              <TouchableOpacity
+                style={styles.semesterHeader}
+                onPress={() => toggleSemester(semester.semester)}
               >
-                <SubjectCard
-                  subject={item}
-                  expanded={!!expandedSubjects[item.name]}
-                  onToggle={() => toggleSubject(item.name)}
-                />
-              </Animated.View>
-            )}
-            keyExtractor={item => item.name}
-            contentContainerStyle={styles.list}
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                tintColor="#2C3DCD"
-              />
-            }
-            ListEmptyComponent={() => (
-              <Text style={styles.emptyText}>No grades data available</Text>
-            )}
-          />
-        </>
+                <Text style={styles.semesterTitle}>
+                  {semester.semester === 1 ? "Semester I" : semester.semester === 2 ? "Semester II" : `Semester ${semester.semester}`}
+                </Text>
+                <View style={styles.semesterHeaderRight}>
+                  {/* Display semester average if available */}
+                  {allSemestersAverages[index] && (
+                    <Text style={styles.semesterAverageText}>
+                      Avg: {allSemestersAverages[index]!.average}
+                    </Text>
+                  )}
+                  <MaterialIcons
+                    name={expandedSemesters[semester.semester] ? "keyboard-arrow-up" : "keyboard-arrow-down"}
+                    size={24}
+                    color="white"
+                  />
+                </View>
+              </TouchableOpacity>
+
+              {/* Semester content (subjects) when expanded */}
+              {expandedSemesters[semester.semester] && (
+                <Animated.View
+                  entering={FadeInUp.springify()}
+                  style={styles.semesterContent}
+                >
+                  {/* Semester average and absences */}
+                  {allSemestersAverages[index] && (
+                    <View style={styles.semesterAverageCard}>
+                      <Text style={styles.averageLabel}>Semester Average</Text>
+                      <Text style={styles.averageValue}>{allSemestersAverages[index]!.average}</Text>
+                      
+                      {/* Display absences if available */}
+                      {semester.absences && (
+                        <View style={styles.absencesContainer}>
+                          <Text style={styles.absencesLabel}>
+                            Absences: <Text style={styles.absencesValue}>{semester.absences.total}</Text>
+                            {' '}(Unexcused: <Text style={styles.absencesUnexcused}>
+                              {semester.absences.unexcused}
+                            </Text>)
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
+
+                  {/* Subject list for this semester */}
+                  {semester.subjects.map((subject, subjectIndex) => (
+                    <SubjectCard
+                      key={`subject-${semester.semester}-${subject.name}-${subjectIndex}`}
+                      subject={subject}
+                      expanded={!!expandedSubjects[`${semester.semester}-${subject.name}`]}
+                      onToggle={() => toggleSubject(subject.name, semester.semester)}
+                      semesterNumber={semester.semester}
+                    />
+                  ))}
+                  
+                  {/* Empty state if no subjects */}
+                  {semester.subjects.length === 0 && (
+                    <Text style={styles.emptyText}>
+                      No subjects available for Semester {semester.semester}
+                    </Text>
+                  )}
+                </Animated.View>
+              )}
+            </Animated.View>
+          ))}
+
+          {/* No data message if no semesters */}
+          {studentGrades.currentGrades.length === 0 && (
+            <Text style={styles.emptyText}>No grades data available</Text>
+          )}
+        </ScrollView>
       ) : (
         <ExamsView exams={studentGrades.exams} />
       )}
@@ -1315,5 +1424,49 @@ const styles = StyleSheet.create({
   },
   gradeItemFailing: {
     backgroundColor: 'rgba(255, 107, 107, 0.5)',
+  },
+  failingGrade: {
+    color: '#FF6B6B',
+  },
+  scrollViewContent: {
+    paddingBottom: 100,
+  },
+  semesterSection: {
+    marginBottom: 16,
+  },
+  semesterHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#232433',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginHorizontal: 20,
+  },
+  semesterTitle: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  semesterHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  semesterAverageText: {
+    color: 'white',
+    fontSize: 14,
+    marginRight: 8,
+  },
+  semesterContent: {
+    marginTop: 8,
+    marginHorizontal: 20,
+  },
+  semesterAverageCard: {
+    backgroundColor: '#232433',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    alignItems: 'center',
   },
 });
