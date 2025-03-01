@@ -944,7 +944,6 @@ export default function Grades() {
         }
       } catch (error) {
         // Silently handle error
-        console.error('Error loading stored data:', error);
       } finally {
         setIsLoading(false);
       }
@@ -1007,8 +1006,6 @@ export default function Grades() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       
     } catch (error) {
-      console.error('Error fetching student data:', error);
-      
       // If this was a fresh login attempt, clear the IDNP
       if (!responseHtml) {
         await AsyncStorage.removeItem(IDNP_KEY);
