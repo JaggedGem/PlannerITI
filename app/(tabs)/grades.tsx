@@ -1,4 +1,4 @@
-import { StyleSheet, View, Text, TouchableOpacity, FlatList, RefreshControl, Modal, TextInput, Platform, KeyboardAvoidingView, ActivityIndicator, DeviceEventEmitter } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, FlatList, RefreshControl, Modal, TextInput, Platform, KeyboardAvoidingView, ActivityIndicator, DeviceEventEmitter, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -9,12 +9,20 @@ import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from '@/hooks/useTranslation';
 import React from 'react';
-import { WebView } from 'react-native-webview';
-import { fetchStudentInfo } from '@/services/gradesService';
+import { 
+  fetchStudentInfo, 
+  parseStudentGradesData, 
+  StudentGrades, 
+  StudentInfo,
+  SemesterGrades, 
+  GradeSubject,
+  Exam
+} from '@/services/gradesService';
 
-// Types for grades
+// Types for local grades
 type GradeCategory = 'exam' | 'test' | 'homework' | 'project' | 'other';
 type SortOption = 'date' | 'grade' | 'category';
+type ViewMode = 'grades' | 'exams';
 
 interface Grade {
   id: string;
@@ -123,382 +131,525 @@ const LoadingScreen = ({ message = 'Loading...' }: { message?: string }) => (
   </View>
 );
 
-// HTML Response component
-const HtmlResponseView = ({ html }: { html: string }) => (
-  <View style={styles.htmlContainer}>
-    <WebView
-      source={{ html }}
-      style={styles.webView}
-    />
+// Replace the SemesterTabs component with a dropdown menu
+const SemesterDropdown = ({ 
+  semesters, 
+  activeSemester, 
+  onSemesterChange 
+}: { 
+  semesters: SemesterGrades[], 
+  activeSemester: number,
+  onSemesterChange: (index: number) => void 
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  const toggleDropdown = () => {
+    setIsOpen(prev => !prev);
+    Haptics.selectionAsync();
+  };
+
+  const selectSemester = (index: number) => {
+    onSemesterChange(index);
+    setIsOpen(false);
+    Haptics.selectionAsync();
+  };
+
+  return (
+    <View style={styles.semesterDropdownContainer}>
+      <TouchableOpacity
+        style={styles.semesterDropdownButton}
+        onPress={toggleDropdown}
+      >
+        <Text style={styles.semesterDropdownButtonText}>
+          {`Semester ${semesters[activeSemester]?.semester || 'I'}`}
+        </Text>
+        <MaterialIcons
+          name={isOpen ? "arrow-drop-up" : "arrow-drop-down"}
+          size={24}
+          color="white"
+        />
+      </TouchableOpacity>
+
+      {isOpen && (
+        <Animated.View
+          entering={FadeInUp.duration(200)}
+          style={styles.semesterDropdownMenu}
+        >
+          {semesters.map((semester, index) => (
+            <TouchableOpacity
+              key={`semester-${semester.semester}`}
+              style={[
+                styles.semesterDropdownItem,
+                activeSemester === index && styles.semesterDropdownItemActive
+              ]}
+              onPress={() => selectSemester(index)}
+            >
+              <Text style={[
+                styles.semesterDropdownItemText,
+                activeSemester === index && styles.semesterDropdownItemTextActive
+              ]}>
+                {`Semester ${semester.semester}`}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </Animated.View>
+      )}
+    </View>
+  );
+};
+
+// Subject card component with expandable grades
+const SubjectCard = ({ 
+  subject, 
+  expanded, 
+  onToggle 
+}: { 
+  subject: GradeSubject, 
+  expanded: boolean,
+  onToggle: () => void 
+}) => {
+  return (
+    <Animated.View
+      layout={Layout.springify()}
+      style={styles.subjectCard}
+    >
+      <TouchableOpacity 
+        style={[styles.subjectHeader, subject.grades.length === 0 && styles.subjectHeaderEmpty]} 
+        onPress={subject.grades.length > 0 ? onToggle : undefined}
+        activeOpacity={subject.grades.length > 0 ? 0.7 : 1}
+      >
+        <Text style={styles.subjectName}>{subject.name}</Text>
+        <View style={styles.subjectHeaderRight}>
+          <Text style={styles.averageGrade}>
+            {subject.displayedAverage || 
+             (subject.average ? subject.average.toFixed(2) : "-")}
+          </Text>
+          {subject.grades.length > 0 && (
+            <MaterialIcons
+              name={expanded ? "keyboard-arrow-up" : "keyboard-arrow-down"}
+              size={24}
+              color="white"
+            />
+          )}
+        </View>
+      </TouchableOpacity>
+
+      {expanded && subject.grades.length > 0 && (
+        <Animated.View 
+          entering={FadeInUp.springify()}
+          style={styles.gradesContainer}
+        >
+          <View style={styles.gradesGrid}>
+            {subject.grades.map((grade, index) => (
+              <View 
+                key={index} 
+                style={[
+                  styles.gradeItem, 
+                  !isNaN(parseFloat(grade.replace(',', '.'))) && 
+                  parseFloat(grade.replace(',', '.')) < 5 && 
+                  styles.gradeItemFailing
+                ]}
+              >
+                <Text style={styles.gradeText}>{grade}</Text>
+              </View>
+            ))}
+          </View>
+        </Animated.View>
+      )}
+    </Animated.View>
+  );
+};
+
+// Exams component with semester filtering
+const ExamsView = ({ 
+  exams
+}: { 
+  exams: Exam[] 
+}) => {
+  // Add state for selected semester
+  const [selectedSemester, setSelectedSemester] = useState<number | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
+
+  // Get unique semesters from exams
+  const semesters = useMemo(() => {
+    const uniqueSemesters = Array.from(
+      new Set(exams.map(exam => exam.semester))
+    ).sort((a, b) => a - b);
+    
+    return uniqueSemesters;
+  }, [exams]);
+
+  // Filter exams by semester if one is selected
+  const filteredExams = useMemo(() => {
+    if (selectedSemester === null) {
+      return exams;
+    }
+    return exams.filter(exam => exam.semester === selectedSemester);
+  }, [exams, selectedSemester]);
+
+  // Group exams by type
+  const examsByType = useMemo(() => {
+    const grouped: Record<string, Exam[]> = {};
+    
+    filteredExams.forEach(exam => {
+      if (!grouped[exam.type]) {
+        grouped[exam.type] = [];
+      }
+      grouped[exam.type].push(exam);
+    });
+    
+    return grouped;
+  }, [filteredExams]);
+
+  // Toggle dropdown
+  const toggleDropdown = () => {
+    setIsOpen(prev => !prev);
+    Haptics.selectionAsync();
+  };
+
+  // Select semester
+  const selectSemester = (semester: number | null) => {
+    setSelectedSemester(semester);
+    setIsOpen(false);
+    Haptics.selectionAsync();
+  };
+
+  if (exams.length === 0) {
+    return <Text style={styles.emptyText}>No exams data available</Text>;
+  }
+
+  return (
+    <View style={{ flex: 1 }}>
+      {/* Semester selector */}
+      <View style={styles.semesterDropdownContainer}>
+        <TouchableOpacity
+          style={styles.semesterDropdownButton}
+          onPress={toggleDropdown}
+        >
+          <Text style={styles.semesterDropdownButtonText}>
+            {selectedSemester !== null 
+              ? `Semester ${selectedSemester}` 
+              : "All Semesters"}
+          </Text>
+          <MaterialIcons
+            name={isOpen ? "arrow-drop-up" : "arrow-drop-down"}
+            size={24}
+            color="white"
+          />
+        </TouchableOpacity>
+
+        {isOpen && (
+          <Animated.View
+            entering={FadeInUp.duration(200)}
+            style={styles.semesterDropdownMenu}
+          >
+            {/* Option to show all semesters */}
+            <TouchableOpacity
+              style={[
+                styles.semesterDropdownItem,
+                selectedSemester === null && styles.semesterDropdownItemActive
+              ]}
+              onPress={() => selectSemester(null)}
+            >
+              <Text style={[
+                styles.semesterDropdownItemText,
+                selectedSemester === null && styles.semesterDropdownItemTextActive
+              ]}>
+                All Semesters
+              </Text>
+            </TouchableOpacity>
+            
+            {/* Options for individual semesters */}
+            {semesters.map((semester) => (
+              <TouchableOpacity
+                key={`semester-${semester}`}
+                style={[
+                  styles.semesterDropdownItem,
+                  selectedSemester === semester && styles.semesterDropdownItemActive
+                ]}
+                onPress={() => selectSemester(semester)}
+              >
+                <Text style={[
+                  styles.semesterDropdownItemText,
+                  selectedSemester === semester && styles.semesterDropdownItemTextActive
+                ]}>
+                  {`Semester ${semester}`}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </Animated.View>
+        )}
+      </View>
+
+      {/* Exams list */}
+      <ScrollView style={styles.examsList}>
+        {Object.entries(examsByType).map(([type, examList]) => (
+          <View key={type} style={styles.examTypeSection}>
+            <Text style={styles.examTypeTitle}>{type}</Text>
+            {examList.map((exam, index) => (
+              <Animated.View
+                key={`${type}-${index}`}
+                entering={FadeInUp.delay(index * 100).springify()}
+                style={styles.examCard}
+              >
+                <Text style={styles.examSubject}>{exam.name}</Text>
+                <View style={styles.examDetails}>
+                  <Text style={styles.examSemester}>Semester {exam.semester}</Text>
+                  <Text style={styles.examGrade}>{exam.grade}</Text>
+                </View>
+              </Animated.View>
+            ))}
+          </View>
+        ))}
+        
+        {Object.keys(examsByType).length === 0 && (
+          <Text style={styles.emptyText}>
+            {selectedSemester !== null 
+              ? `No exams for Semester ${selectedSemester}` 
+              : "No exams data available"}
+          </Text>
+        )}
+      </ScrollView>
+    </View>
+  );
+};
+
+// Tab switcher component
+const ViewModeSwitcher = ({
+  activeMode,
+  onModeChange
+}: {
+  activeMode: ViewMode,
+  onModeChange: (mode: ViewMode) => void
+}) => {
+  const { t } = useTranslation();
+  
+  return (
+    <View style={styles.viewModeSwitcher}>
+      <TouchableOpacity
+        style={[
+          styles.modeTab,
+          activeMode === 'grades' && styles.activeModeTab
+        ]}
+        onPress={() => onModeChange('grades')}
+      >
+        <Text style={[
+          styles.modeTabText,
+          activeMode === 'grades' && styles.activeModeTabText
+        ]}>
+          {t('grades').title}
+        </Text>
+      </TouchableOpacity>
+      
+      <TouchableOpacity
+        style={[
+          styles.modeTab,
+          activeMode === 'exams' && styles.activeModeTab
+        ]}
+        onPress={() => onModeChange('exams')}
+      >
+        <Text style={[
+          styles.modeTabText,
+          activeMode === 'exams' && styles.activeModeTabText
+        ]}>
+          {t('grades').categories.exam}s
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+};
+
+// Student info header component
+const StudentInfoHeader = ({ studentInfo }: { studentInfo: StudentInfo }) => (
+  <View style={styles.studentInfoHeader}>
+    <Text style={styles.studentName}>
+      {studentInfo.firstName} {studentInfo.name}
+    </Text>
+    <Text style={styles.studentDetails}>
+      {studentInfo.group} | {studentInfo.specialization}
+    </Text>
   </View>
 );
 
 // Main Grades component
 const GradesScreen = ({ idnp, responseHtml }: { idnp: string, responseHtml: string }) => {
   const { t } = useTranslation();
-  const [grades, setGrades] = useState<Grade[]>([]);
-  const [refreshing, setRefreshing] = useState(false);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [sortBy, setSortBy] = useState<SortOption>('date');
-  const [editingGrade, setEditingGrade] = useState<Grade | null>(null);
-  
-  // Form state
-  const [subject, setSubject] = useState('');
-  const [gradeValue, setGradeValue] = useState('');
-  const [category, setCategory] = useState<GradeCategory>('test');
-  const [date, setDate] = useState(new Date());
-  const [notes, setNotes] = useState('');
-  const [showDatePicker, setShowDatePicker] = useState(false);
 
-  // Calculate average grade
-  const average = useMemo(() => {
-    if (grades.length === 0) return 0;
-    const sum = grades.reduce((acc, grade) => acc + grade.value, 0);
-    return (sum / grades.length).toFixed(2);
-  }, [grades]);
-
-  // Get color for category
-  const getCategoryColor = (category: GradeCategory): [string, string] => {
-    switch (category) {
-      case 'exam':
-        return ['#FF6B6B', '#FF8787'];
-      case 'test':
-        return ['#4D96FF', '#6BA6FF'];
-      case 'homework':
-        return ['#6BCB77', '#82D98C'];
-      case 'project':
-        return ['#9B89B3', '#B39ECC'];
-      default:
-        return ['#FFB562', '#FFCC8B'];
+  // Parse HTML data
+  const studentGrades = useMemo(() => {
+    try {
+      console.log("Attempting to parse HTML of length:", responseHtml?.length);
+      const result = parseStudentGradesData(responseHtml);
+      console.log("Successfully parsed student grades data:", 
+        result?.studentInfo?.firstName, 
+        result?.studentInfo?.name,
+        "Semesters:", result?.currentGrades?.length
+      );
+      return result;
+    } catch (error) {
+      console.error("Error parsing grades data in component:", error);
+      return null;
     }
-  };
+  }, [responseHtml]);
+  
+  // UI state
+  const [refreshing, setRefreshing] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('grades');
+  const [activeSemesterIndex, setActiveSemesterIndex] = useState(
+    studentGrades?.currentSemester 
+      ? studentGrades.currentGrades.findIndex(s => s.semester === studentGrades.currentSemester) 
+      : 0
+  );
+  const [expandedSubjects, setExpandedSubjects] = useState<Record<string, boolean>>({});
 
-  // Sort grades
-  const sortedGrades = useMemo(() => {
-    return [...grades].sort((a, b) => {
-      switch (sortBy) {
-        case 'date':
-          return b.date.getTime() - a.date.getTime();
-        case 'grade':
-          return b.value - a.value;
-        case 'category':
-          return a.category.localeCompare(b.category);
-        default:
-          return 0;
-      }
-    });
-  }, [grades, sortBy]);
+  // Log when component renders
+  console.log("GradesScreen rendering", 
+    "Has data:", !!studentGrades,
+    "View mode:", viewMode, 
+    "Active semester:", activeSemesterIndex
+  );
+
+  // Get current semester data
+  const currentSemesterData = useMemo(() => {
+    if (!studentGrades || studentGrades.currentGrades.length === 0) {
+      return null;
+    }
+    
+    return studentGrades.currentGrades[
+      activeSemesterIndex >= 0 && activeSemesterIndex < studentGrades.currentGrades.length 
+        ? activeSemesterIndex 
+        : 0
+    ];
+  }, [studentGrades, activeSemesterIndex]);
+
+  // Calculate average grades for current semester
+  const semesterAverage = useMemo(() => {
+    if (!currentSemesterData) return null;
+    
+    const validAverages = currentSemesterData.subjects
+      .map(subject => subject.average)
+      .filter(avg => avg !== undefined) as number[];
+    
+    if (validAverages.length === 0) return null;
+    
+    const sum = validAverages.reduce((acc, val) => acc + val, 0);
+    return (sum / validAverages.length).toFixed(2);
+  }, [currentSemesterData]);
 
   // Handle refresh
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    // Add API call here to fetch grades
+    // Re-fetch data could be implemented here
     await new Promise(resolve => setTimeout(resolve, 1000));
     setRefreshing(false);
   }, []);
-
-  // Reset form
-  const resetForm = useCallback(() => {
-    setSubject('');
-    setGradeValue('');
-    setCategory('test');
-    setDate(new Date());
-    setNotes('');
-    setEditingGrade(null);
-  }, []);
-
-  // Handle save grade
-  const handleSaveGrade = useCallback(() => {
-    if (!subject || !gradeValue) return;
-
-    const gradeData: Grade = {
-      id: editingGrade?.id || Date.now().toString(),
-      subject,
-      value: parseFloat(gradeValue),
-      category,
-      date,
-      notes: notes.trim() || undefined,
-    };
-
-    if (editingGrade) {
-      setGrades(prev => prev.map(g => g.id === editingGrade.id ? gradeData : g));
-    } else {
-      setGrades(prev => [...prev, gradeData]);
-    }
-
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setShowAddModal(false);
-    resetForm();
-  }, [subject, gradeValue, category, date, notes, editingGrade]);
-
-  // Handle edit grade
-  const handleEditGrade = useCallback((grade: Grade) => {
-    setEditingGrade(grade);
-    setSubject(grade.subject);
-    setGradeValue(grade.value.toString());
-    setCategory(grade.category);
-    setDate(grade.date);
-    setNotes(grade.notes || '');
-    setShowAddModal(true);
-  }, []);
-
-  // Handle delete grade
-  const handleDeleteGrade = useCallback((id: string) => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    setGrades(prev => prev.filter(g => g.id !== id));
-  }, []);
-
-  // Render grade item
-  const renderGradeItem = useCallback(({ item, index }: { item: Grade, index: number }) => {
-    const colors = getCategoryColor(item.category);
+  
+  // Toggle subject expand/collapse
+  const toggleSubject = useCallback((subjectName: string) => {
+    setExpandedSubjects(prev => ({
+      ...prev,
+      [subjectName]: !prev[subjectName]
+    }));
     
+    // Add haptic feedback when expanding/collapsing
+    Haptics.selectionAsync();
+  }, []);
+
+  // If no data, show loading or error
+  if (!studentGrades) {
+    console.log("No student grades data available, showing error screen");
     return (
-      <Animated.View
-        entering={FadeInUp.delay(index * 100).springify()}
-        layout={Layout.springify()}
-        style={styles.gradeCard}
-      >
-        <LinearGradient
-          colors={colors}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.gradientCard}
-        >
-          <View style={styles.gradeHeader}>
-            <Text style={styles.subject}>{item.subject}</Text>
-            <Text style={styles.gradeValue}>{item.value}</Text>
-          </View>
-          
-          <View style={styles.gradeDetails}>
-            <Text style={styles.category}>
-              {t('grades').categories[item.category]}
-            </Text>
-            <Text style={styles.date}>
-              {item.date.toLocaleDateString()}
-            </Text>
-          </View>
-
-          {item.notes && (
-            <Text style={styles.notes} numberOfLines={2}>
-              {item.notes}
-            </Text>
-          )}
-
-          <View style={styles.actions}>
-            <TouchableOpacity
-              onPress={() => handleEditGrade(item)}
-              style={styles.actionButton}
-            >
-              <MaterialIcons name="edit" size={20} color="white" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => handleDeleteGrade(item.id)}
-              style={styles.actionButton}
-            >
-              <MaterialIcons name="delete" size={20} color="white" />
-            </TouchableOpacity>
-          </View>
-        </LinearGradient>
-      </Animated.View>
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorTitle}>Error Loading Data</Text>
+        <Text style={styles.errorMessage}>
+          Unable to parse the student data. Please try again later.
+        </Text>
+      </View>
     );
-  }, [t, handleEditGrade, handleDeleteGrade]);
+  }
+
+  // Log student info
+  console.log("Rendering with student data:", 
+    studentGrades.studentInfo.firstName,
+    studentGrades.studentInfo.name,
+    "Subjects:", currentSemesterData?.subjects?.length || 0
+  );
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* HTML Response on top */}
-      <HtmlResponseView html={responseHtml} />
+      {/* Student Info */}
+      <StudentInfoHeader studentInfo={studentGrades.studentInfo} />
       
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>{t('grades').title}</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => {
-            resetForm();
-            setShowAddModal(true);
-          }}
-        >
-          <MaterialIcons name="add" size={24} color="white" />
-        </TouchableOpacity>
-      </View>
-
-      {/* Average Grade Card */}
-      <Animated.View
-        entering={FadeInUp.springify()}
-        style={styles.averageCard}
-      >
-        <Text style={styles.averageLabel}>{t('grades').average}</Text>
-        <Text style={styles.averageValue}>{average}</Text>
-      </Animated.View>
-
-      {/* Sort Options */}
-      <View style={styles.sortContainer}>
-        {(['date', 'grade', 'category'] as SortOption[]).map((option) => (
-          <TouchableOpacity
-            key={option}
-            style={[
-              styles.sortButton,
-              sortBy === option && styles.sortButtonActive
-            ]}
-            onPress={() => setSortBy(option)}
-          >
-            <Text style={[
-              styles.sortButtonText,
-              sortBy === option && styles.sortButtonTextActive
-            ]}>
-              {t('grades').sortOptions[option]}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {/* Grades List */}
-      <FlatList
-        data={sortedGrades}
-        renderItem={renderGradeItem}
-        keyExtractor={item => item.id}
-        contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor="#2C3DCD"
-          />
-        }
-        ListEmptyComponent={() => (
-          <Text style={styles.emptyText}>{t('grades').noGrades}</Text>
-        )}
+      {/* Tab Switcher */}
+      <ViewModeSwitcher 
+        activeMode={viewMode}
+        onModeChange={setViewMode}
       />
+      
+      {viewMode === 'grades' ? (
+        <>
+          {/* Semester Dropdown */}
+          {studentGrades.currentGrades.length > 1 && (
+            <SemesterDropdown
+              semesters={studentGrades.currentGrades}
+              activeSemester={activeSemesterIndex}
+              onSemesterChange={setActiveSemesterIndex}
+            />
+          )}
 
-      {/* Add/Edit Grade Modal */}
-      <Modal
-        visible={showAddModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => {
-          setShowAddModal(false);
-          resetForm();
-        }}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {editingGrade ? t('grades').edit : t('grades').add}
-              </Text>
-              <TouchableOpacity
-                onPress={() => {
-                  setShowAddModal(false);
-                  resetForm();
-                }}
-              >
-                <MaterialIcons name="close" size={24} color="white" />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.form}>
-              {/* Subject Input */}
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>{t('grades').form.subject}</Text>
-                <TextInput
-                  style={styles.input}
-                  value={subject}
-                  onChangeText={setSubject}
-                  placeholder={t('grades').form.subject}
-                  placeholderTextColor="#8A8A8D"
-                />
-              </View>
-
-              {/* Grade Input */}
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>{t('grades').form.grade}</Text>
-                <TextInput
-                  style={styles.input}
-                  value={gradeValue}
-                  onChangeText={setGradeValue}
-                  keyboardType="numeric"
-                  placeholder="10"
-                  placeholderTextColor="#8A8A8D"
-                />
-              </View>
-
-              {/* Category Selection */}
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>{t('grades').form.category}</Text>
-                <View style={styles.categoryContainer}>
-                  {(['exam', 'test', 'homework', 'project', 'other'] as GradeCategory[]).map((cat) => (
-                    <TouchableOpacity
-                      key={cat}
-                      style={[
-                        styles.categoryButton,
-                        category === cat && styles.categoryButtonActive
-                      ]}
-                      onPress={() => setCategory(cat)}
-                    >
-                      <Text style={[
-                        styles.categoryButtonText,
-                        category === cat && styles.categoryButtonTextActive
-                      ]}>
-                        {t('grades').categories[cat]}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              {/* Date Selection */}
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>{t('grades').form.date}</Text>
-                <TouchableOpacity
-                  style={styles.dateButton}
-                  onPress={() => setShowDatePicker(true)}
-                >
-                  <Text style={styles.dateButtonText}>
-                    {date.toLocaleDateString()}
+          {/* Average Grade Card */}
+          {semesterAverage && (
+            <Animated.View
+              entering={FadeInUp.springify()}
+              style={styles.averageCard}
+            >
+              <Text style={styles.averageLabel}>Semester Average</Text>
+              <Text style={styles.averageValue}>{semesterAverage}</Text>
+              
+              {currentSemesterData?.absences && (
+                <View style={styles.absencesContainer}>
+                  <Text style={styles.absencesLabel}>
+                    Absences: <Text style={styles.absencesValue}>{currentSemesterData.absences.total}</Text>
+                    {' '}(Unexcused: <Text style={styles.absencesUnexcused}>
+                      {currentSemesterData.absences.unexcused}
+                    </Text>)
                   </Text>
-                </TouchableOpacity>
-              </View>
+                </View>
+              )}
+            </Animated.View>
+          )}
 
-              {/* Notes Input */}
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>{t('grades').form.notes}</Text>
-                <TextInput
-                  style={[styles.input, styles.notesInput]}
-                  value={notes}
-                  onChangeText={setNotes}
-                  placeholder={t('grades').form.notes}
-                  placeholderTextColor="#8A8A8D"
-                  multiline
-                  numberOfLines={3}
-                />
-              </View>
-
-              {/* Save Button */}
-              <TouchableOpacity
-                style={styles.saveButton}
-                onPress={handleSaveGrade}
+          {/* Subjects List */}
+          <FlatList
+            data={currentSemesterData?.subjects || []}
+            renderItem={({ item, index }) => (
+              <Animated.View
+                entering={FadeInUp.delay(index * 100).springify()}
               >
-                <Text style={styles.saveButtonText}>
-                  {t('grades').form.save}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Date Picker Modal */}
-      {showDatePicker && (
-        <DateTimePicker
-          value={date}
-          mode="date"
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          onChange={(event, selectedDate) => {
-            setShowDatePicker(Platform.OS === 'ios');
-            if (selectedDate) setDate(selectedDate);
-          }}
-        />
+                <SubjectCard
+                  subject={item}
+                  expanded={!!expandedSubjects[item.name]}
+                  onToggle={() => toggleSubject(item.name)}
+                />
+              </Animated.View>
+            )}
+            keyExtractor={item => item.name}
+            contentContainerStyle={styles.list}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor="#2C3DCD"
+              />
+            }
+            ListEmptyComponent={() => (
+              <Text style={styles.emptyText}>No grades data available</Text>
+            )}
+          />
+        </>
+      ) : (
+        <ExamsView exams={studentGrades.exams} />
       )}
     </SafeAreaView>
   );
@@ -558,15 +709,19 @@ export default function Grades() {
       // Clear any previous response
       setResponseHtml('');
       
+      console.log("Fetching student info for IDNP:", studentIdnp);
       // Fetch student info - this handles both login and info retrieval
       const htmlResponse = await fetchStudentInfo(studentIdnp);
       
       if (!htmlResponse || htmlResponse.trim() === '') {
+        console.error("Received empty HTML response");
         throw new Error('Empty response received');
       }
       
+      console.log("Received HTML response of length:", htmlResponse.length);
       // If we got here, the fetch was successful
       setResponseHtml(htmlResponse);
+      console.log("Set response HTML state:", htmlResponse.substring(0, 100) + "...");
 
       // Save the IDNP since it was successful
       await AsyncStorage.setItem(IDNP_KEY, studentIdnp);
@@ -575,6 +730,7 @@ export default function Grades() {
       DeviceEventEmitter.emit(IDNP_UPDATE_EVENT, studentIdnp);
       
     } catch (error) {
+      console.error("Error fetching student data:", error);
       // Clear the IDNP and show error
       await AsyncStorage.removeItem(IDNP_KEY);
       setIdnp(null);
@@ -692,6 +848,7 @@ const styles = StyleSheet.create({
   list: {
     padding: 20,
     paddingTop: 0,
+    paddingBottom: 100, // Extra padding at the bottom for better scrolling
   },
   gradeCard: {
     marginBottom: 12,
@@ -919,15 +1076,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 16,
   },
-  // HTML response styles
-  htmlContainer: {
-    width: '100%',
-    height: '50%', // Take half of the screen
-    backgroundColor: 'white',
-  },
-  webView: {
-    flex: 1,
-  },
   // Error styles
   errorContainer: {
     flex: 1,
@@ -962,5 +1110,210 @@ const styles = StyleSheet.create({
   idnpInputError: {
     borderColor: '#FF6B6B',
     borderWidth: 1,
+  },
+  // New styles for semester dropdown
+  semesterDropdownContainer: {
+    marginHorizontal: 20,
+    marginVertical: 16,
+  },
+  semesterDropdownButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#232433',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  semesterDropdownButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  semesterDropdownMenu: {
+    backgroundColor: '#232433',
+    borderRadius: 12,
+    marginTop: 8,
+    padding: 8,
+  },
+  semesterDropdownItem: {
+    padding: 12,
+    borderRadius: 8,
+  },
+  semesterDropdownItemActive: {
+    backgroundColor: '#2C3DCD',
+  },
+  semesterDropdownItemText: {
+    color: 'white',
+    fontSize: 16,
+  },
+  semesterDropdownItemTextActive: {
+    fontWeight: '600',
+  },
+  // New styles for subject cards
+  subjectCard: {
+    backgroundColor: '#232433',
+    borderRadius: 16,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  subjectHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+  },
+  subjectName: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+    flex: 1,
+    paddingRight: 8,
+  },
+  subjectHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  averageGrade: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: '600',
+    marginRight: 8,
+  },
+  gradesContainer: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    padding: 16,
+  },
+  gradesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  gradeItem: {
+    backgroundColor: 'rgba(44, 61, 205, 0.5)',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    minWidth: 40,
+    alignItems: 'center',
+  },
+  gradeText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  // New styles for exams view
+  examsList: {
+    flex: 1,
+    padding: 20,
+    paddingBottom: 100,
+  },
+  examTypeSection: {
+    marginBottom: 24,
+  },
+  examTypeTitle: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  examCard: {
+    backgroundColor: '#232433',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+  },
+  examSubject: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  examDetails: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  examSemester: {
+    color: '#8A8A8D',
+    fontSize: 14,
+  },
+  examGrade: {
+    color: '#4D96FF',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  // View mode switcher styles
+  viewModeSwitcher: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginHorizontal: 20,
+    marginVertical: 12,
+    backgroundColor: '#232433',
+    borderRadius: 12,
+    padding: 4,
+  },
+  modeTab: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    flex: 1,
+    alignItems: 'center',
+  },
+  activeModeTab: {
+    backgroundColor: '#2C3DCD',
+  },
+  modeTabText: {
+    color: '#8A8A8D',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  activeModeTabText: {
+    color: 'white',
+    fontWeight: '600',
+  },
+  // Student info header styles
+  studentInfoHeader: {
+    padding: 20,
+    paddingBottom: 12,
+  },
+  studentName: {
+    color: 'white',
+    fontSize: 22,
+    fontWeight: 'bold',
+  },
+  studentDetails: {
+    color: '#8A8A8D',
+    fontSize: 14,
+    marginTop: 4,
+  },
+  // Absences styles
+  absencesContainer: {
+    marginTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    paddingTop: 10,
+    width: '100%',
+    alignItems: 'center',
+  },
+  absencesLabel: {
+    color: '#8A8A8D',
+    fontSize: 14,
+  },
+  absencesValue: {
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  absencesUnexcused: {
+    color: '#FF6B6B',
+    fontWeight: 'bold',
+  },
+  subjectHeaderEmpty: {
+    opacity: 0.5,
+  },
+  gradeItemFailing: {
+    backgroundColor: 'rgba(255, 107, 107, 0.5)',
   },
 });
