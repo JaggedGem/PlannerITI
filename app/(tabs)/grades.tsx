@@ -495,16 +495,9 @@ const GradesScreen = ({ idnp, responseHtml }: { idnp: string, responseHtml: stri
   // Parse HTML data
   const studentGrades = useMemo(() => {
     try {
-      console.log("Attempting to parse HTML of length:", responseHtml?.length);
       const result = parseStudentGradesData(responseHtml);
-      console.log("Successfully parsed student grades data:", 
-        result?.studentInfo?.firstName, 
-        result?.studentInfo?.name,
-        "Semesters:", result?.currentGrades?.length
-      );
       return result;
     } catch (error) {
-      console.error("Error parsing grades data in component:", error);
       return null;
     }
   }, [responseHtml]);
@@ -533,13 +526,6 @@ const GradesScreen = ({ idnp, responseHtml }: { idnp: string, responseHtml: stri
       setExpandedSemesters(initialExpandedState);
     }
   }, [studentGrades?.currentGrades]);
-
-  // Log when component renders
-  console.log("GradesScreen rendering", 
-    "Has data:", !!studentGrades,
-    "View mode:", viewMode, 
-    "Active semester:", activeSemesterIndex
-  );
 
   // Get current semester data
   const currentSemesterData = useMemo(() => {
@@ -620,7 +606,6 @@ const GradesScreen = ({ idnp, responseHtml }: { idnp: string, responseHtml: stri
 
   // If no data, show loading or error
   if (!studentGrades) {
-    console.log("No student grades data available, showing error screen");
     return (
       <View style={styles.errorContainer}>
         <Text style={styles.errorTitle}>Error Loading Data</Text>
@@ -630,13 +615,6 @@ const GradesScreen = ({ idnp, responseHtml }: { idnp: string, responseHtml: stri
       </View>
     );
   }
-
-  // Log student info
-  console.log("Rendering with student data:", 
-    studentGrades.studentInfo.firstName,
-    studentGrades.studentInfo.name,
-    "Semesters:", studentGrades.currentGrades.length
-  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -818,19 +796,15 @@ export default function Grades() {
       // Clear any previous response
       setResponseHtml('');
       
-      console.log("Fetching student info for IDNP:", studentIdnp);
       // Fetch student info - this handles both login and info retrieval
       const htmlResponse = await fetchStudentInfo(studentIdnp);
       
       if (!htmlResponse || htmlResponse.trim() === '') {
-        console.error("Received empty HTML response");
         throw new Error('Empty response received');
       }
       
-      console.log("Received HTML response of length:", htmlResponse.length);
       // If we got here, the fetch was successful
       setResponseHtml(htmlResponse);
-      console.log("Set response HTML state:", htmlResponse.substring(0, 100) + "...");
 
       // Save the IDNP since it was successful
       await AsyncStorage.setItem(IDNP_KEY, studentIdnp);
@@ -839,7 +813,6 @@ export default function Grades() {
       DeviceEventEmitter.emit(IDNP_UPDATE_EVENT, studentIdnp);
       
     } catch (error) {
-      console.error("Error fetching student data:", error);
       // Clear the IDNP and show error
       await AsyncStorage.removeItem(IDNP_KEY);
       setIdnp(null);

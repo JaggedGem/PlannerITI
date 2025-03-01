@@ -171,8 +171,6 @@ const extractTableValue = (html: string, tableId: string, labelPattern: string):
  * @returns Student info object
  */
 const parseStudentInfo = (html: string): StudentInfo => {
-  console.log("Parsing student info...");
-  
   try {
     // Extract from date-personale table
     const namePattern = /<tr>\s*<th>Numele<\/th>\s*<td>([^<]+)<\/td>\s*<\/tr>/;
@@ -207,7 +205,6 @@ const parseStudentInfo = (html: string): StudentInfo => {
       status: statusMatch ? statusMatch[1].trim() : undefined
     };
   } catch (error) {
-    console.error("Error parsing student info:", error);
     return {
       name: "Error",
       firstName: "Loading",
@@ -316,41 +313,26 @@ const parseCurrentGrades = (html: string): SemesterGrades[] => {
   const result: SemesterGrades[] = [];
   
   try {
-    console.log("Starting to parse current grades");
-    
-    // Extract the situatia-curenta section
-    const situatiaCurentaPattern = /<div[^>]*id="situatia-curenta"[^>]*>(.*?)<div[^>]*id="note-1"/s;
+    const situatiaCurentaPattern = /<div[^>]*id="situatia-curenta"[^>]*>([\s\S]*?)<div[^>]*id="note-1"/;
     const situatiaCurentaMatch = html.match(situatiaCurentaPattern);
     
     if (!situatiaCurentaMatch) {
-      console.log("Could not find situatia-curenta section");
       return createFallbackSemesters();
     }
     
     const situatiaCurentaContent = situatiaCurentaMatch[1];
+    const semesterPanels = [];
     
-    // Extract the semester headers and panel IDs
-    const semesterHeadersPattern = /<h4[^>]*class="panel-title"[^>]*>[\s\n]*<a[^>]*>[^<]*Semestrul\s+([IVX]+|[0-9]+)[^<]*<\/a>[\s\n]*<\/h4>[\s\n]*<\/div>[\s\n]*<div[^>]*id="collaps3e(\d+)"/gi;
-    const headerMatches = [];
-    let headerMatch;
-    while ((headerMatch = semesterHeadersPattern.exec(situatiaCurentaContent)) !== null) {
-      headerMatches.push({
-        semesterText: headerMatch[1].trim(),
-        panelId: headerMatch[2]
-      });
-    }
+    // Updated pattern to better handle nested content
+    const semesterPattern = /<div[^>]*class="panel-heading"[^>]*>[\s\S]*?<h4[^>]*>[\s\S]*?<a[^>]*>[\s\S]*?Semestrul\s+([IVX]+|[0-9]+)[\s\S]*?<\/a>[\s\S]*?<\/h4>[\s\S]*?<\/div>[\s\S]*?<div[^>]*id="collaps3e(\d+)"[^>]*>([\s\S]*?)(?=<div[^>]*class="panel-heading"|<div[^>]*id="note-1"|$)/g;
+    let panelMatch;
+    let lastIndex = 0;
     
-    console.log(`Found ${headerMatches.length} semester headers`);
-    
-    // If no headers found, try a fallback approach
-    if (headerMatches.length === 0) {
-      return handleFallbackParsing(situatiaCurentaContent);
-    }
-
-    // For each semester header, find its content panel and parse subjects
-    headerMatches.forEach((header, index) => {
-      const panelId = header.panelId;
-      const semesterText = header.semesterText;
+    while ((panelMatch = semesterPattern.exec(situatiaCurentaContent)) !== null) {
+      const semesterText = panelMatch[1].trim();
+      const panelId = panelMatch[2];
+      const fullContent = panelMatch[3];
+      lastIndex = panelMatch.index + panelMatch[0].length;
       
       // Convert Roman numerals or digits to semester number
       let semesterNumber: number;
@@ -358,182 +340,150 @@ const parseCurrentGrades = (html: string): SemesterGrades[] => {
         semesterNumber = 1;
       } else if (semesterText === 'II') {
         semesterNumber = 2;
-      } else if (semesterText === 'III') {
-        semesterNumber = 3;
-      } else if (semesterText === 'IV') {
-        semesterNumber = 4;
       } else if (/^\d+$/.test(semesterText)) {
         semesterNumber = parseInt(semesterText, 10);
       } else {
-        // Default to index + 1 (1-based) if we can't parse
-        semesterNumber = index + 1;
+        semesterNumber = semesterPanels.length + 1;
       }
       
-      console.log(`Processing semester ${semesterNumber} (${semesterText}), panel ID: ${panelId}`);
+      // Find all tables in this panel's content
+      const tables = fullContent.match(/<table[^>]*class="table[^>]*>[\s\S]*?<\/table>/g) || [];
       
-      // Extract the panel content using the panel ID
-      const panelPattern = new RegExp(`<div[^>]*id="collaps3e${panelId}"[^>]*>(.*?)<\\/div>\\s*<\\/div>\\s*<\\/div>`, 's');
-      const panelMatch = situatiaCurentaContent.match(panelPattern);
-      
-      if (!panelMatch) {
-        console.log(`Could not find panel content for semester ${semesterNumber}`);
-        return;
+      if (tables.length > 0) {
+        semesterPanels.push({
+          semesterNumber,
+          semesterText,
+          panelId,
+          tableContent: tables.join('\n'),
+          fullPanelContent: fullContent
+        });
       }
+    }
+    
+    // Process each semester panel
+    semesterPanels.forEach((panel) => {
+      const { semesterNumber, tableContent, fullPanelContent } = panel;
       
-      const panelContent = panelMatch[1];
-      
-      // Create a new semester object
       const semester: SemesterGrades = {
         semester: semesterNumber,
         subjects: []
       };
       
-      // Extract the table rows for subjects and grades
-      parseSubjectsFromPanel(panelContent, semester);
+      parseSubjectsFromTable(tableContent, semester);
+      parseAbsencesFromPanel(fullPanelContent, semester);
       
-      // Parse absences
-      parseAbsencesFromPanel(panelContent, semester);
-      
-      // Add semester to result
-      result.push(semester);
+      if (semester.subjects.length > 0 || semester.absences) {
+        result.push(semester);
+      }
     });
     
-    // If no complete semesters were found, try simpler fallback
-    if (result.length === 0 || !result.some(s => s.subjects.length > 0)) {
-      console.log("No valid semesters with subjects found, using fallback approach");
+    if (result.length === 0) {
       return createFallbackSemesters();
     }
     
-    // Ensure both semester I and semester II are present
-    if (result.length === 1) {
-      const existingSemesterNumber = result[0].semester;
-      if (existingSemesterNumber === 1) {
-        // Add an empty semester II
-        result.push({
-          semester: 2,
-          subjects: [{
-            name: "No subjects available for Semester II",
-            grades: [],
-            displayedAverage: "-"
-          }]
-        });
-      } else if (existingSemesterNumber === 2) {
-        // Add an empty semester I and reorder
-        result.unshift({
-          semester: 1,
-          subjects: [{
-            name: "No subjects available for Semester I",
-            grades: [],
-            displayedAverage: "-"
-          }]
-        });
-      }
-    }
-    
-    // Sort semesters by number to ensure proper order
+    ensureBothSemestersExist(result);
     result.sort((a, b) => a.semester - b.semester);
     
-    console.log(`Final parsed semesters count: ${result.length}`);
     return result;
   } catch (error) {
-    console.error("Error parsing current grades:", error);
     return createFallbackSemesters();
   }
 };
 
 /**
- * Helper function to parse subjects from a panel
- * @param panelContent The HTML content of the panel
+ * Helper function to parse subjects from a table content string
+ * @param tableContent The HTML content of the table within a semester panel
  * @param semester The semester object to populate
  */
-const parseSubjectsFromPanel = (panelContent: string, semester: SemesterGrades): void => {
-  // First try with <p> tags inside <td>
-  let tableRowPattern = /<tr>\s*<td>\s*<p>(.*?)<\/p>\s*<\/td>\s*<td>\s*<p>(.*?)<\/p>\s*<\/td>\s*<\/tr>/gs;
+const parseSubjectsFromTable = (tableContent: string, semester: SemesterGrades): void => {
+  // Extract rows from the table, skipping the header row
+  let rowPattern = /<tr>\s*<td>\s*<p>(.*?)<\/p>\s*<\/td>\s*<td>\s*<p>(.*?)<\/p>\s*<\/td>\s*<\/tr>/gs;
   let rowMatch;
-  let foundSubjects = false;
+  let found = false;
   
-  // Store subject names to prevent duplicates within the same semester
+  // Track subject names to avoid duplicates
   const subjectNames = new Set<string>();
   
-  while ((rowMatch = tableRowPattern.exec(panelContent)) !== null) {
-    const subjectName = rowMatch[1].trim();
-    const gradesText = rowMatch[2].trim();
+  // Process each row in the table
+  while ((rowMatch = rowPattern.exec(tableContent)) !== null) {
+    // Extract subject name and grades, removing any HTML tags
+    const subjectName = rowMatch[1].replace(/<[^>]*>/g, '').trim();
+    const gradesText = rowMatch[2].replace(/<[^>]*>/g, '').trim();
     
-    // Skip header rows, absence rows, and duplicate subjects
-    if (subjectName === "Denumire" || 
-        subjectName === "Semestrul II" || 
-        subjectName.toLowerCase().includes("absențe") || 
-        subjectName === "Note" ||
-        subjectName === "Denumirea Obiectelor" ||
-        subjectNames.has(subjectName)) {
+    // Skip header rows, absence rows, and rows that don't contain actual subjects
+    if (
+      subjectName === "Denumire" || 
+      subjectName === "Note" || 
+      subjectName === "Denumirea Obiectelor" ||
+      subjectName === "Semestrul I" ||
+      subjectName === "Semestrul II" ||
+      subjectName.toLowerCase().includes("absențe") ||
+      subjectNames.has(subjectName)
+    ) {
       continue;
     }
     
-    // Add to tracked subjects
+    // Add this subject name to the set
     subjectNames.add(subjectName);
+    found = true;
     
-    // Parse grades - handle both comma and space separated values
-    // First clean up by removing any HTML tags that might be present
-    const cleanGradesText = gradesText.replace(/<[^>]*>/g, '');
-    
-    // Split using both comma and space as separators
-    // Then filter out non-numeric grades like 'm', 'a', etc.
-    const grades = cleanGradesText
-      ? cleanGradesText
+    // Parse grades by splitting the grades text
+    const grades = gradesText
+      ? gradesText
           .split(/[,\s]+/)
           .map(g => g.trim())
-          .filter(g => {
-            // Keep only valid numeric grades (integer or with decimal)
-            return g.length > 0 && /^\d+([.,]\d+)?$/.test(g);
-          })
+          .filter(g => g.length > 0 && /^\d+([.,]\d+)?$/.test(g))
       : [];
     
+    // Calculate average grade
     const average = calculateAverage(grades);
     
+    // Add subject to the semester
     semester.subjects.push({
       name: subjectName,
       grades,
       average,
       displayedAverage: average ? average.toFixed(2) : '-'
     });
-    
-    foundSubjects = true;
   }
   
-  // If no subjects found with <p> tags, try without them
-  if (!foundSubjects) {
-    tableRowPattern = /<tr>\s*<td>\s*(.*?)\s*<\/td>\s*<td>\s*(.*?)\s*<\/td>\s*<\/tr>/gs;
+  // If no subjects found with <p> tags, try the alternative pattern
+  if (!found) {
+    // Alternative pattern that doesn't require <p> tags
+    rowPattern = /<tr>\s*<td[^>]*>\s*(.*?)\s*<\/td>\s*<td[^>]*>\s*(.*?)\s*<\/td>\s*<\/tr>/gs;
     
-    while ((rowMatch = tableRowPattern.exec(panelContent)) !== null) {
+    while ((rowMatch = rowPattern.exec(tableContent)) !== null) {
       const subjectName = rowMatch[1].replace(/<[^>]*>/g, '').trim();
       const gradesText = rowMatch[2].replace(/<[^>]*>/g, '').trim();
       
-      // Skip header rows, absence rows, and duplicate subjects
-      if (subjectName === "Denumire" || 
-          subjectName === "Semestrul II" || 
-          subjectName.toLowerCase().includes("absențe") || 
-          subjectName === "Note" ||
-          subjectName === "Denumirea Obiectelor" ||
-          subjectNames.has(subjectName)) {
+      // Skip header rows, absence rows, and already included subjects
+      if (
+        subjectName === "Denumire" || 
+        subjectName === "Note" || 
+        subjectName === "Denumirea Obiectelor" ||
+        subjectName === "Semestrul I" ||
+        subjectName === "Semestrul II" ||
+        subjectName.toLowerCase().includes("absențe") ||
+        subjectNames.has(subjectName)
+      ) {
         continue;
       }
       
-      // Add to tracked subjects
+      // Add this subject name to the set
       subjectNames.add(subjectName);
       
-      // Parse grades - filter out non-numeric values
+      // Parse grades
       const grades = gradesText
         ? gradesText
             .split(/[,\s]+/)
             .map(g => g.trim())
-            .filter(g => {
-              // Keep only valid numeric grades (integer or with decimal)
-              return g.length > 0 && /^\d+([.,]\d+)?$/.test(g);
-            })
+            .filter(g => g.length > 0 && /^\d+([.,]\d+)?$/.test(g))
         : [];
       
+      // Calculate average grade
       const average = calculateAverage(grades);
       
+      // Add subject to the semester
       semester.subjects.push({
         name: subjectName,
         grades,
@@ -542,7 +492,7 @@ const parseSubjectsFromPanel = (panelContent: string, semester: SemesterGrades):
       });
     }
   }
-};
+}
 
 /**
  * Helper function to parse absences from a panel
@@ -580,7 +530,6 @@ const parseAbsencesFromPanel = (panelContent: string, semester: SemesterGrades):
  * @returns Array of semester grades objects
  */
 const handleFallbackParsing = (situatiaCurentaContent: string): SemesterGrades[] => {
-  console.log("Using fallback approach to find semesters");
   const result: SemesterGrades[] = [];
   
   // Try to find any semestral data by direct content search
@@ -589,8 +538,6 @@ const handleFallbackParsing = (situatiaCurentaContent: string): SemesterGrades[]
   
   const hasSemester1 = semester1Pattern.test(situatiaCurentaContent);
   const hasSemester2 = semester2Pattern.test(situatiaCurentaContent);
-  
-  console.log(`Fallback detection: Semester I: ${hasSemester1}, Semester II: ${hasSemester2}`);
   
   // Create empty semesters
   if (hasSemester1) {
@@ -663,7 +610,6 @@ const parseExams = (html: string): Exam[] => {
     const note1Section = html.match(/<div[^>]*id="note-1"[^>]*>(.*?)<div[^>]*id="note-2"/s);
     
     if (!note1Section) {
-      console.log("Could not find note-1 section");
       return result;
     }
     
@@ -729,7 +675,6 @@ const parseExams = (html: string): Exam[] => {
     
     return result;
   } catch (error) {
-    console.error("Error parsing exams:", error);
     return result;
   }
 };
@@ -799,34 +744,16 @@ const determineCurrentSemester = (html: string): number | undefined => {
  */
 export const parseStudentGradesData = (html: string): StudentGrades => {
   try {
-    console.log("Starting to parse student data");
-    
-    // Check if we have HTML content
     if (!html || html.trim() === '') {
-      console.error("HTML is empty");
       throw new Error("Empty HTML content");
     }
     
-    // Extract all data using our parsing functions
     const studentInfo = parseStudentInfo(html);
-    console.log("Parsed student info:", studentInfo);
-    
-    // First parse exams since we need them to calculate accurate semester averages
     const exams = parseExams(html);
-    console.log("Parsed exams, count:", exams.length);
-    
-    // Then parse current grades and apply exam weights to averages
     const currentGrades = parseCurrentGrades(html);
-    console.log("Parsed current grades, count:", currentGrades.length);
-    
-    // Apply exam/thesis grades to the semester averages
     applyExamGradesToAverages(currentGrades, exams);
-    
     const annualGrades = parseAnnualGrades(html);
-    console.log("Parsed annual grades, count:", annualGrades.length);
-    
     const currentSemester = determineCurrentSemester(html);
-    console.log("Current semester:", currentSemester);
     
     return {
       studentInfo,
@@ -836,9 +763,6 @@ export const parseStudentGradesData = (html: string): StudentGrades => {
       currentSemester
     };
   } catch (error) {
-    console.error("Error parsing HTML:", error);
-    
-    // Return mock data if parsing fails
     return createMockData();
   }
 };
@@ -885,10 +809,44 @@ const applyExamGradesToAverages = (semesters: SemesterGrades[], exams: Exam[]): 
           // Round DOWN to 2 decimal places
           subject.average = Math.floor(newAverage * 100) / 100;
           subject.displayedAverage = subject.average.toFixed(2);
-          
-          console.log(`Applied ${matchingExam.type} grade ${examGrade} to ${subject.name}, new average: ${subject.average}`);
         }
       }
     });
   });
+};
+
+/**
+ * Ensures both semester I and semester II exist in the results
+ * If one is missing, adds an empty semester for it
+ * @param result Array of semester grades objects
+ */
+const ensureBothSemestersExist = (result: SemesterGrades[]): void => {
+  // Check if semester 1 exists
+  const hasSemester1 = result.some(s => s.semester === 1);
+  // Check if semester 2 exists
+  const hasSemester2 = result.some(s => s.semester === 2);
+
+  // Add semester 1 if missing
+  if (!hasSemester1) {
+    result.push({
+      semester: 1,
+      subjects: [{
+        name: "No subjects available for Semester I",
+        grades: [],
+        displayedAverage: "-"
+      }]
+    });
+  }
+
+  // Add semester 2 if missing
+  if (!hasSemester2) {
+    result.push({
+      semester: 2,
+      subjects: [{
+        name: "No subjects available for Semester II",
+        grades: [],
+        displayedAverage: "-"
+      }]
+    });
+  }
 };
