@@ -158,12 +158,16 @@ const IDNPScreen = ({ onSave, errorMessage, isSubmitting }: {
 };
 
 // Loading screen component
-const LoadingScreen = ({ message = 'Loading...' }: { message?: string }) => (
-  <View style={styles.loadingContainer}>
-    <ActivityIndicator size="large" color="#2C3DCD" />
-    <Text style={styles.loadingText}>{message}</Text>
-  </View>
-);
+const LoadingScreen = ({ message }: { message?: string }) => {
+  const { t } = useTranslation();
+  
+  return (
+    <View style={styles.loadingContainer}>
+      <ActivityIndicator size="large" color="#2C3DCD" />
+      <Text style={styles.loadingText}>{message || t('loading')}</Text>
+    </View>
+  );
+};
 
 // Replace the SemesterTabs component with a dropdown menu
 const SemesterDropdown = ({ 

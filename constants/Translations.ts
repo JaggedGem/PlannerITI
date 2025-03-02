@@ -6,7 +6,7 @@ type TranslationType = {
   months: string[];
   settings: {
     language: string;
-    group: string;
+    subGroup: string;
     idnp: {
       title: string;
       clearButton: string;
@@ -14,6 +14,14 @@ type TranslationType = {
       clearConfirmMessage: string;
       clearConfirmCancel: string;
       clearConfirmConfirm: string;
+    };
+    group: {
+      title: string;
+      notFound: string;
+      select: string;
+      search: string;
+      searching: string;
+      failed: string;
     };
     customPeriods: {
       title: string;
@@ -27,6 +35,8 @@ type TranslationType = {
       save: string;
       noPeriodsYet: string;
       colorPicker: string;
+      cancel: string;
+      confirm: string;
     };
   };
   schedule: {
@@ -40,6 +50,9 @@ type TranslationType = {
     currentWeek: string;
     loading: string;
     error: string;
+    in: string;
+    dayView: string;
+    weekView: string;
   };
   subgroup: {
     group1: string;
@@ -107,6 +120,7 @@ type TranslationType = {
       noSubjects: string;
     };
   };
+  loading: string;
 };
 
 export const translations: Record<'en' | 'ro', TranslationType> = {
@@ -118,7 +132,7 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
     months: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
     settings: {
       language: 'Language',
-      group: 'Subgroup',
+      subGroup: 'Subgroup',
       idnp: {
         title: 'IDNP Settings',
         clearButton: 'Clear Saved IDNP',
@@ -126,6 +140,14 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
         clearConfirmMessage: 'Are you sure you want to clear your saved IDNP? You will need to enter it again to access your grades.',
         clearConfirmCancel: 'Cancel',
         clearConfirmConfirm: 'Clear',
+      },
+      group: {
+        title: 'Group',
+        notFound: 'No groups found matching',
+        select: 'Select a Group',
+        search: 'Search for a group...',
+        searching: 'Searching for group...',
+        failed: 'Failed to load groups. Please check your internet connection and try again.',
       },
       customPeriods: {
         title: 'Custom Periods',
@@ -139,6 +161,8 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
         save: 'Save Period',
         noPeriodsYet: 'No custom periods added yet',
         colorPicker: 'Choose Color',
+        cancel: 'Cancel',
+        confirm: 'Confirm',
       },
     },
     schedule: {
@@ -152,6 +176,9 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
       currentWeek: 'Current Week',
       loading: 'Loading schedule...',
       error: 'Unable to load schedule. Please try again later.',
+      in: 'in',
+      dayView: 'Day View',
+      weekView: 'Week View',
     },
     subgroup: {
       group1: 'Subgroup 1',
@@ -162,7 +189,7 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
       schedule: 'Schedule',
       assignments: 'Assignments',
       settings: 'Settings',
-      grades: 'Grades'
+      grades: 'Grades',
     },
     grades: {
       title: 'Grades',
@@ -180,12 +207,12 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
         test: 'Test',
         homework: 'Homework',
         project: 'Project',
-        other: 'Other'
+        other: 'Other',
       },
       sortOptions: {
         date: 'Date',
         grade: 'Grade',
-        category: 'Category'
+        category: 'Category',
       },
       add: 'Add Grade',
       edit: 'Edit Grade',
@@ -195,7 +222,7 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
         category: 'Category',
         date: 'Date',
         notes: 'Notes',
-        save: 'Save Grade'
+        save: 'Save Grade',
       },
       idnp: {
         title: 'Enter your IDNP',
@@ -211,7 +238,7 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
         semester: 'Semester {{semester}}',
         noData: 'No exam data available',
         noDataSemester: 'No exams available for Semester {{semester}}',
-        connecting: 'Connecting to the CEITI server. This might take some time, please be patient...'
+        connecting: 'Connecting to the CEITI server. This might take some time, please be patient...',
       },
       subjects: {
         noExams: 'No exams available',
@@ -219,6 +246,7 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
         noSubjects: 'No subjects available for Semester {{semester}}',
       },
     },
+    loading: 'Loading...',
   },
   ro: {
     weekdays: {
@@ -228,7 +256,7 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
     months: ['Ianuarie', 'Februarie', 'Martie', 'Aprilie', 'Mai', 'Iunie', 'Iulie', 'August', 'Septembrie', 'Octombrie', 'Noiembrie', 'Decembrie'],
     settings: {
       language: 'Limbă',
-      group: 'Subgrupă',
+      subGroup: 'Subgrupă',
       idnp: {
         title: 'Setări IDNP',
         clearButton: 'Șterge IDNP salvat',
@@ -236,6 +264,14 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
         clearConfirmMessage: 'Sigur doriți să ștergeți IDNP-ul salvat? Va trebui să îl introduceți din nou pentru a accesa notele.',
         clearConfirmCancel: 'Anulează',
         clearConfirmConfirm: 'Șterge',
+      },
+      group: {
+        title: 'Grupă',
+        notFound: 'Nu au fost găsite grupe care să se potrivească',
+        select: 'Selectează o Grupă',
+        search: 'Caută o grupă...',
+        searching: 'Se caută grupa...',
+        failed: 'Nu s-a reușit încărcarea grupelor. Verificați conexiunea la internet și încercați din nou.',
       },
       customPeriods: {
         title: 'Lecții Personalizate',
@@ -249,6 +285,8 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
         save: 'Salvează Lecția Nouă',
         noPeriodsYet: 'Nu există lecții personalizate',
         colorPicker: 'Alege Culoarea',
+        cancel: 'Anulează',
+        confirm: 'Confirmă',
       },
     },
     schedule: {
@@ -262,6 +300,9 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
       currentWeek: 'Săptămâna Curentă',
       loading: 'Se încarcă orarul...',
       error: 'Nu s-a putut încărca orarul. Încercați din nou mai târziu.',
+      in: 'în',
+      dayView: 'Vizualizare pe zi',
+      weekView: 'Vizualizare pe săptămână',
     },
     subgroup: {
       group1: 'Subgrupa 1',
@@ -329,6 +370,7 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
         noSubjects: 'Nu există materii disponibile pentru Semestrul {{semester}}',
       },
     },
+    loading: 'Se încarcă...',
   },
 };
 
