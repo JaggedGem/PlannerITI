@@ -139,7 +139,7 @@ export const scheduleService = {
         await this.findAndSetDefaultGroup(this.settings.selectedGroupName);
       }
     } catch (error) {
-      console.warn('Failed to load settings:', error);
+      // Silent error handling
     }
   },
 
@@ -147,7 +147,7 @@ export const scheduleService = {
     try {
       await AsyncStorage.setItem(CACHE_KEYS.SETTINGS, JSON.stringify(this.settings));
     } catch (error) {
-      console.warn('Failed to save settings:', error);
+      // Silent error handling
     }
   },
 
@@ -166,7 +166,7 @@ export const scheduleService = {
       const cachedData = await AsyncStorage.getItem(CACHE_KEYS.SCHEDULE_PREFIX + groupId);
       return cachedData ? JSON.parse(cachedData) : null;
     } catch (error) {
-      console.warn('Failed to get cached schedule:', error);
+      // Silent error handling
       return null;
     }
   },
@@ -176,7 +176,7 @@ export const scheduleService = {
       await AsyncStorage.setItem(CACHE_KEYS.SCHEDULE_PREFIX + groupId, JSON.stringify(data));
       await AsyncStorage.setItem(CACHE_KEYS.LAST_FETCH_PREFIX + groupId, new Date().toISOString());
     } catch (error) {
-      console.warn('Failed to cache schedule:', error);
+      // Silent error handling
     }
   },
 
@@ -189,7 +189,7 @@ export const scheduleService = {
       const now = new Date();
       return now.getTime() - lastFetchDate.getTime() > CACHE_EXPIRY;
     } catch (error) {
-      console.warn('Failed to check refetch status:', error);
+      // Silent error handling
       return true;
     }
   },
@@ -234,7 +234,7 @@ export const scheduleService = {
       
       return groups;
     } catch (error) {
-      console.error('Error fetching groups:', error);
+      // Silent error handling
       return [];
     }
   },
@@ -263,7 +263,7 @@ export const scheduleService = {
       
       return false;
     } catch (error) {
-      console.error('Error setting default group:', error);
+      // Silent error handling
       return false;
     }
   },
@@ -281,7 +281,7 @@ export const scheduleService = {
       if (shouldRefetch) {
         // Try to fetch new data in the background
         this.fetchAndCacheSchedule(id).catch(error => {
-          console.warn('Background fetch failed:', error);
+          // Silent error handling
         });
       }
       
@@ -293,7 +293,7 @@ export const scheduleService = {
       // If no cached data, try to fetch (this will only happen on first run)
       return await this.fetchAndCacheSchedule(id);
     } catch (error) {
-      console.error('Failed to get schedule:', error);
+      // Silent error handling
       throw error;
     }
   },
@@ -313,7 +313,7 @@ export const scheduleService = {
       await this.cacheSchedule(groupId, data);
       return data;
     } catch (error) {
-      console.error('Failed to fetch schedule:', error);
+      // Silent error handling
       throw error;
     }
   },
