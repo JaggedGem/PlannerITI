@@ -90,7 +90,7 @@ const IDNPScreen = ({ onSave, errorMessage, isSubmitting }: {
 
   const handleSubmit = () => {
     if (!/^\d{13}$/.test(idnp)) {
-      setError('IDNP must be exactly 13 digits');
+      setError(t('grades').idnp.error);
       return;
     }
     
@@ -135,7 +135,7 @@ const IDNPScreen = ({ onSave, errorMessage, isSubmitting }: {
           <View style={styles.loadingNotice}>
             <ActivityIndicator size="small" color="#2C3DCD" />
             <Text style={styles.loadingText}>
-              Connecting to the CEITI server. This might take some time, please be patient...
+              {t('grades').semesters.connecting}
             </Text>
           </View>
         ) : null}
@@ -149,7 +149,7 @@ const IDNPScreen = ({ onSave, errorMessage, isSubmitting }: {
           disabled={!/^\d{13}$/.test(idnp) || isSubmitting}
         >
           <Text style={styles.submitButtonText}>
-            {isSubmitting ? 'Connecting...' : t('grades').idnp.continue}
+            {isSubmitting ? t('grades').semesters.connecting : t('grades').idnp.continue}
           </Text>
         </TouchableOpacity>
       </View>
@@ -176,6 +176,7 @@ const SemesterDropdown = ({
   onSemesterChange: (index: number) => void 
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const { t } = useTranslation();
 
   const toggleDropdown = () => {
     setIsOpen(prev => !prev);
@@ -188,6 +189,15 @@ const SemesterDropdown = ({
     Haptics.selectionAsync();
   };
 
+  // Helper function to format semester label
+  const formatSemesterLabel = (semesterNumber: number) => {
+    const year = Math.ceil(semesterNumber / 2);
+    const semesterInYear = semesterNumber % 2 === 0 ? 2 : 1;
+    return t('grades').semesters.yearSemester
+      .replace('{{year}}', year.toString())
+      .replace('{{semester}}', semesterInYear.toString());
+  };
+
   return (
     <View style={styles.semesterDropdownContainer}>
       <TouchableOpacity
@@ -195,7 +205,7 @@ const SemesterDropdown = ({
         onPress={toggleDropdown}
       >
         <Text style={styles.semesterDropdownButtonText}>
-          {`Semester ${semesters[activeSemester]?.semester || 'I'}`}
+          {formatSemesterLabel(semesters[activeSemester]?.semester || 1)}
         </Text>
         <MaterialIcons
           name={isOpen ? "arrow-drop-up" : "arrow-drop-down"}
@@ -222,7 +232,7 @@ const SemesterDropdown = ({
                 styles.semesterDropdownItemText,
                 activeSemester === index && styles.semesterDropdownItemTextActive
               ]}>
-                {`Semester ${semester.semester}`}
+                {formatSemesterLabel(semester.semester)}
               </Text>
             </TouchableOpacity>
           ))}
@@ -538,7 +548,7 @@ const ViewModeSwitcher = ({
           styles.modeTabText,
           activeMode === 'exams' && styles.activeModeTabText
         ]}>
-          {t('grades').categories.exam}s
+          {t('grades').categories.exam}
         </Text>
       </TouchableOpacity>
     </View>
@@ -581,6 +591,15 @@ const GradesScreen = ({
   onRefresh: () => Promise<void>
 }) => {
   const { t } = useTranslation();
+
+  // Helper function to format semester label
+  const formatSemesterLabel = (semesterNumber: number) => {
+    const year = Math.ceil(semesterNumber / 2);
+    const semesterInYear = semesterNumber % 2 === 0 ? 2 : 1;
+    return t('grades').semesters.yearSemester
+      .replace('{{year}}', year.toString())
+      .replace('{{semester}}', semesterInYear.toString());
+  };
 
   // Parse HTML data
   const studentGrades = useMemo(() => {
@@ -731,9 +750,9 @@ const GradesScreen = ({
   if (!studentGrades) {
     return (
       <View style={styles.errorContainer}>
-        <Text style={styles.errorTitle}>Error Loading Data</Text>
+        <Text style={styles.errorTitle}>{t('schedule').error}</Text>
         <Text style={styles.errorMessage}>
-          Unable to parse the student data. Please try again later.
+          {t('schedule').error}
         </Text>
       </View>
     );
@@ -773,7 +792,7 @@ const GradesScreen = ({
         >
           <MaterialIcons name="info-outline" size={24} color="#FFD700" />
           <Text style={[styles.warningText, textOpacity]}>
-            Your data was last updated on {lastUpdatedFormatted} and might be outdated. Press the refresh button to update.
+            {t('grades').lastUpdated} {lastUpdatedFormatted}. {t('grades').dataStale}
           </Text>
         </Animated.View>
       )}
@@ -795,7 +814,7 @@ const GradesScreen = ({
               entering={FadeInUp.springify()}
               style={[styles.averageCard, refreshing && { opacity: 0.7 }]}
             >
-              <Text style={[styles.averageLabel, textOpacity]}>Overall Average</Text>
+              <Text style={[styles.averageLabel, textOpacity]}>{t('grades').average}</Text>
               <Text style={[styles.averageValue, textOpacity]}>
                 {(allSemestersAverages.reduce((acc, item) => acc + parseFloat(item!.average), 0) / allSemestersAverages.length).toFixed(2)}
               </Text>
@@ -816,13 +835,18 @@ const GradesScreen = ({
                 disabled={refreshing}
               >
                 <Text style={[styles.semesterTitle, textOpacity]}>
-                  {semester.semester === 1 ? "Semester I" : semester.semester === 2 ? "Semester II" : `Semester ${semester.semester}`}
+                  {semester.semester === 1 
+                    ? t('grades').semesters.semester.replace('{{semester}}', '1')
+                    : semester.semester === 2 
+                      ? t('grades').semesters.semester.replace('{{semester}}', '2')
+                      : formatSemesterLabel(semester.semester)
+                  }
                 </Text>
                 <View style={styles.semesterHeaderRight}>
                   {/* Display semester average if available */}
                   {allSemestersAverages[index] && (
                     <Text style={[styles.semesterAverageText, textOpacity]}>
-                      Avg: {allSemestersAverages[index]!.average}
+                      {t('grades').average}: {allSemestersAverages[index]!.average}
                     </Text>
                   )}
                   <MaterialIcons
@@ -843,15 +867,15 @@ const GradesScreen = ({
                   {/* Semester average and absences */}
                   {allSemestersAverages[index] && (
                     <View style={[styles.semesterAverageCard, refreshing && { opacity: 0.7 }]}>
-                      <Text style={[styles.averageLabel, textOpacity]}>Semester Average</Text>
+                      <Text style={[styles.averageLabel, textOpacity]}>{t('grades').average}</Text>
                       <Text style={[styles.averageValue, textOpacity]}>{allSemestersAverages[index]!.average}</Text>
                       
                       {/* Display absences if available */}
                       {semester.absences && (
                         <View style={styles.absencesContainer}>
                           <Text style={[styles.absencesLabel, textOpacity]}>
-                            Absences: <Text style={[styles.absencesValue, textOpacity]}>{semester.absences.total}</Text>
-                            {' '}(Unexcused: <Text style={[styles.absencesUnexcused, textOpacity]}>
+                            {t('grades').absences}: <Text style={[styles.absencesValue, textOpacity]}>{semester.absences.total}</Text>
+                            {' '}({t('grades').unexcused}: <Text style={[styles.absencesUnexcused, textOpacity]}>
                               {semester.absences.unexcused}
                             </Text>)
                           </Text>
@@ -874,7 +898,7 @@ const GradesScreen = ({
                   {/* Empty state if no subjects */}
                   {semester.subjects.length === 0 && (
                     <Text style={[styles.emptyText, textOpacity]}>
-                      No subjects available for Semester {semester.semester}
+                      {t('grades').subjects.noSubjects.replace('{{semester}}', semester.semester.toString())}
                     </Text>
                   )}
                 </Animated.View>
@@ -884,12 +908,12 @@ const GradesScreen = ({
 
           {/* No data message if no semesters */}
           {studentGrades.currentGrades.length === 0 && (
-            <Text style={[styles.emptyText, textOpacity]}>No grades data available</Text>
+            <Text style={[styles.emptyText, textOpacity]}>{t('grades').noGrades}</Text>
           )}
           
           {/* Last updated info at the bottom */}
           <Text style={[styles.lastUpdatedText, textOpacity]}>
-            Last updated: {lastUpdatedFormatted}
+            {t('grades').lastUpdated}: {lastUpdatedFormatted}
           </Text>
         </ScrollView>
       ) : (
@@ -900,7 +924,7 @@ const GradesScreen = ({
       {refreshing && (
         <View style={styles.refreshOverlay}>
           <ActivityIndicator size="large" color="#2C3DCD" />
-          <Text style={styles.refreshingText}>Refreshing data...</Text>
+          <Text style={styles.refreshingText}>{t('grades').refreshing}</Text>
         </View>
       )}
     </SafeAreaView>
@@ -911,6 +935,7 @@ const GradesScreen = ({
 export default function Grades() {
   // Fix: Use a ref to prevent duplicate API requests
   const fetchingRef = useRef(false);
+  const { t } = useTranslation();
 
   const [idnp, setIdnp] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -918,6 +943,15 @@ export default function Grades() {
   const [responseHtml, setResponseHtml] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
+
+  // Helper function to format semester label - added to fix reference error
+  const formatSemesterLabel = (semesterNumber: number) => {
+    const year = Math.ceil(semesterNumber / 2);
+    const semesterInYear = semesterNumber % 2 === 0 ? 2 : 1;
+    return t('grades').semesters.yearSemester
+      .replace('{{year}}', year.toString())
+      .replace('{{semester}}', semesterInYear.toString());
+  };
 
   useEffect(() => {
     // Load stored IDNP and cached grades data
@@ -1010,10 +1044,10 @@ export default function Grades() {
       if (!responseHtml) {
         await AsyncStorage.removeItem(IDNP_KEY);
         setIdnp(null);
-        setErrorMessage('Unable to retrieve data. Please check your IDNP and try again.');
+        setErrorMessage(t('grades').networkError);
       } else {
         // If we have cached data, just show an error toast but keep the cached data
-        setErrorMessage('Network error. Using cached data from ' + new Date(lastUpdated || 0).toLocaleDateString());
+        setErrorMessage(`${t('grades').networkErrorCache} ${new Date(lastUpdated || 0).toLocaleDateString()}`);
         
         // Error notification
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -1054,11 +1088,11 @@ export default function Grades() {
   }, []);
 
   if (isLoading && !responseHtml) {
-    return <LoadingScreen message="Loading your grades data..." />;
+    return <LoadingScreen message={t('schedule').loading} />;
   }
 
   if (isFetching && !responseHtml) {
-    return <LoadingScreen message="Connecting to CEITI server. This might take some time, please be patient..." />;
+    return <LoadingScreen message={t('grades').semesters.connecting} />;
   }
 
   // Show IDNP screen if no IDNP or there was an error with no cached data
