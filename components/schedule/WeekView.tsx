@@ -12,9 +12,15 @@ import ViewModeMenu from './ViewModeMenu';
 const getWeekStart = (date: Date): Date => {
   const result = new Date(date);
   const day = result.getDay() || 7; // Convert Sunday (0) to 7
-  if (day !== 1) { // If not Monday
+  
+  // If weekend, get next week's Monday
+  if (day === 6 || day === 0) { // Saturday or Sunday
+    const daysUntilMonday = day === 0 ? 1 : 2; // Sunday: +1, Saturday: +2
+    result.setDate(result.getDate() + daysUntilMonday);
+  } else if (day !== 1) { // If not Monday and not weekend
     result.setHours(-24 * (day - 1)); // Go back to Monday
   }
+  
   return result;
 };
 
@@ -217,7 +223,9 @@ export default function WeekView() {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [settings, setSettings] = useState(scheduleService.getSettings());
-    const [weekOffset, setWeekOffset] = useState(0);
+    const now = new Date();
+    const isWeekend = now.getDay() === 0 || now.getDay() === 6;
+    const [weekOffset, setWeekOffset] = useState(isWeekend ? 1 : 0);
     const { t, formatDate } = useTranslation();
     const currentTime = useTimeUpdate();
     const verticalScrollRef = useRef<ScrollView>(null);

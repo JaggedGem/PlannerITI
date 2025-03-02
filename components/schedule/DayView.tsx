@@ -58,11 +58,19 @@ export default function DayView() {
   const isEvenWeek = scheduleService.isEvenWeek(selectedDate);
   const { t, formatDate } = useTranslation();
 
-  // Generate 7 days centered around today
+  // Generate 7 days centered around today or next Monday if weekend
   const weekDates = useMemo(() => {
     const today = new Date();
-    const startDate = new Date(today);
-    startDate.setDate(today.getDate() - 3); // Start 3 days before today
+    const isWeekend = today.getDay() === 0 || today.getDay() === 6;
+    
+    let startDate = new Date(today);
+    if (isWeekend) {
+      // If weekend, show next week starting from Monday
+      const daysUntilMonday = today.getDay() === 0 ? 1 : 2; // Sunday: +1, Saturday: +2
+      startDate.setDate(today.getDate() + daysUntilMonday);
+    } else {
+      startDate.setDate(today.getDate() - 3); // Start 3 days before today
+    }
 
     return Array.from({ length: 7 }, (_, i) => {
       const date = new Date(startDate);
@@ -75,6 +83,19 @@ export default function DayView() {
       };
     });
   }, [currentDate, t]);
+
+  // Initial selected date setup - if weekend, select next Monday
+  useEffect(() => {
+    const today = new Date();
+    const isWeekend = today.getDay() === 0 || today.getDay() === 6;
+    
+    if (isWeekend) {
+      const nextMonday = new Date(today);
+      const daysUntilMonday = today.getDay() === 0 ? 1 : 2;
+      nextMonday.setDate(today.getDate() + daysUntilMonday);
+      setSelectedDate(nextMonday);
+    }
+  }, []);
 
   const todaySchedule = scheduleData 
     ? scheduleService.getScheduleForDay(scheduleData, DAYS_MAP[selectedDate.getDay() as keyof typeof DAYS_MAP])
@@ -304,16 +325,8 @@ export default function DayView() {
                 </Text>
               </TouchableOpacity>
             </View>
-            <ScrollView 
-              ref={scrollViewRef}
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              decelerationRate="fast"
-              snapToInterval={(Dimensions.get('window').width - 40) / 5}
-              style={styles.dateList}
-              contentContainerStyle={styles.dateListContent}
-            >
-              {weekDates.map((date, index) => (
+            <View style={styles.dateList}>
+              {weekDates.slice(0, 5).map((date, index) => (
                 <TouchableOpacity 
                   key={index} 
                   onPress={() => handleDatePress(date.date)}
@@ -340,7 +353,7 @@ export default function DayView() {
                   {date.isToday && date.date.getDate() !== selectedDate.getDate() && <View style={styles.todayDot} />}
                 </TouchableOpacity>
               ))}
-            </ScrollView>
+            </View>
           </View>
         </View>
         <View style={styles.loadingContainer}>
@@ -380,16 +393,8 @@ export default function DayView() {
                 </Text>
               </TouchableOpacity>
             </View>
-            <ScrollView 
-              ref={scrollViewRef}
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              decelerationRate="fast"
-              snapToInterval={(Dimensions.get('window').width - 40) / 5}
-              style={styles.dateList}
-              contentContainerStyle={styles.dateListContent}
-            >
-              {weekDates.map((date, index) => (
+            <View style={styles.dateList}>
+              {weekDates.slice(0, 5).map((date, index) => (
                 <TouchableOpacity 
                   key={index} 
                   onPress={() => handleDatePress(date.date)}
@@ -416,7 +421,7 @@ export default function DayView() {
                   {date.isToday && date.date.getDate() !== selectedDate.getDate() && <View style={styles.todayDot} />}
                 </TouchableOpacity>
               ))}
-            </ScrollView>
+            </View>
           </View>
         </View>
         <View style={styles.errorContainer}>
@@ -454,16 +459,8 @@ export default function DayView() {
               </Text>
             </TouchableOpacity>
           </View>
-          <ScrollView 
-            ref={scrollViewRef}
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            decelerationRate="fast"
-            snapToInterval={(Dimensions.get('window').width - 40) / 5}
-            style={styles.dateList}
-            contentContainerStyle={styles.dateListContent}
-          >
-            {weekDates.map((date, index) => (
+          <View style={styles.dateList}>
+            {weekDates.slice(0, 5).map((date, index) => (
               <TouchableOpacity 
                 key={index} 
                 onPress={() => handleDatePress(date.date)}
@@ -490,7 +487,7 @@ export default function DayView() {
                 {date.isToday && date.date.getDate() !== selectedDate.getDate() && <View style={styles.todayDot} />}
               </TouchableOpacity>
             ))}
-          </ScrollView>
+          </View>
         </View>
       </View>
 
@@ -760,20 +757,27 @@ const styles = StyleSheet.create<Styles>({
     fontWeight: '600',
   },
   dateList: {
-    marginHorizontal: -20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    gap: 8, // Reduced gap between items
+    paddingHorizontal: 0, // Reduced padding to allow for wider containers
+    marginBottom: -2, // Adjusted margin to prevent overflow
   },
   dateListContent: {
-    paddingHorizontal: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
   },
   dateItem: {
     alignItems: 'center',
     justifyContent: 'center',
     padding: 12,
     borderRadius: 16,
-    width: (Dimensions.get('window').width - 40) / 5,
+    flex: 1,
     backgroundColor: '#1A1A1A',
-    marginHorizontal: 4,
-    height: 80,
+    height: 90,
+    minWidth: 0, // Ensure flex items can shrink below their content size
   },
   activeDateItem: {
     backgroundColor: '#2C3DCD',
