@@ -108,7 +108,8 @@ export default function Settings() {
   useEffect(() => {
     const loadIdnp = async () => {
       try {
-        await AsyncStorage.getItem(IDNP_KEY);
+        const idnp = await AsyncStorage.getItem(IDNP_KEY);
+        setSavedIdnp(idnp); // Set the savedIdnp state with the retrieved value
       } catch (error) {
         // Silent error handling
       }
@@ -117,7 +118,7 @@ export default function Settings() {
     loadIdnp();
     
     // Add event listener for IDNP updates using DeviceEventEmitter
-    const subscription = DeviceEventEmitter.addListener(IDNP_UPDATE_EVENT, (newIdnp: string) => {
+    const subscription = DeviceEventEmitter.addListener(IDNP_UPDATE_EVENT, (newIdnp: string | null) => {
       setSavedIdnp(newIdnp);
     });
     
