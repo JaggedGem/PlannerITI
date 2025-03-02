@@ -1,4 +1,4 @@
-import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator, FlatList, Modal, TextInput, Switch, Platform } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator, FlatList, Modal, TextInput, Switch, Platform, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useEffect, useRef, useCallback, memo, useMemo } from 'react';
 import { scheduleService, SubGroupType, Language, Group, CustomPeriod } from '@/services/scheduleService';
@@ -6,6 +6,13 @@ import { useTranslation } from '@/hooks/useTranslation';
 import { MaterialIcons } from '@expo/vector-icons';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import ColorPicker from 'react-native-wheel-color-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Haptics from 'expo-haptics';
+import { useRouter } from 'expo-router';
+import { DeviceEventEmitter } from 'react-native';
+
+const IDNP_KEY = '@planner_idnp';
+const IDNP_UPDATE_EVENT = 'idnp_updated';
 
 const languages = {
   en: 'English',
@@ -71,6 +78,7 @@ GroupItem.displayName = 'GroupItem';
 
 export default function Settings() {
   const { t } = useTranslation();
+  const router = useRouter();
   const flatListRef = useRef<FlatList<Group>>(null);
   
   // State hooks
@@ -93,6 +101,53 @@ export default function Settings() {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
+  const [savedIdnp, setSavedIdnp] = useState<string | null>(null);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+
+  // Add useEffect to load IDNP and listen for updates
+  useEffect(() => {
+    const loadIdnp = async () => {
+      try {
+        await AsyncStorage.getItem(IDNP_KEY);
+      } catch (error) {
+        // Silent error handling
+      }
+    };
+    
+    loadIdnp();
+    
+    // Add event listener for IDNP updates using DeviceEventEmitter
+    const subscription = DeviceEventEmitter.addListener(IDNP_UPDATE_EVENT, (newIdnp: string) => {
+      setSavedIdnp(newIdnp);
+    });
+    
+    // Cleanup event listener on unmount
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
+  // Custom clear IDNP function
+  const handleClearIdnp = useCallback(() => {
+    setShowConfirmDialog(true);
+  }, []);
+
+  // Handle IDNP confirmation
+  const handleConfirmClearIdnp = useCallback(async () => {
+    try {
+      await AsyncStorage.removeItem(IDNP_KEY);
+      setSavedIdnp(null);
+      // Emit null to notify that IDNP has been cleared
+      DeviceEventEmitter.emit(IDNP_UPDATE_EVENT, null);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setShowConfirmDialog(false);
+      
+      // Use replace instead of push to force a screen refresh
+      router.replace('/grades');
+    } catch (error) {
+      // Silent error handling
+    }
+  }, [router]);
 
   // Callback functions
   const handleLanguageChange = useCallback((language: Language) => {
@@ -142,7 +197,6 @@ export default function Settings() {
     highestMeasuredFrameIndex: number;
     averageItemLength: number;
   }) => {
-    console.log('Scroll to index failed:', info);
     if (flatListRef.current) {
       flatListRef.current.scrollToOffset({
         offset: 0,
@@ -181,7 +235,6 @@ export default function Settings() {
         setFilteredGroups(groups);
       } catch (err) {
         setError('Failed to load groups. Please check your connection.');
-        console.error('Error fetching groups:', err);
       } finally {
         setIsLoading(false);
       }
@@ -233,7 +286,6 @@ export default function Settings() {
                     viewPosition: 0.5
                   });
                 } catch (e) {
-                  console.log('Fallback to offset scroll');
                   const itemHeight = 82;
                   flatListRef.current.scrollToOffset({
                     offset: selectedIndex * itemHeight,
@@ -328,6 +380,20 @@ export default function Settings() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Add IDNP section before Language Selection */}
+      {savedIdnp && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t('settings').idnp.title}</Text>
+          <TouchableOpacity
+            style={styles.clearIdnpButton}
+            onPress={handleClearIdnp}
+          >
+            <MaterialIcons name="delete-outline" size={24} color="#FF6B6B" />
+            <Text style={styles.clearIdnpText}>{t('settings').idnp.clearButton}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Class Selection Section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Class</Text>
@@ -484,7 +550,7 @@ export default function Settings() {
                 autoCapitalize="none"
               />
               {searchQuery.length > 0 && (
-                <TouchableOpacity onPress={handleSearchClear} style={styles.clearButton}>
+                <TouchableOpacity onPress={handleSearchClear} style={styles.searchClearButton}>
                   <MaterialIcons name="clear" size={20} color="#8A8A8D" />
                 </TouchableOpacity>
               )}
@@ -678,6 +744,36 @@ export default function Settings() {
         </View>
       </Modal>
 
+      {/* Custom Confirmation Dialog */}
+      <Modal
+        visible={showConfirmDialog}
+        transparent={true}
+        animationType="fade"
+      >
+        <View style={styles.confirmOverlay}>
+          <View style={styles.confirmDialog}>
+            <Text style={styles.confirmTitle}>{t('settings').idnp.clearConfirmTitle}</Text>
+            <Text style={styles.confirmMessage}>{t('settings').idnp.clearConfirmMessage}</Text>
+            
+            <View style={styles.confirmButtons}>
+              <TouchableOpacity
+                style={[styles.confirmButton, styles.cancelButton]}
+                onPress={() => setShowConfirmDialog(false)}
+              >
+                <Text style={styles.cancelButtonText}>{t('settings').idnp.clearConfirmCancel}</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.confirmButton, styles.clearButton]}
+                onPress={handleConfirmClearIdnp}
+              >
+                <Text style={styles.clearButtonText}>{t('settings').idnp.clearConfirmConfirm}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Time Pickers */}
       {(showStartPicker || showEndPicker) && (Platform.OS === 'android' ? (
         <DateTimePicker
@@ -808,7 +904,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     padding: 0,
   },
-  clearButton: {
+  searchClearButton: {
     padding: 5,
   },
   groupsList: {
@@ -1016,5 +1112,69 @@ const styles = StyleSheet.create({
   colorPickerContainer: {
     height: 300,
     padding: 20,
+  },
+  clearIdnpButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#232433',
+    padding: 16,
+    borderRadius: 12,
+  },
+  clearIdnpText: {
+    color: '#FF6B6B',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  confirmOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  confirmDialog: {
+    backgroundColor: '#1a1b26',
+    borderRadius: 20,
+    padding: 20,
+    width: '80%',
+    maxWidth: 400,
+  },
+  confirmTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: 'white',
+    marginBottom: 16,
+  },
+  confirmMessage: {
+    color: '#8A8A8D',
+    fontSize: 16,
+    marginBottom: 20,
+  },
+  confirmButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  confirmButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#232433',
+    marginRight: 10,
+  },
+  clearButton: {
+    backgroundColor: '#FF6B6B',
+  },
+  cancelButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  clearButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

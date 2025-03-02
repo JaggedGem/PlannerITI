@@ -238,10 +238,9 @@ export default function WeekView() {
         setError(null);
         const data = await scheduleService.getClassSchedule(groupId);
         setScheduleData(data);
+        setIsLoading(false);
       } catch (error) {
-        setError('Unable to load schedule. Please try again later.');
-        console.error('Failed to fetch schedule:', error);
-      } finally {
+        // Silent error handling
         setIsLoading(false);
       }
     };
