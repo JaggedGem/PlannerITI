@@ -345,7 +345,7 @@ export default function DayView() {
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#3478F6" />
-          <Text style={styles.loadingText}>Loading schedule...</Text>
+          <Text style={styles.loadingText}>{t('schedule').loading}</Text>
         </View>
         <ViewModeMenu
           isOpen={isMenuOpen}
@@ -573,7 +573,7 @@ export default function DayView() {
                                   );
                                   const diffInMs = target.getTime() - now.getTime();
                                   const minutesUntilStart = Math.ceil(diffInMs / (1000 * 60));
-                                  return `In ${minutesUntilStart}m`;
+                                  return `${t('schedule').in} ${minutesUntilStart}m`;
                                 }
                               }
                               return '';

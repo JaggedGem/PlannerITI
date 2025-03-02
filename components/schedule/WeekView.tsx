@@ -391,7 +391,7 @@ export default function WeekView() {
         <SafeAreaView style={styles.container}>
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#3478F6" />
-            <Text style={styles.loadingText}>Loading schedule...</Text>
+            <Text style={styles.loadingText}>{t('schedule').loading}</Text>
           </View>
         </SafeAreaView>
       );

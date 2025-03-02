@@ -1,11 +1,9 @@
-import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator, FlatList, Modal, TextInput, Switch, Platform, Alert } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator, FlatList, Modal, TextInput, Switch, Platform, Alert, Animated, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useEffect, useRef, useCallback, memo, useMemo } from 'react';
 import { scheduleService, SubGroupType, Language, Group, CustomPeriod } from '@/services/scheduleService';
 import { useTranslation } from '@/hooks/useTranslation';
 import { MaterialIcons } from '@expo/vector-icons';
-import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import ColorPicker from 'react-native-wheel-color-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
@@ -20,6 +18,24 @@ const languages = {
 };
 
 const groups: SubGroupType[] = ['Subgroup 1', 'Subgroup 2'];
+
+// Array of theme-appropriate colors for random selection
+const THEME_COLORS = [
+  '#2C3DCD', // Blue
+  '#9D54BB', // Purple
+  '#D85A77', // Pink
+  '#FF9566', // Coral
+  '#FFBE3F', // Amber
+  '#42A5F5', // Light Blue
+  '#26A69A', // Teal
+  '#66BB6A', // Green
+  '#EC407A', // Deep Pink
+  '#7986CB', // Indigo
+];
+
+const getRandomColor = () => {
+  return THEME_COLORS[Math.floor(Math.random() * THEME_COLORS.length)];
+};
 
 // Optimized item comparison function for memo
 const areGroupItemPropsEqual = (prevProps: any, nextProps: any) => {
@@ -76,6 +92,339 @@ const GroupItem = memo(({
 
 GroupItem.displayName = 'GroupItem';
 
+// Custom TimePicker component
+const TimePicker = ({ 
+  value, 
+  onChange, 
+  label,
+  onClose,
+  use12HourFormat = false,
+  translations = { cancel: 'Cancel', confirm: 'Confirm' }
+}: { 
+  value: Date;
+  onChange: (date: Date) => void;
+  label: string;
+  onClose: () => void;
+  use12HourFormat?: boolean;
+  translations?: { cancel: string; confirm: string };
+}) => {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.95)).current;
+  const [localValue, setLocalValue] = useState(value);
+  const [period, setPeriod] = useState(value.getHours() >= 12 ? 'PM' : 'AM');
+  const hoursRef = useRef<ScrollView>(null);
+  const minutesRef = useRef<ScrollView>(null);
+  const itemHeight = 56;
+  const visibleItems = 5;
+  const [isScrolling, setIsScrolling] = useState(false);
+
+  const hours = useMemo(() => {
+    if (use12HourFormat) {
+      return Array.from({ length: 12 }, (_, i) => i === 0 ? 12 : i);
+    }
+    return Array.from({ length: 24 }, (_, i) => i);
+  }, [use12HourFormat]);
+
+  const minutes = useMemo(() => {
+    return Array.from({ length: 60 }, (_, i) => i);
+  }, []);
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 250,
+        useNativeDriver: true,
+      })
+    ]).start();
+
+    // Scroll to initial positions
+    setTimeout(() => {
+      let hour = localValue.getHours();
+      if (use12HourFormat) {
+        hour = hour % 12;
+        if (hour === 0) hour = 12;
+      }
+      const minute = localValue.getMinutes();
+
+      hoursRef.current?.scrollTo({ y: hour * itemHeight, animated: false });
+      minutesRef.current?.scrollTo({ y: minute * itemHeight, animated: false });
+    }, 50);
+  }, []);
+
+  const formatNumber = (num: number, padLength = 2) => {
+    return num.toString().padStart(padLength, '0');
+  };
+
+  const formatTimeForDisplay = (date: Date) => {
+    if (use12HourFormat) {
+      const hours = date.getHours();
+      const hour12 = hours % 12 || 12;
+      const minutes = date.getMinutes();
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      return `${hour12}:${minutes.toString().padStart(2, '0')} ${ampm}`;
+    }
+    return date.toTimeString().slice(0, 5);
+  };
+
+  const handleHourScroll = (event: any) => {
+    if (!event.nativeEvent) return;
+    
+    const offsetY = event.nativeEvent.contentOffset.y;
+    const selectedHour = Math.round(offsetY / itemHeight);
+    
+    if (selectedHour >= 0 && selectedHour < (use12HourFormat ? 12 : 24)) {
+      let newHour = selectedHour;
+      if (use12HourFormat) {
+        if (newHour === 12) newHour = 0;
+        if (period === 'PM') newHour += 12;
+      }
+      
+      const newDate = new Date(localValue);
+      if (newDate.getHours() !== newHour) {
+        newDate.setHours(newHour);
+        setLocalValue(newDate);
+      }
+    }
+  };
+
+  const handleMinuteScroll = (event: any) => {
+    if (!event.nativeEvent) return;
+    
+    const offsetY = event.nativeEvent.contentOffset.y;
+    const selectedMinute = Math.round(offsetY / itemHeight);
+    
+    if (selectedMinute >= 0 && selectedMinute < 60) {
+      const newDate = new Date(localValue);
+      if (newDate.getMinutes() !== selectedMinute) {
+        newDate.setMinutes(selectedMinute);
+        setLocalValue(newDate);
+      }
+    }
+  };
+
+  const handleScrollBeginDrag = () => {
+    setIsScrolling(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const handleScrollEndDrag = (event: any, type: 'hours' | 'minutes') => {
+    setIsScrolling(false);
+    if (type === 'hours') {
+      handleHourScroll(event);
+    } else {
+      handleMinuteScroll(event);
+    }
+  };
+
+  const togglePeriod = () => {
+    const newPeriod = period === 'AM' ? 'PM' : 'AM';
+    setPeriod(newPeriod);
+    
+    const newDate = new Date(localValue);
+    const currentHours = newDate.getHours();
+    const newHours = newPeriod === 'PM' 
+      ? (currentHours + 12) % 24 
+      : (currentHours - 12 + 24) % 24;
+    
+    newDate.setHours(newHours);
+    setLocalValue(newDate);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const handleConfirm = () => {
+    onChange(localValue);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    onClose();
+  };
+
+  return (
+    <Modal
+      transparent
+      visible
+      animationType="none"
+      onRequestClose={onClose}
+    >
+      <View style={styles.timePickerOverlay}>
+        <Animated.View 
+          style={[
+            styles.timePickerContainer,
+            {
+              opacity: fadeAnim,
+              transform: [{ scale: scaleAnim }]
+            }
+          ]}
+        >
+          <View style={styles.timePickerHeader}>
+            <Text style={styles.timePickerTitle}>{label}</Text>
+            <Text style={styles.timePickerValue}>
+              {formatTimeForDisplay(localValue)}
+            </Text>
+          </View>
+
+          <View style={styles.timePickerContent}>
+            <View style={styles.timePickerColumn}>
+              <ScrollView
+                ref={hoursRef}
+                showsVerticalScrollIndicator={false}
+                snapToInterval={itemHeight}
+                decelerationRate={Platform.select({ ios: 0.992, android: 0.985 })}
+                onScroll={handleHourScroll}
+                onMomentumScrollEnd={() => Haptics.selectionAsync()}
+                scrollEventThrottle={16}
+                style={{ height: itemHeight * visibleItems }}
+                contentContainerStyle={{ paddingVertical: itemHeight * 2 }}
+              >
+                {hours.map((hour) => (
+                  <View key={`hour-${hour}`} style={[styles.timePickerItem, { height: itemHeight }]}>
+                    <Text style={[
+                      styles.timePickerItemText,
+                      hour === (use12HourFormat ? (localValue.getHours() % 12 || 12) : localValue.getHours()) && styles.timePickerItemTextSelected
+                    ]}>
+                      {formatNumber(hour, use12HourFormat ? 1 : 2)}
+                    </Text>
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+
+            <Text style={styles.timePickerSeparator}>:</Text>
+
+            <View style={styles.timePickerColumn}>
+              <ScrollView
+                ref={minutesRef}
+                showsVerticalScrollIndicator={false}
+                snapToInterval={itemHeight}
+                decelerationRate={Platform.select({ ios: 0.992, android: 0.985 })}
+                onScroll={handleMinuteScroll}
+                onMomentumScrollEnd={() => Haptics.selectionAsync()}
+                scrollEventThrottle={16}
+                style={{ height: itemHeight * visibleItems }}
+                contentContainerStyle={{ paddingVertical: itemHeight * 2 }}
+              >
+                {minutes.map((minute) => (
+                  <View key={`minute-${minute}`} style={[
+                    styles.timePickerItem, 
+                    { height: itemHeight }
+                  ]}>
+                    <Text style={[
+                      styles.timePickerItemText,
+                      minute === localValue.getMinutes() && styles.timePickerItemTextSelected
+                    ]}>
+                      {formatNumber(minute)}
+                    </Text>
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+
+            {use12HourFormat && (
+              <TouchableOpacity
+                style={styles.timePickerPeriodButton}
+                onPress={togglePeriod}
+              >
+                <Text style={[
+                  styles.timePickerPeriodText,
+                  { color: period === 'AM' ? '#ffffff' : '#8A8A8D' }
+                ]}>AM</Text>
+                <Text style={[
+                  styles.timePickerPeriodText,
+                  { color: period === 'PM' ? '#ffffff' : '#8A8A8D' }
+                ]}>PM</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <View style={styles.timePickerActions}>
+            <TouchableOpacity
+              style={[styles.timePickerButton, styles.timePickerCancelButton]}
+              onPress={onClose}
+            >
+              <Text style={styles.timePickerButtonText}>{translations.cancel}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.timePickerButton, styles.timePickerConfirmButton]}
+              onPress={handleConfirm}
+            >
+              <Text style={[styles.timePickerButtonText, styles.timePickerConfirmText]}>{translations.confirm}</Text>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+};
+
+// Custom Toggle Switch component
+const CustomToggle = ({ 
+  value, 
+  onValueChange, 
+  activeColor = '#2C3DCD',
+  inactiveColor = '#232433',
+  thumbColor = '#ffffff'
+}: { 
+  value: boolean;
+  onValueChange: (value: boolean) => void;
+  activeColor?: string;
+  inactiveColor?: string;
+  thumbColor?: string;
+}) => {
+  const translateX = useRef(new Animated.Value(value ? 22 : 2)).current;
+  const backgroundColorAnim = useRef(new Animated.Value(value ? 1 : 0)).current;
+  
+  const backgroundColor = backgroundColorAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [inactiveColor, activeColor]
+  });
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(translateX, {
+        toValue: value ? 22 : 2,
+        friction: 6,
+        tension: 60,
+        useNativeDriver: false
+      }),
+      Animated.timing(backgroundColorAnim, {
+        toValue: value ? 1 : 0,
+        duration: 200,
+        useNativeDriver: false
+      })
+    ]).start();
+  }, [value]);
+
+  const toggleSwitch = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onValueChange(!value);
+  };
+
+  return (
+    <TouchableOpacity 
+      activeOpacity={0.8} 
+      onPress={toggleSwitch}
+    >
+      <Animated.View style={[
+        styles.toggleContainer,
+        { backgroundColor }
+      ]}>
+        <Animated.View style={[
+          styles.toggleThumb,
+          { transform: [{ translateX }] }
+        ]}>
+          {value && (
+            <MaterialIcons name="check" size={14} color={activeColor} style={styles.toggleIcon} />
+          )}
+        </Animated.View>
+      </Animated.View>
+    </TouchableOpacity>
+  );
+};
+
 export default function Settings() {
   const { t } = useTranslation();
   const router = useRouter();
@@ -96,9 +445,8 @@ export default function Settings() {
   const [startTime, setStartTime] = useState(new Date());
   const [endTime, setEndTime] = useState(new Date());
   const [selectedDays, setSelectedDays] = useState<number[]>([]);
-  const [selectedColor, setSelectedColor] = useState('#2C3DCD');
+  const [selectedColor, setSelectedColor] = useState(getRandomColor());
   const [isEnabled, setIsEnabled] = useState(true);
-  const [showColorPicker, setShowColorPicker] = useState(false);
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
   const [savedIdnp, setSavedIdnp] = useState<string | null>(null);
@@ -235,7 +583,7 @@ export default function Settings() {
         setGroupsList(groups);
         setFilteredGroups(groups);
       } catch (err) {
-        setError('Failed to load groups. Please check your connection.');
+        setError(t('settings').group.failed);
       } finally {
         setIsLoading(false);
       }
@@ -307,7 +655,7 @@ export default function Settings() {
   // Memoize empty component for FlatList
   const ListEmptyComponent = useCallback(() => (
     <View style={styles.errorContainer}>
-      <Text style={styles.loadingText}>No classes found matching "{searchQuery}"</Text>
+      <Text style={styles.loadingText}>{t('settings').group.notFound} "{searchQuery}"</Text>
     </View>
   ), [searchQuery]);
 
@@ -316,7 +664,7 @@ export default function Settings() {
     setStartTime(new Date());
     setEndTime(new Date());
     setSelectedDays([]);
-    setSelectedColor('#2C3DCD');
+    setSelectedColor(getRandomColor());
     setIsEnabled(true);
     setEditingPeriod(null);
   }, []);
@@ -370,152 +718,171 @@ export default function Settings() {
     );
   }, []);
 
-  const handleTimePickerChange = (type: 'start' | 'end') => (event: DateTimePickerEvent, date?: Date) => {
-    if (Platform.OS === 'android') {
-      type === 'start' ? setShowStartPicker(false) : setShowEndPicker(false);
-    }
-    if (event.type === 'set' && date) {
-      type === 'start' ? setStartTime(date) : setEndTime(date);
-    }
+  const handleTimePickerChange = (type: 'start' | 'end') => (date: Date) => {
+    type === 'start' ? setStartTime(date) : setEndTime(date);
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Add IDNP section before Language Selection */}
-      {savedIdnp && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('settings').idnp.title}</Text>
-          <TouchableOpacity
-            style={styles.clearIdnpButton}
-            onPress={handleClearIdnp}
-          >
-            <MaterialIcons name="delete-outline" size={24} color="#FF6B6B" />
-            <Text style={styles.clearIdnpText}>{t('settings').idnp.clearButton}</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Class Selection Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Class</Text>
-        <TouchableOpacity
-          style={styles.classSelector}
-          onPress={() => setShowGroupModal(true)}
-        >
-          <View style={styles.classSelectorContent}>
-            <Text style={styles.selectedClassName}>
-              {settings.selectedGroupName || 'Select a class'}
-            </Text>
-            <MaterialIcons name="keyboard-arrow-down" size={24} color="#8A8A8D" />
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Add IDNP section before Language Selection */}
+        {savedIdnp && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('settings').idnp.title}</Text>
+            <TouchableOpacity
+              style={styles.clearIdnpButton}
+              onPress={handleClearIdnp}
+            >
+              <MaterialIcons name="delete-outline" size={24} color="#FF6B6B" />
+              <Text style={styles.clearIdnpText}>{t('settings').idnp.clearButton}</Text>
+            </TouchableOpacity>
           </View>
-        </TouchableOpacity>
-      </View>
+        )}
 
-      {/* Language Selection Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>{t('settings').language}</Text>
-        <View style={styles.optionsContainer}>
-          {(Object.keys(languages) as Language[]).map(lang => (
-            <TouchableOpacity
-              key={lang}
-              style={[
-                styles.optionButton,
-                settings.language === lang && styles.selectedOption
-              ]}
-              onPress={() => handleLanguageChange(lang)}
-            >
-              <Text style={[
-                styles.optionText,
-                settings.language === lang && styles.selectedOptionText
-              ]}>
-                {languages[lang]}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-
-      {/* Subgroup Selection Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>{t('settings').group}</Text>
-        <View style={styles.optionsContainer}>
-          {groups.map(group => (
-            <TouchableOpacity
-              key={group}
-              style={[
-                styles.optionButton,
-                settings.group === group && styles.selectedOption
-              ]}
-              onPress={() => handleGroupChange(group)}
-            >
-              <Text style={[
-                styles.optionText,
-                settings.group === group && styles.selectedOptionText
-              ]}>
-                {group === 'Subgroup 1' ? t('subgroup').group1 : t('subgroup').group2}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-
-      {/* Custom Periods Section */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Custom Periods</Text>
+        {/* Class Selection Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t('settings').group.title}</Text>
           <TouchableOpacity
-            style={styles.addButton}
-            onPress={handleAddPeriod}
+            style={styles.classSelector}
+            onPress={() => setShowGroupModal(true)}
           >
-            <MaterialIcons name="add" size={24} color="white" />
+            <View style={styles.classSelectorContent}>
+              <Text style={styles.selectedClassName}>
+                {settings.selectedGroupName || t('settings').group.select}
+              </Text>
+              <MaterialIcons name="keyboard-arrow-down" size={24} color="#8A8A8D" />
+            </View>
           </TouchableOpacity>
         </View>
 
-        <View style={styles.periodsListContainer}>
-          {settings.customPeriods.map((period) => (
-            <View key={period._id} style={styles.periodItem}>
-              <View style={styles.periodItemHeader}>
-                <View style={[styles.colorDot, { backgroundColor: period.color || '#2C3DCD' }]} />
-                <Text style={styles.periodName}>{period.name || 'Custom Period'}</Text>
-                <Switch
-                  value={period.isEnabled}
-                  onValueChange={(value) => {
-                    scheduleService.updateCustomPeriod(period._id, { isEnabled: value });
-                  }}
-                />
-              </View>
-              
-              <View style={styles.periodItemContent}>
-                <Text style={styles.periodTime}>
-                  {period.starttime} - {period.endtime}
+        {/* Language Selection Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t('settings').language}</Text>
+          <View style={styles.optionsContainer}>
+            {(Object.keys(languages) as Language[]).map(lang => (
+              <TouchableOpacity
+                key={lang}
+                style={[
+                  styles.optionButton,
+                  settings.language === lang && styles.selectedOption
+                ]}
+                onPress={() => handleLanguageChange(lang)}
+              >
+                <Text style={[
+                  styles.optionText,
+                  settings.language === lang && styles.selectedOptionText
+                ]}>
+                  {languages[lang]}
                 </Text>
-                <Text style={styles.periodDays}>
-                  {period.daysOfWeek?.map(day => t('weekdays').short[day - 1]).join(', ') || 'All weekdays'}
-                </Text>
-              </View>
-
-              <View style={styles.periodItemActions}>
-                <TouchableOpacity
-                  style={styles.periodAction}
-                  onPress={() => handleEditPeriod(period)}
-                >
-                  <MaterialIcons name="edit" size={20} color="#8A8A8D" />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.periodAction}
-                  onPress={() => handleDeletePeriod(period._id)}
-                >
-                  <MaterialIcons name="delete" size={20} color="#ff6b6b" />
-                </TouchableOpacity>
-              </View>
-            </View>
-          ))}
-          
-          {settings.customPeriods.length === 0 && (
-            <Text style={styles.noPeriods}>No custom periods added yet</Text>
-          )}
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
-      </View>
+
+        {/* Subgroup Selection Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t('settings').subGroup}</Text>
+          <View style={styles.optionsContainer}>
+            {groups.map(group => (
+              <TouchableOpacity
+                key={group}
+                style={[
+                  styles.optionButton,
+                  settings.group === group && styles.selectedOption
+                ]}
+                onPress={() => handleGroupChange(group)}
+              >
+                <Text style={[
+                  styles.optionText,
+                  settings.group === group && styles.selectedOptionText
+                ]}>
+                  {group === 'Subgroup 1' ? t('subgroup').group1 : t('subgroup').group2}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Custom Periods Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>{t('settings').customPeriods.title}</Text>
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={handleAddPeriod}
+            >
+              <MaterialIcons name="add" size={24} color="white" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.periodsListContainer}>
+            {settings.customPeriods.map((period) => (
+              <View key={period._id} style={styles.periodItem}>
+                <View style={styles.periodItemHeader}>
+                  <View style={[styles.colorDot, { backgroundColor: period.color || '#2C3DCD' }]} />
+                  <Text style={styles.periodName}>{period.name || 'Custom Period'}</Text>
+                  <CustomToggle
+                    value={period.isEnabled}
+                    onValueChange={(value) => {
+                      scheduleService.updateCustomPeriod(period._id, { isEnabled: value });
+                    }}
+                  />
+                </View>
+                
+                <View style={styles.periodItemContent}>
+                  <Text style={styles.periodTime}>
+                    {period.starttime} - {period.endtime}
+                  </Text>
+                  <Text style={styles.periodDays}>
+                    {period.daysOfWeek?.map(day => t('weekdays').short[day - 1]).join(', ') || 'All weekdays'}
+                  </Text>
+                </View>
+
+                <View style={styles.periodItemActions}>
+                  <TouchableOpacity
+                    style={styles.periodAction}
+                    onPress={() => handleEditPeriod(period)}
+                  >
+                    <MaterialIcons name="edit" size={20} color="#8A8A8D" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.periodAction}
+                    onPress={() => handleDeletePeriod(period._id)}
+                  >
+                    <MaterialIcons name="delete" size={20} color="#ff6b6b" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
+            
+            {settings.customPeriods.length === 0 && (
+              <Text style={styles.noPeriods}>{t('settings').customPeriods.noPeriodsYet}</Text>
+            )}
+          </View>
+        </View>
+      </ScrollView>
+
+      {/* Time Pickers */}
+      {showStartPicker && (
+        <TimePicker
+          value={startTime}
+          onChange={handleTimePickerChange('start')}
+          label={t('settings').customPeriods.time}
+          onClose={() => setShowStartPicker(false)}
+          use12HourFormat={settings.language === 'en'}
+          translations={{ cancel: t('settings').customPeriods.cancel, confirm: t('settings').customPeriods.confirm }}
+        />
+      )}
+      {showEndPicker && (
+        <TimePicker
+          value={endTime}
+          onChange={handleTimePickerChange('end')}
+          label={t('settings').customPeriods.time}
+          onClose={() => setShowEndPicker(false)}
+          use12HourFormat={settings.language === 'en'}
+          translations={{ cancel: t('settings').customPeriods.cancel, confirm: t('settings').customPeriods.confirm }}
+        />
+      )}
 
       {/* Groups Selection Modal */}
       <Modal
@@ -530,7 +897,7 @@ export default function Settings() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Class</Text>
+              <Text style={styles.modalTitle}>{t('settings').group.select}</Text>
               <TouchableOpacity onPress={() => {
                 setShowGroupModal(false);
                 setSearchQuery('');
@@ -544,7 +911,7 @@ export default function Settings() {
               <MaterialIcons name="search" size={20} color="#8A8A8D" style={styles.searchIcon} />
               <TextInput
                 style={styles.searchInput}
-                placeholder="Search classes..."
+                placeholder={t('settings').group.search}
                 placeholderTextColor="#8A8A8D"
                 value={searchQuery}
                 onChangeText={setSearchQuery}
@@ -560,7 +927,7 @@ export default function Settings() {
             {isLoading ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color="#3478F6" />
-                <Text style={styles.loadingText}>Loading classes...</Text>
+                <Text style={styles.loadingText}>{t('settings').group.searching}</Text>
               </View>
             ) : error ? (
               <View style={styles.errorContainer}>
@@ -616,7 +983,7 @@ export default function Settings() {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
-                {editingPeriod ? 'Edit Period' : 'Add New Period'}
+                {editingPeriod ? t('settings').customPeriods.edit : t('settings').customPeriods.add}
               </Text>
               <TouchableOpacity onPress={() => {
                 setShowPeriodModal(false);
@@ -629,19 +996,19 @@ export default function Settings() {
             <View style={styles.formContainer}>
               {/* Name Input */}
               <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Name</Text>
+                <Text style={styles.formLabel}>{t('settings').customPeriods.name}</Text>
                 <TextInput
                   style={styles.formInput}
                   value={periodName}
                   onChangeText={setPeriodName}
-                  placeholder="Enter period name"
+                  placeholder={t('settings').customPeriods.name}
                   placeholderTextColor="#8A8A8D"
                 />
               </View>
 
               {/* Time Selection */}
               <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Time</Text>
+                <Text style={styles.formLabel}>{t('settings').customPeriods.time}</Text>
                 <View style={styles.timeContainer}>
                   <TouchableOpacity
                     style={styles.timeButton}
@@ -665,7 +1032,7 @@ export default function Settings() {
 
               {/* Days Selection */}
               <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Days</Text>
+                <Text style={styles.formLabel}>{t('settings').customPeriods.days}</Text>
                 <View style={styles.daysContainer}>
                   {[1, 2, 3, 4, 5].map((day) => (
                     <TouchableOpacity
@@ -687,20 +1054,14 @@ export default function Settings() {
                 </View>
               </View>
 
-              {/* Color Selection */}
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Color</Text>
-                <TouchableOpacity
-                  style={[styles.colorPreview, { backgroundColor: selectedColor }]}
-                  onPress={() => setShowColorPicker(true)}
-                />
-              </View>
-
               {/* Enabled Toggle */}
               <View style={styles.formGroup}>
                 <View style={styles.switchContainer}>
-                  <Text style={styles.formLabel}>Enabled</Text>
-                  <Switch value={isEnabled} onValueChange={setIsEnabled} />
+                  <Text style={styles.formLabel}>{t('settings').customPeriods.enabled}</Text>
+                  <CustomToggle
+                    value={isEnabled}
+                    onValueChange={setIsEnabled}
+                  />
                 </View>
               </View>
 
@@ -709,37 +1070,8 @@ export default function Settings() {
                 style={styles.saveButton}
                 onPress={handleSavePeriod}
               >
-                <Text style={styles.saveButtonText}>Save Period</Text>
+                <Text style={styles.saveButtonText}>{t('settings').customPeriods.save}</Text>
               </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Color Picker Modal */}
-      <Modal
-        visible={showColorPicker}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowColorPicker(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.colorPickerModal}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Choose Color</Text>
-              <TouchableOpacity onPress={() => setShowColorPicker(false)}>
-                <MaterialIcons name="close" size={24} color="white" />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.colorPickerContainer}>
-              <ColorPicker
-                color={selectedColor}
-                onColorChange={setSelectedColor}
-                thumbSize={30}
-                sliderSize={30}
-                noSnap={true}
-                row={false}
-              />
             </View>
           </View>
         </View>
@@ -774,37 +1106,6 @@ export default function Settings() {
           </View>
         </View>
       </Modal>
-
-      {/* Time Pickers */}
-      {(showStartPicker || showEndPicker) && (Platform.OS === 'android' ? (
-        <DateTimePicker
-          value={showStartPicker ? startTime : endTime}
-          mode="time"
-          is24Hour={true}
-          onChange={handleTimePickerChange(showStartPicker ? 'start' : 'end')}
-        />
-      ) : Platform.OS === 'ios' && (
-        <>
-          {showStartPicker && (
-            <DateTimePicker
-              value={startTime}
-              mode="time"
-              is24Hour={true}
-              onChange={handleTimePickerChange('start')}
-              display="spinner"
-            />
-          )}
-          {showEndPicker && (
-            <DateTimePicker
-              value={endTime}
-              mode="time"
-              is24Hour={true}
-              onChange={handleTimePickerChange('end')}
-              display="spinner"
-            />
-          )}
-        </>
-      ))}
     </SafeAreaView>
   );
 }
@@ -1102,18 +1403,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  colorPickerModal: {
-    backgroundColor: '#1a1b26',
-    borderRadius: 20,
-    padding: 20,
-    width: '90%',
-    maxWidth: 400,
-    alignSelf: 'center',
-  },
-  colorPickerContainer: {
-    height: 300,
-    padding: 20,
-  },
   clearIdnpButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1177,5 +1466,136 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
+  },
+  timePickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  timePickerContainer: {
+    backgroundColor: '#1a1b26',
+    borderRadius: 20,
+    padding: 24,
+    width: '90%',
+    maxWidth: 400,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+  },
+  timePickerHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  timePickerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: 'white',
+    marginBottom: 8,
+  },
+  timePickerValue: {
+    fontSize: 16,
+    color: '#8A8A8D',
+  },
+  timePickerContent: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+    marginTop: 12,
+  },
+  timePickerColumn: {
+    flex: 1,
+    alignItems: 'center',
+    backgroundColor: '#232433',
+    borderRadius: 12,
+    overflow: 'hidden',
+    minWidth: 100,
+  },
+  timePickerItem: {
+    height: 56,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  timePickerItemText: {
+    fontSize: 38,
+    color: '#8A8A8D',
+    opacity: 0.15,
+    fontWeight: '400',
+  },
+  timePickerItemTextSelected: {
+    fontSize: 44,
+    color: '#ffffff',
+    opacity: 1,
+    fontWeight: '600',
+  },
+  timePickerSeparator: {
+    fontSize: 52,
+    color: '#ffffff',
+    marginHorizontal: 20,
+    opacity: 0.8,
+    fontWeight: '300',
+  },
+  timePickerPeriodButton: {
+    marginLeft: 20,
+    backgroundColor: '#232433',
+    borderRadius: 12,
+    padding: 12,
+    width: 60,
+    height: 80,
+    justifyContent: 'space-evenly',
+  },
+  timePickerPeriodText: {
+    fontSize: 20,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  timePickerActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+    marginTop: 20,
+  },
+  timePickerButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+  },
+  timePickerCancelButton: {
+    backgroundColor: '#232433',
+  },
+  timePickerConfirmButton: {
+    backgroundColor: '#2C3DCD',
+  },
+  timePickerButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'white',
+  },
+  timePickerConfirmText: {
+    color: 'white',
+    fontWeight: '600',
+  },
+  toggleContainer: {
+    width: 50,
+    height: 30,
+    borderRadius: 15,
+    padding: 2,
+    justifyContent: 'center',
+  },
+  toggleThumb: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  toggleIcon: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
   },
 });

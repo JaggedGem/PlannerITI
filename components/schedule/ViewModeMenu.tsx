@@ -9,6 +9,8 @@ import Animated, {
   Extrapolate
 } from 'react-native-reanimated';
 import { scheduleService, ScheduleView } from '@/services/scheduleService';
+import { useTranslation } from '@/hooks/useTranslation';
+
 
 interface ViewModeMenuProps {
   isOpen: boolean;
@@ -19,7 +21,9 @@ interface ViewModeMenuProps {
 }
 
 export default function ViewModeMenu({ isOpen, onClose, isEvenWeek, weekText, currentView }: ViewModeMenuProps) {
+  const { t } = useTranslation();
   const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
 
   const animatedContainerStyle = useAnimatedStyle(() => {
     return {
@@ -58,14 +62,14 @@ export default function ViewModeMenu({ isOpen, onClose, isEvenWeek, weekText, cu
     {
       id: 'day',
       icon: 'today',
-      label: 'Day View',
+      label: t('schedule').dayView,
     },
     {
       id: 'week',
       icon: 'view-week',
-      label: 'Week View',
+      label: t('schedule').weekView,
     },
-  ], []);
+  ], [t]);
 
   return (
     <Animated.View style={[styles.overlay, overlayStyle]}>
