@@ -37,6 +37,9 @@ type TranslationType = {
       colorPicker: string;
       cancel: string;
       confirm: string;
+      deleteConfirmTitle: string;
+      deleteConfirmMessage: string;
+      delete: string;
     };
   };
   schedule: {
@@ -163,6 +166,9 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
         colorPicker: 'Choose Color',
         cancel: 'Cancel',
         confirm: 'Confirm',
+        deleteConfirmTitle: 'Delete Period',
+        deleteConfirmMessage: 'Are you sure you want to delete this period?',
+        delete: 'Delete',
       },
     },
     schedule: {
@@ -287,6 +293,9 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
         colorPicker: 'Alege Culoarea',
         cancel: 'Anulează',
         confirm: 'Confirmă',
+        deleteConfirmTitle: 'Șterge Lecția',
+        deleteConfirmMessage: 'Sigur doriți să ștergeți această lecție?',
+        delete: 'Șterge',
       },
     },
     schedule: {

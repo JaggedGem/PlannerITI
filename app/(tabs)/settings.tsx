@@ -451,6 +451,8 @@ export default function Settings() {
   const [showEndPicker, setShowEndPicker] = useState(false);
   const [savedIdnp, setSavedIdnp] = useState<string | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [confirmDialogType, setConfirmDialogType] = useState<'idnp' | 'period'>('idnp');
+  const [periodToDelete, setPeriodToDelete] = useState<string | null>(null);
 
   // Add useEffect to load IDNP and listen for updates
   useEffect(() => {
@@ -478,6 +480,7 @@ export default function Settings() {
 
   // Custom clear IDNP function
   const handleClearIdnp = useCallback(() => {
+    setConfirmDialogType('idnp');
     setShowConfirmDialog(true);
   }, []);
 
@@ -497,6 +500,21 @@ export default function Settings() {
       // Silent error handling
     }
   }, [router]);
+
+  const handleDeletePeriod = useCallback((periodId: string) => {
+    setPeriodToDelete(periodId);
+    setConfirmDialogType('period');
+    setShowConfirmDialog(true);
+  }, []);
+
+  const handleConfirmDeletePeriod = useCallback(() => {
+    if (periodToDelete) {
+      scheduleService.deleteCustomPeriod(periodToDelete);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+    setShowConfirmDialog(false);
+    setPeriodToDelete(null);
+  }, [periodToDelete]);
 
   // Callback functions
   const handleLanguageChange = useCallback((language: Language) => {
@@ -683,10 +701,6 @@ export default function Settings() {
     setSelectedColor(period.color || '#2C3DCD');
     setIsEnabled(period.isEnabled);
     setShowPeriodModal(true);
-  }, []);
-
-  const handleDeletePeriod = useCallback((periodId: string) => {
-    scheduleService.deleteCustomPeriod(periodId);
   }, []);
 
   const handleSavePeriod = useCallback(() => {
@@ -1085,22 +1099,41 @@ export default function Settings() {
       >
         <View style={styles.confirmOverlay}>
           <View style={styles.confirmDialog}>
-            <Text style={styles.confirmTitle}>{t('settings').idnp.clearConfirmTitle}</Text>
-            <Text style={styles.confirmMessage}>{t('settings').idnp.clearConfirmMessage}</Text>
+            <Text style={styles.confirmTitle}>
+              {confirmDialogType === 'idnp' 
+                ? t('settings').idnp.clearConfirmTitle 
+                : t('settings').customPeriods.deleteConfirmTitle}
+            </Text>
+            <Text style={styles.confirmMessage}>
+              {confirmDialogType === 'idnp'
+                ? t('settings').idnp.clearConfirmMessage
+                : t('settings').customPeriods.deleteConfirmMessage}
+            </Text>
             
             <View style={styles.confirmButtons}>
               <TouchableOpacity
                 style={[styles.confirmButton, styles.cancelButton]}
-                onPress={() => setShowConfirmDialog(false)}
+                onPress={() => {
+                  setShowConfirmDialog(false);
+                  setPeriodToDelete(null);
+                }}
               >
-                <Text style={styles.cancelButtonText}>{t('settings').idnp.clearConfirmCancel}</Text>
+                <Text style={styles.cancelButtonText}>
+                  {confirmDialogType === 'idnp'
+                    ? t('settings').idnp.clearConfirmCancel
+                    : t('settings').customPeriods.cancel}
+                </Text>
               </TouchableOpacity>
               
               <TouchableOpacity
                 style={[styles.confirmButton, styles.clearButton]}
-                onPress={handleConfirmClearIdnp}
+                onPress={confirmDialogType === 'idnp' ? handleConfirmClearIdnp : handleConfirmDeletePeriod}
               >
-                <Text style={styles.clearButtonText}>{t('settings').idnp.clearConfirmConfirm}</Text>
+                <Text style={styles.clearButtonText}>
+                  {confirmDialogType === 'idnp'
+                    ? t('settings').idnp.clearConfirmConfirm
+                    : t('settings').customPeriods.delete}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
