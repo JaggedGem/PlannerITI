@@ -1419,6 +1419,7 @@ const styles = StyleSheet.create({
     color: 'white',
     marginTop: 12,
     textAlign: 'center',
+    paddingHorizontal: 12,
   },
   loadingNotice: {
     flexDirection: 'row',
@@ -1427,6 +1428,7 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
     marginBottom: 16,
+    paddingHorizontal: 20,
   },
   // Error styles
   errorContainer: {
