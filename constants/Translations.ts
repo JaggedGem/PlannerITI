@@ -123,6 +123,20 @@ type TranslationType = {
       noSubjects: string;
     };
   };
+  update: {
+    availableTitle: string;
+    availableMessage: string;
+    readyTitle: string;
+    readyMessage: string;
+    errorTitle: string;
+    errorMessage: string;
+    downloadingMessage: string;
+    downloading: string;
+    downloadButton: string;
+    restartButton: string;
+    laterButton: string;
+    retryButton: string;
+  };
   loading: string;
 };
 
@@ -252,6 +266,20 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
         noSubjects: 'No subjects available for Semester {{semester}}',
       },
     },
+    update: {
+      availableTitle: 'Update Available',
+      availableMessage: 'A new version of the app is available. Would you like to download it now?',
+      readyTitle: 'Update Ready',
+      readyMessage: 'The update has been downloaded and is ready to install. The app will restart to apply the update.',
+      errorTitle: 'Update Error',
+      errorMessage: 'There was a problem downloading the update. Please try again.',
+      downloadingMessage: 'Downloading update...',
+      downloading: 'Please wait while the update is being downloaded',
+      downloadButton: 'Download Now',
+      restartButton: 'Restart App',
+      laterButton: 'Later',
+      retryButton: 'Try Again',
+    },
     loading: 'Loading...',
   },
   ro: {
@@ -378,6 +406,20 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
         upcoming: 'În curând',
         noSubjects: 'Nu există materii disponibile pentru Semestrul {{semester}}',
       },
+    },
+    update: {
+      availableTitle: 'Actualizare Disponibilă',
+      availableMessage: 'O nouă versiune a aplicației este disponibilă. Doriți să o descărcați acum?',
+      readyTitle: 'Actualizare Pregătită',
+      readyMessage: 'Actualizarea a fost descărcată și este gata de instalare. Aplicația va reporni pentru a aplica actualizarea.',
+      errorTitle: 'Eroare de Actualizare',
+      errorMessage: 'A apărut o problemă la descărcarea actualizării. Vă rugăm să încercați din nou.',
+      downloadingMessage: 'Se descarcă actualizarea...',
+      downloading: 'Vă rugăm să așteptați în timp ce actualizarea este descărcată',
+      downloadButton: 'Descarcă Acum',
+      restartButton: 'Repornește Aplicația',
+      laterButton: 'Mai Târziu',
+      retryButton: 'Încearcă din nou',
     },
     loading: 'Se încarcă...',
   },
