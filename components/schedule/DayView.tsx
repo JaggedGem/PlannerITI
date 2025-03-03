@@ -58,23 +58,19 @@ export default function DayView() {
   const isEvenWeek = scheduleService.isEvenWeek(selectedDate);
   const { t, formatDate } = useTranslation();
 
-  // Generate 7 days centered around today or next Monday if weekend
+  // Generate current week dates (Monday to Friday)
   const weekDates = useMemo(() => {
     const today = new Date();
-    const isWeekend = today.getDay() === 0 || today.getDay() === 6;
+    const currentDay = today.getDay(); // 0 is Sunday, 1 is Monday, etc.
     
-    let startDate = new Date(today);
-    if (isWeekend) {
-      // If weekend, show next week starting from Monday
-      const daysUntilMonday = today.getDay() === 0 ? 1 : 2; // Sunday: +1, Saturday: +2
-      startDate.setDate(today.getDate() + daysUntilMonday);
-    } else {
-      startDate.setDate(today.getDate() - 3); // Start 3 days before today
-    }
+    // Calculate the Monday of current week
+    const monday = new Date(today);
+    const daysFromMonday = currentDay === 0 ? -6 : 1 - currentDay; // If Sunday, go back 6 days, otherwise calculate days till Monday
+    monday.setDate(today.getDate() + daysFromMonday);
 
-    return Array.from({ length: 7 }, (_, i) => {
-      const date = new Date(startDate);
-      date.setDate(startDate.getDate() + i);
+    return Array.from({ length: 5 }, (_, i) => {
+      const date = new Date(monday);
+      date.setDate(monday.getDate() + i);
       return {
         date,
         day: t('weekdays').short[date.getDay()],
@@ -87,11 +83,11 @@ export default function DayView() {
   // Initial selected date setup - if weekend, select next Monday
   useEffect(() => {
     const today = new Date();
-    const isWeekend = today.getDay() === 0 || today.getDay() === 6;
+    const currentDay = today.getDay();
     
-    if (isWeekend) {
+    if (currentDay === 0 || currentDay === 6) { // If weekend
       const nextMonday = new Date(today);
-      const daysUntilMonday = today.getDay() === 0 ? 1 : 2;
+      const daysUntilMonday = currentDay === 0 ? 1 : 2;
       nextMonday.setDate(today.getDate() + daysUntilMonday);
       setSelectedDate(nextMonday);
     }
@@ -189,10 +185,10 @@ export default function DayView() {
   }, [weekDates]);
 
   const handleDatePress = useCallback((date: Date) => {
-    // Only allow selecting dates within the 7-day range
+    // Only allow selecting dates within the 5-day range (Monday to Friday)
     const dateTime = date.getTime();
     const minDate = weekDates[0].date.getTime();
-    const maxDate = weekDates[6].date.getTime();
+    const maxDate = weekDates[4].date.getTime(); // Changed from 6 to 4 since we only have 5 days
     
     if (dateTime >= minDate && dateTime <= maxDate) {
       setSelectedDate(date);
