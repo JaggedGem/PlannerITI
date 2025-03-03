@@ -848,7 +848,7 @@ export default function Settings() {
                     {period.starttime} - {period.endtime}
                   </Text>
                   <Text style={styles.periodDays}>
-                    {period.daysOfWeek?.map(day => t('weekdays').short[day - 1]).join(', ') || 'All weekdays'}
+                    {period.daysOfWeek?.map(day => t('weekdays').long[day]).join(', ') || 'All weekdays'}
                   </Text>
                 </View>
 
