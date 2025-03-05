@@ -54,6 +54,7 @@ export default function DayView() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [settings, setSettings] = useState(scheduleService.getSettings());
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [todaySchedule, setTodaySchedule] = useState<any[]>([]);
   const currentDate = new Date();
   const isEvenWeek = scheduleService.isEvenWeek(selectedDate);
   const { t, formatDate } = useTranslation();
@@ -80,6 +81,20 @@ export default function DayView() {
     });
   }, [currentDate, t]);
 
+  // Update schedule when date changes or scheduleData changes
+  useEffect(() => {
+    const updateSchedule = async () => {
+      if (scheduleData) {
+        const daySchedule = await scheduleService.getScheduleForDay(
+          scheduleData, 
+          DAYS_MAP[selectedDate.getDay() as keyof typeof DAYS_MAP]
+        );
+        setTodaySchedule(daySchedule);
+      }
+    };
+    updateSchedule();
+  }, [selectedDate, scheduleData]);
+
   // Initial selected date setup - if weekend, select next Monday
   useEffect(() => {
     const today = new Date();
@@ -92,10 +107,6 @@ export default function DayView() {
       setSelectedDate(nextMonday);
     }
   }, []);
-
-  const todaySchedule = scheduleData 
-    ? scheduleService.getScheduleForDay(scheduleData, DAYS_MAP[selectedDate.getDay() as keyof typeof DAYS_MAP])
-    : [];
 
   const currentTime = useTimeUpdate();
 
@@ -133,19 +144,34 @@ export default function DayView() {
     return currentTimeInMinutes >= startTimeInMinutes && currentTimeInMinutes < endTimeInMinutes;
   };
 
-  // Settings subscription effect
+  // Schedule update function 
+  const updateSchedule = async () => {
+    if (scheduleData) {
+      const daySchedule = await scheduleService.getScheduleForDay(
+        scheduleData, 
+        DAYS_MAP[selectedDate.getDay() as keyof typeof DAYS_MAP]
+      );
+      setTodaySchedule(daySchedule);
+    }
+  };
+
+  // Settings subscription effect - update for both groupId and subgroup changes
   useEffect(() => {
     const unsubscribe = scheduleService.subscribe(() => {
       const newSettings = scheduleService.getSettings();
       setSettings(newSettings);
       
-      // Refresh schedule data when the group changes
-      if (newSettings.selectedGroupId !== settings.selectedGroupId) {
+      // Refresh schedule data when the group changes or subgroup changes
+      if (newSettings.selectedGroupId !== settings.selectedGroupId || newSettings.group !== settings.group) {
         fetchSchedule(newSettings.selectedGroupId);
+      }
+      // Just update today's schedule if only subgroup changed
+      else if (newSettings.group !== settings.group && scheduleData) {
+        updateSchedule();
       }
     });
     return () => unsubscribe();
-  }, [settings.selectedGroupId]);
+  }, [settings.selectedGroupId, settings.group, scheduleData]);
 
   // Schedule data fetching effect
   useEffect(() => {

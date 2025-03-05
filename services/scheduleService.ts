@@ -99,7 +99,25 @@ const CACHE_KEYS = {
 const CACHE_EXPIRY = 3 * 24 * 60 * 60 * 1000; // 3 days in milliseconds
 const DEFAULT_GROUP_NAME = 'P-2412';
 
+const PERIOD_TIMES_CACHE_KEY = 'period_times_cache';
+const LAST_PERIOD_SYNC_KEY = 'last_period_sync';
+const PERIOD_SYNC_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+
 type SettingsListener = () => void;
+
+interface PeriodTime {
+  period: number;
+  starttime: string;
+  endtime: string;
+}
+
+interface PeriodTimes {
+  monday: PeriodTime[];
+  tuesday: PeriodTime[];
+  wednesday: PeriodTime[];
+  thursday: PeriodTime[];
+  friday: PeriodTime[];
+}
 
 export const scheduleService = {
   // Default settings
@@ -345,7 +363,42 @@ export const scheduleService = {
     }
   },
 
-  getScheduleForDay(data: ApiResponse, dayName: keyof ApiResponse['data'] | undefined) {
+  async getPeriodTimes(): Promise<PeriodTimes | null> {
+    try {
+      const cachedTimes = await AsyncStorage.getItem(PERIOD_TIMES_CACHE_KEY);
+      if (cachedTimes) {
+        return JSON.parse(cachedTimes);
+      }
+      return null;
+    } catch (error) {
+      return null;
+    }
+  },
+
+  async syncPeriodTimes(): Promise<void> {
+    try {
+      // Check if we need to sync
+      const lastSync = await AsyncStorage.getItem(LAST_PERIOD_SYNC_KEY);
+      if (lastSync) {
+        const lastSyncTime = new Date(lastSync).getTime();
+        if (Date.now() - lastSyncTime < PERIOD_SYNC_INTERVAL) {
+          return;
+        }
+      }
+
+      // Fetch new period times
+      const response = await fetch('https://papi.jagged.me/api/schedule');
+      if (!response.ok) throw new Error('Failed to fetch period times');
+      
+      const periodTimes = await response.json();
+      await AsyncStorage.setItem(PERIOD_TIMES_CACHE_KEY, JSON.stringify(periodTimes));
+      await AsyncStorage.setItem(LAST_PERIOD_SYNC_KEY, new Date().toISOString());
+    } catch (error) {
+      // Silent error handling - will use cached times or fall back to default times
+    }
+  },
+
+  async getScheduleForDay(data: ApiResponse, dayName: keyof ApiResponse['data'] | undefined) {
     if (!dayName) return [];
     
     const daySchedule = data.data[dayName];
@@ -384,45 +437,50 @@ export const scheduleService = {
       }
     });
 
+    // Get period times once for all items
+    const periodTimes = await this.getPeriodTimes();
+
     // Process regular periods
-    Object.entries(daySchedule).forEach(([period, schedules]) => {
-      const periodData = data.periods[parseInt(period) - 1];
-      
-      const processScheduleItem = (item: ScheduleItem, isEvenWeek?: boolean) => {
-        // Skip if item is for a different group
-        const itemGroup = item.groupids.name;
-        const entireClass = itemGroup === 'Clasă intreagă' || itemGroup === 'Clas� intreag�';
-        
-        // Convert old group names to new ones for comparison
-        const settingsGroup = this.settings.group === 'Subgroup 1' ? 'Grupa 1' : 'Grupa 2';
-        const compareItemGroup = itemGroup === 'Grupa 1' ? 'Subgroup 1' : itemGroup === 'Grupa 2' ? 'Subgroup 2' : itemGroup;
+    const processItems = async () => {
+      const promises = Object.entries(daySchedule).map(async ([periodNum, schedules]) => {
+        const processScheduleItem = async (item: ScheduleItem, isEvenWeek?: boolean) => {
+          const itemGroup = item.groupids.name;
+          const entireClass = itemGroup === 'Clasă intreagă' || itemGroup === 'Clas� intreag�';
+          const settingsGroup = this.settings.group === 'Subgroup 1' ? 'Grupa 1' : 'Grupa 2';
+          const compareItemGroup = itemGroup === 'Grupa 1' ? 'Subgroup 1' : itemGroup === 'Grupa 2' ? 'Subgroup 2' : itemGroup;
 
-        // Check if this item is for the current user's group
-        if (!entireClass && compareItemGroup !== this.settings.group) {
-          return;
-        }
+          if (!entireClass && compareItemGroup !== this.settings.group) {
+            return;
+          }
 
-        result.push({
-          period,
-          startTime: periodData.starttime,
-          endTime: periodData.endtime,
-          className: item.subjectid.name,
-          teacherName: item.teacherids.name,
-          roomNumber: item.classroomids.name,
-          isEvenWeek,
-          group: compareItemGroup, // Use normalized group name for display
-        });
-      };
+          // Use period times from new API or fall back to original data
+          const periodData = periodTimes?.[dayName]?.find(p => p.period === parseInt(periodNum) - 1) || 
+                           data.periods[parseInt(periodNum) - 1];
 
-      // Add items for both weeks
-      schedules.both.forEach(item => processScheduleItem(item));
+          result.push({
+            period: periodNum,
+            startTime: periodData.starttime,
+            endTime: periodData.endtime,
+            className: item.subjectid.name,
+            teacherName: item.teacherids.name,
+            roomNumber: item.classroomids.name,
+            isEvenWeek,
+            group: compareItemGroup,
+          });
+        };
 
-      // Add items for even weeks
-      schedules.par.forEach(item => processScheduleItem(item, true));
+        // Process all items for the current period
+        await Promise.all([
+          ...schedules.both.map(item => processScheduleItem(item)),
+          ...schedules.par.map(item => processScheduleItem(item, true)),
+          ...schedules.impar.map(item => processScheduleItem(item, false))
+        ]);
+      });
 
-      // Add items for odd weeks
-      schedules.impar.forEach(item => processScheduleItem(item, false));
-    });
+      await Promise.all(promises);
+    };
+
+    await processItems();
 
     // Sort schedule by time
     const sortedSchedule = result.sort((a, b) => {
@@ -487,3 +545,4 @@ export const scheduleService = {
 
 // Initialize settings from storage
 scheduleService.loadSettings();
+scheduleService.syncPeriodTimes(); // Initial sync
