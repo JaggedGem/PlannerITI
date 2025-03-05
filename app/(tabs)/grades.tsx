@@ -1108,15 +1108,18 @@ export default function Grades() {
     />;
   }
 
-  // Error notification at the top if there was a network error but we're showing cached data
-  const errorNotification = errorMessage && responseHtml ? (
-    <ErrorNotification message={errorMessage} />
-  ) : null;
-
   // If we have IDNP and response HTML, show the grades screen
   return (
     <>
-      {errorNotification}
+      {errorMessage && responseHtml && (
+        <Animated.View 
+          entering={FadeInUp.springify().delay(100)}
+          style={[styles.errorNotification]}
+        >
+          <MaterialIcons name="error-outline" size={24} color="#FF6B6B" />
+          <Text style={styles.errorNotificationText}>{errorMessage}</Text>
+        </Animated.View>
+      )}
       <GradesScreen 
         idnp={idnp!}
         responseHtml={responseHtml} 
@@ -1767,16 +1770,24 @@ const styles = StyleSheet.create({
   errorNotification: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 107, 107, 0.15)',
-    padding: 12,
-    borderRadius: 8,
+    backgroundColor: '#1f1f2c',
+    padding: 16,
+    borderRadius: 12,
     marginHorizontal: 20,
-    marginTop: 10,
+    marginTop: 60,
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     zIndex: 10,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   errorNotificationText: {
     color: '#FF6B6B',
