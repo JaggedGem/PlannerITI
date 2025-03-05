@@ -7,6 +7,7 @@ import { useEffect } from 'react';
 import 'react-native-reanimated';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import UpdateNotification from '@/components/UpdateNotification';
+import { scheduleService } from '@/services/scheduleService';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -16,6 +17,26 @@ export default function RootLayout() {
   const [loaded] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   });
+
+  // Setup period times sync interval at a random offset to avoid server stress
+  useEffect(() => {
+    if (loaded) {
+      // Initial sync with random delay between 0-60 seconds to distribute load
+      const initialDelay = Math.random() * 60 * 1000;
+      const syncTimer = setTimeout(() => {
+        scheduleService.syncPeriodTimes();
+        
+        // Then sync every 24 hours at a random minute to distribute load
+        setInterval(() => {
+          scheduleService.syncPeriodTimes();
+        }, 24 * 60 * 60 * 1000);
+      }, initialDelay);
+
+      return () => {
+        clearTimeout(syncTimer);
+      };
+    }
+  }, [loaded]);
 
   useEffect(() => {
     if (loaded) {
