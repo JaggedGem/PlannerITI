@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Modal, TouchableOpacity, StyleSheet, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, Modal, TouchableOpacity, StyleSheet, Platform, ActivityIndicator, Dimensions } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Updates from 'expo-updates';
 import * as Haptics from 'expo-haptics';
@@ -14,8 +14,11 @@ export default function UpdateNotification() {
 
   useEffect(() => {
     // Only check for updates in production mode
-    if (!__DEV__) {
+    if (Updates.channel !== 'development') {
       checkForUpdates();
+    } else {
+      // In development, we don't show the notification
+      setUpdateStatus('not-available');
     }
   }, []);
 
@@ -25,11 +28,9 @@ export default function UpdateNotification() {
       setUpdateStatus('checking');
       const update = await Updates.checkForUpdateAsync();
       
-      // If an update is available, show the modal
       if (update.isAvailable) {
         setUpdateStatus('available');
         setModalVisible(true);
-        // Vibrate to notify user
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
         setUpdateStatus('not-available');
@@ -45,13 +46,9 @@ export default function UpdateNotification() {
     try {
       setUpdateStatus('downloading');
       
-      // Download the update
       await Updates.fetchUpdateAsync();
       
-      // If we get here, the download was successful
       setUpdateStatus('ready');
-      
-      // Vibrate to notify user that update is ready
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
       console.error('Error downloading update:', error);
@@ -60,13 +57,15 @@ export default function UpdateNotification() {
   };
 
   // Function to restart the app to apply the update
-  const applyUpdate = () => {
-    // Vibrate to notify user
+  const applyUpdate = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    
-    // Close the modal and restart
     setModalVisible(false);
-    Updates.reloadAsync();
+    
+    try {
+      await Updates.reloadAsync();
+    } catch (error) {
+      console.error('Error reloading app:', error);
+    }
   };
 
   // Function to dismiss the modal
@@ -77,176 +76,195 @@ export default function UpdateNotification() {
     Haptics.selectionAsync();
   };
 
-  // Don't render anything if no update is available
-  if (updateStatus === 'not-available' || updateStatus === 'checking' || __DEV__) {
+  // If no update or still checking, don't render anything
+  if (updateStatus === 'not-available' || updateStatus === 'checking') {
     return null;
   }
 
   return (
-    <Modal
-      visible={modalVisible}
-      transparent={true}
-      animationType="fade"
-      onRequestClose={dismissModal}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>
-              {updateStatus === 'error' 
-                ? t('update').errorTitle 
-                : updateStatus === 'ready'
-                  ? t('update').readyTitle
-                  : t('update').availableTitle}
-            </Text>
-            {updateStatus !== 'downloading' && (
-              <TouchableOpacity onPress={dismissModal}>
-                <MaterialIcons name="close" size={24} color="white" />
-              </TouchableOpacity>
-            )}
-          </View>
-
-          <View style={styles.messageContainer}>
-            <MaterialIcons 
-              name={
-                updateStatus === 'error' 
-                  ? "error-outline" 
-                  : updateStatus === 'downloading'
-                    ? "cloud-download"
-                    : updateStatus === 'ready'
-                      ? "system-update-alt"
-                      : "system-update"
-              } 
-              size={40} 
-              color={updateStatus === 'error' ? "#FF6B6B" : "#2C3DCD"} 
-              style={styles.icon}
-            />
-            <Text style={styles.message}>
-              {updateStatus === 'error' 
-                ? t('update').errorMessage 
-                : updateStatus === 'downloading'
-                  ? t('update').downloadingMessage
+    <View style={styles.container}>
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={dismissModal}
+      >
+        <View style={styles.centeredView}>
+          <View style={styles.modalView}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {updateStatus === 'error' 
+                  ? t('update').errorTitle 
                   : updateStatus === 'ready'
-                    ? t('update').readyMessage
-                    : t('update').availableMessage}
-            </Text>
-          </View>
-
-          {updateStatus === 'downloading' && (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#2C3DCD" />
-              <Text style={styles.loadingText}>{t('update').downloading}</Text>
+                    ? t('update').readyTitle
+                    : t('update').availableTitle}
+              </Text>
+              {updateStatus !== 'downloading' && (
+                <TouchableOpacity onPress={dismissModal}>
+                  <MaterialIcons name="close" size={24} color="white" />
+                </TouchableOpacity>
+              )}
             </View>
-          )}
 
-          <View style={styles.buttonContainer}>
-            {updateStatus === 'available' && (
-              <TouchableOpacity
-                style={[styles.button, styles.updateButton]}
-                onPress={downloadUpdate}
-              >
-                <Text style={styles.updateButtonText}>{t('update').downloadButton}</Text>
-              </TouchableOpacity>
+            <View style={styles.messageContainer}>
+              <MaterialIcons 
+                name={
+                  updateStatus === 'error' 
+                    ? "error-outline" 
+                    : updateStatus === 'downloading'
+                      ? "cloud-download"
+                      : updateStatus === 'ready'
+                        ? "system-update-alt"
+                        : "system-update"
+                } 
+                size={40} 
+                color={updateStatus === 'error' ? "#FF6B6B" : "#2C3DCD"} 
+                style={styles.icon}
+              />
+              <Text style={styles.message}>
+                {updateStatus === 'error' 
+                  ? t('update').errorMessage 
+                  : updateStatus === 'downloading'
+                    ? t('update').downloadingMessage
+                    : updateStatus === 'ready'
+                      ? t('update').readyMessage
+                      : t('update').availableMessage}
+              </Text>
+            </View>
+
+            {updateStatus === 'downloading' && (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#2C3DCD" />
+                <Text style={styles.loadingText}>{t('update').downloading}</Text>
+              </View>
             )}
 
-            {updateStatus === 'ready' && (
-              <TouchableOpacity
-                style={[styles.button, styles.updateButton]}
-                onPress={applyUpdate}
-              >
-                <Text style={styles.updateButtonText}>{t('update').restartButton}</Text>
-              </TouchableOpacity>
-            )}
+            <View style={styles.buttonContainer}>
+              {updateStatus === 'available' && (
+                <TouchableOpacity
+                  style={[styles.button, styles.updateButton]}
+                  onPress={downloadUpdate}
+                >
+                  <Text style={styles.updateButtonText}>{t('update').downloadButton}</Text>
+                </TouchableOpacity>
+              )}
 
-            {updateStatus === 'error' && (
-              <TouchableOpacity
-                style={[styles.button, styles.updateButton]}
-                onPress={checkForUpdates}
-              >
-                <Text style={styles.updateButtonText}>{t('update').retryButton}</Text>
-              </TouchableOpacity>
-            )}
+              {updateStatus === 'ready' && (
+                <TouchableOpacity
+                  style={[styles.button, styles.updateButton]}
+                  onPress={applyUpdate}
+                >
+                  <Text style={styles.updateButtonText}>{t('update').restartButton}</Text>
+                </TouchableOpacity>
+              )}
 
-            {(updateStatus === 'available' || updateStatus === 'error') && (
-              <TouchableOpacity
-                style={[styles.button, styles.cancelButton]}
-                onPress={dismissModal}
-              >
-                <Text style={styles.cancelButtonText}>{t('update').laterButton}</Text>
-              </TouchableOpacity>
-            )}
+              {updateStatus === 'error' && (
+                <TouchableOpacity
+                  style={[styles.button, styles.updateButton]}
+                  onPress={checkForUpdates}
+                >
+                  <Text style={styles.updateButtonText}>{t('update').retryButton}</Text>
+                </TouchableOpacity>
+              )}
+
+              {(updateStatus === 'available' || updateStatus === 'error') && (
+                <TouchableOpacity
+                  style={[styles.button, styles.cancelButton]}
+                  onPress={dismissModal}
+                >
+                  <Text style={styles.cancelButtonText}>{t('update').laterButton}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
         </View>
-      </View>
-    </Modal>
+      </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
+  container: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
   },
-  modalContent: {
+  centeredView: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+  },
+  modalView: {
     backgroundColor: '#1a1b26',
     borderRadius: 20,
-    padding: 20,
-    width: '80%',
+    padding: 24,
+    width: '90%',
     maxWidth: 400,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 3.84,
-      },
-      android: {
-        elevation: 5,
-      },
-    }),
+    minWidth: 280,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
+    width: '100%',
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
     color: 'white',
+    flex: 1,
   },
   messageContainer: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
+    width: '100%',
   },
   icon: {
-    marginBottom: 15,
+    marginBottom: 16,
   },
   message: {
     color: 'white',
     fontSize: 16,
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: 24,
+    paddingHorizontal: 8,
   },
   loadingContainer: {
     alignItems: 'center',
-    marginVertical: 20,
+    marginVertical: 24,
+    width: '100%',
   },
   loadingText: {
     color: 'white',
-    marginTop: 10,
+    marginTop: 12,
+    fontSize: 16,
   },
   buttonContainer: {
-    marginTop: 10,
+    marginTop: 16,
+    width: '100%',
   },
   button: {
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 12,
+    width: '100%',
+    minHeight: 52,
   },
   updateButton: {
     backgroundColor: '#2C3DCD',
@@ -264,5 +282,6 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     color: 'rgba(255, 255, 255, 0.7)',
     fontSize: 16,
+    fontWeight: '500',
   },
 });
