@@ -8,13 +8,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { DeviceEventEmitter } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 const IDNP_KEY = '@planner_idnp';
 const IDNP_UPDATE_EVENT = 'idnp_updated';
 
 const languages = {
-  en: 'English',
-  ro: 'Română'
+  en: { name: 'English', icon: '🇬🇧' },
+  ro: { name: 'Română', icon: '🇷🇴' },
+  ru: { name: 'Русский', icon: '🇷🇺' }
 };
 
 const groups: SubGroupType[] = ['Subgroup 1', 'Subgroup 2'];
@@ -453,6 +455,7 @@ export default function Settings() {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [confirmDialogType, setConfirmDialogType] = useState<'idnp' | 'period'>('idnp');
   const [periodToDelete, setPeriodToDelete] = useState<string | null>(null);
+  const [showLanguageModal, setShowLanguageModal] = useState(false);
 
   // Add useEffect to load IDNP and listen for updates
   useEffect(() => {
@@ -772,26 +775,63 @@ export default function Settings() {
         {/* Language Selection Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('settings').language}</Text>
-          <View style={styles.optionsContainer}>
-            {(Object.keys(languages) as Language[]).map(lang => (
-              <TouchableOpacity
-                key={lang}
-                style={[
-                  styles.optionButton,
-                  settings.language === lang && styles.selectedOption
-                ]}
-                onPress={() => handleLanguageChange(lang)}
-              >
-                <Text style={[
-                  styles.optionText,
-                  settings.language === lang && styles.selectedOptionText
-                ]}>
-                  {languages[lang]}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          <TouchableOpacity
+            style={styles.languageSelector}
+            onPress={() => setShowLanguageModal(true)}
+          >
+            <View style={styles.languageSelectorContent}>
+              <Text style={styles.selectedLanguageIcon}>{languages[settings.language].icon}</Text>
+              <Text style={styles.selectedLanguageName}>{languages[settings.language].name}</Text>
+              <MaterialIcons name="keyboard-arrow-down" size={24} color="#8A8A8D" />
+            </View>
+          </TouchableOpacity>
         </View>
+
+        {/* Language Selection Modal */}
+        <Modal
+          visible={showLanguageModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowLanguageModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>{t('settings').language}</Text>
+                <TouchableOpacity onPress={() => setShowLanguageModal(false)}>
+                  <MaterialIcons name="close" size={24} color="white" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.languagesList}>
+                {Object.entries(languages).map(([code, { name, icon }]) => (
+                  <TouchableOpacity
+                    key={code}
+                    style={[
+                      styles.languageOption,
+                      settings.language === code && styles.selectedLanguageOption
+                    ]}
+                    onPress={() => {
+                      handleLanguageChange(code as keyof typeof languages);
+                      setShowLanguageModal(false);
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    }}
+                  >
+                    <Text style={styles.languageIcon}>{icon}</Text>
+                    <Text style={[
+                      styles.languageOptionText,
+                      settings.language === code && styles.selectedLanguageOptionText
+                    ]}>
+                      {name}
+                    </Text>
+                    {settings.language === code && (
+                      <MaterialIcons name="check" size={24} color="white" />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         {/* Subgroup Selection Section */}
         <View style={styles.section}>
@@ -1631,4 +1671,49 @@ const styles = StyleSheet.create({
     top: 6,
     left: 6,
   },
+  languageSelector: {
+    backgroundColor: '#232433',
+    padding: 16,
+    borderRadius: 12,
+  },
+  languageSelectorContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  selectedLanguageIcon: {
+    fontSize: 20,
+    marginRight: 12,
+  },
+  selectedLanguageName: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+    flex: 1,
+  },
+  languagesList: {
+    gap: 8,
+  },
+  languageOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#232433',
+    padding: 16,
+    borderRadius: 12,
+  },
+  selectedLanguageOption: {
+    backgroundColor: '#2C3DCD',
+  },
+  languageIcon: {
+    fontSize: 20,
+    marginRight: 12,
+  },
+  languageOptionText: {
+    color: '#8A8A8D',
+    fontSize: 16,
+    fontWeight: '600',
+    flex: 1,
+  },
+  selectedLanguageOptionText: {
+    color: 'white',
+  }
 });
