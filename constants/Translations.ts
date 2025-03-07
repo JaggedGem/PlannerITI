@@ -1,3 +1,5 @@
+import { linkTo } from "expo-router/build/global-state/routing";
+
 type TranslationType = {
   weekdays: {
     short: string[];
@@ -149,6 +151,7 @@ type TranslationType = {
       signupLink: string;
       error: string;
       success: string;
+      allFieldsRequired: string;
     };
     signup: {
       title: string;
@@ -163,6 +166,9 @@ type TranslationType = {
       privacyPolicy: string;
       privacyPolicyLink: string;
       privacyAccept: string;
+      emptyFields: string;
+      passwordMismatch: string;
+      acceptPrivacy: string;
     };
     forgotPassword: {
       title: string;
@@ -171,6 +177,7 @@ type TranslationType = {
       backToLogin: string;
       success: string;
       error: string;
+      emailRequired: string;
     };
     verifyEmail: {
       title: string;
@@ -186,12 +193,52 @@ type TranslationType = {
       submit: string;
       success: string;
       error: string;
+      emptyFields: string;
+      passwordMismatch: string;
+      invalidToken: string;
     };
     optional: {
       title: string;
       message: string;
       skip: string;
       continue: string;
+    };
+  };
+  privacyPolicy: {
+    title: string;
+    sections: {
+      dataCollection: {
+        title: string;
+        content: string[];
+      };
+      idnpSecurity: {
+        title: string;
+        content: string[];
+      };
+      passwordSecurity: {
+        title: string;
+        content: string[];
+      };
+      dataStorage: {
+        title: string;
+        content: string[];
+      };
+      thirdParty: {
+        title: string;
+        content: string[];
+      };
+      rights: {
+        title: string;
+        content: string[];
+      };
+      updates: {
+        title: string;
+        content: string;
+      };
+      contact: {
+        title: string;
+        content: string;
+      };
     };
   };
 };
@@ -347,7 +394,8 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
         noAccount: "Don't have an account?",
         signupLink: 'Sign Up',
         error: 'Invalid email or password',
-        success: 'Successfully logged in'
+        success: 'Successfully logged in',
+        allFieldsRequired: 'All fields are required',
       },
       signup: {
         title: 'Create Account',
@@ -361,7 +409,10 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
         success: 'Account created successfully',
         privacyPolicy: 'Privacy Policy',
         privacyPolicyLink: 'View Privacy Policy',
-        privacyAccept: 'I accept the Privacy Policy'
+        privacyAccept: 'I accept the Privacy Policy',
+        emptyFields: 'All fields are required',
+        passwordMismatch: 'Passwords do not match',
+        acceptPrivacy: 'You must accept the Privacy Policy',
       },
       forgotPassword: {
         title: 'Reset Password',
@@ -369,7 +420,8 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
         submit: 'Send Reset Link',
         backToLogin: 'Back to Login',
         success: 'Password reset email sent',
-        error: 'Could not send reset email'
+        error: 'Could not send reset email',
+        emailRequired: 'Email is required',
       },
       verifyEmail: {
         title: 'Verify Your Email',
@@ -384,13 +436,73 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
         confirmPassword: 'Confirm New Password',
         submit: 'Update Password',
         success: 'Password updated successfully',
-        error: 'Could not update password'
+        error: 'Could not update password',
+        emptyFields: 'All fields are required',
+        passwordMismatch: 'Passwords do not match',
+        invalidToken: 'Invalid token',
       },
       optional: {
         title: 'Complete Your Profile',
         message: 'Create an account to sync your data across devices and access additional features',
         skip: 'Skip for Now',
         continue: 'Create Account'
+      }
+    },
+    privacyPolicy: {
+      title: 'Privacy Policy',
+      sections: {
+        dataCollection: {
+          title: 'Data Collection',
+          content: [
+            'We collect data to provide better services to our users.',
+            'The data we collect includes personal information such as name, email address, and IDNP(optional).'
+          ]
+        },
+        idnpSecurity: {
+          title: 'IDNP Security',
+          content: [
+            'Your IDNP is stored securely on our server with encryption before transit and at rest which makes it impossible to decrypt without your password or intercepted by malicious people.',
+            'You can choose to store your IDNP locally on your device instead of syncing it with the server if you feel that it\'s not secure and store it only on-device.',
+            'We do not share your IDNP with third parties.'
+          ]
+        },
+        passwordSecurity: {
+          title: 'Password Security',
+          content: [
+            'We use strong encryption to protect your password encrypting it even before it reaches our server which means that even if we wanted we wouldn\'t be able to see your password.',
+            'Your password is never stored in plain text and is only used to encrypt your IDNP before it reaches our server.',
+            'Never share your password with anyone.'
+          ]
+        },
+        dataStorage: {
+          title: 'Data Storage',
+          content: [
+            'Your data is stored securely either on our server or locally on your device.',
+            'You can opt out from our services at any time.',
+          ]
+        },
+        thirdParty: {
+          title: 'Third Party Services',
+          content: [
+            'We do not share your data with third parties.',
+            'We may use third-party services to improve our app.'
+          ]
+        },
+        rights: {
+          title: 'Your Rights',
+          content: [
+            'You have the right to access your data.',
+            'You have the right to request the deletion of your data.'
+          ]
+        },
+        updates: {
+          title: 'Policy Updates',
+          content: 'We may update this policy from time to time. Please check this page regularly for updates.'
+        },
+        contact: {
+          title: 'Contact Us',
+          content: 'If you have any questions about this policy, please contact us at <link>privacy@p.jagged.me</link>.'
+        }
       }
     }
   },
@@ -544,7 +656,8 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
         noAccount: 'Nu ai cont?',
         signupLink: 'Înregistrare',
         error: 'Email sau parolă invalidă',
-        success: 'Conectare reușită'
+        success: 'Conectare reușită',
+        allFieldsRequired: 'Toate câmpurile sunt obligatorii'
       },
       signup: {
         title: 'Creează Cont',
@@ -558,7 +671,10 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
         success: 'Cont creat cu succes',
         privacyPolicy: 'Politica de Confidențialitate',
         privacyPolicyLink: 'Vezi Politica de Confidențialitate',
-        privacyAccept: 'Accept Politica de Confidențialitate'
+        privacyAccept: 'Accept Politica de Confidențialitate',
+        emptyFields: 'Toate câmpurile sunt obligatorii',
+        passwordMismatch: 'Parolele nu se potrivesc',
+        acceptPrivacy: 'Trebuie să accepți Politica de Confidențialitate',
       },
       forgotPassword: {
         title: 'Resetare Parolă',
@@ -566,7 +682,8 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
         submit: 'Trimite Link de Resetare',
         backToLogin: 'Înapoi la Conectare',
         success: 'Email de resetare trimis',
-        error: 'Nu s-a putut trimite emailul'
+        error: 'Nu s-a putut trimite emailul',
+        emailRequired: 'Emailul este obligatoriu',
       },
       verifyEmail: {
         title: 'Verifică Emailul',
@@ -581,13 +698,73 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
         confirmPassword: 'Confirmă Parola Nouă',
         submit: 'Actualizează Parola',
         success: 'Parola actualizată cu succes',
-        error: 'Nu s-a putut actualiza parola'
+        error: 'Nu s-a putut actualiza parola',
+        emptyFields: 'Toate câmpurile sunt obligatorii',
+        passwordMismatch: 'Parolele nu se potrivesc',
+        invalidToken: 'Token invalid',
       },
       optional: {
         title: 'Completează Profilul',
         message: 'Creează un cont pentru a sincroniza datele între dispozitive și a accesa funcții suplimentare',
         skip: 'Poate Mai Târziu',
         continue: 'Creează Cont'
+      }
+    },
+    privacyPolicy: {
+      title: 'Politica de Confidențialitate',
+      sections: {
+        dataCollection: {
+          title: 'Colectarea Datelor',
+          content: [
+            'Colectăm date pentru a oferi servicii mai bune utilizatorilor noștri.',
+            'Datele pe care le colectăm includ informații personale precum numele, adresa de email și IDNP (opțional).'
+          ]
+        },
+        idnpSecurity: {
+          title: 'Securitatea IDNP',
+          content: [
+            'IDNP-ul dvs. este stocat în siguranță pe serverul nostru cu criptare înainte de transmitere și în timpul stocării, ceea ce face imposibilă decriptarea fără parola dvs. sau interceptarea de către persoane rău intenționate.',
+            'Puteți alege să stocați IDNP-ul local pe dispozitivul dvs. în loc să îl sincronizați cu serverul dacă considerați că nu este sigur și să îl păstrați doar pe dispozitiv.',
+            'Nu împărtășim IDNP-ul dvs. cu terțe părți.'
+          ]
+        },
+        passwordSecurity: {
+          title: 'Securitatea Parolei',
+          content: [
+            'Folosim criptare puternică pentru a vă proteja parola, criptând-o înainte să ajungă pe serverul nostru, ceea ce înseamnă că nici dacă am vrea nu am putea să vă vedem parola.',
+            'Parola dvs. nu este niciodată stocată în text simplu și este folosită doar pentru a cripta IDNP-ul înainte să ajungă pe serverul nostru.',
+            'Nu împărtășiți niciodată parola cu nimeni.'
+          ]
+        },
+        dataStorage: {
+          title: 'Stocarea Datelor',
+          content: [
+            'Datele dvs. sunt stocate în siguranță fie pe serverul nostru, fie local pe dispozitivul dvs.',
+            'Puteți opta să nu mai folosiți serviciile noastre în orice moment.'
+          ]
+        },
+        thirdParty: {
+          title: 'Servicii Terțe',
+          content: [
+            'Nu împărtășim datele dvs. cu terțe părți.',
+            'Putem folosi servicii terțe pentru a îmbunătăți aplicația noastră.'
+          ]
+        },
+        rights: {
+          title: 'Drepturile Dvs.',
+          content: [
+            'Aveți dreptul de a vă accesa datele.',
+            'Aveți dreptul de a solicita ștergerea datelor dvs.'
+          ]
+        },
+        updates: {
+          title: 'Actualizări ale Politicii',
+          content: 'Putem actualiza această politică din când în când. Vă rugăm să verificați această pagină regulat pentru actualizări.'
+        },
+        contact: {
+          title: 'Contactați-ne',
+          content: 'Dacă aveți întrebări despre această politică, vă rugăm să ne contactați la <link>privacy@p.jagged.me</link>.'
+        }
       }
     }
   },

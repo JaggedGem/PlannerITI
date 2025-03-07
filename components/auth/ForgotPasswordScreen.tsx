@@ -32,7 +32,7 @@ export function ForgotPasswordScreen() {
 
   const handleResetPassword = async () => {
     if (!email) {
-      showCustomAlert('Error', 'Please enter your email address');
+      showCustomAlert('Error', t('auth').forgotPassword.emailRequired);
       return;
     }
 

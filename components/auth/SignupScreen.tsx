@@ -33,17 +33,17 @@ export function SignupScreen() {
 
   const validateForm = () => {
     if (!email || !password || !confirmPassword) {
-      showCustomAlert('Error', 'Please fill in all fields');
+      showCustomAlert('Error', t('auth').signup.emptyFields);
       return false;
     }
 
     if (password !== confirmPassword) {
-      showCustomAlert('Error', 'Passwords do not match');
+      showCustomAlert('Error', t('auth').signup.passwordMismatch);
       return false;
     }
 
     if (!acceptedPrivacy) {
-      showCustomAlert('Error', 'Please accept the privacy policy');
+      showCustomAlert('Error', t('auth').signup.acceptPrivacy);
       return false;
     }
 
@@ -61,7 +61,6 @@ export function SignupScreen() {
         t('auth').verifyEmail.message
       );
     } catch (error) {
-      console.error('Signup error:', error);
       showCustomAlert('Error', t('auth').signup.error);
     } finally {
       setLoading(false);

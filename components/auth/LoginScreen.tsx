@@ -29,7 +29,7 @@ export function LoginScreen() {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      showCustomAlert('Please fill in all fields');
+      showCustomAlert(t('auth').login.allFieldsRequired);
       return;
     }
 

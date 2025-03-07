@@ -34,17 +34,17 @@ export function ResetPasswordScreen() {
 
   const handleResetPassword = async () => {
     if (!newPassword || !confirmPassword) {
-      showCustomAlert('Error', 'Please fill in all fields');
+      showCustomAlert('Error', t('auth').resetPassword.emptyFields);
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      showCustomAlert('Error', 'Passwords do not match');
+      showCustomAlert('Error', t('auth').resetPassword.passwordMismatch);
       return;
     }
 
     if (!token) {
-      showCustomAlert('Error', 'Invalid reset token');
+      showCustomAlert('Error', t('auth').resetPassword.invalidToken);
       return;
     }
 
