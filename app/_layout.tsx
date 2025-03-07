@@ -92,7 +92,7 @@ function RootLayoutNav() {
         >
           <Stack.Screen name="index" options={{ animation: 'fade' }} />
           <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="auth" options={{ animation: 'fade' }} />
+          <Stack.Screen name="auth" options={{ animation: 'slide_from_left' }} />
           <Stack.Screen 
             name="signup" 
             options={{ 
