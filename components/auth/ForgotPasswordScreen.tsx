@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, TextInput, TouchableOpacity, Platform, Modal } from 'react-native';
-import { router } from 'expo-router';
+import { Link, router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ThemedText } from '../ThemedText';
 import { ThemedView } from '../ThemedView';
@@ -92,14 +92,16 @@ export function ForgotPasswordScreen() {
             </ThemedText>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
-          >
-            <ThemedText style={[styles.backButtonText, { color: '#2C3DCD' }]}>
-              {t('auth').forgotPassword.backToLogin}
-            </ThemedText>
-          </TouchableOpacity>
+
+          <View style={styles.backButton}>
+            <Link href="/auth" asChild>
+              <TouchableOpacity>
+                <ThemedText style={{ color: "#2C3DCD" }}>
+                  {t('auth').forgotPassword.backToLogin}
+                </ThemedText>
+              </TouchableOpacity>
+            </Link>
+          </View>
         </View>
       </View>
 

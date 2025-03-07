@@ -121,7 +121,7 @@ export function LoginScreen() {
             <ThemedText>{t('auth').login.noAccount} </ThemedText>
             <Link href="/signup" asChild>
               <TouchableOpacity>
-                <ThemedText style={{ color: tintColor }}>
+                <ThemedText style={{ color: "#2C3DCD" }}>
                   {t('auth').login.signupLink}
                 </ThemedText>
               </TouchableOpacity>

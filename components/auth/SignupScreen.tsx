@@ -163,11 +163,13 @@ export function SignupScreen() {
 
           <View style={styles.footer}>
             <ThemedText>{t('auth').signup.hasAccount} </ThemedText>
-            <TouchableOpacity onPress={() => router.push('/auth')}>
-              <ThemedText style={{ color: "#2C3DCD" }}>
+            <Link href="/auth" asChild>
+              <TouchableOpacity>
+                <ThemedText style={{ color: "#2C3DCD" }}>
                 {t('auth').signup.loginLink}
-              </ThemedText>
-            </TouchableOpacity>
+                </ThemedText>
+              </TouchableOpacity>
+            </Link>
           </View>
         </View>
       </View>
