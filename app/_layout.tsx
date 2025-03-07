@@ -3,7 +3,7 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { useFonts } from 'expo-font';
 import { SplashScreen, Stack } from 'expo-router';
 import { useEffect } from 'react';
-import { useColorScheme, StatusBar } from 'react-native';
+import { useColorScheme, StatusBar, View } from 'react-native';
 import authService from '../services/authService';
 import UpdateNotification from '@/components/UpdateNotification';
 import { scheduleService } from '@/services/scheduleService';
@@ -74,6 +74,7 @@ export default function RootLayout() {
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const backgroundColor = isDark ? '#000' : '#fff';
 
   return (
     <ThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
@@ -86,47 +87,37 @@ function RootLayoutNav() {
         <Stack
           screenOptions={{
             headerShown: false,
-            animation: 'fade_from_bottom',
-            contentStyle: { backgroundColor: isDark ? '#000' : '#fff' },
+            animation: 'default',
+            presentation: 'containedTransparentModal',
+            headerTransparent: true,
+            headerTintColor: isDark ? '#fff' : '#000',
           }}
         >
           <Stack.Screen name="index" options={{ animation: 'fade' }} />
           <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="auth" options={{ animation: 'slide_from_left' }} />
+          <Stack.Screen name="auth" />
           <Stack.Screen 
             name="signup" 
             options={{ 
-              headerShown: true,
-              headerTransparent: true,
-              headerTintColor: isDark ? '#fff' : '#000',
-              animation: 'slide_from_right',
+              headerShown: false,
             }} 
           />
           <Stack.Screen 
             name="forgot-password" 
             options={{ 
-              headerShown: true,
-              headerTransparent: true,
-              headerTintColor: isDark ? '#fff' : '#000',
-              animation: 'slide_from_right',
+              headerShown: false,
             }} 
           />
           <Stack.Screen 
             name="reset-password" 
             options={{ 
-              headerShown: true,
-              headerTransparent: true,
-              headerTintColor: isDark ? '#fff' : '#000',
-              animation: 'slide_from_right',
+              headerShown: false,
             }} 
           />
           <Stack.Screen 
             name="privacy-policy" 
             options={{ 
-              headerShown: true,
-              headerTransparent: true,
-              headerTintColor: isDark ? '#fff' : '#000',
-              animation: 'slide_from_right',
+              headerShown: false,
             }} 
           />
         </Stack>
