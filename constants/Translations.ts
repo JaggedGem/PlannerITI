@@ -138,6 +138,62 @@ type TranslationType = {
     retryButton: string;
   };
   loading: string;
+  auth: {
+    login: {
+      title: string;
+      email: string;
+      password: string;
+      submit: string;
+      forgotPassword: string;
+      noAccount: string;
+      signupLink: string;
+      error: string;
+      success: string;
+    };
+    signup: {
+      title: string;
+      email: string;
+      password: string;
+      confirmPassword: string;
+      submit: string;
+      hasAccount: string;
+      loginLink: string;
+      error: string;
+      success: string;
+      privacyPolicy: string;
+      privacyPolicyLink: string;
+      privacyAccept: string;
+    };
+    forgotPassword: {
+      title: string;
+      email: string;
+      submit: string;
+      backToLogin: string;
+      success: string;
+      error: string;
+    };
+    verifyEmail: {
+      title: string;
+      message: string;
+      resend: string;
+      success: string;
+      error: string;
+    };
+    resetPassword: {
+      title: string;
+      newPassword: string;
+      confirmPassword: string;
+      submit: string;
+      success: string;
+      error: string;
+    };
+    optional: {
+      title: string;
+      message: string;
+      skip: string;
+      continue: string;
+    };
+  };
 };
 
 export const translations: Record<'en' | 'ro', TranslationType> = {
@@ -281,6 +337,62 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
       retryButton: 'Try Again',
     },
     loading: 'Loading...',
+    auth: {
+      login: {
+        title: 'Welcome Back',
+        email: 'Email',
+        password: 'Password',
+        submit: 'Sign In',
+        forgotPassword: 'Forgot Password?',
+        noAccount: "Don't have an account?",
+        signupLink: 'Sign Up',
+        error: 'Invalid email or password',
+        success: 'Successfully logged in'
+      },
+      signup: {
+        title: 'Create Account',
+        email: 'Email',
+        password: 'Password',
+        confirmPassword: 'Confirm Password',
+        submit: 'Sign Up',
+        hasAccount: 'Already have an account?',
+        loginLink: 'Sign In',
+        error: 'Could not create account',
+        success: 'Account created successfully',
+        privacyPolicy: 'Privacy Policy',
+        privacyPolicyLink: 'View Privacy Policy',
+        privacyAccept: 'I accept the Privacy Policy'
+      },
+      forgotPassword: {
+        title: 'Reset Password',
+        email: 'Email',
+        submit: 'Send Reset Link',
+        backToLogin: 'Back to Login',
+        success: 'Password reset email sent',
+        error: 'Could not send reset email'
+      },
+      verifyEmail: {
+        title: 'Verify Your Email',
+        message: 'Please check your email for a verification link',
+        resend: 'Resend Verification Email',
+        success: 'Email verified successfully',
+        error: 'Could not verify email'
+      },
+      resetPassword: {
+        title: 'Set New Password',
+        newPassword: 'New Password',
+        confirmPassword: 'Confirm New Password',
+        submit: 'Update Password',
+        success: 'Password updated successfully',
+        error: 'Could not update password'
+      },
+      optional: {
+        title: 'Complete Your Profile',
+        message: 'Create an account to sync your data across devices and access additional features',
+        skip: 'Skip for Now',
+        continue: 'Create Account'
+      }
+    }
   },
   ro: {
     weekdays: {
@@ -422,6 +534,62 @@ export const translations: Record<'en' | 'ro', TranslationType> = {
       retryButton: 'Încearcă din nou',
     },
     loading: 'Se încarcă...',
+    auth: {
+      login: {
+        title: 'Bun Venit',
+        email: 'Email',
+        password: 'Parolă',
+        submit: 'Conectare',
+        forgotPassword: 'Ai uitat parola?',
+        noAccount: 'Nu ai cont?',
+        signupLink: 'Înregistrare',
+        error: 'Email sau parolă invalidă',
+        success: 'Conectare reușită'
+      },
+      signup: {
+        title: 'Creează Cont',
+        email: 'Email',
+        password: 'Parolă',
+        confirmPassword: 'Confirmă Parola',
+        submit: 'Înregistrare',
+        hasAccount: 'Ai deja cont?',
+        loginLink: 'Conectare',
+        error: 'Nu s-a putut crea contul',
+        success: 'Cont creat cu succes',
+        privacyPolicy: 'Politica de Confidențialitate',
+        privacyPolicyLink: 'Vezi Politica de Confidențialitate',
+        privacyAccept: 'Accept Politica de Confidențialitate'
+      },
+      forgotPassword: {
+        title: 'Resetare Parolă',
+        email: 'Email',
+        submit: 'Trimite Link de Resetare',
+        backToLogin: 'Înapoi la Conectare',
+        success: 'Email de resetare trimis',
+        error: 'Nu s-a putut trimite emailul'
+      },
+      verifyEmail: {
+        title: 'Verifică Emailul',
+        message: 'Te rugăm să verifici emailul pentru linkul de verificare',
+        resend: 'Retrimite Email de Verificare',
+        success: 'Email verificat cu succes',
+        error: 'Nu s-a putut verifica emailul'
+      },
+      resetPassword: {
+        title: 'Setează Parolă Nouă',
+        newPassword: 'Parolă Nouă',
+        confirmPassword: 'Confirmă Parola Nouă',
+        submit: 'Actualizează Parola',
+        success: 'Parola actualizată cu succes',
+        error: 'Nu s-a putut actualiza parola'
+      },
+      optional: {
+        title: 'Completează Profilul',
+        message: 'Creează un cont pentru a sincroniza datele între dispozitive și a accesa funcții suplimentare',
+        skip: 'Poate Mai Târziu',
+        continue: 'Creează Cont'
+      }
+    }
   },
 };
 
