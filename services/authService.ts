@@ -55,17 +55,31 @@ class AuthService {
   }
 
   async getSalt(email: string): Promise<string> {
-    const response = await this.makeAuthRequest('/auth/get-salt', 'POST', { email });
+    const response = await this.makeAuthRequest('/auth/get-salt/' + email, 'GET');
     return response.salt;
   }
 
-  async signup(email: string, password: string): Promise<AuthResponse> {
-    const salt = crypto.lib.WordArray.random(128 / 8).toString();
+  async signup(email: string, password: string, confirmPassword: string): Promise<AuthResponse> {
+    // Generate a secure random salt using React Native's crypto
+    const randomBytes = new Uint8Array(16);
+    const getRandomValues = (global as any).crypto?.getRandomValues;
+    if (getRandomValues) {
+      getRandomValues(randomBytes);
+    } else {
+      // Fallback for older React Native versions
+      for (let i = 0; i < randomBytes.length; i++) {
+        randomBytes[i] = Math.floor(Math.random() * 256);
+      }
+    }
+    const salt = Array.from(randomBytes, byte => byte.toString(16).padStart(2, '0')).join('');
+    
     const passwordHash = crypto.SHA256(password + salt).toString();
+    const confirmPasswordHash = crypto.SHA256(confirmPassword + salt).toString();
 
     return await this.makeAuthRequest('/auth/signup', 'POST', {
       email,
       password_hash: passwordHash,
+      confirm_password_hash: confirmPasswordHash,
       salt
     });
   }
@@ -75,8 +89,8 @@ class AuthService {
     const passwordHash = crypto.SHA256(password + salt).toString();
 
     const response = await this.makeAuthRequest('/auth/login', 'POST', {
-      email,
-      password_hash: passwordHash
+      email: email,
+      password: passwordHash
     });
 
     if (response.token) {
@@ -99,11 +113,23 @@ class AuthService {
   }
 
   async requestPasswordReset(email: string): Promise<void> {
-    await this.makeAuthRequest('/auth/reset-password', 'POST', { email });
+    await this.makeAuthRequest('/auth/forgot-password', 'POST', { email });
   }
 
   async resetPassword(token: string, newPassword: string): Promise<boolean> {
-    const salt = crypto.lib.WordArray.random(128 / 8).toString();
+    // Generate a secure random salt using React Native's crypto
+    const randomBytes = new Uint8Array(16);
+    const getRandomValues = (global as any).crypto?.getRandomValues;
+    if (getRandomValues) {
+      getRandomValues(randomBytes);
+    } else {
+      // Fallback for older React Native versions
+      for (let i = 0; i < randomBytes.length; i++) {
+        randomBytes[i] = Math.floor(Math.random() * 256);
+      }
+    }
+    const salt = Array.from(randomBytes, byte => byte.toString(16).padStart(2, '0')).join('');
+    
     const passwordHash = crypto.SHA256(newPassword + salt).toString();
 
     try {

@@ -55,12 +55,13 @@ export function SignupScreen() {
 
     setLoading(true);
     try {
-      await authService.signup(email, password);
+      await authService.signup(email, password, confirmPassword);
       showCustomAlert(
         t('auth').signup.success,
         t('auth').verifyEmail.message
       );
     } catch (error) {
+      console.error('Signup error:', error);
       showCustomAlert('Error', t('auth').signup.error);
     } finally {
       setLoading(false);
