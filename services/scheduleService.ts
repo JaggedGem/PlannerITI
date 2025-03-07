@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
+import { Platform, NativeModules } from 'react-native';
 
 export interface Period {
   _id: string;
@@ -64,7 +64,7 @@ export interface Group {
 }
 
 export type SubGroupType = 'Subgroup 1' | 'Subgroup 2';
-export type Language = 'en' | 'ro';
+export type Language = 'en' | 'ro' | 'ru';
 export type ScheduleView = 'day' | 'week';
 
 interface UserSettings {
@@ -119,11 +119,30 @@ interface PeriodTimes {
   friday: PeriodTime[];
 }
 
+// Add platform-specific language detection
+const getSystemLanguage = (): Language => {
+  try {
+    const locale = Platform.select({
+      ios: NativeModules.SettingsManager.settings.AppleLocale,
+      android: NativeModules.I18nManager.localeIdentifier,
+      default: navigator?.language || 'en'
+    }) || 'en';
+
+    // Convert locale to our supported languages
+    const lang = locale.toLowerCase().split(/[-_]/)[0];
+    if (lang === 'ru') return 'ru';
+    if (lang === 'ro' || lang === 'mo') return 'ro';
+    return 'en';
+  } catch (error) {
+    return 'en';
+  }
+};
+
 export const scheduleService = {
   // Default settings
   settings: {
     group: 'Subgroup 2' as SubGroupType,
-    language: 'en' as Language,
+    language: getSystemLanguage(),
     selectedGroupId: '',  // Will be set dynamically after fetching groups
     selectedGroupName: DEFAULT_GROUP_NAME,
     scheduleView: 'day' as ScheduleView,
