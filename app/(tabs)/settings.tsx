@@ -1,4 +1,4 @@
-import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator, FlatList, Modal, TextInput, Switch, Platform, Alert, Animated, ScrollView } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator, FlatList, Modal, TextInput, Switch, Platform, Alert, Animated, ScrollView, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useEffect, useRef, useCallback, memo, useMemo } from 'react';
 import { scheduleService, SubGroupType, Language, Group, CustomPeriod } from '@/services/scheduleService';
@@ -464,6 +464,11 @@ export default function Settings() {
   const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [showAccountActionSheet, setShowAccountActionSheet] = useState(false);
   const [showDeleteAccountConfirm, setShowDeleteAccountConfirm] = useState(false);
+  const [passwordForDeletion, setPasswordForDeletion] = useState('');
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showDeletionSuccessModal, setShowDeletionSuccessModal] = useState(false);
   const [isRefreshingAccount, setIsRefreshingAccount] = useState(false);
   // Use a single source of truth for current auth state that can be updated from multiple places
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!user);
@@ -813,22 +818,63 @@ export default function Settings() {
   };
 
   const handleDeleteAccount = useCallback(async () => {
+    // Reset any previous errors
+    setPasswordError(null);
+    
+    if (!passwordForDeletion.trim()) {
+      setPasswordError("Please enter your password");
+      return;
+    }
+    
+    setDeletingAccount(true);
     try {
-      await authService.deleteAccount();
+      await authService.deleteAccount(passwordForDeletion);
       // Immediately update local state
       setIsAuthenticated(false);
       // Broadcast auth state change
       DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, { isAuthenticated: false });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setShowDeleteAccountConfirm(false);
-      router.replace('/auth');
+      // Show success modal instead of navigating away immediately
+      setShowPasswordModal(false);
+      setShowDeletionSuccessModal(true);
+      setPasswordForDeletion('');
     } catch (error) {
-      Alert.alert(
-        t('settings').account.deleteError.title,
-        t('settings').account.deleteError.message
-      );
+      // Check if it's a network error or authentication error
+      if (error instanceof Error) {
+        if (error.message === 'Request timeout' || error.message.includes('network')) {
+          setPasswordError("Network error. Please check your connection.");
+        } else {
+          setPasswordError("Incorrect password. Please try again.");
+        }
+      } else {
+        setPasswordError("Something went wrong. Please try again.");
+      }
+    } finally {
+      setDeletingAccount(false);
     }
-  }, [t, router]);
+  }, [t, router, passwordForDeletion]);
+
+  const openEmailApp = useCallback(() => {
+    // Try to open the default email app
+    Linking.canOpenURL('mailto:')
+      .then(supported => {
+        if (supported) {
+          Linking.openURL('mailto:');
+        } else {
+          // If generic mailto doesn't work, try popular email apps
+          Linking.openURL('gmail://')
+            .catch(() => Linking.openURL('mailto:'));
+        }
+      })
+      .catch(() => {
+        // Silently fail
+      });
+  }, []);
+
+  const completeAccountDeletion = useCallback(() => {
+    setShowDeletionSuccessModal(false);
+    router.replace('/auth');
+  }, [router]);
 
   const handleRefreshAccount = async () => {
     setIsRefreshingAccount(true);
@@ -1474,13 +1520,122 @@ export default function Settings() {
               
               <TouchableOpacity
                 style={[styles.confirmButton, styles.deleteButton]}
-                onPress={handleDeleteAccount}
+                onPress={() => {
+                  setShowDeleteAccountConfirm(false);
+                  setShowPasswordModal(true);
+                }}
               >
                 <Text style={styles.deleteButtonText}>
                   {t('settings').account.deleteConfirm.confirm}
                 </Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+      
+      {/* Password Confirmation Modal */}
+      <Modal
+        visible={showPasswordModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          setShowPasswordModal(false);
+          setPasswordForDeletion('');
+          setPasswordError(null);
+        }}
+      >
+        <View style={styles.confirmOverlay}>
+          <View style={styles.confirmDialog}>
+            <Text style={styles.confirmTitle}>Confirm Account Deletion</Text>
+            <Text style={styles.confirmMessage}>
+              Please enter your password to confirm account deletion.
+            </Text>
+            
+            <View style={[
+              styles.passwordInputContainer,
+              passwordError ? styles.passwordInputError : null
+            ]}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Your password"
+                placeholderTextColor="#666"
+                secureTextEntry
+                value={passwordForDeletion}
+                onChangeText={(text) => {
+                  setPasswordForDeletion(text);
+                  if (passwordError) setPasswordError(null);
+                }}
+                editable={!deletingAccount}
+              />
+            </View>
+            
+            {passwordError && (
+              <Text style={styles.errorText}>{passwordError}</Text>
+            )}
+            
+            <View style={styles.confirmButtons}>
+              <TouchableOpacity
+                style={[styles.confirmButton, styles.cancelButton]}
+                onPress={() => {
+                  setShowPasswordModal(false);
+                  setPasswordForDeletion('');
+                  setPasswordError(null);
+                }}
+                disabled={deletingAccount}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.confirmButton, styles.deleteButton]}
+                onPress={handleDeleteAccount}
+                disabled={deletingAccount}
+              >
+                {deletingAccount ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.deleteButtonText}>Delete</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Deletion Success Modal */}
+      <Modal
+        visible={showDeletionSuccessModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => completeAccountDeletion()}
+      >
+        <View style={styles.confirmOverlay}>
+          <View style={styles.confirmDialog}>
+            <View style={styles.successIconContainer}>
+              <MaterialIcons name="check-circle" size={64} color="#4CAF50" />
+            </View>
+            
+            <Text style={styles.confirmTitle}>Deletion Request Sent</Text>
+            <Text style={styles.confirmMessage}>
+              We've sent a confirmation email to verify your account deletion request. 
+              Please check your email inbox and follow the instructions to complete the process.
+            </Text>
+            
+            <TouchableOpacity
+              style={styles.emailButton}
+              onPress={openEmailApp}
+            >
+              <MaterialIcons name="email" size={20} color="white" />
+              <Text style={styles.emailButtonText}>Open Email App</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.doneButton}
+              onPress={completeAccountDeletion}
+            >
+              <Text style={styles.doneButtonText}>Done</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -1629,11 +1784,6 @@ const styles = StyleSheet.create({
   errorContainer: {
     padding: 30,
     alignItems: 'center',
-  },
-  errorText: {
-    color: '#ff6b6b',
-    textAlign: 'center',
-    fontSize: 16,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -2140,4 +2290,76 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  passwordInputContainer: {
+    width: '100%',
+    backgroundColor: '#232433',
+    borderRadius: 10,
+    marginTop: 10,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  
+  passwordInputError: {
+    borderColor: '#FF6B6B',
+  },
+  
+  passwordInput: {
+    height: 50,
+    paddingHorizontal: 15,
+    color: 'white',
+  },
+  
+  errorText: {
+    color: '#FF6B6B',
+    fontSize: 14,
+    marginBottom: 12,
+    paddingHorizontal: 5,
+  },
+  
+  successIconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  
+  emailButton: {
+    flexDirection: 'row',
+    backgroundColor: '#2C3DCD',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  
+  emailButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  
+  doneButton: {
+    backgroundColor: '#232433',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  
+  doneButtonText: {
+    color: '#8A8A8D',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  
+  // ... existing styles ...
 });
