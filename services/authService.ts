@@ -3,12 +3,14 @@ import { Platform, DeviceEventEmitter } from 'react-native';
 import * as crypto from 'crypto-js';
 
 const API_URL = 'https://papi.jagged.me';
+const GRAVATAR_API_URL = 'https://api.gravatar.com/v3';
+const GRAVATAR_API_KEY = '3381:gk-z35A_RO-EcLGDaMqNVANDOUINAFOOZmsKSQxr_JAjAkZopcY7oOjl4m8rz3S0'; // This should be stored securely
 const API_KEY = 'u5Xq2LgBSIWgyocdGoB7bx1IhJZ723XUkwwoKqSbDtc'; // This should be stored securely
 const AUTH_STATE_CHANGE_EVENT = 'auth_state_changed';
 const SKIP_LOGIN_KEY = '@planner_skip_login';
 const AUTH_TOKEN_KEY = '@auth_token';
 const LOGIN_DISMISSED_KEY = '@login_notification_dismissed';
-
+const GRAVATAR_CACHE_KEY = '@gravatar_cache';
 
 // Add timeout constants for network requests
 const REQUEST_TIMEOUT = 8000; // 8 seconds timeout
@@ -24,6 +26,78 @@ export interface UserData {
   isEmailVerified: boolean;
 }
 
+interface GravatarProfile {
+  hash: string;
+  display_name?: string;
+  avatar_url?: string;
+  location?: string;
+  description?: string;
+  pronouns?: string;
+}
+
+interface GravatarCache {
+  timestamp: number;
+  profile: GravatarProfile;
+}
+
+const CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+
+export const getGravatarHash = (email: string): string => {
+  // Convert email to lowercase and trim
+  const normalizedEmail = email.toLowerCase().trim();
+  // Create SHA-256 hash
+  return crypto.SHA256(normalizedEmail).toString();
+};
+
+export const getGravatarProfile = async (email: string): Promise<GravatarProfile | null> => {
+  try {
+    // Check cache first
+    const cachedData = await AsyncStorage.getItem(GRAVATAR_CACHE_KEY);
+    if (cachedData) {
+      const cache: GravatarCache = JSON.parse(cachedData);
+      // If cache is less than 24 hours old, use it
+      if (Date.now() - cache.timestamp < CACHE_EXPIRY) {
+        return cache.profile;
+      }
+    }
+
+    const hash = getGravatarHash(email);
+    const response = await fetch(`${GRAVATAR_API_URL}/profiles/${hash}`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Bearer': GRAVATAR_API_KEY,
+      },
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        // User doesn't have a Gravatar profile, create a default one
+        const defaultProfile: GravatarProfile = {
+          hash,
+          avatar_url: `https://www.gravatar.com/avatar/${hash}?d=mp`, // mp = mystery person
+        };
+        return defaultProfile;
+      }
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const profile: GravatarProfile = await response.json();
+
+    // Cache the profile
+    const cacheData: GravatarCache = {
+      timestamp: Date.now(),
+      profile,
+    };
+    await AsyncStorage.setItem(GRAVATAR_CACHE_KEY, JSON.stringify(cacheData));
+
+    return profile;
+  } catch (error) {
+    console.error('Error fetching Gravatar profile:', error);
+    return null;
+  }
+};
+
 class AuthService {
   private static instance: AuthService;
   private token: string | null = null;
@@ -38,6 +112,11 @@ class AuthService {
       AuthService.instance = new AuthService();
     }
     return AuthService.instance;
+  }
+
+  // Add getGravatarProfile as a public method
+  async getGravatarProfile(email: string): Promise<GravatarProfile | null> {
+    return getGravatarProfile(email);
   }
 
   private async makeAuthRequest(endpoint: string, method: string, body?: any): Promise<any> {
