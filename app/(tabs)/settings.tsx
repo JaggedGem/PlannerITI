@@ -12,12 +12,21 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuthContext } from '@/components/auth/AuthContext';
 import * as WebBrowser from 'expo-web-browser';
 import authService from '@/services/authService';
+import Constants from 'expo-constants';
 
 const IDNP_KEY = '@planner_idnp';
 const IDNP_UPDATE_EVENT = 'idnp_updated';
 const AUTH_STATE_CHANGE_EVENT = 'auth_state_changed';
 const SKIP_LOGIN_KEY = '@planner_skip_login';
 const USER_CACHE_KEY = '@planner_user_cache';
+const AUTH_TOKEN_KEY = '@auth_token';  // Adding this constant
+
+// Import CACHE_KEYS from scheduleService
+// We need to access this directly from scheduleService to use the same keys
+const { SCHEDULE_PREFIX } = scheduleService.CACHE_KEYS;
+
+// Check if app is running in development mode
+const IS_DEV = __DEV__;
 
 const languages = {
   en: { name: 'English', icon: '🇬🇧' },
@@ -1011,6 +1020,100 @@ export default function Settings() {
     );
   };
 
+  // Function to render the developer section
+  const renderDeveloperSection = () => {
+    if (!IS_DEV) return null;
+
+    return (
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Developer Tools</Text>
+        
+        <View style={styles.devToolsList}>
+          <TouchableOpacity
+            style={styles.devToolButton}
+            onPress={async () => {
+              await AsyncStorage.clear();
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert('Success', 'AsyncStorage has been cleared');
+            }}
+          >
+            <MaterialIcons name="delete-sweep" size={24} color="#FF6B6B" />
+            <Text style={styles.devToolText}>Clear AsyncStorage</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.devToolButton}
+            onPress={() => {
+              scheduleService.resetSettings();
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert('Success', 'Settings have been reset');
+            }}
+          >
+            <MaterialIcons name="settings-backup-restore" size={24} color="#FFB020" />
+            <Text style={styles.devToolText}>Reset Settings</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.devToolButton}
+            onPress={() => {
+              DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, { 
+                isAuthenticated: false,
+                skipped: false 
+              });
+              setIsAuthenticated(false);
+              setSkipLogin(false);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert('Success', 'Auth state reset');
+            }}
+          >
+            <MaterialIcons name="lock-reset" size={24} color="#2C3DCD" />
+            <Text style={styles.devToolText}>Reset Auth State</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.devToolButton}
+            onPress={async () => {
+              // Toggle debug mode
+              const currentMode = await AsyncStorage.getItem('@debug_mode') === 'true';
+              await AsyncStorage.setItem('@debug_mode', (!currentMode).toString());
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert('Debug Mode', currentMode ? 'Disabled' : 'Enabled');
+            }}
+          >
+            <MaterialIcons name="bug-report" size={24} color="#26A69A" />
+            <Text style={styles.devToolText}>Toggle Debug Mode</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.devToolButton}
+            onPress={async () => {
+              // Clear schedule cache
+              const keys = await AsyncStorage.getAllKeys();
+              const scheduleCacheKeys = keys.filter(key => key.startsWith(SCHEDULE_PREFIX));
+              await AsyncStorage.multiRemove(scheduleCacheKeys);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert('Success', 'Schedule cache cleared');
+            }}
+          >
+            <MaterialIcons name="event-busy" size={24} color="#EC407A" />
+            <Text style={styles.devToolText}>Clear Schedule Cache</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.devToolButton}
+            onPress={() => {
+              // Show AsyncStorage keys - implementation depends on your UI preferences
+              Alert.alert('Not implemented', 'This feature would display all AsyncStorage keys');
+            }}
+          >
+            <MaterialIcons name="list-alt" size={24} color="#66BB6A" />
+            <Text style={styles.devToolText}>View Storage Keys</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -1189,6 +1292,9 @@ export default function Settings() {
             )}
           </View>
         </View>
+
+        {/* Developer Section */}
+        {renderDeveloperSection()}
       </ScrollView>
 
       {/* Time Pickers */}
@@ -2376,4 +2482,21 @@ const styles = StyleSheet.create({
   },
   
   // ... existing styles ...
+  devToolsList: {
+    gap: 12,
+  },
+  devToolButton: {
+    backgroundColor: '#232433',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  devToolText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: 8,
+    textAlign: 'center',
+  },
 });

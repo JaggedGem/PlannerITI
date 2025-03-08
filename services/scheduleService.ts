@@ -89,7 +89,8 @@ export const DAYS_MAP = {
 // Initial reference date for week calculation (September 2, 2024)
 const REFERENCE_DATE = new Date(2024, 8, 2); // Note: Month is 0-based, so 8 is September
 
-const CACHE_KEYS = {
+// Export the cache keys so they can be accessed from outside
+export const CACHE_KEYS = {
   SCHEDULE_PREFIX: 'schedule_cache_',
   SETTINGS: 'user_settings',
   LAST_FETCH_PREFIX: 'last_schedule_fetch_',
@@ -148,6 +149,9 @@ export const scheduleService = {
     scheduleView: 'day' as ScheduleView,
     customPeriods: [] as CustomPeriod[]
   },
+  
+  // Expose cache keys as a property of the service for external access
+  CACHE_KEYS,
   
   listeners: new Set<SettingsListener>(),
   cachedGroups: [] as Group[],
@@ -559,6 +563,20 @@ export const scheduleService = {
       return true;
     }
     return false;
+  },
+
+  // Reset settings to defaults
+  resetSettings() {
+    this.settings = {
+      group: 'Subgroup 2',
+      language: getSystemLanguage(),
+      selectedGroupId: '',
+      selectedGroupName: DEFAULT_GROUP_NAME,
+      scheduleView: 'day',
+      customPeriods: []
+    };
+    this.saveSettings();
+    this.notifyListeners();
   },
 };
 
