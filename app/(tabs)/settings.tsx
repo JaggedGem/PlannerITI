@@ -956,6 +956,7 @@ export default function Settings() {
           <TouchableOpacity 
             style={styles.accountAvatar}
             onPress={() => Linking.openURL('https://gravatar.com')}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             {gravatarProfile?.avatar_url ? (
               <Image 
@@ -969,21 +970,27 @@ export default function Settings() {
               </Text>
             )}
           </TouchableOpacity>
-          <View style={styles.accountDetails}>
-            <Text style={styles.accountEmail} numberOfLines={1}>
-              {gravatarProfile?.display_name || user?.email}
-            </Text>
-            {!user?.isEmailVerified && (
-              <View style={styles.verificationBadge}>
-                <MaterialIcons name="warning" size={14} color="#FFB020" />
-                <Text style={styles.verificationText}>
-                  {t('settings').account.notVerified}
-                </Text>
-              </View>
-            )}
-          </View>
+          <TouchableOpacity 
+            style={styles.accountDetails}
+            onPress={() => setShowAccountActionSheet(true)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.accountDetailsContent}>
+              <Text style={styles.accountEmail} numberOfLines={1}>
+                {gravatarProfile?.display_name || user?.email}
+              </Text>
+              {!user?.is_verified && (
+                <View style={styles.verificationBadge}>
+                  <MaterialIcons name="warning" size={14} color="#FFB020" />
+                  <Text style={styles.verificationText}>
+                    {t('settings').account.notVerified}
+                  </Text>
+                </View>
+              )}
+            </View>
+            <MaterialIcons name="chevron-right" size={24} color="#8A8A8D" />
+          </TouchableOpacity>
         </View>
-        {/* Rest of the account section */}
       </View>
     );
   };
@@ -2285,6 +2292,14 @@ const styles = StyleSheet.create({
   },
   accountDetails: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginRight: 4,
+  },
+  accountDetailsContent: {
+    flex: 1,
+    marginRight: 12,
   },
   accountEmail: {
     color: 'white',
@@ -2425,13 +2440,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 16,
     marginBottom: 8,
+    gap: 8,
   },
   
   emailButtonText: {
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
-    marginLeft: 8,
   },
   
   doneButton: {
