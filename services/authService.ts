@@ -176,9 +176,25 @@ class AuthService {
     }
   }
 
-  async deleteAccount(): Promise<void> {
-    await this.makeAuthRequest('/auth/delete-account', 'POST');
-    await this.logout();
+  async deleteAccount(password: string): Promise<void> {
+    try {
+      // Get the salt for the current user
+      const email = this.userData?.email;
+      if (!email) {
+        throw new Error('User not authenticated');
+      }
+      
+      const salt = await this.getSalt(email);
+      const passwordHash = crypto.SHA256(password + salt).toString();
+      
+      await this.makeAuthRequest('/auth/delete-account/initiate', 'POST', {
+        password_hash: passwordHash
+      });
+      
+      await this.logout();
+    } catch (error) {
+      throw error;
+    }
   }
 
   async logout(): Promise<void> {
