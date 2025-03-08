@@ -64,9 +64,17 @@ export default function DayView() {
     const today = new Date();
     const currentDay = today.getDay(); // 0 is Sunday, 1 is Monday, etc.
     
-    // Calculate the Monday of current week
+    // Calculate the Monday date
     const monday = new Date(today);
-    const daysFromMonday = currentDay === 0 ? -6 : 1 - currentDay; // If Sunday, go back 6 days, otherwise calculate days till Monday
+    let daysFromMonday;
+    
+    // If it's weekend (Saturday or Sunday), calculate next week's Monday
+    if (currentDay === 0 || currentDay === 6) {
+      daysFromMonday = currentDay === 0 ? 1 : 2; // Sunday: +1, Saturday: +2
+    } else {
+      daysFromMonday = currentDay === 0 ? -6 : 1 - currentDay;
+    }
+    
     monday.setDate(today.getDate() + daysFromMonday);
 
     return Array.from({ length: 5 }, (_, i) => {
