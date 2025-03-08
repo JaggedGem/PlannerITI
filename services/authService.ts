@@ -23,7 +23,7 @@ interface AuthResponse {
 export interface UserData {
   email: string;
   idnp?: string;
-  isEmailVerified: boolean;
+  is_verified: boolean;
 }
 
 interface GravatarProfile {
