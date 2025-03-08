@@ -17,6 +17,7 @@ const IDNP_KEY = '@planner_idnp';
 const IDNP_UPDATE_EVENT = 'idnp_updated';
 const AUTH_STATE_CHANGE_EVENT = 'auth_state_changed';
 const SKIP_LOGIN_KEY = '@planner_skip_login';
+const USER_CACHE_KEY = '@planner_user_cache';
 
 const languages = {
   en: { name: 'English', icon: '🇬🇧' },
@@ -818,6 +819,7 @@ export default function Settings() {
   };
 
   const handleDeleteAccount = useCallback(async () => {
+    const AUTH_TOKEN_KEY = '@auth_token';
     // Reset any previous errors
     setPasswordError(null);
     
@@ -829,11 +831,23 @@ export default function Settings() {
     setDeletingAccount(true);
     try {
       await authService.deleteAccount(passwordForDeletion);
+      
+      // Properly clean up user data
+      await AsyncStorage.removeItem(AUTH_TOKEN_KEY); // Clear cached user data
+      await logout(); // This will clear the user state internally
+      
       // Immediately update local state
       setIsAuthenticated(false);
-      // Broadcast auth state change
-      DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, { isAuthenticated: false });
+      setSkipLogin(false);
+      
+      // Broadcast auth state change with complete reset
+      DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, { 
+        isAuthenticated: false,
+        skipped: false 
+      });
+      
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      
       // Show success modal instead of navigating away immediately
       setShowPasswordModal(false);
       setShowDeletionSuccessModal(true);
@@ -852,7 +866,7 @@ export default function Settings() {
     } finally {
       setDeletingAccount(false);
     }
-  }, [t, router, passwordForDeletion]);
+  }, [t, router, passwordForDeletion, logout]);
 
   const openEmailApp = useCallback(() => {
     // Try to open the default email app
