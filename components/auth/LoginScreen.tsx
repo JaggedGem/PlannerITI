@@ -72,13 +72,6 @@ export function LoginScreen() {
 
   const handleSkip = async () => {
     try {
-      // Save the skip preference
-      await AsyncStorage.setItem(SKIP_LOGIN_KEY, 'true');
-      // Notify components about skipped login
-      DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, { 
-        isAuthenticated: false, 
-        skipped: true 
-      });
       router.replace('/(tabs)/schedule');
     } catch (error) {
       // Silent error handling
