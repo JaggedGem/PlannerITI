@@ -2,12 +2,13 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { SplashScreen, Stack } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useColorScheme, StatusBar, View } from 'react-native';
 import authService from '../services/authService';
 import UpdateNotification from '@/components/UpdateNotification';
 import { scheduleService } from '@/services/scheduleService';
 import { AuthProvider } from '@/components/auth/AuthContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -19,6 +20,10 @@ export const unstable_settings = {
   initialRouteName: '(tabs)',
 };
 
+// Constants
+const USER_CACHE_KEY = '@planner_user_cache';
+const SKIP_LOGIN_KEY = '@planner_skip_login';
+
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
@@ -28,9 +33,26 @@ export default function RootLayout() {
     ...FontAwesome.font,
   });
 
-  // Initialize auth state
+  // Pre-load auth state values for faster app startup
   useEffect(() => {
-    authService.loadUserData();
+    const preloadAuthState = async () => {
+      try {
+        // Preload values in memory for faster access later
+        await Promise.all([
+          AsyncStorage.getItem(USER_CACHE_KEY),
+          AsyncStorage.getItem(SKIP_LOGIN_KEY)
+        ]);
+        
+        // Start loading user data in background after preloading is done
+        setTimeout(() => {
+          authService.loadUserData();
+        }, 100);
+      } catch (error) {
+        // Silent error handling
+      }
+    };
+    
+    preloadAuthState();
   }, []);
 
   // Setup period times sync interval at a random offset to avoid server stress
@@ -93,7 +115,7 @@ function RootLayoutNav() {
             headerTintColor: isDark ? '#fff' : '#000',
           }}
         >
-          <Stack.Screen name="index" options={{ animation: 'fade' }} />
+          <Stack.Screen name="index" options={{ animation: 'none' }} />
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="auth" />
           <Stack.Screen 

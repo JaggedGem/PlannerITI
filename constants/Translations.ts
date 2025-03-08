@@ -7,6 +7,29 @@ type TranslationType = {
   settings: {
     language: string;
     subGroup: string;
+    account: {
+      title: string;
+      signIn: string;
+      notVerified: string;
+      refresh: string;
+      privacy: string;
+      terms: string;
+      actions: {
+        title: string;
+        logout: string;
+        delete: string;
+      };
+      deleteConfirm: {
+        title: string;
+        message: string;
+        cancel: string;
+        confirm: string;
+      };
+      deleteError: {
+        title: string;
+        message: string;
+      };
+    };
     idnp: {
       title: string;
       clearButton: string;
@@ -251,6 +274,29 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
     settings: {
       language: 'Language',
       subGroup: 'Subgroup',
+      account: {
+        title: 'Account',
+        signIn: 'Sign In to Your Account',
+        notVerified: 'Email not verified',
+        refresh: 'Refresh',
+        privacy: 'Privacy',
+        terms: 'Terms',
+        actions: {
+          title: 'Account Actions',
+          logout: 'Sign Out',
+          delete: 'Delete Account',
+        },
+        deleteConfirm: {
+          title: 'Delete Account',
+          message: 'Are you sure you want to delete your account? This action cannot be undone.',
+          cancel: 'Cancel',
+          confirm: 'Delete',
+        },
+        deleteError: {
+          title: 'Error',
+          message: 'There was a problem deleting your account. Please try again.',
+        },
+      },
       idnp: {
         title: 'IDNP Settings',
         clearButton: 'Clear Saved IDNP',
@@ -513,6 +559,29 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
     settings: {
       language: 'Limbă',
       subGroup: 'Subgrupă',
+      account: {
+        title: 'Cont',
+        signIn: 'Conectează-te la Contul Tău',
+        notVerified: 'Email neverificat',
+        refresh: 'Reîmprospătează',
+        privacy: 'Confidențialitate',
+        terms: 'Termeni',
+        actions: {
+          title: 'Acțiuni Cont',
+          logout: 'Deconectare',
+          delete: 'Șterge Contul',
+        },
+        deleteConfirm: {
+          title: 'Șterge Contul',
+          message: 'Ești sigur că vrei să ștergi contul? Această acțiune nu poate fi anulată.',
+          cancel: 'Anulează',
+          confirm: 'Șterge',
+        },
+        deleteError: {
+          title: 'Eroare',
+          message: 'A apărut o problemă la ștergerea contului tău. Te rugăm să încerci din nou.',
+        },
+      },
       idnp: {
         title: 'Setări IDNP',
         clearButton: 'Șterge IDNP salvat',
@@ -775,6 +844,29 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
     settings: {
       language: 'Язык',
       subGroup: 'Подгруппа',
+      account: {
+        title: 'Аккаунт',
+        signIn: 'Войдите в Ваш Аккаунт',
+        notVerified: 'Email не подтвержден',
+        refresh: 'Обновить',
+        privacy: 'Конфиденциальность',
+        terms: 'Условия',
+        actions: {
+          title: 'Действия с Аккаунтом',
+          logout: 'Выйти',
+          delete: 'Удалить Аккаунт',
+        },
+        deleteConfirm: {
+          title: 'Удалить Аккаунт',
+          message: 'Вы уверены, что хотите удалить свой аккаунт? Это действие нельзя отменить.',
+          cancel: 'Отмена',
+          confirm: 'Удалить',
+        },
+        deleteError: {
+          title: 'Ошибка',
+          message: 'Возникла проблема при удалении аккаунта. Пожалуйста, попробуйте снова.',
+        },
+      },
       idnp: {
         title: 'Настройки IDNP',
         clearButton: 'Очистить сохраненный IDNP',

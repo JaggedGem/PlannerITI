@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, TextInput, TouchableOpacity, Alert, Platform, Modal } from 'react-native';
 import { Link, router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -8,6 +8,11 @@ import { useTranslation } from '../../hooks/useTranslation';
 import { useThemeColor } from '../../hooks/useThemeColor';
 import authService from '../../services/authService';
 import { StatusBar } from 'expo-status-bar';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { DeviceEventEmitter } from 'react-native';
+
+const SKIP_LOGIN_KEY = '@planner_skip_login';
+const AUTH_STATE_CHANGE_EVENT = 'auth_state_changed';
 
 export function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -21,6 +26,21 @@ export function LoginScreen() {
   const textColor = useThemeColor({}, 'text');
   const tintColor = useThemeColor({}, 'tint');
   const backgroundColor = useThemeColor({}, 'background');
+
+  // Check if user has previously skipped login
+  useEffect(() => {
+    const checkSkipLogin = async () => {
+      try {
+        const hasSkipped = await AsyncStorage.getItem(SKIP_LOGIN_KEY);
+        if (hasSkipped === 'true') {
+          router.replace('/(tabs)/schedule');
+        }
+      } catch (error) {
+        // Silent error handling
+      }
+    };
+    checkSkipLogin();
+  }, []);
 
   const showCustomAlert = (message: string) => {
     setAlertMessage(message);
@@ -36,6 +56,8 @@ export function LoginScreen() {
     setLoading(true);
     try {
       await authService.login(email, password);
+      // Broadcast successful login
+      DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, { isAuthenticated: true });
       router.replace('/(tabs)/schedule');
     } catch (error) {
       showCustomAlert(t('auth').login.error);
@@ -48,8 +70,19 @@ export function LoginScreen() {
     router.push('/forgot-password');
   };
 
-  const handleSkip = () => {
-    router.replace('/(tabs)/schedule');
+  const handleSkip = async () => {
+    try {
+      // Save the skip preference
+      await AsyncStorage.setItem(SKIP_LOGIN_KEY, 'true');
+      // Notify components about skipped login
+      DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, { 
+        isAuthenticated: false, 
+        skipped: true 
+      });
+      router.replace('/(tabs)/schedule');
+    } catch (error) {
+      // Silent error handling
+    }
   };
 
   return (
