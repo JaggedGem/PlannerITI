@@ -1,11 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform, DeviceEventEmitter } from 'react-native';
 import * as crypto from 'crypto-js';
+import { GRAVATAR_API_KEY, API_KEY } from '@env';
 
 const API_URL = 'https://papi.jagged.me';
 const GRAVATAR_API_URL = 'https://api.gravatar.com/v3';
-const GRAVATAR_API_KEY = '3381:gk-z35A_RO-EcLGDaMqNVANDOUINAFOOZmsKSQxr_JAjAkZopcY7oOjl4m8rz3S0'; // This should be stored securely
-const API_KEY = 'u5Xq2LgBSIWgyocdGoB7bx1IhJZ723XUkwwoKqSbDtc'; // This should be stored securely
+
 const AUTH_STATE_CHANGE_EVENT = 'auth_state_changed';
 const SKIP_LOGIN_KEY = '@planner_skip_login';
 const AUTH_TOKEN_KEY = '@auth_token';
