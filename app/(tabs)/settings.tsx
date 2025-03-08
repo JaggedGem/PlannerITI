@@ -1,4 +1,4 @@
-import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator, FlatList, Modal, TextInput, Switch, Platform, Alert, Animated, ScrollView } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator, FlatList, Modal, TextInput, Switch, Platform, Alert, Animated, ScrollView, Linking, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useEffect, useRef, useCallback, memo, useMemo } from 'react';
 import { scheduleService, SubGroupType, Language, Group, CustomPeriod } from '@/services/scheduleService';
@@ -6,15 +6,32 @@ import { useTranslation } from '@/hooks/useTranslation';
 import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { DeviceEventEmitter } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useAuthContext } from '@/components/auth/AuthContext';
+import * as WebBrowser from 'expo-web-browser';
+import authService from '@/services/authService';
+import Constants from 'expo-constants';
 
 const IDNP_KEY = '@planner_idnp';
 const IDNP_UPDATE_EVENT = 'idnp_updated';
+const AUTH_STATE_CHANGE_EVENT = 'auth_state_changed';
+const SKIP_LOGIN_KEY = '@planner_skip_login';
+const USER_CACHE_KEY = '@planner_user_cache';
+const AUTH_TOKEN_KEY = '@auth_token';  // Adding this constant
+
+// Import CACHE_KEYS from scheduleService
+// We need to access this directly from scheduleService to use the same keys
+const { SCHEDULE_PREFIX } = scheduleService.CACHE_KEYS;
+
+// Check if app is running in development mode
+const IS_DEV = __DEV__;
 
 const languages = {
-  en: 'English',
-  ro: 'Română'
+  en: { name: 'English', icon: '🇬🇧' },
+  ro: { name: 'Română', icon: '🇷🇴' },
+  ru: { name: 'Русский', icon: '🇷🇺' }
 };
 
 const groups: SubGroupType[] = ['Subgroup 1', 'Subgroup 2'];
@@ -429,6 +446,7 @@ export default function Settings() {
   const { t } = useTranslation();
   const router = useRouter();
   const flatListRef = useRef<FlatList<Group>>(null);
+  const { user, logout, reloadUser, loading } = useAuthContext();
   
   // State hooks
   const [settings, setSettings] = useState(scheduleService.getSettings());
@@ -451,15 +469,30 @@ export default function Settings() {
   const [showEndPicker, setShowEndPicker] = useState(false);
   const [savedIdnp, setSavedIdnp] = useState<string | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const [confirmDialogType, setConfirmDialogType] = useState<'idnp' | 'period'>('idnp');
+  const [confirmDialogType, setConfirmDialogType] = useState<'idnp' | 'period' | 'account'>('idnp');
   const [periodToDelete, setPeriodToDelete] = useState<string | null>(null);
+  const [showLanguageModal, setShowLanguageModal] = useState(false);
+  const [showAccountActionSheet, setShowAccountActionSheet] = useState(false);
+  const [showDeleteAccountConfirm, setShowDeleteAccountConfirm] = useState(false);
+  const [passwordForDeletion, setPasswordForDeletion] = useState('');
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showDeletionSuccessModal, setShowDeletionSuccessModal] = useState(false);
+  const [isRefreshingAccount, setIsRefreshingAccount] = useState(false);
+  // Use a single source of truth for current auth state that can be updated from multiple places
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!user);
+  // Add state for tracking whether the user has skipped login
+  const [skipLogin, setSkipLogin] = useState<boolean>(false);
 
   // Add useEffect to load IDNP and listen for updates
   useEffect(() => {
     const loadIdnp = async () => {
       try {
         const idnp = await AsyncStorage.getItem(IDNP_KEY);
-        setSavedIdnp(idnp); // Set the savedIdnp state with the retrieved value
+        const hasSkipped = await AsyncStorage.getItem(SKIP_LOGIN_KEY);
+        setSavedIdnp(idnp);
+        setSkipLogin(hasSkipped === 'true');
       } catch (error) {
         // Silent error handling
       }
@@ -468,15 +501,53 @@ export default function Settings() {
     loadIdnp();
     
     // Add event listener for IDNP updates using DeviceEventEmitter
-    const subscription = DeviceEventEmitter.addListener(IDNP_UPDATE_EVENT, (newIdnp: string | null) => {
+    const idnpSubscription = DeviceEventEmitter.addListener(IDNP_UPDATE_EVENT, (newIdnp: string | null) => {
       setSavedIdnp(newIdnp);
     });
+
+    // Add event listener for auth state changes
+    const authSubscription = DeviceEventEmitter.addListener(
+      AUTH_STATE_CHANGE_EVENT, 
+      (authState: { isAuthenticated: boolean; skipped?: boolean }) => {
+        setIsAuthenticated(authState.isAuthenticated);
+        if (typeof authState.skipped === 'boolean') {
+          setSkipLogin(authState.skipped);
+        }
+        // Reload user data when auth state changes to true
+        if (authState.isAuthenticated) {
+          reloadUser();
+        }
+      }
+    );
     
-    // Cleanup event listener on unmount
+    // Cleanup event listeners on unmount
     return () => {
-      subscription.remove();
+      idnpSubscription.remove();
+      authSubscription.remove();
     };
-  }, []);
+  }, [reloadUser]);
+
+  // Update authentication state when user changes
+  useEffect(() => {
+    setIsAuthenticated(!!user);
+  }, [user]);
+
+  // Use useFocusEffect to check auth state when screen becomes focused
+  useFocusEffect(
+    useCallback(() => {
+      const checkAuthState = async () => {
+        try {
+          // Check if the skip login flag is set
+          const hasSkipped = await AsyncStorage.getItem(SKIP_LOGIN_KEY);
+          setSkipLogin(hasSkipped === 'true');
+        } catch (error) {
+          // Silent error handling
+        }
+      };
+
+      checkAuthState();
+    }, [])
+  );
 
   // Custom clear IDNP function
   const handleClearIdnp = useCallback(() => {
@@ -736,9 +807,294 @@ export default function Settings() {
     type === 'start' ? setStartTime(date) : setEndTime(date);
   };
 
+  const handleLogout = async () => {
+    setShowAccountActionSheet(false);
+    try {
+      // Clear the skip login flag as well when explicitly logging out
+      await AsyncStorage.removeItem(SKIP_LOGIN_KEY);
+      await logout();
+      // Immediately update local state
+      setIsAuthenticated(false);
+      setSkipLogin(false);
+      // Broadcast auth state change to all components
+      DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, { 
+        isAuthenticated: false,
+        skipped: false 
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
+  };
+
+  const handleDeleteAccount = useCallback(async () => {
+    const AUTH_TOKEN_KEY = '@auth_token';
+    // Reset any previous errors
+    setPasswordError(null);
+    
+    if (!passwordForDeletion.trim()) {
+      setPasswordError("Please enter your password");
+      return;
+    }
+    
+    setDeletingAccount(true);
+    try {
+      await authService.deleteAccount(passwordForDeletion);
+      
+      // Properly clean up user data
+      await AsyncStorage.removeItem(AUTH_TOKEN_KEY); // Clear cached user data
+      await logout(); // This will clear the user state internally
+      
+      // Immediately update local state
+      setIsAuthenticated(false);
+      setSkipLogin(false);
+      
+      // Broadcast auth state change with complete reset
+      DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, { 
+        isAuthenticated: false,
+        skipped: false 
+      });
+      
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      
+      // Show success modal instead of navigating away immediately
+      setShowPasswordModal(false);
+      setShowDeletionSuccessModal(true);
+      setPasswordForDeletion('');
+    } catch (error) {
+      // Check if it's a network error or authentication error
+      if (error instanceof Error) {
+        if (error.message === 'Request timeout' || error.message.includes('network')) {
+          setPasswordError("Network error. Please check your connection.");
+        } else {
+          setPasswordError("Incorrect password. Please try again.");
+        }
+      } else {
+        setPasswordError("Something went wrong. Please try again.");
+      }
+    } finally {
+      setDeletingAccount(false);
+    }
+  }, [t, router, passwordForDeletion, logout]);
+
+  const openEmailApp = useCallback(() => {
+    // Try to open the default email app
+    Linking.canOpenURL('mailto:')
+      .then(supported => {
+        if (supported) {
+          Linking.openURL('mailto:');
+        } else {
+          // If generic mailto doesn't work, try popular email apps
+          Linking.openURL('gmail://')
+            .catch(() => Linking.openURL('mailto:'));
+        }
+      })
+      .catch(() => {
+        // Silently fail
+      });
+  }, []);
+
+  const completeAccountDeletion = useCallback(() => {
+    setShowDeletionSuccessModal(false);
+    router.replace('/auth');
+  }, [router]);
+
+  const handleRefreshAccount = async () => {
+    setIsRefreshingAccount(true);
+    try {
+      await reloadUser();
+      // Immediately update local state based on user context
+      setIsAuthenticated(!!user);
+      // Broadcast auth state change
+      DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, { isAuthenticated: !!user });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      console.error("Refresh error:", error);
+    } finally {
+      setIsRefreshingAccount(false);
+    }
+  };
+
+  const handlePrivacyPolicy = () => {
+    WebBrowser.openBrowserAsync('https://papi.jagged.me/privacy-policy');
+  };
+
+  const handleTermsOfService = () => {
+    WebBrowser.openBrowserAsync('https://papi.jagged.me/terms-of-service');
+  };
+
+  // Function to render the account section based on authentication state
+  const renderAccountSection = () => {
+    const [gravatarProfile, setGravatarProfile] = useState<{ display_name?: string; avatar_url?: string } | null>(null);
+  
+    // Load Gravatar profile when user data changes
+    useEffect(() => {
+      const loadGravatarProfile = async () => {
+        if (user?.email) {
+          const profile = await authService.getGravatarProfile(user.email);
+          setGravatarProfile(profile);
+        }
+      };
+      loadGravatarProfile();
+    }, [user]);
+  
+    if (!isAuthenticated) {
+      return (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t('settings').account.title}</Text>
+          <TouchableOpacity style={styles.signInButton} onPress={() => router.push('/auth')}>
+            <Text style={styles.signInButtonText}>{t('settings').account.signIn}</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+  
+    return (
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>{t('settings').account.title}</Text>
+        <View style={styles.accountInfo}>
+          <TouchableOpacity 
+            style={styles.accountAvatar}
+            onPress={() => Linking.openURL('https://gravatar.com')}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            {gravatarProfile?.avatar_url ? (
+              <Image 
+                source={{ uri: gravatarProfile.avatar_url }} 
+                style={styles.avatarImage}
+                defaultSource={require('../../assets/images/default-avatar.png')}
+              />
+            ) : (
+              <Text style={styles.avatarText}>
+                {user?.email.charAt(0).toUpperCase()}
+              </Text>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.accountDetails}
+            onPress={() => setShowAccountActionSheet(true)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.accountDetailsContent}>
+              <Text style={styles.accountEmail} numberOfLines={1}>
+                {gravatarProfile?.display_name || user?.email}
+              </Text>
+              {!user?.is_verified && (
+                <View style={styles.verificationBadge}>
+                  <MaterialIcons name="warning" size={14} color="#FFB020" />
+                  <Text style={styles.verificationText}>
+                    {t('settings').account.notVerified}
+                  </Text>
+                </View>
+              )}
+            </View>
+            <MaterialIcons name="chevron-right" size={24} color="#8A8A8D" />
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
+  // Function to render the developer section
+  const renderDeveloperSection = () => {
+    if (!IS_DEV) return null;
+
+    return (
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Developer Tools</Text>
+        
+        <View style={styles.devToolsList}>
+          <TouchableOpacity
+            style={styles.devToolButton}
+            onPress={async () => {
+              await AsyncStorage.clear();
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert('Success', 'AsyncStorage has been cleared');
+            }}
+          >
+            <MaterialIcons name="delete-sweep" size={24} color="#FF6B6B" />
+            <Text style={styles.devToolText}>Clear AsyncStorage</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.devToolButton}
+            onPress={() => {
+              scheduleService.resetSettings();
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert('Success', 'Settings have been reset');
+            }}
+          >
+            <MaterialIcons name="settings-backup-restore" size={24} color="#FFB020" />
+            <Text style={styles.devToolText}>Reset Settings</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.devToolButton}
+            onPress={() => {
+              DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, { 
+                isAuthenticated: false,
+                skipped: false 
+              });
+              setIsAuthenticated(false);
+              setSkipLogin(false);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert('Success', 'Auth state reset');
+            }}
+          >
+            <MaterialIcons name="lock-reset" size={24} color="#2C3DCD" />
+            <Text style={styles.devToolText}>Reset Auth State</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.devToolButton}
+            onPress={async () => {
+              // Toggle debug mode
+              const currentMode = await AsyncStorage.getItem('@debug_mode') === 'true';
+              await AsyncStorage.setItem('@debug_mode', (!currentMode).toString());
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert('Debug Mode', currentMode ? 'Disabled' : 'Enabled');
+            }}
+          >
+            <MaterialIcons name="bug-report" size={24} color="#26A69A" />
+            <Text style={styles.devToolText}>Toggle Debug Mode</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.devToolButton}
+            onPress={async () => {
+              // Clear schedule cache
+              const keys = await AsyncStorage.getAllKeys();
+              const scheduleCacheKeys = keys.filter(key => key.startsWith(SCHEDULE_PREFIX));
+              await AsyncStorage.multiRemove(scheduleCacheKeys);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert('Success', 'Schedule cache cleared');
+            }}
+          >
+            <MaterialIcons name="event-busy" size={24} color="#EC407A" />
+            <Text style={styles.devToolText}>Clear Schedule Cache</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.devToolButton}
+            onPress={() => {
+              // Show AsyncStorage keys - implementation depends on your UI preferences
+              Alert.alert('Not implemented', 'This feature would display all AsyncStorage keys');
+            }}
+          >
+            <MaterialIcons name="list-alt" size={24} color="#66BB6A" />
+            <Text style={styles.devToolText}>View Storage Keys</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Account Section */}
+        {renderAccountSection()}
+
         {/* Add IDNP section before Language Selection */}
         {savedIdnp && (
           <View style={styles.section}>
@@ -772,26 +1128,63 @@ export default function Settings() {
         {/* Language Selection Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('settings').language}</Text>
-          <View style={styles.optionsContainer}>
-            {(Object.keys(languages) as Language[]).map(lang => (
-              <TouchableOpacity
-                key={lang}
-                style={[
-                  styles.optionButton,
-                  settings.language === lang && styles.selectedOption
-                ]}
-                onPress={() => handleLanguageChange(lang)}
-              >
-                <Text style={[
-                  styles.optionText,
-                  settings.language === lang && styles.selectedOptionText
-                ]}>
-                  {languages[lang]}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          <TouchableOpacity
+            style={styles.languageSelector}
+            onPress={() => setShowLanguageModal(true)}
+          >
+            <View style={styles.languageSelectorContent}>
+              <Text style={styles.selectedLanguageIcon}>{languages[settings.language].icon}</Text>
+              <Text style={styles.selectedLanguageName}>{languages[settings.language].name}</Text>
+              <MaterialIcons name="keyboard-arrow-down" size={24} color="#8A8A8D" />
+            </View>
+          </TouchableOpacity>
         </View>
+
+        {/* Language Selection Modal */}
+        <Modal
+          visible={showLanguageModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowLanguageModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>{t('settings').language}</Text>
+                <TouchableOpacity onPress={() => setShowLanguageModal(false)}>
+                  <MaterialIcons name="close" size={24} color="white" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.languagesList}>
+                {Object.entries(languages).map(([code, { name, icon }]) => (
+                  <TouchableOpacity
+                    key={code}
+                    style={[
+                      styles.languageOption,
+                      settings.language === code && styles.selectedLanguageOption
+                    ]}
+                    onPress={() => {
+                      handleLanguageChange(code as keyof typeof languages);
+                      setShowLanguageModal(false);
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    }}
+                  >
+                    <Text style={styles.languageIcon}>{icon}</Text>
+                    <Text style={[
+                      styles.languageOptionText,
+                      settings.language === code && styles.selectedLanguageOptionText
+                    ]}>
+                      {name}
+                    </Text>
+                    {settings.language === code && (
+                      <MaterialIcons name="check" size={24} color="white" />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         {/* Subgroup Selection Section */}
         <View style={styles.section}>
@@ -874,6 +1267,9 @@ export default function Settings() {
             )}
           </View>
         </View>
+
+        {/* Developer Section */}
+        {renderDeveloperSection()}
       </ScrollView>
 
       {/* Time Pickers */}
@@ -1139,6 +1535,207 @@ export default function Settings() {
           </View>
         </View>
       </Modal>
+
+      {/* Account Action Sheet */}
+      <Modal
+        visible={showAccountActionSheet}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowAccountActionSheet(false)}
+      >
+        <TouchableOpacity
+          style={styles.actionSheetOverlay}
+          activeOpacity={1}
+          onPress={() => setShowAccountActionSheet(false)}
+        >
+          <View style={styles.actionSheet}>
+            <View style={styles.actionSheetHeader}>
+              <Text style={styles.actionSheetTitle}>
+                {t('settings').account.actions.title}
+              </Text>
+              <TouchableOpacity 
+                style={styles.actionSheetClose}
+                onPress={() => setShowAccountActionSheet(false)}
+              >
+                <MaterialIcons name="close" size={24} color="white" />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.actionSheetButton}
+              onPress={handleLogout}
+            >
+              <MaterialIcons name="logout" size={24} color="#FF6B6B" />
+              <Text style={[styles.actionSheetButtonText, { color: '#FF6B6B' }]}>
+                {t('settings').account.actions.logout}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionSheetButton}
+              onPress={() => {
+                setShowAccountActionSheet(false);
+                setShowDeleteAccountConfirm(true);
+              }}
+            >
+              <MaterialIcons name="delete-forever" size={24} color="#FF6B6B" />
+              <Text style={[styles.actionSheetButtonText, { color: '#FF6B6B' }]}>
+                {t('settings').account.actions.delete}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Delete Account Confirmation */}
+      <Modal
+        visible={showDeleteAccountConfirm}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowDeleteAccountConfirm(false)}
+      >
+        <View style={styles.confirmOverlay}>
+          <View style={styles.confirmDialog}>
+            <Text style={styles.confirmTitle}>
+              {t('settings').account.deleteConfirm.title}
+            </Text>
+            <Text style={styles.confirmMessage}>
+              {t('settings').account.deleteConfirm.message}
+            </Text>
+            
+            <View style={styles.confirmButtons}>
+              <TouchableOpacity
+                style={[styles.confirmButton, styles.cancelButton]}
+                onPress={() => setShowDeleteAccountConfirm(false)}
+              >
+                <Text style={styles.cancelButtonText}>
+                  {t('settings').account.deleteConfirm.cancel}
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.confirmButton, styles.deleteButton]}
+                onPress={() => {
+                  setShowDeleteAccountConfirm(false);
+                  setShowPasswordModal(true);
+                }}
+              >
+                <Text style={styles.deleteButtonText}>
+                  {t('settings').account.deleteConfirm.confirm}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+      
+      {/* Password Confirmation Modal */}
+      <Modal
+        visible={showPasswordModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          setShowPasswordModal(false);
+          setPasswordForDeletion('');
+          setPasswordError(null);
+        }}
+      >
+        <View style={styles.confirmOverlay}>
+          <View style={styles.confirmDialog}>
+            <Text style={styles.confirmTitle}>Confirm Account Deletion</Text>
+            <Text style={styles.confirmMessage}>
+              Please enter your password to confirm account deletion.
+            </Text>
+            
+            <View style={[
+              styles.passwordInputContainer,
+              passwordError ? styles.passwordInputError : null
+            ]}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Your password"
+                placeholderTextColor="#666"
+                secureTextEntry
+                value={passwordForDeletion}
+                onChangeText={(text) => {
+                  setPasswordForDeletion(text);
+                  if (passwordError) setPasswordError(null);
+                }}
+                editable={!deletingAccount}
+              />
+            </View>
+            
+            {passwordError && (
+              <Text style={styles.errorText}>{passwordError}</Text>
+            )}
+            
+            <View style={styles.confirmButtons}>
+              <TouchableOpacity
+                style={[styles.confirmButton, styles.cancelButton]}
+                onPress={() => {
+                  setShowPasswordModal(false);
+                  setPasswordForDeletion('');
+                  setPasswordError(null);
+                }}
+                disabled={deletingAccount}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.confirmButton, styles.deleteButton]}
+                onPress={handleDeleteAccount}
+                disabled={deletingAccount}
+              >
+                {deletingAccount ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.deleteButtonText}>Delete</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Deletion Success Modal */}
+      <Modal
+        visible={showDeletionSuccessModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => completeAccountDeletion()}
+      >
+        <View style={styles.confirmOverlay}>
+          <View style={styles.confirmDialog}>
+            <View style={styles.successIconContainer}>
+              <MaterialIcons name="check-circle" size={64} color="#4CAF50" />
+            </View>
+            
+            <Text style={styles.confirmTitle}>Deletion Request Sent</Text>
+            <Text style={styles.confirmMessage}>
+              We've sent a confirmation email to verify your account deletion request. 
+              Please check your email inbox and follow the instructions to complete the process.
+            </Text>
+            
+            <TouchableOpacity
+              style={styles.emailButton}
+              onPress={openEmailApp}
+            >
+              <MaterialIcons name="email" size={20} color="white" />
+              <Text style={styles.emailButtonText}>Open Email App</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.doneButton}
+              onPress={completeAccountDeletion}
+            >
+              <Text style={styles.doneButtonText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ...existing modals... */}
     </SafeAreaView>
   );
 }
@@ -1282,11 +1879,6 @@ const styles = StyleSheet.create({
   errorContainer: {
     padding: 30,
     alignItems: 'center',
-  },
-  errorText: {
-    color: '#ff6b6b',
-    textAlign: 'center',
-    fontSize: 16,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -1630,5 +2222,269 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 6,
     left: 6,
+  },
+  languageSelector: {
+    backgroundColor: '#232433',
+    padding: 16,
+    borderRadius: 12,
+  },
+  languageSelectorContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  selectedLanguageIcon: {
+    fontSize: 20,
+    marginRight: 12,
+  },
+  selectedLanguageName: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+    flex: 1,
+  },
+  languagesList: {
+    gap: 8,
+  },
+  languageOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#232433',
+    padding: 16,
+    borderRadius: 12,
+  },
+  selectedLanguageOption: {
+    backgroundColor: '#2C3DCD',
+  },
+  languageIcon: {
+    fontSize: 20,
+    marginRight: 12,
+  },
+  languageOptionText: {
+    color: '#8A8A8D',
+    fontSize: 16,
+    fontWeight: '600',
+    flex: 1,
+  },
+  selectedLanguageOptionText: {
+    color: 'white',
+  },
+  // Account section styles
+  accountInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#232433',
+    padding: 16,
+    borderRadius: 12,
+  },
+  accountAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#2C3DCD',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  avatarText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  accountDetails: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginRight: 4,
+  },
+  accountDetailsContent: {
+    flex: 1,
+    marginRight: 12,
+  },
+  accountEmail: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  verificationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  verificationText: {
+    color: '#FFB020',
+    fontSize: 14,
+    marginLeft: 4,
+  },
+  accountActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 16,
+  },
+  accountAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#232433',
+    padding: 12,
+    borderRadius: 12,
+    flex: 1,
+    marginRight: 8,
+  },
+  accountActionText: {
+    color: '#2C3DCD',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  signInButton: {
+    backgroundColor: '#2C3DCD',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  signInButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  actionSheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'flex-end',
+  },
+  actionSheet: {
+    backgroundColor: '#1a1b26',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+  },
+  actionSheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  actionSheetTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  actionSheetClose: {
+    padding: 5,
+  },
+  actionSheetButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    backgroundColor: '#232433',
+  },
+  actionSheetButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 12,
+  },
+  deleteButton: {
+    backgroundColor: '#FF6B6B',
+  },
+  deleteButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  passwordInputContainer: {
+    width: '100%',
+    backgroundColor: '#232433',
+    borderRadius: 10,
+    marginTop: 10,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  
+  passwordInputError: {
+    borderColor: '#FF6B6B',
+  },
+  
+  passwordInput: {
+    height: 50,
+    paddingHorizontal: 15,
+    color: 'white',
+  },
+  
+  errorText: {
+    color: '#FF6B6B',
+    fontSize: 14,
+    marginBottom: 12,
+    paddingHorizontal: 5,
+  },
+  
+  successIconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  
+  emailButton: {
+    flexDirection: 'row',
+    backgroundColor: '#2C3DCD',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 16,
+    marginBottom: 8,
+    gap: 8,
+  },
+  
+  emailButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  
+  doneButton: {
+    backgroundColor: '#232433',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  
+  doneButtonText: {
+    color: '#8A8A8D',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  
+  // ... existing styles ...
+  devToolsList: {
+    gap: 12,
+  },
+  devToolButton: {
+    backgroundColor: '#232433',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  devToolText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  avatarImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
   },
 });
