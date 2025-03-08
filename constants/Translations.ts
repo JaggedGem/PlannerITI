@@ -262,6 +262,12 @@ type TranslationType = {
       };
     };
   };
+  loginPromo: {
+    body: string;
+    stayConnected: string;
+    getStarted: string;
+    dismiss: string;
+  };
 };
 
 export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
@@ -548,7 +554,13 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
           content: 'If you have any questions about this policy, please contact us at <link>privacy@p.jagged.me</link>.'
         }
       }
-    }
+    },
+    loginPromo: {
+      body: 'Sign in to unlock the full potential of your planner with cross-device sync and premium features.',
+      stayConnected: 'Stay Connected',
+      getStarted: 'Get Started',
+      dismiss: 'Maybe Later',
+    },
   },
   ro: {
     weekdays: {
@@ -833,7 +845,13 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
           content: 'Dacă aveți întrebări despre această politică, vă rugăm să ne contactați la <link>privacy@p.jagged.me</link>.'
         }
       }
-    }
+    },
+    loginPromo: {
+      body: 'Conectează-te pentru a debloca întregul potențial al planificatorului tău cu sincronizare între dispozitive și funcții premium.',
+      stayConnected: 'Rămâi Conectat',
+      getStarted: 'Începe Acum',
+      dismiss: 'Poate Mai Târziu',
+    },
   },
   ru: {
     weekdays: {
@@ -1119,7 +1137,14 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         },
       },
     },
+    loginPromo: {
+      body: 'Войдите, чтобы разблокировать весь потенциал вашего планировщика с синхронизацией между устройствами и премиум-функциями.',
+      stayConnected: 'Оставайтесь на связи',
+      getStarted: 'Начать',
+      dismiss: 'Может быть позже',
+    },
   }
+
 };
 
 export type Translation = typeof translations.en;
