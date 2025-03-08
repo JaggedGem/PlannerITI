@@ -7,6 +7,8 @@ const API_KEY = 'u5Xq2LgBSIWgyocdGoB7bx1IhJZ723XUkwwoKqSbDtc'; // This should be
 const AUTH_STATE_CHANGE_EVENT = 'auth_state_changed';
 const SKIP_LOGIN_KEY = '@planner_skip_login';
 const AUTH_TOKEN_KEY = '@auth_token';
+const LOGIN_DISMISSED_KEY = '@login_notification_dismissed';
+
 
 // Add timeout constants for network requests
 const REQUEST_TIMEOUT = 8000; // 8 seconds timeout
@@ -203,6 +205,7 @@ class AuthService {
     this.skippedLogin = false;
     await AsyncStorage.removeItem(AUTH_TOKEN_KEY);
     await AsyncStorage.removeItem(SKIP_LOGIN_KEY);
+    await AsyncStorage.removeItem(LOGIN_DISMISSED_KEY);
     DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, { 
       isAuthenticated: false,
       skipped: false 
