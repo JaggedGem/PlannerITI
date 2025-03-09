@@ -7,7 +7,13 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "channel": "development"
+      "channel": "development",
+      "android": {
+        "package": "me.jagged.planneriti.dev"
+      },
+      "ios": {
+        "bundleIdentifier": "me.jagged.planneriti.dev"
+      }
     },
     "preview": {
       "android": {
@@ -17,7 +23,10 @@
     },
     "production": {
       "autoIncrement": true,
-      "channel": "production"
+      "channel": "production",
+      "android": {
+        "buildType": "apk"
+      }
     },
     "staging": {
       "channel": "staging"
