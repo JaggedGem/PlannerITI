@@ -8,28 +8,25 @@
       "developmentClient": true,
       "distribution": "internal",
       "channel": "development",
-      "android": {
-        "package": "me.jagged.planneriti.dev"
-      },
-      "ios": {
-        "bundleIdentifier": "me.jagged.planneriti.dev"
+      "env": {
+        "APP_VARIANT": "development",
+        "ANDROID_PACKAGE": "me.jagged.planneriti.dev",
+        "IOS_BUNDLE_IDENTIFIER": "me.jagged.planneriti.dev",
+        "API_KEY": "u5Xq2LgBSIWgyocdGoB7bx1IhJZ723XUkwwoKqSbDtc",
+        "GRAVATAR_API_KEY": "3388:gk-4gEEX2o9HTSw8y7vJFDZgMEMnKukJZH-0CqUS7IKHIBa1S7FXJIb9ulBba8i6"
       }
-    },
-    "preview": {
-      "android": {
-        "buildType": "apk"
-      },
-      "channel": "preview"
     },
     "production": {
       "autoIncrement": true,
       "channel": "production",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "APP_VARIANT": "production",
+        "ANDROID_PACKAGE": "me.jagged.planneriti",
+        "IOS_BUNDLE_IDENTIFIER": "me.jagged.planneriti"
       }
-    },
-    "staging": {
-      "channel": "staging"
     }
   },
   "submit": {
