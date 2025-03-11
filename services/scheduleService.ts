@@ -15,6 +15,16 @@ export interface CustomPeriod extends Period {
   daysOfWeek?: number[]; // 1-5 for Monday-Friday
 }
 
+// Interface for recovery days data structure
+export interface RecoveryDay {
+  date: string; // format: "YYYY-MM-DD"
+  replacedDay: string; // "monday", "tuesday", etc.
+  reason: string;
+  groupId: string; // if empty, applies to all groups
+  groupName: string; // if empty, applies to all groups
+  isActive: boolean;
+}
+
 export interface ScheduleItem {
   _id: string;
   subjectid: {
@@ -86,6 +96,14 @@ export const DAYS_MAP = {
   5: 'friday'
 } as const;
 
+export const DAYS_MAP_INVERSE = {
+  'monday': 1,
+  'tuesday': 2,
+  'wednesday': 3,
+  'thursday': 4,
+  'friday': 5
+} as const;
+
 // Initial reference date for week calculation (September 2, 2024)
 const REFERENCE_DATE = new Date(2024, 8, 2); // Note: Month is 0-based, so 8 is September
 
@@ -94,7 +112,9 @@ export const CACHE_KEYS = {
   SCHEDULE_PREFIX: 'schedule_cache_',
   SETTINGS: 'user_settings',
   LAST_FETCH_PREFIX: 'last_schedule_fetch_',
-  GROUPS: 'groups_cache'
+  GROUPS: 'groups_cache',
+  RECOVERY_DAYS: 'recovery_days_cache',
+  LAST_RECOVERY_SYNC: 'last_recovery_days_sync'
 };
 
 const CACHE_EXPIRY = 3 * 24 * 60 * 60 * 1000; // 3 days in milliseconds
@@ -103,6 +123,7 @@ const DEFAULT_GROUP_NAME = 'P-2412';
 const PERIOD_TIMES_CACHE_KEY = 'period_times_cache';
 const LAST_PERIOD_SYNC_KEY = 'last_period_sync';
 const PERIOD_SYNC_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+const RECOVERY_DAYS_SYNC_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
 type SettingsListener = () => void;
 
@@ -155,6 +176,7 @@ export const scheduleService = {
   
   listeners: new Set<SettingsListener>(),
   cachedGroups: [] as Group[],
+  cachedRecoveryDays: [] as RecoveryDay[],
 
   subscribe(listener: SettingsListener) {
     this.listeners.add(listener);
@@ -421,10 +443,95 @@ export const scheduleService = {
     }
   },
 
-  async getScheduleForDay(data: ApiResponse, dayName: keyof ApiResponse['data'] | undefined) {
+  // Recovery Days feature implementation
+  async getRecoveryDays(): Promise<RecoveryDay[]> {
+    try {
+      // Return cached recovery days if available
+      if (this.cachedRecoveryDays.length > 0) {
+        return this.cachedRecoveryDays;
+      }
+
+      // Try to get cached recovery days first
+      const cachedRecoveryDays = await AsyncStorage.getItem(CACHE_KEYS.RECOVERY_DAYS);
+      if (cachedRecoveryDays) {
+        this.cachedRecoveryDays = JSON.parse(cachedRecoveryDays);
+        return this.cachedRecoveryDays;
+      }
+      
+      // If no cached recovery days, fetch from API
+      await this.syncRecoveryDays();
+      return this.cachedRecoveryDays;
+    } catch (error) {
+      // Silent error handling
+      return [];
+    }
+  },
+
+  async syncRecoveryDays(): Promise<void> {
+    try {
+      // Check if we need to sync
+      const lastSync = await AsyncStorage.getItem(CACHE_KEYS.LAST_RECOVERY_SYNC);
+      if (lastSync) {
+        const lastSyncTime = new Date(lastSync).getTime();
+        if (Date.now() - lastSyncTime < RECOVERY_DAYS_SYNC_INTERVAL) {
+          return;
+        }
+      }
+
+      // Check for internet connectivity
+      if (!await this.hasInternetConnection()) {
+        return;
+      }
+
+      // Fetch recovery days
+      const response = await fetch('https://papi.jagged.me/api/recovery-days');
+      if (!response.ok) throw new Error('Failed to fetch recovery days');
+      console.log('Recovery days response:', response);
+      
+      const recoveryDays: RecoveryDay[] = await response.json();
+      console.log('Fetched recovery days:', recoveryDays);
+      
+      // Cache the recovery days
+      await AsyncStorage.setItem(CACHE_KEYS.RECOVERY_DAYS, JSON.stringify(recoveryDays));
+      await AsyncStorage.setItem(CACHE_KEYS.LAST_RECOVERY_SYNC, new Date().toISOString());
+      
+      this.cachedRecoveryDays = recoveryDays;
+    } catch (error) {
+      // Silent error handling - will use cached recovery days or return empty array
+    }
+  },
+
+  // Check if a specific date is a recovery day
+  isRecoveryDay(date: Date): RecoveryDay | null {
+    const dateString = date.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+    
+    // Find a matching recovery day that is active and applies to the current group
+    const recoveryDay = this.cachedRecoveryDays.find(day => 
+      day.date === dateString && 
+      day.isActive && 
+      (day.groupId === '' || day.groupId === this.settings.selectedGroupId)
+    );
+    
+    return recoveryDay || null;
+  },
+
+  async getScheduleForDay(data: ApiResponse, dayName: keyof ApiResponse['data'] | undefined, date?: Date) {
     if (!dayName) return [];
     
-    const daySchedule = data.data[dayName];
+    // If date is provided, check if it's a recovery day
+    let actualDayName = dayName;
+    let recoveryDayInfo = null;
+    
+    if (date) {
+      const recoveryDay = this.isRecoveryDay(date);
+      if (recoveryDay) {
+        // Use the replaced day's schedule instead
+        actualDayName = recoveryDay.replacedDay as keyof ApiResponse['data'];
+        recoveryDayInfo = recoveryDay;
+      }
+    }
+    
+    const daySchedule = data.data[actualDayName];
     if (!daySchedule) return [];
 
     const result: Array<{
@@ -440,10 +547,28 @@ export const scheduleService = {
       hasNextItem?: boolean;
       isCustom?: boolean;
       color?: string;
+      isRecoveryDay?: boolean;
+      recoveryReason?: string;
     }> = [];
 
+    // If this is a recovery day, add the information
+    if (recoveryDayInfo) {
+      result.push({
+        period: 'recovery-info',
+        startTime: '00:00',
+        endTime: '00:01',
+        className: `Recovery Day: Using ${actualDayName}'s schedule`,
+        teacherName: '',
+        roomNumber: '',
+        isCustom: true,
+        color: '#FF5733',  // A distinct color for recovery days
+        isRecoveryDay: true,
+        recoveryReason: recoveryDayInfo.reason
+      });
+    }
+
     // Add custom periods for this day
-    const dayIndex = Object.keys(DAYS_MAP).findIndex(key => DAYS_MAP[Number(key) as keyof typeof DAYS_MAP] === dayName) + 1;
+    const dayIndex = Object.keys(DAYS_MAP).findIndex(key => DAYS_MAP[Number(key) as keyof typeof DAYS_MAP] === actualDayName) + 1;
     
     this.settings.customPeriods.forEach(customPeriod => {
       if (customPeriod.isEnabled && (!customPeriod.daysOfWeek || customPeriod.daysOfWeek.includes(dayIndex))) {
@@ -477,7 +602,7 @@ export const scheduleService = {
           }
 
           // Use period times from new API or fall back to original data
-          const periodData = periodTimes?.[dayName]?.find(p => p.period === parseInt(periodNum) - 1) || 
+          const periodData = periodTimes?.[actualDayName as keyof PeriodTimes]?.find((p: PeriodTime) => p.period === parseInt(periodNum) - 1) || 
                            data.periods[parseInt(periodNum) - 1];
 
           result.push({
@@ -494,9 +619,9 @@ export const scheduleService = {
 
         // Process all items for the current period
         await Promise.all([
-          ...schedules.both.map(item => processScheduleItem(item)),
-          ...schedules.par.map(item => processScheduleItem(item, true)),
-          ...schedules.impar.map(item => processScheduleItem(item, false))
+          ...schedules.both.map((item: ScheduleItem) => processScheduleItem(item)),
+          ...schedules.par.map((item: ScheduleItem) => processScheduleItem(item, true)),
+          ...schedules.impar.map((item: ScheduleItem) => processScheduleItem(item, false))
         ]);
       });
 
@@ -507,6 +632,10 @@ export const scheduleService = {
 
     // Sort schedule by time
     const sortedSchedule = result.sort((a, b) => {
+      // Put recovery day info at the top
+      if (a.isRecoveryDay) return -1;
+      if (b.isRecoveryDay) return 1;
+      
       const timeA = a.startTime.split(':').map(Number);
       const timeB = b.startTime.split(':').map(Number);
       return (timeA[0] * 60 + timeA[1]) - (timeB[0] * 60 + timeB[1]);
@@ -583,3 +712,4 @@ export const scheduleService = {
 // Initialize settings from storage
 scheduleService.loadSettings();
 scheduleService.syncPeriodTimes(); // Initial sync
+scheduleService.syncRecoveryDays(); // Initial sync of recovery days
