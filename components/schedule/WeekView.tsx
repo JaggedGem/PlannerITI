@@ -1,12 +1,12 @@
 import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Dimensions, ViewStyle, TextStyle, ActivityIndicator } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useEffect, useState, useRef } from 'react';
-import { scheduleService, DAYS_MAP, ApiResponse } from '@/services/scheduleService';
+import { scheduleService, DAYS_MAP, ApiResponse, RecoveryDay } from '@/services/scheduleService';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useTimeUpdate } from '@/hooks/useTimeUpdate';
-import Animated from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, withTiming, withSpring } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import ViewModeMenu from './ViewModeMenu';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Get week start (Monday) from current date
 const getWeekStart = (date: Date): Date => {
@@ -136,6 +136,89 @@ const TimetableItem = ({ item, top, height, color, isActive, timeFormat }: Timet
   );
 };
 
+const RecoveryDayInfo = ({ reason }: { reason: string }) => {
+  const [showInfo, setShowInfo] = useState(false);
+  
+  // Add animated value for popup transitions
+  const popupAnimation = useAnimatedStyle(() => {
+    return {
+      opacity: withTiming(showInfo ? 1 : 0, { duration: 200 }),
+      transform: [
+        { 
+          scale: withSpring(showInfo ? 1 : 0.9, {
+            damping: 15,
+            stiffness: 150,
+          })
+        },
+        { 
+          translateY: withSpring(showInfo ? 0 : -10, {
+            damping: 15,
+            stiffness: 150,
+          })
+        }
+      ],
+    };
+  }, [showInfo]);
+
+  // Add button animation
+  const buttonAnimation = useAnimatedStyle(() => {
+    return {
+      transform: [
+        {
+          scale: withSpring(showInfo ? 0.9 : 1, {
+            damping: 15,
+            stiffness: 150,
+          })
+        }
+      ]
+    };
+  }, [showInfo]);
+
+  return (
+    <>
+      <Animated.View style={buttonAnimation}>
+        <TouchableOpacity 
+          style={styles.recoveryDayInfoButton}
+          onPress={() => setShowInfo(!showInfo)}
+          activeOpacity={0.7}
+          hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
+        >
+          <LinearGradient
+            colors={['#FF5733DD', '#FF5733AA']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.recoveryDayInfoButtonGradient}
+          >
+            <Text style={styles.recoveryDayInfoIcon}>ⓘ</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      </Animated.View>
+      
+      {/* Reason tooltip that appears when info button is pressed */}
+      <Animated.View 
+        style={[styles.recoveryDayTooltipContainer, popupAnimation]}
+        pointerEvents={showInfo ? 'auto' : 'none'}
+      >
+        <View style={styles.recoveryDayTooltip}>
+          <View style={styles.recoveryDayTooltipHeader}>
+            <Text style={styles.recoveryDayTooltipTitle}>Recovery Day</Text>
+            <TouchableOpacity 
+              style={styles.closeTooltipButton}
+              onPress={() => setShowInfo(false)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Text style={styles.closeTooltipText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.recoveryDayTooltipReason}>
+            {reason || 'No reason provided'}
+          </Text>
+        </View>
+      </Animated.View>
+    </>
+  );
+};
+
 interface CurrentTimeIndicatorProps {
   hourHeight: number;
   firstHour: number;
@@ -216,6 +299,19 @@ type Styles = {
   todayColumn: ViewStyle;
   gridLine: ViewStyle;
   currentHourHighlight: ViewStyle;
+  recoveryDot: TextStyle;
+  recoveryDayInfo: ViewStyle;
+  recoveryDayInfoIcon: TextStyle;
+  recoveryDayInfoButton: ViewStyle;
+  recoveryDayInfoButtonGradient: ViewStyle;
+  recoveryDayTooltipContainer: ViewStyle;
+  recoveryDayTooltip: ViewStyle;
+  recoveryDayTooltipHeader: ViewStyle;
+  recoveryDayTooltipTitle: TextStyle;
+  closeTooltipButton: ViewStyle;
+  closeTooltipText: TextStyle;
+  recoveryDayTooltipReason: TextStyle;
+  weekendColumn: ViewStyle;
 };
 
 export default function WeekView() {
@@ -237,6 +333,7 @@ export default function WeekView() {
   const currentTime = useTimeUpdate();
   const verticalScrollRef = useRef<ScrollView>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [recoveryDays, setRecoveryDays] = useState<RecoveryDay[]>([]);
 
   // Calculate current week start date (Monday)
   const weekStartDate = new Date();
@@ -246,59 +343,77 @@ export default function WeekView() {
   // Check if current week is even
   const isEvenWeek = scheduleService.isEvenWeek(weekStartDate);
 
-  // Schedule data fetching function
-  const fetchSchedule = async (groupId?: string) => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const data = await scheduleService.getClassSchedule(groupId);
-      setScheduleData(data);
-      
-      // Update week schedule with async calls
-      const newWeekSchedule = {
-        monday: await scheduleService.getScheduleForDay(data, 'monday'),
-        tuesday: await scheduleService.getScheduleForDay(data, 'tuesday'),
-        wednesday: await scheduleService.getScheduleForDay(data, 'wednesday'),
-        thursday: await scheduleService.getScheduleForDay(data, 'thursday'),
-        friday: await scheduleService.getScheduleForDay(data, 'friday'),
-      };
-      setWeekSchedule(newWeekSchedule);
-      setIsLoading(false);
-    } catch (error) {
-      // Silent error handling
-      setIsLoading(false);
-    }
-  };
-
-  // Schedule update function 
-  const updateWeekSchedule = async () => {
-    if (scheduleData) {
-      const newWeekSchedule = {
-        monday: await scheduleService.getScheduleForDay(scheduleData, 'monday'),
-        tuesday: await scheduleService.getScheduleForDay(scheduleData, 'tuesday'),
-        wednesday: await scheduleService.getScheduleForDay(scheduleData, 'wednesday'),
-        thursday: await scheduleService.getScheduleForDay(scheduleData, 'thursday'),
-        friday: await scheduleService.getScheduleForDay(scheduleData, 'friday'),
-      };
-      setWeekSchedule(newWeekSchedule);
-    }
-  };
-
-  // Update week schedule when scheduleData changes
+  // Load recovery days
   useEffect(() => {
-    updateWeekSchedule();
-  }, [scheduleData]);
-
-  // Calculate day dates for the week
-  const dayDates = Array.from({ length: 5 }, (_, i) => {
-    const date = new Date(weekStart);
-    date.setDate(weekStart.getDate() + i);
-    return {
-      date,
-      dayName: t('weekdays').short[date.getDay()],
-      dayNumber: date.getDate(),
-      isToday: date.toDateString() === new Date().toDateString()
+    const loadRecoveryDays = async () => {
+      const days = await scheduleService.getRecoveryDays();
+      setRecoveryDays(days);
     };
+    
+    loadRecoveryDays();
+  }, []);
+
+  // Determine if we have weekend recovery days for the current week
+  const weekendRecoveryDays = recoveryDays.filter(rd => {
+    // Parse the recovery day date
+    const rdDate = new Date(rd.date);
+    
+    // Check if this date falls within the current week view
+    const startOfWeek = new Date(weekStart);
+    const endOfWeek = new Date(weekStart);
+    endOfWeek.setDate(weekStart.getDate() + 6); // Include Saturday and Sunday
+    
+    // Check if the recovery day is within the week range and is on a weekend
+    return rdDate >= startOfWeek && 
+           rdDate <= endOfWeek && 
+           (rdDate.getDay() === 0 || rdDate.getDay() === 6) && // 0 = Sunday, 6 = Saturday
+           rd.isActive && 
+           (rd.groupId === '' || rd.groupId === settings.selectedGroupId);
+  });
+
+  // Calculate day dates for the week, including weekend recovery days if they exist
+  const normalDayCount = 5; // Monday-Friday
+  const totalDays = weekendRecoveryDays.length > 0 ? normalDayCount + weekendRecoveryDays.length : normalDayCount;
+  
+  const dayDates = Array.from({ length: totalDays }, (_, i) => {
+    // First 5 days are the normal weekdays
+    if (i < normalDayCount) {
+      const date = new Date(weekStart);
+      date.setDate(weekStart.getDate() + i);
+      
+      // Check if this is a recovery day
+      const recoveryDay = recoveryDays.find(rd => {
+        const rdDate = rd.date.split('-').map(Number);
+        return date.getFullYear() === rdDate[0] && 
+              date.getMonth() + 1 === rdDate[1] && 
+              date.getDate() === rdDate[2] &&
+              rd.isActive &&
+              (rd.groupId === '' || rd.groupId === settings.selectedGroupId);
+      });
+      
+      return {
+        date,
+        dayName: t('weekdays').short[date.getDay()],
+        dayNumber: date.getDate(),
+        isToday: date.toDateString() === new Date().toDateString(),
+        recoveryDay: recoveryDay,
+        isWeekend: false
+      };
+    } else {
+      // Weekend recovery days
+      const weekendIndex = i - normalDayCount;
+      const recoveryDay = weekendRecoveryDays[weekendIndex];
+      const date = new Date(recoveryDay.date);
+      
+      return {
+        date,
+        dayName: t('weekdays').short[date.getDay()],
+        dayNumber: date.getDate(),
+        isToday: date.toDateString() === new Date().toDateString(),
+        recoveryDay: recoveryDay,
+        isWeekend: true
+      };
+    }
   });
 
   // Calculate time range
@@ -313,11 +428,75 @@ export default function WeekView() {
   const windowWidth = Dimensions.get('window').width;
   const hourHeight = 65; // Slightly more compact
   const timeColumnWidth = 30; // Even narrower time column
-  const dayColumnWidth = (windowWidth - timeColumnWidth - 16) / 5; // Account for padding
+  const dayColumnWidth = (windowWidth - timeColumnWidth - 8) / Math.min(totalDays, 6); // Limit to 6 columns max for readability
   const timetableHeight = (lastHour - firstHour + 1) * hourHeight;
 
   // Get current hour for highlighting
   const nowHour = new Date().getHours();
+  
+  // Helper to get date for specific day in week
+  const getDateForDay = (weekStartDate: Date, dayOffset: number) => {
+    const date = new Date(weekStartDate);
+    date.setDate(weekStartDate.getDate() + dayOffset);
+    return date;
+  };
+
+  // Schedule data fetching function
+  const fetchSchedule = async (groupId?: string) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const data = await scheduleService.getClassSchedule(groupId);
+      setScheduleData(data);
+      
+      // Update week schedule with async calls for weekdays
+      const newWeekSchedule: Record<string, any[]> = {
+        monday: await scheduleService.getScheduleForDay(data, 'monday', getDateForDay(weekStart, 0)),
+        tuesday: await scheduleService.getScheduleForDay(data, 'tuesday', getDateForDay(weekStart, 1)),
+        wednesday: await scheduleService.getScheduleForDay(data, 'wednesday', getDateForDay(weekStart, 2)),
+        thursday: await scheduleService.getScheduleForDay(data, 'thursday', getDateForDay(weekStart, 3)),
+        friday: await scheduleService.getScheduleForDay(data, 'friday', getDateForDay(weekStart, 4)),
+      };
+      
+      // Add weekend recovery days if they exist
+      for (let i = 0; i < weekendRecoveryDays.length; i++) {
+        const recoveryDay = weekendRecoveryDays[i];
+        const dayKey = `weekend_${i}`;
+        
+        // Get schedule for the day that this recovery day is replacing
+        const replacedDay = recoveryDay.replacedDay as keyof ApiResponse['data'];
+        if (replacedDay && data.data[replacedDay]) {
+          newWeekSchedule[dayKey] = await scheduleService.getScheduleForDay(
+            data, 
+            replacedDay, 
+            new Date(recoveryDay.date)
+          );
+        } else {
+          newWeekSchedule[dayKey] = [];
+        }
+      }
+      
+      setWeekSchedule(newWeekSchedule);
+      setIsLoading(false);
+    } catch (error) {
+      // Silent error handling
+      setIsLoading(false);
+    }
+  };
+
+  // Schedule update function 
+  const updateWeekSchedule = async () => {
+    if (scheduleData) {
+      const newWeekSchedule = {
+        monday: await scheduleService.getScheduleForDay(scheduleData, 'monday', getDateForDay(weekStart, 0)),
+        tuesday: await scheduleService.getScheduleForDay(scheduleData, 'tuesday', getDateForDay(weekStart, 1)),
+        wednesday: await scheduleService.getScheduleForDay(scheduleData, 'wednesday', getDateForDay(weekStart, 2)),
+        thursday: await scheduleService.getScheduleForDay(scheduleData, 'thursday', getDateForDay(weekStart, 3)),
+        friday: await scheduleService.getScheduleForDay(scheduleData, 'friday', getDateForDay(weekStart, 4)),
+      };
+      setWeekSchedule(newWeekSchedule);
+    }
+  };
 
   // Effects for settings, data fetching, etc.
   useEffect(() => {
@@ -340,7 +519,7 @@ export default function WeekView() {
   // Initial schedule data fetching effect
   useEffect(() => {
     fetchSchedule();
-  }, []);
+  }, [weekOffset]); // Re-fetch when week changes
 
   // Scroll to current time on mount
   useEffect(() => {
@@ -496,7 +675,8 @@ export default function WeekView() {
               style={[
                 styles.dayColumn,
                 { width: dayColumnWidth }, 
-                day.isToday && styles.todayColumn
+                day.isToday && styles.todayColumn,
+                day.isWeekend && styles.weekendColumn
               ]}
             >
               <Text style={styles.dayName}>{day.dayName}</Text>
@@ -543,6 +723,7 @@ export default function WeekView() {
 
             {/* Grid container - contains all days and grid lines */}
             <View style={[styles.gridContainer, { width: windowWidth - timeColumnWidth - 8 }]}>
+
               {/* Horizontal grid lines */}
               {timeSlots.map((hour, index) => (
                 <View 
@@ -559,9 +740,15 @@ export default function WeekView() {
               ))}
 
               {/* Day columns */}
-              {['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].map((day, dayIndex) => {
-                const dayItems = weekSchedule[day as keyof typeof weekSchedule] || [];
-                const isToday = dayDates[dayIndex].isToday;
+              {dayDates.map((day, dayIndex) => {
+                const dayKey = dayIndex < 5 
+                  ? ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'][dayIndex]
+                  : `weekend_${dayIndex - 5}`;
+                
+                const dayItems = weekSchedule[dayKey as keyof typeof weekSchedule] || [];
+                const isToday = day.isToday;
+                const isWeekend = day.isWeekend;
+                const isRecoveryDay = day.recoveryDay != null;
 
                 // Filter items based on current week (odd/even)
                 const filteredItems = dayItems.filter(item => 
@@ -570,7 +757,7 @@ export default function WeekView() {
 
                 return (
                   <View 
-                    key={day} 
+                    key={`day_${dayIndex}`} 
                     style={[
                       styles.dayContent, 
                       { 
@@ -578,18 +765,30 @@ export default function WeekView() {
                         height: timetableHeight,
                         left: dayIndex * dayColumnWidth,
                       },
-                      isToday && { backgroundColor: 'rgba(52, 120, 246, 0.03)' }
+                      isToday && { backgroundColor: 'rgba(52, 120, 246, 0.03)' },
+                      (isRecoveryDay || isWeekend) && { backgroundColor: 'rgba(255, 87, 51, 0.05)' }
                     ]}
                   >
+
+                    {/* Show recovery day info button when this is a recovery day */}
+                    {isRecoveryDay && day.recoveryDay && (
+                      <RecoveryDayInfo reason={day.recoveryDay.reason || ''} />
+                    )}
+
                     {/* Render schedule items */}
                     {filteredItems.map((item, itemIndex) => {
+                      // Skip the recovery day info item as we're handling it differently
+                      if (item.isRecoveryDay) return null;
+                      
                       const { top, height } = calculateItemPosition(
                         item.startTime,
                         item.endTime,
                         hourHeight,
                         firstHour
                       );
-                      const color = getSubjectColor(item.className);
+                      
+                      // Use custom color for custom periods, otherwise generate color from class name
+                      const color = item.isCustom && item.color ? item.color : getSubjectColor(item.className);
                       const isActive = isToday && isCurrentTimeSlot(item.startTime, item.endTime);
 
                       // Create simplified item with only necessary props
@@ -600,6 +799,7 @@ export default function WeekView() {
                         roomNumber: item.roomNumber
                       };
 
+                      // Don't add offset for recovery days anymore - let items position naturally
                       return (
                         <TimetableItem 
                           key={itemIndex}
@@ -615,7 +815,10 @@ export default function WeekView() {
 
                     {/* If day is empty, show empty message */}
                     {filteredItems.length === 0 && (
-                      <Text style={styles.emptySchedule}>
+                      <Text style={[
+                        styles.emptySchedule,
+                        isRecoveryDay && { marginTop: 30 } // Add some space for recovery icon
+                      ]}>
                         {t('schedule').noClassesDay}
                       </Text>
                     )}
@@ -717,9 +920,99 @@ const styles = StyleSheet.create<Styles>({
     alignItems: 'center',
     paddingVertical: 8,
     borderRadius: 12,
+    position: 'relative',
   },
   todayColumn: {
     backgroundColor: 'rgba(44, 61, 205, 0.1)', // Using #2C3DCD with 0.1 opacity
+  },
+  recoveryIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    width: 6,
+    height: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recoveryDot: {
+    fontSize: 8,
+    color: '#FF5733',
+  },
+  recoveryDayInfo: {
+    position: 'absolute',
+    top: 0,
+    left: 2,
+    right: 2,
+    zIndex: 10,
+  },
+  recoveryDayInfoButton: {
+    position: 'absolute',
+    top: 5,
+    right: 5,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    overflow: 'hidden',
+    zIndex: 10,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 1, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+  },
+  recoveryDayInfoButtonGradient: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recoveryDayInfoIcon: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  recoveryDayTooltipContainer: {
+    position: 'absolute',
+    top: 28,
+    right: 5,
+    width: 200,
+    zIndex: 100,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  recoveryDayTooltip: {
+    backgroundColor: '#1C1C1E', // Dark background
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#2C2C2E',
+  },
+  recoveryDayTooltipHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  recoveryDayTooltipTitle: {
+    color: '#FF5733',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  closeTooltipButton: {
+    padding: 4,
+  },
+  closeTooltipText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  recoveryDayTooltipReason: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    lineHeight: 18,
+    opacity: 0.8,
   },
   dayName: {
     color: '#8A8A8D',
@@ -865,5 +1158,10 @@ const styles = StyleSheet.create<Styles>({
     color: '#FF3B30',
     fontSize: 16,
     textAlign: 'center',
+  },
+  weekendColumn: {
+    backgroundColor: 'rgba(255, 87, 51, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 87, 51, 0.2)',
   },
 });

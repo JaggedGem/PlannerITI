@@ -518,22 +518,7 @@ export const scheduleService = {
   async getScheduleForDay(data: ApiResponse, dayName: keyof ApiResponse['data'] | undefined, date?: Date) {
     if (!dayName) return [];
     
-    // If date is provided, check if it's a recovery day
-    let actualDayName = dayName;
-    let recoveryDayInfo = null;
-    
-    if (date) {
-      const recoveryDay = this.isRecoveryDay(date);
-      if (recoveryDay) {
-        // Use the replaced day's schedule instead
-        actualDayName = recoveryDay.replacedDay as keyof ApiResponse['data'];
-        recoveryDayInfo = recoveryDay;
-      }
-    }
-    
-    const daySchedule = data.data[actualDayName];
-    if (!daySchedule) return [];
-
+    // Create result array for schedule items
     const result: Array<{
       period: string;
       startTime: string;
@@ -549,26 +534,39 @@ export const scheduleService = {
       color?: string;
       isRecoveryDay?: boolean;
       recoveryReason?: string;
+      replacedDayName?: string;
     }> = [];
-
-    // If this is a recovery day, add the information
-    if (recoveryDayInfo) {
-      result.push({
-        period: 'recovery-info',
-        startTime: '00:00',
-        endTime: '00:01',
-        className: `Recovery Day: Using ${actualDayName}'s schedule`,
-        teacherName: '',
-        roomNumber: '',
-        isCustom: true,
-        color: '#FF5733',  // A distinct color for recovery days
-        isRecoveryDay: true,
-        recoveryReason: recoveryDayInfo.reason
-      });
+    
+    // If this is a recovery day, add a badge item but still use the current day's schedule
+    // This way we show recovery day info without displacing the normal schedule
+    let recoveryDayInfo = null;
+    if (date) {
+      recoveryDayInfo = this.isRecoveryDay(date);
+      
+      if (recoveryDayInfo) {
+        // Add an info item about the recovery day at the top
+        result.push({
+          period: 'recovery-info',
+          startTime: '00:00',
+          endTime: '00:01',
+          className: `Recovery Day: ${recoveryDayInfo.reason}`,
+          teacherName: '',
+          roomNumber: '',
+          isCustom: true,
+          color: '#FF5733',  // A distinct color for recovery days
+          isRecoveryDay: true,
+          recoveryReason: recoveryDayInfo.reason,
+          replacedDayName: recoveryDayInfo.replacedDay
+        });
+      }
     }
+    
+    // Always use the specified day's schedule rather than replacing it with the recovery day's schedule
+    const daySchedule = data.data[dayName];
+    if (!daySchedule) return result;
 
     // Add custom periods for this day
-    const dayIndex = Object.keys(DAYS_MAP).findIndex(key => DAYS_MAP[Number(key) as keyof typeof DAYS_MAP] === actualDayName) + 1;
+    const dayIndex = Object.keys(DAYS_MAP).findIndex(key => DAYS_MAP[Number(key) as keyof typeof DAYS_MAP] === dayName) + 1;
     
     this.settings.customPeriods.forEach(customPeriod => {
       if (customPeriod.isEnabled && (!customPeriod.daysOfWeek || customPeriod.daysOfWeek.includes(dayIndex))) {
@@ -602,7 +600,7 @@ export const scheduleService = {
           }
 
           // Use period times from new API or fall back to original data
-          const periodData = periodTimes?.[actualDayName as keyof PeriodTimes]?.find((p: PeriodTime) => p.period === parseInt(periodNum) - 1) || 
+          const periodData = periodTimes?.[dayName as keyof PeriodTimes]?.find((p: PeriodTime) => p.period === parseInt(periodNum) - 1) || 
                            data.periods[parseInt(periodNum) - 1];
 
           result.push({
