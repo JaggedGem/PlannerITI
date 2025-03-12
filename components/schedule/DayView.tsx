@@ -4,12 +4,13 @@ import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { scheduleService, DAYS_MAP, ApiResponse } from '@/services/scheduleService';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useTimeUpdate } from '@/hooks/useTimeUpdate';
-import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, withTiming, withSpring } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import ViewModeMenu from './ViewModeMenu';
 
 const formatTimeByLocale = (time: string, isEnglish: boolean) => {
   if (!isEnglish) return time;
-  
+
   const [hours, minutes] = time.split(':').map(Number);
   const period = hours >= 12 ? 'PM' : 'AM';
   const hour12 = hours % 12 || 12;
@@ -64,18 +65,18 @@ export default function DayView() {
   const weekDates = useMemo(() => {
     const today = new Date();
     const currentDay = today.getDay(); // 0 is Sunday, 1 is Monday, etc.
-    
+
     // Calculate the Monday date
     const monday = new Date(today);
     let daysFromMonday;
-    
+
     // If it's weekend (Saturday or Sunday), calculate next week's Monday
     if (currentDay === 0 || currentDay === 6) {
       daysFromMonday = currentDay === 0 ? 1 : 2; // Sunday: +1, Saturday: +2
     } else {
       daysFromMonday = currentDay === 0 ? -6 : 1 - currentDay;
     }
-    
+
     monday.setDate(today.getDate() + daysFromMonday);
 
     // First generate Monday-Friday
@@ -90,13 +91,13 @@ export default function DayView() {
         isRecoveryDay: scheduleService.isRecoveryDay(date) !== null
       };
     });
-    
+
     // Check if Saturday is a recovery day, and if so, add it to the array
     const saturday = new Date(monday);
     saturday.setDate(monday.getDate() + 5); // Saturday is 5 days from Monday
-    
+
     const saturdayIsRecovery = scheduleService.isRecoveryDay(saturday) !== null;
-    
+
     if (saturdayIsRecovery) {
       dates.push({
         date: saturday,
@@ -106,7 +107,7 @@ export default function DayView() {
         isRecoveryDay: true
       });
     }
-    
+
     return dates;
   }, [currentDate, t]);
 
@@ -115,7 +116,7 @@ export default function DayView() {
     const updateSchedule = async () => {
       if (scheduleData) {
         const daySchedule = await scheduleService.getScheduleForDay(
-          scheduleData, 
+          scheduleData,
           DAYS_MAP[selectedDate.getDay() as keyof typeof DAYS_MAP],
           selectedDate // Pass the actual date to check for recovery days
         );
@@ -129,7 +130,7 @@ export default function DayView() {
   useEffect(() => {
     const today = new Date();
     const currentDay = today.getDay();
-    
+
     if (currentDay === 0 || currentDay === 6) { // If weekend
       const nextMonday = new Date(today);
       const daysUntilMonday = currentDay === 0 ? 1 : 2;
@@ -150,18 +151,18 @@ export default function DayView() {
     const startTimeInMinutes = startHours * 60 + startMinutes;
     const endTimeInMinutes = endHours * 60 + endMinutes;
 
-    return currentTimeInMinutes >= startTimeInMinutes && 
-           currentTimeInMinutes <= endTimeInMinutes;
+    return currentTimeInMinutes >= startTimeInMinutes &&
+      currentTimeInMinutes <= endTimeInMinutes;
   };
 
   const isCurrentTimeInSchedule = (item: ScheduleItem): boolean => {
     // First check if selected date is today
     const today = new Date();
     const isSelectedDateToday = selectedDate.toDateString() === today.toDateString();
-    
+
     // If not today, don't show the time indicator
     if (!isSelectedDateToday) return false;
-    
+
     const [startHours, startMinutes] = item.startTime.split(':').map(Number);
     const [endHours, endMinutes] = item.endTime.split(':').map(Number);
     const currentHours = currentTime.getHours();
@@ -174,11 +175,11 @@ export default function DayView() {
     return currentTimeInMinutes >= startTimeInMinutes && currentTimeInMinutes < endTimeInMinutes;
   };
 
-  // Schedule update function 
+  // Schedule update function
   const updateSchedule = async () => {
     if (scheduleData) {
       const daySchedule = await scheduleService.getScheduleForDay(
-        scheduleData, 
+        scheduleData,
         DAYS_MAP[selectedDate.getDay() as keyof typeof DAYS_MAP]
       );
       setTodaySchedule(daySchedule);
@@ -190,7 +191,7 @@ export default function DayView() {
     const unsubscribe = scheduleService.subscribe(() => {
       const newSettings = scheduleService.getSettings();
       setSettings(newSettings);
-      
+
       // Refresh schedule data when the group changes or subgroup changes
       if (newSettings.selectedGroupId !== settings.selectedGroupId || newSettings.group !== settings.group) {
         fetchSchedule(newSettings.selectedGroupId);
@@ -224,14 +225,14 @@ export default function DayView() {
   };
 
   const scrollViewRef = useRef<ScrollView>(null);
-  
+
   const scrollToDate = useCallback((date: Date) => {
     if (!scrollViewRef.current) return;
-    
+
     const dateIndex = weekDates.findIndex(
       d => d.date.toDateString() === date.toDateString()
     );
-    
+
     if (dateIndex !== -1) {
       scrollViewRef.current.scrollTo({
         x: dateIndex * ((Dimensions.get('window').width - 40) / 5),
@@ -244,8 +245,8 @@ export default function DayView() {
     // Only allow selecting dates within the 5-day range (Monday to Friday)
     const dateTime = date.getTime();
     const minDate = weekDates[0].date.getTime();
-    const maxDate = weekDates[5].date.getTime(); 
-    
+    const maxDate = weekDates[5].date.getTime();
+
     if (dateTime >= minDate && dateTime <= maxDate) {
       setSelectedDate(date);
       scrollToDate(date);
@@ -278,17 +279,17 @@ export default function DayView() {
       const currentMinutes = date.getMinutes();
       const currentSeconds = date.getSeconds();
       const currentTimeInMinutes = currentHours * 60 + currentMinutes + (currentSeconds / 60);
-    
+
       const [startHours, startMinutes] = props.startTime.split(':').map(Number);
       const [endHours, endMinutes] = props.endTime.split(':').map(Number);
-      
+
       const startTimeInMinutes = startHours * 60 + startMinutes;
       const endTimeInMinutes = endHours * 60 + endMinutes;
       const timeSlotDuration = endTimeInMinutes - startTimeInMinutes;
-    
+
       if (currentTimeInMinutes < startTimeInMinutes) return { top: withTiming('0%') };
       if (currentTimeInMinutes > endTimeInMinutes) return { top: withTiming('100%') };
-    
+
       const progress = (currentTimeInMinutes - startTimeInMinutes) / timeSlotDuration;
       return {
         top: withTiming(`${progress * 100}%`, { duration: 1000 }),
@@ -302,21 +303,21 @@ export default function DayView() {
       const currentMinutes = date.getMinutes();
       const currentSeconds = date.getSeconds();
       const currentTimeInMinutes = currentHours * 60 + currentMinutes + (currentSeconds / 60);
-    
+
       const [startHours, startMinutes] = props.startTime.split(':').map(Number);
       const [endHours, endMinutes] = props.endTime.split(':').map(Number);
-      
+
       const startTimeInMinutes = startHours * 60 + startMinutes;
       const endTimeInMinutes = endHours * 60 + endMinutes;
       const timeSlotDuration = endTimeInMinutes - startTimeInMinutes;
       const progress = (currentTimeInMinutes - startTimeInMinutes) / timeSlotDuration;
-      
+
       const position = progress * props.containerHeight;
       const showOnTop = position > props.containerHeight / 2;
 
       return {
-        transform: [{ 
-          translateY: withTiming(showOnTop ? -24 : 24, { duration: 300 }) 
+        transform: [{
+          translateY: withTiming(showOnTop ? -24 : 24, { duration: 300 })
         }],
       };
     }, [props.timestamp, props.containerHeight]);
@@ -333,7 +334,7 @@ export default function DayView() {
               const now = new Date();
               // Use the current period's end time for the line indicator
               const [endHours, endMinutes] = props.endTime.split(':').map(Number);
-              
+
               const endTime = new Date(
                 now.getFullYear(),
                 now.getMonth(),
@@ -355,6 +356,82 @@ export default function DayView() {
     );
   }, []);
 
+  const RecoveryDayInfo = ({ reason }: { reason: string }) => {
+    const [showInfo, setShowInfo] = useState(false);
+
+    // Add animated value for popup transitions
+    const popupAnimation = useAnimatedStyle(() => {
+      return {
+        opacity: withTiming(showInfo ? 1 : 0, { duration: 200 }),
+        transform: [
+          {
+            scale: withSpring(showInfo ? 1 : 0.95, {
+              damping: 15,
+              stiffness: 150,
+            })
+          }
+        ],
+      };
+    }, [showInfo]);
+
+    // Add button animation
+    const buttonAnimation = useAnimatedStyle(() => {
+      return {
+        transform: [
+          {
+            scale: withSpring(showInfo ? 0.95 : 1, {
+              damping: 15,
+              stiffness: 150,
+            })
+          }
+        ]
+      };
+    }, [showInfo]);
+
+    return (
+      <View style={{ alignItems: 'flex-end' }}>
+        <Animated.View style={buttonAnimation}>
+          <TouchableOpacity
+            style={styles.recoveryDayInfoButton}
+            onPress={() => setShowInfo(!showInfo)}
+            activeOpacity={0.7}
+            hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
+          >
+            <LinearGradient
+              colors={['#FF5733DD', '#FF5733AA']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.recoveryDayInfoButtonGradient}
+            >
+              <Text style={styles.recoveryDayInfoIcon}>ⓘ</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </Animated.View>
+
+        <Animated.View
+          style={[styles.recoveryDayTooltipContainer, popupAnimation]}
+          pointerEvents={showInfo ? 'auto' : 'none'}
+        >
+          <View style={styles.recoveryDayTooltip}>
+            <View style={styles.recoveryDayTooltipHeader}>
+              <Text style={styles.recoveryDayTooltipTitle}>Recovery Day</Text>
+              <TouchableOpacity
+                style={styles.closeTooltipButton}
+                onPress={() => setShowInfo(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Text style={styles.closeTooltipText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.recoveryDayTooltipReason}>
+              {reason || 'No reason provided'}
+            </Text>
+          </View>
+        </Animated.View>
+      </View>
+    );
+  };
+
   if (isLoading && !scheduleData) {
     return (
       <SafeAreaView style={styles.container}>
@@ -362,13 +439,13 @@ export default function DayView() {
           <View style={styles.header}>
             <View style={styles.headerTop}>
               <Text style={styles.headerTitle}>
-                {formatDate(selectedDate, { 
+                {formatDate(selectedDate, {
                   month: 'long',
                   day: 'numeric',
                   year: 'numeric'
                 })}
               </Text>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.weekInfo}
                 onPress={() => setIsMenuOpen(true)}
               >
@@ -401,13 +478,13 @@ export default function DayView() {
           <View style={styles.header}>
             <View style={styles.headerTop}>
               <Text style={styles.headerTitle}>
-                {formatDate(selectedDate, { 
+                {formatDate(selectedDate, {
                   month: 'long',
                   day: 'numeric',
                   year: 'numeric'
                 })}
               </Text>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.weekInfo}
                 onPress={() => setIsMenuOpen(true)}
               >
@@ -438,13 +515,13 @@ export default function DayView() {
         <View style={styles.header}>
           <View style={styles.headerTop}>
             <Text style={styles.headerTitle}>
-              {formatDate(selectedDate, { 
+              {formatDate(selectedDate, {
                 month: 'long',
                 day: 'numeric',
                 year: 'numeric'
               })}
             </Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.weekInfo}
               onPress={() => setIsMenuOpen(true)}
             >
@@ -454,14 +531,14 @@ export default function DayView() {
             </TouchableOpacity>
           </View>
           <View style={styles.dateList}>
-            <ScrollView 
+            <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.dateListScrollContent}
             >
               {weekDates.map((date, index) => (
-                <TouchableOpacity 
-                  key={index} 
+                <TouchableOpacity
+                  key={index}
                   onPress={() => handleDatePress(date.date)}
                   style={[
                     styles.dateItem,
@@ -472,7 +549,7 @@ export default function DayView() {
                   ]}
                 >
                   <Text style={[
-                    styles.dateDay, 
+                    styles.dateDay,
                     date.date.getDate() === selectedDate.getDate() && !date.isRecoveryDay && styles.selectedDayText,
                     date.date.getDate() === selectedDate.getDate() && date.isRecoveryDay && styles.selectedRecoveryDayText,
                     date.isToday && date.date.getDate() !== selectedDate.getDate() && styles.todayText,
@@ -481,7 +558,7 @@ export default function DayView() {
                     {date.day}
                   </Text>
                   <Text style={[
-                    styles.dateNumber, 
+                    styles.dateNumber,
                     date.date.getDate() === selectedDate.getDate() && !date.isRecoveryDay && styles.selectedDayText,
                     date.date.getDate() === selectedDate.getDate() && date.isRecoveryDay && styles.selectedRecoveryDayText,
                     date.isToday && date.date.getDate() !== selectedDate.getDate() && styles.todayText,
@@ -501,134 +578,128 @@ export default function DayView() {
       <View style={styles.contentContainer}>
         <ScrollView style={styles.scheduleContainer}>
           {recoveryDay && (
-            <View style={styles.recoveryBanner}>
-              <Text style={styles.recoveryTitle}>Recovery Day</Text>
-              <Text style={styles.recoveryInfo}>
-                This is a recovery day following the {recoveryDay.replacedDay.charAt(0).toUpperCase() + recoveryDay.replacedDay.slice(1)} schedule
-              </Text>
-              <Text style={styles.recoveryReason}>{recoveryDay.reason}</Text>
-            </View>
+            <RecoveryDayInfo reason={recoveryDay.reason || ''} />
           )}
-          
+
           {isWeekend && !recoveryDay ? (
             <View style={styles.noSchedule}>
               <Text style={styles.noScheduleText}>{t('schedule').noClassesWeekend}</Text>
             </View>
           ) : (
-            todaySchedule.map((item, index) => {
-              // Skip recovery-info items as we now display a banner
-              if (item.period === 'recovery-info') {
-                return null;
-              }
-              
-              if (item.isEvenWeek !== undefined && item.isEvenWeek !== isEvenWeek) {
-                return null;
-              }
+              todaySchedule.map((item, index) => {
+                // Skip recovery-info items as we now display a banner
+                if (item.period === 'recovery-info') {
+                  return null;
+                }
 
-              const nextItem = todaySchedule[index + 1];
-              const showTimeIndicator = isCurrentTimeInSchedule(item);
+                if (item.isEvenWeek !== undefined && item.isEvenWeek !== isEvenWeek) {
+                  return null;
+                }
 
-              return (
-                <View 
-                  key={index} 
-                  style={[styles.scheduleItem]}
-                  onLayout={(event) => {
-                    item._height = event.nativeEvent.layout.height;
-                  }}
-                >
-                  <View style={[styles.classCard, { 
-                    borderLeftColor: getSubjectColor(item.className),
-                    backgroundColor: '#232433',
-                    shadowOpacity: 0.1,
-                    minHeight: 100,
-                  }]}>
-                    <View style={[styles.timeContainer, {
-                      borderRightColor: 'rgba(138, 138, 141, 0.2)'
+                const nextItem = todaySchedule[index + 1];
+                const showTimeIndicator = isCurrentTimeInSchedule(item);
+
+                return (
+                  <View
+                    key={index}
+                    style={[styles.scheduleItem]}
+                    onLayout={(event) => {
+                      item._height = event.nativeEvent.layout.height;
+                    }}
+                  >
+                    <View style={[styles.classCard, {
+                      borderLeftColor: getSubjectColor(item.className),
+                      backgroundColor: '#232433',
+                      shadowOpacity: 0.1,
+                      minHeight: 100,
                     }]}>
-                      <View style={styles.timeWrapper}>
-                        <View style={[styles.timeDot, { backgroundColor: getSubjectColor(item.className) }]} />
-                        <Text style={[styles.time, { marginBottom: 'auto' }]}>
-                          {formatTimeByLocale(item.startTime, settings.language === 'en')}
+                      <View style={[styles.timeContainer, {
+                        borderRightColor: 'rgba(138, 138, 141, 0.2)'
+                      }]}>
+                        <View style={styles.timeWrapper}>
+                          <View style={[styles.timeDot, { backgroundColor: getSubjectColor(item.className) }]} />
+                          <Text style={[styles.time, { marginBottom: 'auto' }]}>
+                            {formatTimeByLocale(item.startTime, settings.language === 'en')}
+                          </Text>
+                        </View>
+                        <Text style={[styles.time, { marginTop: 'auto' }]}>
+                          {formatTimeByLocale(item.endTime, settings.language === 'en')}
                         </Text>
                       </View>
-                      <Text style={[styles.time, { marginTop: 'auto' }]}>
-                        {formatTimeByLocale(item.endTime, settings.language === 'en')}
-                      </Text>
-                    </View>
 
-                    <View style={styles.classContent}>
-                      <View style={styles.classHeaderRow}>
-                        <Text style={styles.className}>{item.className}</Text>
-                        <Text style={[styles.statusText, showTimeIndicator && styles.activeStatusText]}>
-                          {showTimeIndicator ? 'Now' : 
-                            (() => {
-                              const currentTimeMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
-                              const [startHours, startMinutes] = item.startTime.split(':').map(Number);
-                              const startTimeMinutes = startHours * 60 + startMinutes;
-                              
-                              if (currentTimeMinutes < startTimeMinutes) {
-                                const previousItem = index > 0 ? todaySchedule[index - 1] : null;
-                                if (previousItem && isCurrentTimeInSchedule(previousItem)) {
-                                  // Calculate minutes until start and round up (so 59 seconds = 1 minute)
-                                  const now = new Date();
-                                  const target = new Date(
-                                    now.getFullYear(),
-                                    now.getMonth(),
-                                    now.getDate(),
-                                    startHours,
-                                    startMinutes
-                                  );
-                                  const diffInMs = target.getTime() - now.getTime();
-                                  const minutesUntilStart = Math.ceil(diffInMs / (1000 * 60));
-                                  return `In ${minutesUntilStart}m`;
-                                } else if (!previousItem && currentTimeMinutes < startTimeMinutes) {
-                                  // If this is the first class and it hasn't started yet
-                                  const now = new Date();
-                                  const target = new Date(
-                                    now.getFullYear(),
-                                    now.getMonth(),
-                                    now.getDate(),
-                                    startHours,
-                                    startMinutes
-                                  );
-                                  const diffInMs = target.getTime() - now.getTime();
-                                  const minutesUntilStart = Math.ceil(diffInMs / (1000 * 60));
-                                  return `${t('schedule').in} ${minutesUntilStart}m`;
+                      <View style={styles.classContent}>
+                        <View style={styles.classHeaderRow}>
+                          <Text style={styles.className}>{item.className}</Text>
+                          <Text style={[styles.statusText, showTimeIndicator && styles.activeStatusText]}>
+                            {showTimeIndicator ? 'Now' :
+                              (() => {
+                                const currentTimeMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
+                                const [startHours, startMinutes] = item.startTime.split(':').map(Number);
+                                const startTimeMinutes = startHours * 60 + startMinutes;
+
+                                if (currentTimeMinutes < startTimeMinutes) {
+                                  const previousItem = index > 0 ? todaySchedule[index - 1] : null;
+                                  if (previousItem && isCurrentTimeInSchedule(previousItem)) {
+                                    // Calculate minutes until start and round up (so 59 seconds = 1 minute)
+                                    const now = new Date();
+                                    const target = new Date(
+                                      now.getFullYear(),
+                                      now.getMonth(),
+                                      now.getDate(),
+                                      startHours,
+                                      startMinutes
+                                    );
+                                    const diffInMs = target.getTime() - now.getTime();
+                                    const minutesUntilStart = Math.ceil(diffInMs / (1000 * 60));
+                                    return `In ${minutesUntilStart}m`;
+                                  } else if (!previousItem && currentTimeMinutes < startTimeMinutes) {
+                                    // If this is the first class and it hasn't started yet
+                                    const now = new Date();
+                                    const target = new Date(
+                                      now.getFullYear(),
+                                      now.getMonth(),
+                                      now.getDate(),
+                                      startHours,
+                                      startMinutes
+                                    );
+                                    const diffInMs = target.getTime() - now.getTime();
+                                    const minutesUntilStart = Math.ceil(diffInMs / (1000 * 60));
+                                    return `${t('schedule').in} ${minutesUntilStart}m`;
+                                  }
                                 }
-                              }
-                              return '';
-                            })()
-                          }
-                        </Text>
-                      </View>
-                      <View style={styles.detailsContainer}>
-                        <View style={styles.teacherContainer}>
-                          <Text style={styles.teacherName}>{item.teacherName}</Text>
-                          {item.group && item.group !== 'Clasă intreagă' && item.group !== 'Clas� intreag�' && (
-                            <Text style={styles.groupName}>
-                              {item.group === 'Subgroup 1' ? t('subgroup').group1 : t('subgroup').group2}
-                            </Text>
-                          )}
+                                return '';
+                              })()
+                            }
+                          </Text>
                         </View>
-                        <View style={styles.roomContainer}>
-                          <Text style={styles.roomNumber}>{t('schedule').room} {item.roomNumber}</Text>
+                        <View style={styles.detailsContainer}>
+                          <View style={styles.teacherContainer}>
+                            <Text style={styles.teacherName}>{item.teacherName}</Text>
+                            {item.group && item.group !== 'Clasă intreagă' && item.group !== 'Clas� intreag�' && (
+                              <Text style={styles.groupName}>
+                                {item.group === 'Subgroup 1' ? t('subgroup').group1 : t('subgroup').group2}
+                              </Text>
+                            )}
+                          </View>
+                          <View style={styles.roomContainer}>
+                            <Text style={styles.roomNumber}>{t('schedule').room} {item.roomNumber}</Text>
+                          </View>
                         </View>
                       </View>
+                      {showTimeIndicator && (
+                        <TimeIndicator
+                          startTime={item.startTime}
+                          endTime={item.endTime} // Use item's end time for the period indicator
+                          containerHeight={item._height || 100}
+                          hasNextItem={item.hasNextItem}
+                          timestamp={currentTimestamp}
+                        />
+                      )}
                     </View>
-                    {showTimeIndicator && (
-                      <TimeIndicator 
-                        startTime={item.startTime} 
-                        endTime={item.endTime} // Use item's end time for the period indicator
-                        containerHeight={item._height || 100}
-                        hasNextItem={item.hasNextItem}
-                        timestamp={currentTimestamp}
-                      />
-                    )}
                   </View>
-                </View>
-              );
-            })
-          )}
+                );
+              })
+            )}
         </ScrollView>
       </View>
       <ViewModeMenu
@@ -658,13 +729,13 @@ function getSubjectColor(subjectName: string): string {
     '#BA55D3', // Medium Orchid
     '#2E8B57', // Sea Green
   ];
-  
+
   // Generate a number from the subject name
   let hash = 0;
   for (let i = 0; i < subjectName.length; i++) {
     hash = subjectName.charCodeAt(i) + ((hash << 5) - hash);
   }
-  
+
   // Use the hash to pick a color
   const index = Math.abs(hash) % colors.length;
   return colors[index];
@@ -734,7 +805,16 @@ type Styles = {
   recoveryDayText: TextStyle; // Added new style
   selectedRecoveryDay: ViewStyle; // Added new style
   selectedRecoveryDayText: TextStyle; // Added new style
-
+  recoveryDayInfoButton: ViewStyle;
+  recoveryDayInfoButtonGradient: ViewStyle;
+  recoveryDayInfoIcon: TextStyle;
+  recoveryDayTooltipContainer: ViewStyle;
+  recoveryDayTooltip: ViewStyle;
+  recoveryDayTooltipHeader: ViewStyle;
+  recoveryDayTooltipTitle: TextStyle;
+  closeTooltipButton: ViewStyle;
+  closeTooltipText: TextStyle;
+  recoveryDayTooltipReason: TextStyle;
 };
 
 const styles = StyleSheet.create<Styles>({
@@ -1155,5 +1235,69 @@ const styles = StyleSheet.create<Styles>({
   },
   selectedRecoveryDayText: {
     color: '#FFFFFF',
+  },
+  recoveryDayInfoButton: {
+    alignSelf: 'flex-end',
+    marginBottom: 12,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    overflow: 'hidden',
+    zIndex: 10,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 1, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+  },
+  recoveryDayInfoButtonGradient: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recoveryDayInfoIcon: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  recoveryDayTooltipContainer: {
+    position: 'absolute',
+    top: 28,
+    right: 0,
+    width: 200,
+    zIndex: 100,
+  },
+  recoveryDayTooltip: {
+    backgroundColor: '#1C1C1E',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#2C2C2E',
+  },
+  recoveryDayTooltipHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  recoveryDayTooltipTitle: {
+    color: '#FF5733',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  closeTooltipButton: {
+    padding: 4,
+  },
+  closeTooltipText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  recoveryDayTooltipReason: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    lineHeight: 18,
+    opacity: 0.8,
   },
 });
