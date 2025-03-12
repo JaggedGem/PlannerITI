@@ -377,48 +377,19 @@ export default function DayView() {
                 </Text>
               </TouchableOpacity>
             </View>
-            <View style={styles.dateList}>
-              {weekDates.slice(0, 6).map((date, index) => (
-                <TouchableOpacity 
-                  key={index} 
-                  onPress={() => handleDatePress(date.date)}
-                  style={[
-                    styles.dateItem,
-                    date.date.getDate() === selectedDate.getDate() && styles.selectedDay,
-                    date.isToday && date.date.getDate() !== selectedDate.getDate() && styles.todayDateItem
-                  ]}
-                >
-                  <Text style={[
-                    styles.dateDay, 
-                    date.date.getDate() === selectedDate.getDate() && styles.selectedDayText,
-                    date.isToday && date.date.getDate() !== selectedDate.getDate() && styles.todayText
-                  ]}>
-                    {date.day}
-                  </Text>
-                  <Text style={[
-                    styles.dateNumber, 
-                    date.date.getDate() === selectedDate.getDate() && styles.selectedDayText,
-                    date.isToday && date.date.getDate() !== selectedDate.getDate() && styles.todayText
-                  ]}>
-                    {date.dateNum}
-                  </Text>
-                  {date.isToday && date.date.getDate() !== selectedDate.getDate() && <View style={styles.todayDot} />}
-                </TouchableOpacity>
-              ))}
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#3478F6" />
+              <Text style={styles.loadingText}>{t('schedule').loading}</Text>
             </View>
+            <ViewModeMenu
+              isOpen={isMenuOpen}
+              onClose={() => setIsMenuOpen(false)}
+              isEvenWeek={isEvenWeek}
+              weekText={isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
+              currentView="day"
+            />
           </View>
         </View>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#3478F6" />
-          <Text style={styles.loadingText}>{t('schedule').loading}</Text>
-        </View>
-        <ViewModeMenu
-          isOpen={isMenuOpen}
-          onClose={() => setIsMenuOpen(false)}
-          isEvenWeek={isEvenWeek}
-          weekText={isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
-          currentView="day"
-        />
       </SafeAreaView>
     );
   }
@@ -445,49 +416,18 @@ export default function DayView() {
                 </Text>
               </TouchableOpacity>
             </View>
-            <View style={styles.dateList}>
-              {weekDates.map((date, index) => (
-                <TouchableOpacity 
-                  key={index} 
-                  onPress={() => handleDatePress(date.date)}
-                  style={[
-                    styles.dateItem,
-                    date.date.getDate() === selectedDate.getDate() && styles.selectedDay,
-                    date.isToday && date.date.getDate() !== selectedDate.getDate() && styles.todayDateItem,
-                    date.isRecoveryDay && styles.recoveryDayItem
-                  ]}
-                >
-                  <Text style={[
-                    styles.dateDay, 
-                    date.date.getDate() === selectedDate.getDate() && styles.selectedDayText,
-                    date.isToday && date.date.getDate() !== selectedDate.getDate() && styles.todayText,
-                    date.isRecoveryDay && styles.recoveryDayText
-                  ]}>
-                    {date.day}
-                  </Text>
-                  <Text style={[
-                    styles.dateNumber, 
-                    date.date.getDate() === selectedDate.getDate() && styles.selectedDayText,
-                    date.isToday && date.date.getDate() !== selectedDate.getDate() && styles.todayText,
-                    date.isRecoveryDay && styles.recoveryDayText
-                  ]}>
-                    {date.dateNum}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>{error}</Text>
             </View>
+            <ViewModeMenu
+              isOpen={isMenuOpen}
+              onClose={() => setIsMenuOpen(false)}
+              isEvenWeek={isEvenWeek}
+              weekText={isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
+              currentView="day"
+            />
           </View>
         </View>
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-        <ViewModeMenu
-          isOpen={isMenuOpen}
-          onClose={() => setIsMenuOpen(false)}
-          isEvenWeek={isEvenWeek}
-          weekText={isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
-          currentView="day"
-        />
       </SafeAreaView>
     );
   }
@@ -514,40 +454,46 @@ export default function DayView() {
             </TouchableOpacity>
           </View>
           <View style={styles.dateList}>
-            {weekDates.map((date, index) => (
-              <TouchableOpacity 
-                key={index} 
-                onPress={() => handleDatePress(date.date)}
-                style={[
-                  styles.dateItem,
-                  date.date.getDate() === selectedDate.getDate() && !date.isRecoveryDay && styles.selectedDay,
-                  date.date.getDate() === selectedDate.getDate() && date.isRecoveryDay && styles.selectedRecoveryDay,
-                  date.isToday && date.date.getDate() !== selectedDate.getDate() && styles.todayDateItem,
-                  date.isRecoveryDay && date.date.getDate() !== selectedDate.getDate() && styles.recoveryDayItem
-                ]}
-              >
-                <Text style={[
-                  styles.dateDay, 
-                  date.date.getDate() === selectedDate.getDate() && !date.isRecoveryDay && styles.selectedDayText,
-                  date.date.getDate() === selectedDate.getDate() && date.isRecoveryDay && styles.selectedRecoveryDayText,
-                  date.isToday && date.date.getDate() !== selectedDate.getDate() && styles.todayText,
-                  date.isRecoveryDay && date.date.getDate() !== selectedDate.getDate() && styles.recoveryDayText
-                ]}>
-                  {date.day}
-                </Text>
-                <Text style={[
-                  styles.dateNumber, 
-                  date.date.getDate() === selectedDate.getDate() && !date.isRecoveryDay && styles.selectedDayText,
-                  date.date.getDate() === selectedDate.getDate() && date.isRecoveryDay && styles.selectedRecoveryDayText,
-                  date.isToday && date.date.getDate() !== selectedDate.getDate() && styles.todayText,
-                  date.isRecoveryDay && date.date.getDate() !== selectedDate.getDate() && styles.recoveryDayText
-                ]}>
-                  {date.dateNum}
-                </Text>
-                {date.isToday && date.date.getDate() !== selectedDate.getDate() && <View style={styles.todayDot} />}
-                {date.isRecoveryDay && <View style={styles.recoveryDot} />}
-              </TouchableOpacity>
-            ))}
+            <ScrollView 
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.dateListScrollContent}
+            >
+              {weekDates.map((date, index) => (
+                <TouchableOpacity 
+                  key={index} 
+                  onPress={() => handleDatePress(date.date)}
+                  style={[
+                    styles.dateItem,
+                    date.date.getDate() === selectedDate.getDate() && !date.isRecoveryDay && styles.selectedDay,
+                    date.date.getDate() === selectedDate.getDate() && date.isRecoveryDay && styles.selectedRecoveryDay,
+                    date.isToday && date.date.getDate() !== selectedDate.getDate() && styles.todayDateItem,
+                    date.isRecoveryDay && date.date.getDate() !== selectedDate.getDate() && styles.recoveryDayItem
+                  ]}
+                >
+                  <Text style={[
+                    styles.dateDay, 
+                    date.date.getDate() === selectedDate.getDate() && !date.isRecoveryDay && styles.selectedDayText,
+                    date.date.getDate() === selectedDate.getDate() && date.isRecoveryDay && styles.selectedRecoveryDayText,
+                    date.isToday && date.date.getDate() !== selectedDate.getDate() && styles.todayText,
+                    date.isRecoveryDay && date.date.getDate() !== selectedDate.getDate() && styles.recoveryDayText
+                  ]}>
+                    {date.day}
+                  </Text>
+                  <Text style={[
+                    styles.dateNumber, 
+                    date.date.getDate() === selectedDate.getDate() && !date.isRecoveryDay && styles.selectedDayText,
+                    date.date.getDate() === selectedDate.getDate() && date.isRecoveryDay && styles.selectedRecoveryDayText,
+                    date.isToday && date.date.getDate() !== selectedDate.getDate() && styles.todayText,
+                    date.isRecoveryDay && date.date.getDate() !== selectedDate.getDate() && styles.recoveryDayText
+                  ]}>
+                    {date.dateNum}
+                  </Text>
+                  {date.isToday && date.date.getDate() !== selectedDate.getDate() && <View style={styles.todayDot} />}
+                  {date.isRecoveryDay && <View style={styles.recoveryDot} />}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           </View>
         </View>
       </View>
@@ -730,6 +676,7 @@ type Styles = {
   headerTop: ViewStyle;
   headerTitle: TextStyle;
   dateList: ViewStyle;
+  dateListScrollContent: ViewStyle; // Added new style
   dateListContent: ViewStyle;
   dateItem: ViewStyle;
   activeDateItem: ViewStyle;
@@ -759,6 +706,7 @@ type Styles = {
   timeIndicator: ViewStyle;
   timeIndicatorLine: ViewStyle;
   timeIndicatorArrowContainer: ViewStyle;
+  timeIndicatorMove: ViewStyle; // Added new style
   timeIndicatorArrow: ViewStyle;
   timeLeftText: TextStyle;
   timeWrapper: ViewStyle;
@@ -856,15 +804,20 @@ const styles = StyleSheet.create<Styles>({
     justifyContent: 'space-between',
     width: '100%',
   },
+  dateListScrollContent: {
+    paddingVertical: 5, // Add padding to prevent cut-off
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   dateItem: {
     alignItems: 'center',
     justifyContent: 'center',
     padding: 12,
     borderRadius: 16,
-    flex: 1,
     backgroundColor: '#1A1A1A',
     height: 90,
-    minWidth: 0, // Ensure flex items can shrink below their content size
+    width: 70, // Fixed width for all date items
+    marginHorizontal: 5, // Add some horizontal spacing
   },
   activeDateItem: {
     backgroundColor: '#2C3DCD',
@@ -1040,6 +993,14 @@ const styles = StyleSheet.create<Styles>({
     shadowRadius: 6,
     elevation: 8,
   },
+  timeIndicatorMove: {
+    position: 'absolute',
+    left: 0,
+    borderColor: 'red',
+    width: 2,
+    height: 2,
+    borderRadius: 5,
+  },
   timeIndicatorArrow: {
     width: 0,
     height: 0,
@@ -1171,7 +1132,7 @@ const styles = StyleSheet.create<Styles>({
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#FF4B4B',
+    backgroundColor: '#FF5733',
     marginTop: 4,
   },
   recoveryDayItem: {
