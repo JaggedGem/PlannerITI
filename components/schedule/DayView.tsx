@@ -58,8 +58,9 @@ export default function DayView() {
   const currentDate = new Date();
   const isEvenWeek = scheduleService.isEvenWeek(selectedDate);
   const { t, formatDate } = useTranslation();
+  const recoveryDay = useMemo(() => scheduleService.isRecoveryDay(selectedDate), [selectedDate]);
 
-  // Generate current week dates (Monday to Friday)
+  // Generate current week dates (Monday to Friday, plus Saturday if it's a recovery day)
   const weekDates = useMemo(() => {
     const today = new Date();
     const currentDay = today.getDay(); // 0 is Sunday, 1 is Monday, etc.
@@ -77,16 +78,36 @@ export default function DayView() {
     
     monday.setDate(today.getDate() + daysFromMonday);
 
-    return Array.from({ length: 5 }, (_, i) => {
+    // First generate Monday-Friday
+    const dates = Array.from({ length: 5 }, (_, i) => {
       const date = new Date(monday);
       date.setDate(monday.getDate() + i);
       return {
         date,
         day: t('weekdays').short[date.getDay()],
         dateNum: date.getDate(),
-        isToday: date.toDateString() === currentDate.toDateString()
+        isToday: date.toDateString() === currentDate.toDateString(),
+        isRecoveryDay: scheduleService.isRecoveryDay(date) !== null
       };
     });
+    
+    // Check if Saturday is a recovery day, and if so, add it to the array
+    const saturday = new Date(monday);
+    saturday.setDate(monday.getDate() + 5); // Saturday is 5 days from Monday
+    
+    const saturdayIsRecovery = scheduleService.isRecoveryDay(saturday) !== null;
+    
+    if (saturdayIsRecovery) {
+      dates.push({
+        date: saturday,
+        day: t('weekdays').short[saturday.getDay()],
+        dateNum: saturday.getDate(),
+        isToday: saturday.toDateString() === currentDate.toDateString(),
+        isRecoveryDay: true
+      });
+    }
+    
+    return dates;
   }, [currentDate, t]);
 
   // Update schedule when date changes or scheduleData changes
@@ -95,7 +116,8 @@ export default function DayView() {
       if (scheduleData) {
         const daySchedule = await scheduleService.getScheduleForDay(
           scheduleData, 
-          DAYS_MAP[selectedDate.getDay() as keyof typeof DAYS_MAP]
+          DAYS_MAP[selectedDate.getDay() as keyof typeof DAYS_MAP],
+          selectedDate // Pass the actual date to check for recovery days
         );
         setTodaySchedule(daySchedule);
       }
@@ -132,7 +154,7 @@ export default function DayView() {
            currentTimeInMinutes <= endTimeInMinutes;
   };
 
-  const isCurrentTimeInSchedule = (item: ScheduleItem, nextItem: ScheduleItem | undefined): boolean => {
+  const isCurrentTimeInSchedule = (item: ScheduleItem): boolean => {
     // First check if selected date is today
     const today = new Date();
     const isSelectedDateToday = selectedDate.toDateString() === today.toDateString();
@@ -222,7 +244,7 @@ export default function DayView() {
     // Only allow selecting dates within the 5-day range (Monday to Friday)
     const dateTime = date.getTime();
     const minDate = weekDates[0].date.getTime();
-    const maxDate = weekDates[4].date.getTime(); // Changed from 6 to 4 since we only have 5 days
+    const maxDate = weekDates[5].date.getTime(); 
     
     if (dateTime >= minDate && dateTime <= maxDate) {
       setSelectedDate(date);
@@ -356,7 +378,7 @@ export default function DayView() {
               </TouchableOpacity>
             </View>
             <View style={styles.dateList}>
-              {weekDates.slice(0, 5).map((date, index) => (
+              {weekDates.slice(0, 6).map((date, index) => (
                 <TouchableOpacity 
                   key={index} 
                   onPress={() => handleDatePress(date.date)}
@@ -424,31 +446,33 @@ export default function DayView() {
               </TouchableOpacity>
             </View>
             <View style={styles.dateList}>
-              {weekDates.slice(0, 5).map((date, index) => (
+              {weekDates.map((date, index) => (
                 <TouchableOpacity 
                   key={index} 
                   onPress={() => handleDatePress(date.date)}
                   style={[
                     styles.dateItem,
                     date.date.getDate() === selectedDate.getDate() && styles.selectedDay,
-                    date.isToday && date.date.getDate() !== selectedDate.getDate() && styles.todayDateItem
+                    date.isToday && date.date.getDate() !== selectedDate.getDate() && styles.todayDateItem,
+                    date.isRecoveryDay && styles.recoveryDayItem
                   ]}
                 >
                   <Text style={[
                     styles.dateDay, 
                     date.date.getDate() === selectedDate.getDate() && styles.selectedDayText,
-                    date.isToday && date.date.getDate() !== selectedDate.getDate() && styles.todayText
+                    date.isToday && date.date.getDate() !== selectedDate.getDate() && styles.todayText,
+                    date.isRecoveryDay && styles.recoveryDayText
                   ]}>
                     {date.day}
                   </Text>
                   <Text style={[
                     styles.dateNumber, 
                     date.date.getDate() === selectedDate.getDate() && styles.selectedDayText,
-                    date.isToday && date.date.getDate() !== selectedDate.getDate() && styles.todayText
+                    date.isToday && date.date.getDate() !== selectedDate.getDate() && styles.todayText,
+                    date.isRecoveryDay && styles.recoveryDayText
                   ]}>
                     {date.dateNum}
                   </Text>
-                  {date.isToday && date.date.getDate() !== selectedDate.getDate() && <View style={styles.todayDot} />}
                 </TouchableOpacity>
               ))}
             </View>
@@ -490,31 +514,38 @@ export default function DayView() {
             </TouchableOpacity>
           </View>
           <View style={styles.dateList}>
-            {weekDates.slice(0, 5).map((date, index) => (
+            {weekDates.map((date, index) => (
               <TouchableOpacity 
                 key={index} 
                 onPress={() => handleDatePress(date.date)}
                 style={[
                   styles.dateItem,
-                  date.date.getDate() === selectedDate.getDate() && styles.selectedDay,
-                  date.isToday && date.date.getDate() !== selectedDate.getDate() && styles.todayDateItem
+                  date.date.getDate() === selectedDate.getDate() && !date.isRecoveryDay && styles.selectedDay,
+                  date.date.getDate() === selectedDate.getDate() && date.isRecoveryDay && styles.selectedRecoveryDay,
+                  date.isToday && date.date.getDate() !== selectedDate.getDate() && styles.todayDateItem,
+                  date.isRecoveryDay && date.date.getDate() !== selectedDate.getDate() && styles.recoveryDayItem
                 ]}
               >
                 <Text style={[
                   styles.dateDay, 
-                  date.date.getDate() === selectedDate.getDate() && styles.selectedDayText,
-                  date.isToday && date.date.getDate() !== selectedDate.getDate() && styles.todayText
+                  date.date.getDate() === selectedDate.getDate() && !date.isRecoveryDay && styles.selectedDayText,
+                  date.date.getDate() === selectedDate.getDate() && date.isRecoveryDay && styles.selectedRecoveryDayText,
+                  date.isToday && date.date.getDate() !== selectedDate.getDate() && styles.todayText,
+                  date.isRecoveryDay && date.date.getDate() !== selectedDate.getDate() && styles.recoveryDayText
                 ]}>
                   {date.day}
                 </Text>
                 <Text style={[
                   styles.dateNumber, 
-                  date.date.getDate() === selectedDate.getDate() && styles.selectedDayText,
-                  date.isToday && date.date.getDate() !== selectedDate.getDate() && styles.todayText
+                  date.date.getDate() === selectedDate.getDate() && !date.isRecoveryDay && styles.selectedDayText,
+                  date.date.getDate() === selectedDate.getDate() && date.isRecoveryDay && styles.selectedRecoveryDayText,
+                  date.isToday && date.date.getDate() !== selectedDate.getDate() && styles.todayText,
+                  date.isRecoveryDay && date.date.getDate() !== selectedDate.getDate() && styles.recoveryDayText
                 ]}>
                   {date.dateNum}
                 </Text>
                 {date.isToday && date.date.getDate() !== selectedDate.getDate() && <View style={styles.todayDot} />}
+                {date.isRecoveryDay && <View style={styles.recoveryDot} />}
               </TouchableOpacity>
             ))}
           </View>
@@ -523,18 +554,33 @@ export default function DayView() {
 
       <View style={styles.contentContainer}>
         <ScrollView style={styles.scheduleContainer}>
-          {isWeekend ? (
+          {recoveryDay && (
+            <View style={styles.recoveryBanner}>
+              <Text style={styles.recoveryTitle}>Recovery Day</Text>
+              <Text style={styles.recoveryInfo}>
+                This is a recovery day following the {recoveryDay.replacedDay.charAt(0).toUpperCase() + recoveryDay.replacedDay.slice(1)} schedule
+              </Text>
+              <Text style={styles.recoveryReason}>{recoveryDay.reason}</Text>
+            </View>
+          )}
+          
+          {isWeekend && !recoveryDay ? (
             <View style={styles.noSchedule}>
               <Text style={styles.noScheduleText}>{t('schedule').noClassesWeekend}</Text>
             </View>
           ) : (
             todaySchedule.map((item, index) => {
+              // Skip recovery-info items as we now display a banner
+              if (item.period === 'recovery-info') {
+                return null;
+              }
+              
               if (item.isEvenWeek !== undefined && item.isEvenWeek !== isEvenWeek) {
                 return null;
               }
 
               const nextItem = todaySchedule[index + 1];
-              const showTimeIndicator = isCurrentTimeInSchedule(item, nextItem);
+              const showTimeIndicator = isCurrentTimeInSchedule(item);
 
               return (
                 <View 
@@ -563,6 +609,7 @@ export default function DayView() {
                         {formatTimeByLocale(item.endTime, settings.language === 'en')}
                       </Text>
                     </View>
+
                     <View style={styles.classContent}>
                       <View style={styles.classHeaderRow}>
                         <Text style={styles.className}>{item.className}</Text>
@@ -575,7 +622,7 @@ export default function DayView() {
                               
                               if (currentTimeMinutes < startTimeMinutes) {
                                 const previousItem = index > 0 ? todaySchedule[index - 1] : null;
-                                if (previousItem && isCurrentTimeInSchedule(previousItem, item)) {
+                                if (previousItem && isCurrentTimeInSchedule(previousItem)) {
                                   // Calculate minutes until start and round up (so 59 seconds = 1 minute)
                                   const now = new Date();
                                   const target = new Date(
@@ -730,6 +777,16 @@ type Styles = {
   selectedDayText: TextStyle;  // Added missing style
   selectedDay: ViewStyle;
   groupName: TextStyle; // Added missing style
+  recoveryBanner: ViewStyle; // Added new style
+  recoveryTitle: TextStyle; // Added new style
+  recoveryInfo: TextStyle; // Added new style
+  recoveryReason: TextStyle; // Added new style
+  recoveryDot: ViewStyle; // Added new style
+  recoveryDayItem: ViewStyle; // Added new style
+  recoveryDayText: TextStyle; // Added new style
+  selectedRecoveryDay: ViewStyle; // Added new style
+  selectedRecoveryDayText: TextStyle; // Added new style
+
 };
 
 const styles = StyleSheet.create<Styles>({
@@ -1087,5 +1144,55 @@ const styles = StyleSheet.create<Styles>({
     color: '#8A8A8D',
     fontSize: 12,
     marginTop: 4,
+  },
+  recoveryBanner: {
+    backgroundColor: 'rgba(45, 137, 191, 1)',
+    borderRadius: 10,
+    padding: 16,
+    marginVertical: 8,
+  },
+  recoveryTitle: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  recoveryInfo: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  recoveryReason: {
+    color: '#FF4B4B',
+    fontSize: 12,
+    fontStyle: 'italic',
+    marginTop: 4,
+  },
+  recoveryDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#FF4B4B',
+    marginTop: 4,
+  },
+  recoveryDayItem: {
+    borderColor: '#FF5733',
+    borderWidth: 2,
+    backgroundColor: 'transparent',
+  },
+  recoveryDayText: {
+    color: '#FF5733',
+  },
+  selectedRecoveryDay: {
+    backgroundColor: '#FF5733',
+    transform: [{ scale: 1.05 }],
+    shadowColor: '#FF5733',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+    borderWidth: 0, // Remove border when selected
+  },
+  selectedRecoveryDayText: {
+    color: '#FFFFFF',
   },
 });
