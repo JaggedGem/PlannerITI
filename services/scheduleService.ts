@@ -60,8 +60,10 @@ export interface ApiResponse {
     wednesday: { [key: string]: DaySchedule };
     thursday: { [key: string]: DaySchedule };
     friday: { [key: string]: DaySchedule };
+    [key: string]: { [key: string]: DaySchedule }; // For weekend recovery days
   };
   periods: Period[];
+  recoveryDays?: RecoveryDay[]; // Add recovery days to the API response
 }
 
 export interface Group {
@@ -169,8 +171,7 @@ export const scheduleService = {
     selectedGroupName: DEFAULT_GROUP_NAME,
     scheduleView: 'day' as ScheduleView,
     customPeriods: [] as CustomPeriod[]
-  },
-  
+  },  
   // Expose cache keys as a property of the service for external access
   CACHE_KEYS,
   
@@ -205,7 +206,7 @@ export const scheduleService = {
       // Silent error handling
     }
   },
-
+  
   async saveSettings() {
     try {
       await AsyncStorage.setItem(CACHE_KEYS.SETTINGS, JSON.stringify(this.settings));
@@ -226,8 +227,26 @@ export const scheduleService = {
 
   async getCachedSchedule(groupId: string): Promise<ApiResponse | null> {
     try {
-      const cachedData = await AsyncStorage.getItem(CACHE_KEYS.SCHEDULE_PREFIX + groupId);
-      return cachedData ? JSON.parse(cachedData) : null;
+      // Get both schedule and recovery days from cache at once
+      const [cachedData, cachedRecoveryDays] = await Promise.all([
+        AsyncStorage.getItem(CACHE_KEYS.SCHEDULE_PREFIX + groupId),
+        AsyncStorage.getItem(CACHE_KEYS.RECOVERY_DAYS)
+      ]);
+
+      if (cachedData) {
+        const data = JSON.parse(cachedData);
+        
+        // Update cached recovery days in memory if available
+        if (cachedRecoveryDays) {
+          this.cachedRecoveryDays = JSON.parse(cachedRecoveryDays);
+        }
+        
+        // Include recovery days in the response
+        data.recoveryDays = this.cachedRecoveryDays;
+        
+        return data;
+      }
+      return null;
     } catch (error) {
       // Silent error handling
       return null;
@@ -236,6 +255,7 @@ export const scheduleService = {
 
   async cacheSchedule(groupId: string, data: ApiResponse) {
     try {
+      // Cache the schedule data with recovery days already integrated
       await AsyncStorage.setItem(CACHE_KEYS.SCHEDULE_PREFIX + groupId, JSON.stringify(data));
       await AsyncStorage.setItem(CACHE_KEYS.LAST_FETCH_PREFIX + groupId, new Date().toISOString());
     } catch (error) {
@@ -301,7 +321,7 @@ export const scheduleService = {
       return [];
     }
   },
-
+  
   async findAndSetDefaultGroup(targetName: string = DEFAULT_GROUP_NAME) {
     try {
       const groups = await this.getGroups();
@@ -335,30 +355,89 @@ export const scheduleService = {
     const id = groupId || this.settings.selectedGroupId;
     
     try {
-      // First, try to get cached data
+      // Load recovery days into memory first if not already loaded
+      if (this.cachedRecoveryDays.length === 0) {
+        const cachedRecoveryDays = await AsyncStorage.getItem(CACHE_KEYS.RECOVERY_DAYS);
+        if (cachedRecoveryDays) {
+          this.cachedRecoveryDays = JSON.parse(cachedRecoveryDays);
+        }
+      }
+
+      // Get cached schedule data
       const cachedData = await this.getCachedSchedule(id);
       
       // Check if we need to refresh the cache in the background
       const shouldRefetch = await this.shouldRefetchSchedule(id);
       
       if (shouldRefetch) {
-        // Try to fetch new data in the background
-        this.fetchAndCacheSchedule(id).catch(error => {
-          // Silent error handling
-        });
+        // Fetch new data in the background
+        this.fetchAndCacheSchedule(id).catch(() => {});
+        // Also refresh recovery days in background if needed
+        this.syncRecoveryDays().catch(() => {});
       }
       
-      // If we have cached data, use it
+      // Return cached data as schedule response
       if (cachedData) {
-        return cachedData;
+        return this.transformScheduleData(cachedData);
       }
-      
+
       // If no cached data, try to fetch (this will only happen on first run)
-      return await this.fetchAndCacheSchedule(id);
+      const freshData = await this.fetchAndCacheSchedule(id);
+      return this.transformScheduleData(freshData);
     } catch (error) {
       // Silent error handling
       throw error;
     }
+  },
+
+  transformScheduleData(data: ApiResponse): ApiResponse {
+    // Create a deep copy of the data
+    const transformedData: ApiResponse = {
+      ...data,
+      data: { ...data.data }
+    };
+
+    // Process recovery days if we have them
+    if (this.cachedRecoveryDays.length > 0) {
+      this.cachedRecoveryDays.forEach(rd => {
+        if (!rd.isActive || (rd.groupId !== '' && rd.groupId !== this.settings.selectedGroupId)) {
+          return;
+        }
+
+        const date = new Date(rd.date);
+        const dayIndex = date.getDay();
+        
+        // Only process weekend recovery days
+        if (dayIndex !== 0 && dayIndex !== 6) {
+          return;
+        }
+
+        const weekendKey = `weekend_${rd.date}`;
+        const replacedDay = rd.replacedDay.toLowerCase() as keyof ApiResponse['data'];
+        
+        if (replacedDay in data.data) {
+          // Copy the schedule from the replaced day
+          transformedData.data[weekendKey] = JSON.parse(JSON.stringify(data.data[replacedDay]));
+          
+          // Mark all periods as recovery day items
+          Object.values(transformedData.data[weekendKey]).forEach(schedules => {
+            ['both', 'par', 'impar'].forEach(weekType => {
+              (schedules as any)[weekType].forEach((item: any) => {
+                item.isRecoveryDay = true;
+                item.recoveryInfo = {
+                  reason: rd.reason,
+                  replacedDay: rd.replacedDay,
+                  date: rd.date
+                };
+              });
+            });
+          });
+        }
+      });
+    }
+
+    transformedData.recoveryDays = this.cachedRecoveryDays;
+    return transformedData;
   },
 
   async fetchAndCacheSchedule(groupId: string): Promise<ApiResponse> {
@@ -373,8 +452,17 @@ export const scheduleService = {
         throw new Error('Network response was not ok');
       }
       const data = await response.json();
-      await this.cacheSchedule(groupId, data);
-      return data;
+      
+      // Ensure recovery days are loaded before caching
+      if (this.cachedRecoveryDays.length === 0) {
+        await this.syncRecoveryDays();
+      }
+      
+      // Apply recovery day transformations
+      const transformedData = this.transformScheduleData(data);
+      
+      await this.cacheSchedule(groupId, transformedData);
+      return transformedData;
     } catch (error) {
       // Silent error handling
       throw error;
@@ -486,16 +574,23 @@ export const scheduleService = {
       // Fetch recovery days
       const response = await fetch('https://papi.jagged.me/api/recovery-days');
       if (!response.ok) throw new Error('Failed to fetch recovery days');
-      console.log('Recovery days response:', response);
       
       const recoveryDays: RecoveryDay[] = await response.json();
-      console.log('Fetched recovery days:', recoveryDays);
       
       // Cache the recovery days
       await AsyncStorage.setItem(CACHE_KEYS.RECOVERY_DAYS, JSON.stringify(recoveryDays));
       await AsyncStorage.setItem(CACHE_KEYS.LAST_RECOVERY_SYNC, new Date().toISOString());
       
       this.cachedRecoveryDays = recoveryDays;
+      
+      // Refresh the schedule cache with the new recovery days
+      if (this.settings.selectedGroupId) {
+        const cachedData = await this.getCachedSchedule(this.settings.selectedGroupId);
+        if (cachedData) {
+          const transformedData = this.transformScheduleData(cachedData);
+          await this.cacheSchedule(this.settings.selectedGroupId, transformedData);
+        }
+      }
     } catch (error) {
       // Silent error handling - will use cached recovery days or return empty array
     }
@@ -515,10 +610,9 @@ export const scheduleService = {
     return recoveryDay || null;
   },
 
-  async getScheduleForDay(data: ApiResponse, dayName: keyof ApiResponse['data'] | undefined, date?: Date) {
+  getScheduleForDay(data: ApiResponse, dayName: keyof ApiResponse['data'] | undefined, date?: Date) {
     if (!dayName) return [];
-    
-    // Create result array for schedule items
+
     const result: Array<{
       period: string;
       startTime: string;
@@ -536,103 +630,69 @@ export const scheduleService = {
       recoveryReason?: string;
       replacedDayName?: string;
     }> = [];
-    
-    // If this is a recovery day, add a badge item but still use the current day's schedule
-    // This way we show recovery day info without displacing the normal schedule
-    let recoveryDayInfo = null;
-    if (date) {
-      recoveryDayInfo = this.isRecoveryDay(date);
-      
-      if (recoveryDayInfo) {
-        // Add an info item about the recovery day at the top
-        result.push({
-          period: 'recovery-info',
-          startTime: '00:00',
-          endTime: '00:01',
-          className: `Recovery Day: ${recoveryDayInfo.reason}`,
-          teacherName: '',
-          roomNumber: '',
-          isCustom: true,
-          color: '#FF5733',  // A distinct color for recovery days
-          isRecoveryDay: true,
-          recoveryReason: recoveryDayInfo.reason,
-          replacedDayName: recoveryDayInfo.replacedDay
-        });
-      }
-    }
-    
-    // Always use the specified day's schedule rather than replacing it with the recovery day's schedule
+
     const daySchedule = data.data[dayName];
     if (!daySchedule) return result;
 
-    // Add custom periods for this day
-    const dayIndex = Object.keys(DAYS_MAP).findIndex(key => DAYS_MAP[Number(key) as keyof typeof DAYS_MAP] === dayName) + 1;
-    
-    this.settings.customPeriods.forEach(customPeriod => {
-      if (customPeriod.isEnabled && (!customPeriod.daysOfWeek || customPeriod.daysOfWeek.includes(dayIndex))) {
-        result.push({
-          period: customPeriod._id,
-          startTime: customPeriod.starttime,
-          endTime: customPeriod.endtime,
-          className: customPeriod.name || 'Custom Period',
-          teacherName: '',
-          roomNumber: '',
-          isCustom: true,
-          color: customPeriod.color,
-        });
-      }
-    });
+    // Process each period synchronously since we already have all the data
+    Object.entries(daySchedule).forEach(([periodNum, schedules]) => {
+      const processScheduleItem = (item: ScheduleItem & { isRecoveryDay?: boolean; recoveryInfo?: any }, isEvenWeek?: boolean) => {
+        const itemGroup = item.groupids.name;
+        const entireClass = itemGroup === 'Clasă intreagă' || itemGroup === 'Clas� intreag�';
+        const settingsGroup = this.settings.group === 'Subgroup 1' ? 'Grupa 1' : 'Grupa 2';
+        const compareItemGroup = itemGroup === 'Grupa 1' ? 'Subgroup 1' : itemGroup === 'Grupa 2' ? 'Subgroup 2' : itemGroup;
 
-    // Get period times once for all items
-    const periodTimes = await this.getPeriodTimes();
+        if (!entireClass && compareItemGroup !== this.settings.group) {
+          return;
+        }
 
-    // Process regular periods
-    const processItems = async () => {
-      const promises = Object.entries(daySchedule).map(async ([periodNum, schedules]) => {
-        const processScheduleItem = async (item: ScheduleItem, isEvenWeek?: boolean) => {
-          const itemGroup = item.groupids.name;
-          const entireClass = itemGroup === 'Clasă intreagă' || itemGroup === 'Clas� intreag�';
-          const settingsGroup = this.settings.group === 'Subgroup 1' ? 'Grupa 1' : 'Grupa 2';
-          const compareItemGroup = itemGroup === 'Grupa 1' ? 'Subgroup 1' : itemGroup === 'Grupa 2' ? 'Subgroup 2' : itemGroup;
+        // Use period data directly from the API response
+        const periodIndex = parseInt(periodNum) - 1;
+        const periodData = data.periods[periodIndex];
 
-          if (!entireClass && compareItemGroup !== this.settings.group) {
-            return;
-          }
-
-          // Use period times from new API or fall back to original data
-          const periodData = periodTimes?.[dayName as keyof PeriodTimes]?.find((p: PeriodTime) => p.period === parseInt(periodNum) - 1) || 
-                           data.periods[parseInt(periodNum) - 1];
-
+        // If this is a recovery day item and it's the first period, add the info banner
+        if (item.isRecoveryDay && periodIndex === 0 && item.recoveryInfo) {
           result.push({
-            period: periodNum,
-            startTime: periodData.starttime,
-            endTime: periodData.endtime,
-            className: item.subjectid.name,
-            teacherName: item.teacherids.name,
-            roomNumber: item.classroomids.name,
-            isEvenWeek,
-            group: compareItemGroup,
+            period: 'recovery-info',
+            startTime: '00:00',
+            endTime: '00:01',
+            className: `Recovery Day: ${item.recoveryInfo.reason}`,
+            teacherName: '',
+            roomNumber: '',
+            isCustom: true,
+            color: '#FF5733',
+            isRecoveryDay: true,
+            recoveryReason: item.recoveryInfo.reason,
+            replacedDayName: item.recoveryInfo.replacedDay
           });
-        };
+        }
 
-        // Process all items for the current period
-        await Promise.all([
-          ...schedules.both.map((item: ScheduleItem) => processScheduleItem(item)),
-          ...schedules.par.map((item: ScheduleItem) => processScheduleItem(item, true)),
-          ...schedules.impar.map((item: ScheduleItem) => processScheduleItem(item, false))
-        ]);
-      });
+        result.push({
+          period: periodNum.toString(),
+          startTime: periodData.starttime,
+          endTime: periodData.endtime,
+          className: item.subjectid.name,
+          teacherName: item.teacherids.name,
+          roomNumber: item.classroomids.name,
+          isEvenWeek,
+          group: compareItemGroup,
+          isRecoveryDay: item.isRecoveryDay,
+          recoveryReason: item.recoveryInfo?.reason,
+          replacedDayName: item.recoveryInfo?.replacedDay
+        });
+      };
 
-      await Promise.all(promises);
-    };
-
-    await processItems();
+      // Process all items for the current period
+      schedules.both.forEach(item => processScheduleItem(item));
+      schedules.par.forEach(item => processScheduleItem(item, true));
+      schedules.impar.forEach(item => processScheduleItem(item, false));
+    });
 
     // Sort schedule by time
     const sortedSchedule = result.sort((a, b) => {
       // Put recovery day info at the top
-      if (a.isRecoveryDay) return -1;
-      if (b.isRecoveryDay) return 1;
+      if (a.isRecoveryDay && a.period === 'recovery-info') return -1;
+      if (b.isRecoveryDay && b.period === 'recovery-info') return 1;
       
       const timeA = a.startTime.split(':').map(Number);
       const timeB = b.startTime.split(':').map(Number);
@@ -707,7 +767,16 @@ export const scheduleService = {
   },
 };
 
-// Initialize settings from storage
-scheduleService.loadSettings();
-scheduleService.syncPeriodTimes(); // Initial sync
-scheduleService.syncRecoveryDays(); // Initial sync of recovery days
+// Initialize settings and data from storage
+(async () => {
+  await scheduleService.loadSettings();
+  
+  // Load recovery days into memory immediately
+  const cachedRecoveryDays = await AsyncStorage.getItem(CACHE_KEYS.RECOVERY_DAYS);
+  if (cachedRecoveryDays) {
+    scheduleService.cachedRecoveryDays = JSON.parse(cachedRecoveryDays);
+  }
+  
+  scheduleService.syncPeriodTimes(); // Initial sync
+  scheduleService.syncRecoveryDays(); // Initial sync of recovery days
+})();

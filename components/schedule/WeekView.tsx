@@ -85,6 +85,22 @@ const generateTimeSlots = (startHour: number, endHour: number): number[] => {
   return slots;
 };
 
+// Add isCurrentTimeSlot helper function
+const isCurrentTimeSlot = (startTime: string, endTime: string): boolean => {
+  const now = new Date();
+  const currentHour = now.getHours();
+  const currentMinute = now.getMinutes();
+  
+  const [startHour, startMinute] = startTime.split(':').map(Number);
+  const [endHour, endMinute] = endTime.split(':').map(Number);
+  
+  const currentTimeInMinutes = currentHour * 60 + currentMinute;
+  const startTimeInMinutes = startHour * 60 + startMinute;
+  const endTimeInMinutes = endHour * 60 + endMinute;
+  
+  return currentTimeInMinutes >= startTimeInMinutes && currentTimeInMinutes < endTimeInMinutes;
+};
+
 interface TimetableItemProps {
   item: {
     startTime: string;
@@ -207,7 +223,7 @@ const RecoveryDayInfo = ({ reason }: { reason: string }) => {
               onPress={() => setShowInfo(false)}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Text style={styles.closeTooltipText}>✕</Text>
+              <Text style={styles.closeTooltipText as TextStyle}>✕</Text>
             </TouchableOpacity>
           </View>
           <Text style={styles.recoveryDayTooltipReason}>
@@ -297,7 +313,6 @@ type Styles = {
   errorContainer: ViewStyle;
   errorText: TextStyle;
   todayColumn: ViewStyle;
-  gridLine: ViewStyle;
   currentHourHighlight: ViewStyle;
   recoveryDot: TextStyle;
   recoveryDayInfo: ViewStyle;
@@ -309,9 +324,10 @@ type Styles = {
   recoveryDayTooltipHeader: ViewStyle;
   recoveryDayTooltipTitle: TextStyle;
   closeTooltipButton: ViewStyle;
-  closeTooltipText: TextStyle;
+  closeTooltipText: TextStyle; // Changed from ViewStyle to TextStyle
   recoveryDayTooltipReason: TextStyle;
   weekendColumn: ViewStyle;
+  gridLine: ViewStyle;
 };
 
 export default function WeekView() {
@@ -333,7 +349,6 @@ export default function WeekView() {
   const currentTime = useTimeUpdate();
   const verticalScrollRef = useRef<ScrollView>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [recoveryDays, setRecoveryDays] = useState<RecoveryDay[]>([]);
 
   // Calculate current week start date (Monday)
   const weekStartDate = new Date();
@@ -343,37 +358,123 @@ export default function WeekView() {
   // Check if current week is even
   const isEvenWeek = scheduleService.isEvenWeek(weekStartDate);
 
-  // Load recovery days
+  // Helper to get date for specific day in week
+  const getDateForDay = (weekStartDate: Date, dayOffset: number) => {
+    const date = new Date(weekStartDate);
+    date.setDate(weekStartDate.getDate() + dayOffset);
+    return date;
+  };
+
+  // Schedule data fetching function
+  const fetchSchedule = async (groupId?: string) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const data = await scheduleService.getClassSchedule(groupId);
+      setScheduleData(data);
+      
+      // Process recovery days for this week
+      const recoveryDays = data.recoveryDays || [];
+      
+      // Get weekend recovery days for current week
+      const weekendRecoveryDays = recoveryDays.filter(rd => {
+        const rdDate = new Date(rd.date);
+        const startOfWeek = new Date(weekStart);
+        const endOfWeek = new Date(weekStart);
+        endOfWeek.setDate(weekStart.getDate() + 6);
+        
+        return rdDate >= startOfWeek && 
+               rdDate <= endOfWeek && 
+               (rdDate.getDay() === 0 || rdDate.getDay() === 6) &&
+               rd.isActive && 
+               (rd.groupId === '' || rd.groupId === settings.selectedGroupId);
+      });
+
+      // Build the schedule object synchronously
+      const newWeekSchedule = {
+        monday: scheduleService.getScheduleForDay(data, 'monday', getDateForDay(weekStart, 0)),
+        tuesday: scheduleService.getScheduleForDay(data, 'tuesday', getDateForDay(weekStart, 1)),
+        wednesday: scheduleService.getScheduleForDay(data, 'wednesday', getDateForDay(weekStart, 2)),
+        thursday: scheduleService.getScheduleForDay(data, 'thursday', getDateForDay(weekStart, 3)),
+        friday: scheduleService.getScheduleForDay(data, 'friday', getDateForDay(weekStart, 4)),
+        ...Object.fromEntries(
+          weekendRecoveryDays.map(rd => [
+            `weekend_${rd.date}`,
+            scheduleService.getScheduleForDay(data, rd.replacedDay.toLowerCase() as keyof ApiResponse['data'], new Date(rd.date))
+          ])
+        )
+      };
+      
+      setWeekSchedule(newWeekSchedule);
+      setIsLoading(false);
+    } catch (error) {
+      setError(t('schedule').error || 'Failed to load schedule');
+      setIsLoading(false);
+    }
+  };
+
+  // Add useEffect for initial schedule load
   useEffect(() => {
-    const loadRecoveryDays = async () => {
-      const days = await scheduleService.getRecoveryDays();
-      setRecoveryDays(days);
-    };
-    
-    loadRecoveryDays();
+    fetchSchedule();
   }, []);
 
-  // Determine if we have weekend recovery days for the current week
+  // Schedule update function (combines regular days and recovery days)
+  const updateWeekSchedule = () => {
+    if (scheduleData) {
+      const recoveryDays = scheduleData.recoveryDays || [];
+      const weekendRecoveryDays = recoveryDays.filter(rd => {
+        const rdDate = new Date(rd.date);
+        const startOfWeek = new Date(weekStart);
+        const endOfWeek = new Date(weekStart);
+        endOfWeek.setDate(weekStart.getDate() + 6);
+        
+        return rdDate >= startOfWeek && 
+               rdDate <= endOfWeek && 
+               (rdDate.getDay() === 0 || rdDate.getDay() === 6) &&
+               rd.isActive && 
+               (rd.groupId === '' || rd.groupId === settings.selectedGroupId);
+      });
+
+      // Build the schedule object synchronously
+      const newWeekSchedule = {
+        monday: scheduleService.getScheduleForDay(scheduleData, 'monday', getDateForDay(weekStart, 0)),
+        tuesday: scheduleService.getScheduleForDay(scheduleData, 'tuesday', getDateForDay(weekStart, 1)),
+        wednesday: scheduleService.getScheduleForDay(scheduleData, 'wednesday', getDateForDay(weekStart, 2)),
+        thursday: scheduleService.getScheduleForDay(scheduleData, 'thursday', getDateForDay(weekStart, 3)),
+        friday: scheduleService.getScheduleForDay(scheduleData, 'friday', getDateForDay(weekStart, 4)),
+        ...Object.fromEntries(
+          weekendRecoveryDays.map(rd => [
+            `weekend_${rd.date}`,
+            scheduleService.getScheduleForDay(
+              scheduleData,
+              rd.replacedDay.toLowerCase() as keyof ApiResponse['data'],
+              new Date(rd.date)
+            )
+          ])
+        )
+      };
+      
+      setWeekSchedule(newWeekSchedule);
+    }
+  };
+
+  // Calculate day dates for the week, including weekend recovery days if they exist
+  const normalDayCount = 5; // Monday-Friday
+  const recoveryDays = scheduleData?.recoveryDays || [];
   const weekendRecoveryDays = recoveryDays.filter(rd => {
-    // Parse the recovery day date
     const rdDate = new Date(rd.date);
-    
-    // Check if this date falls within the current week view
     const startOfWeek = new Date(weekStart);
     const endOfWeek = new Date(weekStart);
-    endOfWeek.setDate(weekStart.getDate() + 6); // Include Saturday and Sunday
+    endOfWeek.setDate(weekStart.getDate() + 6);
     
-    // Check if the recovery day is within the week range and is on a weekend
     return rdDate >= startOfWeek && 
            rdDate <= endOfWeek && 
-           (rdDate.getDay() === 0 || rdDate.getDay() === 6) && // 0 = Sunday, 6 = Saturday
+           (rdDate.getDay() === 0 || rdDate.getDay() === 6) &&
            rd.isActive && 
            (rd.groupId === '' || rd.groupId === settings.selectedGroupId);
   });
 
-  // Calculate day dates for the week, including weekend recovery days if they exist
-  const normalDayCount = 5; // Monday-Friday
-  const totalDays = weekendRecoveryDays.length > 0 ? normalDayCount + weekendRecoveryDays.length : normalDayCount;
+  const totalDays = weekSchedule.monday.length > 0 ? normalDayCount + weekendRecoveryDays.length : normalDayCount;
   
   const dayDates = Array.from({ length: totalDays }, (_, i) => {
     // First 5 days are the normal weekdays
@@ -433,129 +534,6 @@ export default function WeekView() {
 
   // Get current hour for highlighting
   const nowHour = new Date().getHours();
-  
-  // Helper to get date for specific day in week
-  const getDateForDay = (weekStartDate: Date, dayOffset: number) => {
-    const date = new Date(weekStartDate);
-    date.setDate(weekStartDate.getDate() + dayOffset);
-    return date;
-  };
-
-  // Schedule data fetching function
-  const fetchSchedule = async (groupId?: string) => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const data = await scheduleService.getClassSchedule(groupId);
-      setScheduleData(data);
-      
-      // Update week schedule with async calls for weekdays
-      const newWeekSchedule: Record<string, any[]> = {
-        monday: await scheduleService.getScheduleForDay(data, 'monday', getDateForDay(weekStart, 0)),
-        tuesday: await scheduleService.getScheduleForDay(data, 'tuesday', getDateForDay(weekStart, 1)),
-        wednesday: await scheduleService.getScheduleForDay(data, 'wednesday', getDateForDay(weekStart, 2)),
-        thursday: await scheduleService.getScheduleForDay(data, 'thursday', getDateForDay(weekStart, 3)),
-        friday: await scheduleService.getScheduleForDay(data, 'friday', getDateForDay(weekStart, 4)),
-      };
-      
-      // Add weekend recovery days if they exist
-      for (let i = 0; i < weekendRecoveryDays.length; i++) {
-        const recoveryDay = weekendRecoveryDays[i];
-        const dayKey = `weekend_${i}`;
-        
-        // Get schedule for the day that this recovery day is replacing
-        const replacedDay = recoveryDay.replacedDay as keyof ApiResponse['data'];
-        if (replacedDay && data.data[replacedDay]) {
-          newWeekSchedule[dayKey] = await scheduleService.getScheduleForDay(
-            data, 
-            replacedDay, 
-            new Date(recoveryDay.date)
-          );
-        } else {
-          newWeekSchedule[dayKey] = [];
-        }
-      }
-      
-      setWeekSchedule(newWeekSchedule);
-      setIsLoading(false);
-    } catch (error) {
-      // Silent error handling
-      setIsLoading(false);
-    }
-  };
-
-  // Schedule update function 
-  const updateWeekSchedule = async () => {
-    if (scheduleData) {
-      const newWeekSchedule = {
-        monday: await scheduleService.getScheduleForDay(scheduleData, 'monday', getDateForDay(weekStart, 0)),
-        tuesday: await scheduleService.getScheduleForDay(scheduleData, 'tuesday', getDateForDay(weekStart, 1)),
-        wednesday: await scheduleService.getScheduleForDay(scheduleData, 'wednesday', getDateForDay(weekStart, 2)),
-        thursday: await scheduleService.getScheduleForDay(scheduleData, 'thursday', getDateForDay(weekStart, 3)),
-        friday: await scheduleService.getScheduleForDay(scheduleData, 'friday', getDateForDay(weekStart, 4)),
-      };
-      setWeekSchedule(newWeekSchedule);
-    }
-  };
-
-  // Effects for settings, data fetching, etc.
-  useEffect(() => {
-    const unsubscribe = scheduleService.subscribe(() => {
-      const newSettings = scheduleService.getSettings();
-      setSettings(newSettings);
-      
-      // Refresh schedule data when the group changes or subgroup changes
-      if (newSettings.selectedGroupId !== settings.selectedGroupId || newSettings.group !== settings.group) {
-        fetchSchedule(newSettings.selectedGroupId);
-      }
-      // Just update week schedule if only subgroup changed
-      else if (newSettings.group !== settings.group && scheduleData) {
-        updateWeekSchedule();
-      }
-    });
-    return () => unsubscribe();
-  }, [settings.selectedGroupId, settings.group, scheduleData]);
-
-  // Initial schedule data fetching effect
-  useEffect(() => {
-    fetchSchedule();
-  }, [weekOffset]); // Re-fetch when week changes
-
-  // Scroll to current time on mount
-  useEffect(() => {
-    const scrollToCurrentTime = () => {
-      if (verticalScrollRef.current && currentTime) {
-        const now = new Date();
-        const currentHour = now.getHours();
-        
-        if (currentHour >= firstHour && currentHour <= lastHour) {
-          const scrollPosition = (currentHour - firstHour - 1) * hourHeight;
-          verticalScrollRef.current.scrollTo({
-            y: Math.max(0, scrollPosition),
-            animated: true
-          });
-        }
-      }
-    };
-    
-    // Wait for layout to complete
-    setTimeout(scrollToCurrentTime, 500);
-  }, [firstHour, lastHour, scheduleData]);
-
-  // Function to check if an item is currently active
-  const isCurrentTimeSlot = (startTime: string, endTime: string): boolean => {
-    const [startHours, startMinutes] = startTime.split(':').map(Number);
-    const [endHours, endMinutes] = endTime.split(':').map(Number);
-    const currentHours = currentTime.getHours();
-    const currentMinutes = currentTime.getMinutes();
-
-    const currentTimeInMinutes = currentHours * 60 + currentMinutes;
-    const startTimeInMinutes = startHours * 60 + startMinutes;
-    const endTimeInMinutes = endHours * 60 + endMinutes;
-
-    return currentTimeInMinutes >= startTimeInMinutes && 
-          currentTimeInMinutes <= endTimeInMinutes;
-  };
 
   // Function to navigate between weeks
   const navigateWeek = (direction: number) => {
@@ -741,9 +719,9 @@ export default function WeekView() {
 
               {/* Day columns */}
               {dayDates.map((day, dayIndex) => {
-                const dayKey = dayIndex < 5 
-                  ? ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'][dayIndex]
-                  : `weekend_${dayIndex - 5}`;
+                const dayKey = day.isWeekend 
+                  ? `weekend_${day.date.toISOString().split('T')[0]}`
+                  : ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'][dayIndex];
                 
                 const dayItems = weekSchedule[dayKey as keyof typeof weekSchedule] || [];
                 const isToday = day.isToday;
@@ -898,8 +876,6 @@ const styles = StyleSheet.create<Styles>({
   navigationControls: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    marginBottom: 12,
   },
   navButton: {
     padding: 8,
@@ -1007,7 +983,7 @@ const styles = StyleSheet.create<Styles>({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: 'bold',
-  },
+  } as TextStyle,
   recoveryDayTooltipReason: {
     color: '#FFFFFF',
     fontSize: 12,
@@ -1039,10 +1015,6 @@ const styles = StyleSheet.create<Styles>({
     alignItems: 'center',
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.05)',
-  },
-  currentHourHighlight: {
-    backgroundColor: 'rgba(44, 61, 205, 0.08)',
-    borderRadius: 4,
   },
   timeHour: {
     color: '#8A8A8D',
@@ -1107,20 +1079,20 @@ const styles = StyleSheet.create<Styles>({
     textShadowRadius: 2,
   },
   currentTimeIndicator: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    zIndex: 50,
-  },
-  currentTimeIndicatorLine: {
-    flex: 1,
-    height: 2,
-    backgroundColor: '#FF3B30',
-    opacity: 0.7,
-  },
-  currentTimeIndicatorDot: {
+		position: 'absolute',
+		left: 0,
+		right: 0,
+		flexDirection: 'row',
+		alignItems: 'center',
+		zIndex: 50,
+	},
+	currentTimeIndicatorLine: {
+		flex: 1,
+		height: 2,
+		backgroundColor: '#FF3B30',
+		opacity: 0.7,
+	},
+	currentTimeIndicatorDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
@@ -1130,38 +1102,41 @@ const styles = StyleSheet.create<Styles>({
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
     shadowRadius: 4,
-  },
-  emptySchedule: {
+	},
+	emptySchedule: {
     color: '#8A8A8D',
     fontSize: 10,
     textAlign: 'center',
     marginTop: 30,
     opacity: 0.7,
-  },
-  loadingContainer: {
+	},
+	loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  loadingText: {
+	},
+	loadingText: {
     color: '#8A8A8D',
     fontSize: 16,
     marginTop: 12,
-  },
-  errorContainer: {
+	},
+	errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-  },
-  errorText: {
+	},
+	errorText: {
     color: '#FF3B30',
     fontSize: 16,
     textAlign: 'center',
-  },
-  weekendColumn: {
+	},
+	weekendColumn: {
     backgroundColor: 'rgba(255, 87, 51, 0.1)',
     borderWidth: 1,
     borderColor: 'rgba(255, 87, 51, 0.2)',
-  },
+	},
+	currentHourHighlight: {
+		backgroundColor: 'rgba(52, 120, 246, 0.08)', // Light blue background for current hour
+	},
 });
