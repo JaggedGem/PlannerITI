@@ -85,16 +85,16 @@ const RecoveryDayInfo = ({ reason }: RecoveryDayInfoProps) => {
   }, [showInfo]);
 
   return (
-    <View style={{ alignItems: 'flex-end' }}>
+    <View style={styles.recoveryDayInfoContainer}>
       <Animated.View style={buttonAnimation}>
         <TouchableOpacity
           style={styles.recoveryDayInfoButton}
           onPress={() => setShowInfo(!showInfo)}
           activeOpacity={0.7}
-          hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <LinearGradient
-            colors={['#FF5733DD', '#FF5733AA']}
+            colors={['#FF5733', '#FF3333']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.recoveryDayInfoButtonGradient}
@@ -406,8 +406,9 @@ export default function DayView() {
       const timeSlotDuration = endTimeInMinutes - startTimeInMinutes;
       const progress = (currentTimeInMinutes - startTimeInMinutes) / timeSlotDuration;
 
-      const position = progress * props.containerHeight;
-      const showOnTop = position > props.containerHeight / 2;
+      // The height of the container is 80 (the height property of the time indicator is min-height: 25px);
+      const position = progress * (props.containerHeight - 100) + 28; // We need to add the height of the item
+      const showOnTop = -1 * position > props.containerHeight / 2; // Show the text only when we need to show time
 
       return {
         transform: [{
@@ -595,10 +596,6 @@ export default function DayView() {
 
       <View style={styles.contentContainer}>
         <ScrollView style={styles.scheduleContainer}>
-          {recoveryDay && (
-            <RecoveryDayInfo reason={recoveryDay.reason || ''} />
-          )}
-
           {isWeekend && !recoveryDay ? (
             <View style={styles.noSchedule}>
               <Text style={styles.noScheduleText}>{t('schedule').noClassesWeekend}</Text>
@@ -720,7 +717,15 @@ export default function DayView() {
               })
             )}
         </ScrollView>
+        
+        {/* Position the recovery day info button at the top right corner */}
+        {recoveryDay && (
+          <View style={styles.fixedRecoveryInfoContainer}>
+            <RecoveryDayInfo reason={recoveryDay.reason || ''} />
+          </View>
+        )}
       </View>
+      
       <ViewModeMenu
         isOpen={isMenuOpen}
         onClose={() => setIsMenuOpen(false)}
@@ -766,7 +771,7 @@ type Styles = {
   headerTop: ViewStyle;
   headerTitle: TextStyle;
   dateList: ViewStyle;
-  dateListScrollContent: ViewStyle; // Added new style
+  dateListScrollContent: ViewStyle;
   dateListContent: ViewStyle;
   dateItem: ViewStyle;
   activeDateItem: ViewStyle;
@@ -788,7 +793,7 @@ type Styles = {
   weekInfo: ViewStyle;
   weekText: TextStyle;
   detailsContainer: ViewStyle;
-  teacherContainer: ViewStyle; // Changed from TextStyle to ViewStyle
+  teacherContainer: ViewStyle;
   teacherName: TextStyle;
   noSchedule: ViewStyle;
   noScheduleText: TextStyle;
@@ -796,7 +801,7 @@ type Styles = {
   timeIndicator: ViewStyle;
   timeIndicatorLine: ViewStyle;
   timeIndicatorArrowContainer: ViewStyle;
-  timeIndicatorMove: ViewStyle; // Added new style
+  timeIndicatorMove: ViewStyle;
   timeIndicatorArrow: ViewStyle;
   timeLeftText: TextStyle;
   timeWrapper: ViewStyle;
@@ -812,18 +817,18 @@ type Styles = {
   weekText2: TextStyle;
   headerContainer: ViewStyle;
   contentContainer: ViewStyle;
-  selectedDayText: TextStyle;  // Added missing style
+  selectedDayText: TextStyle;
   selectedDay: ViewStyle;
-  groupName: TextStyle; // Added missing style
-  recoveryBanner: ViewStyle; // Added new style
-  recoveryTitle: TextStyle; // Added new style
-  recoveryInfo: TextStyle; // Added new style
-  recoveryReason: TextStyle; // Added new style
-  recoveryDot: ViewStyle; // Added new style
-  recoveryDayItem: ViewStyle; // Added new style
-  recoveryDayText: TextStyle; // Added new style
-  selectedRecoveryDay: ViewStyle; // Added new style
-  selectedRecoveryDayText: TextStyle; // Added new style
+  groupName: TextStyle;
+  recoveryBanner: ViewStyle;
+  recoveryTitle: TextStyle;
+  recoveryInfo: TextStyle;
+  recoveryReason: TextStyle;
+  recoveryDot: ViewStyle;
+  recoveryDayItem: ViewStyle;
+  recoveryDayText: TextStyle;
+  selectedRecoveryDay: ViewStyle;
+  selectedRecoveryDayText: TextStyle;
   recoveryDayInfoButton: ViewStyle;
   recoveryDayInfoButtonGradient: ViewStyle;
   recoveryDayInfoIcon: TextStyle;
@@ -834,6 +839,9 @@ type Styles = {
   closeTooltipButton: ViewStyle;
   closeTooltipText: TextStyle;
   recoveryDayTooltipReason: TextStyle;
+  recoveryDayInfoContainer: ViewStyle;
+  recoveryDayInfoWrapper: ViewStyle;
+  fixedRecoveryInfoContainer: ViewStyle;
 };
 
 const styles = StyleSheet.create<Styles>({
@@ -892,11 +900,9 @@ const styles = StyleSheet.create<Styles>({
   },
   dateList: {
     flexDirection: 'row',
-    alignItems: 'center',
     width: '100%',
-    gap: 8, // Reduced gap between items
-    paddingHorizontal: 0, // Reduced padding to allow for wider containers
-    marginBottom: -2, // Adjusted margin to prevent overflow
+    paddingHorizontal: 0,
+    marginBottom: 8,
   },
   dateListContent: {
     flexDirection: 'row',
@@ -904,45 +910,42 @@ const styles = StyleSheet.create<Styles>({
     width: '100%',
   },
   dateListScrollContent: {
-    paddingVertical: 5, // Add padding to prevent cut-off
-    alignItems: 'center',
+    paddingVertical: 5,
+    flexDirection: 'row',
     justifyContent: 'space-between',
+    paddingHorizontal: 8,
+    gap: 12,
   },
   dateItem: {
+    width: 70,
+    height: 90,
+    borderRadius: 20,
+    backgroundColor: '#1A1A1A', // Changed from #3A3A3C to match the app's darker theme
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 12,
-    borderRadius: 16,
-    backgroundColor: '#1A1A1A',
-    height: 90,
-    width: 70, // Fixed width for all date items
-    marginHorizontal: 5, // Add some horizontal spacing
+    paddingVertical: 12,
   },
   activeDateItem: {
     backgroundColor: '#2C3DCD',
     transform: [{ scale: 1.05 }],
-    shadowColor: '#2C3DCD',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
   },
   todayDateItem: {
     borderColor: '#2C3DCD',
     borderWidth: 2,
+    backgroundColor: '#1A1A1A', // Changed from #0A0A0A for better contrast
   },
   dateDay: {
     color: '#8A8A8D',
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
     letterSpacing: 0.5,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   dateNumber: {
     color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    marginBottom: 6, // Increased to make room for today dot
   },
   activeDateText: {
     color: '#FFFFFF',
@@ -960,8 +963,7 @@ const styles = StyleSheet.create<Styles>({
   scheduleContainer: {
     flex: 1,
     paddingHorizontal: 20,
-    paddingTop: 16,
-    backgroundColor: '#0A0A0A', // Ensure background color is consistent
+    backgroundColor: '#0A0A0A',
   },
   scheduleItem: {
     marginBottom: 16,
@@ -982,12 +984,11 @@ const styles = StyleSheet.create<Styles>({
     marginVertical: 4, // Add spacing to prevent shadow clipping
   },
   timeContainer: {
-    width: 80,
+    width: 90,
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 16,
-    borderRightWidth: 1,
-    minHeight: 100,
+    borderRightWidth: 2,
   },
   time: {
     color: '#8A8A8D',
@@ -1013,18 +1014,6 @@ const styles = StyleSheet.create<Styles>({
     color: '#8A8A8D',
     fontSize: 14,
     fontWeight: '500',
-  },
-  missingBadge: {
-    backgroundColor: '#FF3B30',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    marginLeft: 10,
-  },
-  missingText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '600',
   },
   detailsContainer: {
     flexDirection: 'row',
@@ -1255,20 +1244,6 @@ const styles = StyleSheet.create<Styles>({
   selectedRecoveryDayText: {
     color: '#FFFFFF',
   },
-  recoveryDayInfoButton: {
-    alignSelf: 'flex-end',
-    marginBottom: 12,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    overflow: 'hidden',
-    zIndex: 10,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 1, height: 1 },
-    shadowOpacity: 0.3,
-    shadowRadius: 2,
-  },
   recoveryDayInfoButtonGradient: {
     flex: 1,
     alignItems: 'center',
@@ -1318,5 +1293,35 @@ const styles = StyleSheet.create<Styles>({
     fontSize: 12,
     lineHeight: 18,
     opacity: 0.8,
+  },
+  recoveryDayInfoContainer: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    zIndex: 100,
+  },
+  recoveryDayInfoWrapper: {
+    position: 'relative',
+    height: 28, // Provide space for the button
+    marginBottom: 4,
+    width: '100%',
+  },
+  recoveryDayInfoButton: {
+    width: 24, 
+    height: 24,
+    borderRadius: 12,
+    overflow: 'hidden',
+    zIndex: 100,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 1, height: 1 },
+    shadowOpacity: 0.4,
+    shadowRadius: 3,
+  },
+  fixedRecoveryInfoContainer: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    zIndex: 101,
   },
 });
