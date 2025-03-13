@@ -48,6 +48,86 @@ type ScheduleItem = {
   hasNextItem?: boolean;
 };
 
+interface RecoveryDayInfoProps {
+  reason: string;
+}
+
+const RecoveryDayInfo = ({ reason }: RecoveryDayInfoProps) => {
+  const [showInfo, setShowInfo] = useState(false);
+
+  // Add animated value for popup transitions
+  const popupAnimation = useAnimatedStyle(() => {
+    return {
+      opacity: withTiming(showInfo ? 1 : 0, { duration: 200 }),
+      transform: [
+        {
+          scale: withSpring(showInfo ? 1 : 0.95, {
+            damping: 15,
+            stiffness: 150,
+          })
+        }
+      ],
+    };
+  }, [showInfo]);
+
+  // Add button animation
+  const buttonAnimation = useAnimatedStyle(() => {
+    return {
+      transform: [
+        {
+          scale: withSpring(showInfo ? 0.95 : 1, {
+            damping: 15,
+            stiffness: 150,
+          })
+        }
+      ]
+    };
+  }, [showInfo]);
+
+  return (
+    <View style={{ alignItems: 'flex-end' }}>
+      <Animated.View style={buttonAnimation}>
+        <TouchableOpacity
+          style={styles.recoveryDayInfoButton}
+          onPress={() => setShowInfo(!showInfo)}
+          activeOpacity={0.7}
+          hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
+        >
+          <LinearGradient
+            colors={['#FF5733DD', '#FF5733AA']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.recoveryDayInfoButtonGradient}
+          >
+            <Text style={styles.recoveryDayInfoIcon}>ⓘ</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      </Animated.View>
+
+      <Animated.View
+        style={[styles.recoveryDayTooltipContainer, popupAnimation]}
+        pointerEvents={showInfo ? 'auto' : 'none'}
+      >
+        <View style={styles.recoveryDayTooltip}>
+          <View style={styles.recoveryDayTooltipHeader}>
+            <Text style={styles.recoveryDayTooltipTitle}>Recovery Day</Text>
+            <TouchableOpacity
+              style={styles.closeTooltipButton}
+              onPress={() => setShowInfo(false)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Text style={styles.closeTooltipText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.recoveryDayTooltipReason}>
+            {reason || 'No reason provided'}
+          </Text>
+        </View>
+      </Animated.View>
+    </View>
+  );
+};
+
 export default function DayView() {
   const [scheduleData, setScheduleData] = useState<ApiResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -355,82 +435,6 @@ export default function DayView() {
       </View>
     );
   }, []);
-
-  const RecoveryDayInfo = ({ reason }: { reason: string }) => {
-    const [showInfo, setShowInfo] = useState(false);
-
-    // Add animated value for popup transitions
-    const popupAnimation = useAnimatedStyle(() => {
-      return {
-        opacity: withTiming(showInfo ? 1 : 0, { duration: 200 }),
-        transform: [
-          {
-            scale: withSpring(showInfo ? 1 : 0.95, {
-              damping: 15,
-              stiffness: 150,
-            })
-          }
-        ],
-      };
-    }, [showInfo]);
-
-    // Add button animation
-    const buttonAnimation = useAnimatedStyle(() => {
-      return {
-        transform: [
-          {
-            scale: withSpring(showInfo ? 0.95 : 1, {
-              damping: 15,
-              stiffness: 150,
-            })
-          }
-        ]
-      };
-    }, [showInfo]);
-
-    return (
-      <View style={{ alignItems: 'flex-end' }}>
-        <Animated.View style={buttonAnimation}>
-          <TouchableOpacity
-            style={styles.recoveryDayInfoButton}
-            onPress={() => setShowInfo(!showInfo)}
-            activeOpacity={0.7}
-            hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
-          >
-            <LinearGradient
-              colors={['#FF5733DD', '#FF5733AA']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.recoveryDayInfoButtonGradient}
-            >
-              <Text style={styles.recoveryDayInfoIcon}>ⓘ</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </Animated.View>
-
-        <Animated.View
-          style={[styles.recoveryDayTooltipContainer, popupAnimation]}
-          pointerEvents={showInfo ? 'auto' : 'none'}
-        >
-          <View style={styles.recoveryDayTooltip}>
-            <View style={styles.recoveryDayTooltipHeader}>
-              <Text style={styles.recoveryDayTooltipTitle}>Recovery Day</Text>
-              <TouchableOpacity
-                style={styles.closeTooltipButton}
-                onPress={() => setShowInfo(false)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Text style={styles.closeTooltipText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.recoveryDayTooltipReason}>
-              {reason || 'No reason provided'}
-            </Text>
-          </View>
-        </Animated.View>
-      </View>
-    );
-  };
 
   if (isLoading && !scheduleData) {
     return (
