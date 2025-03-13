@@ -195,9 +195,23 @@ export default function DayView() {
   useEffect(() => {
     const updateSchedule = async () => {
       if (scheduleData) {
+        let dayKey;
+        const dateString = selectedDate.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+        
+        // Check if this is a recovery day
+        const isRecDay = scheduleService.isRecoveryDay(selectedDate);
+        
+        if (isRecDay) {
+          // For recovery days, use the special weekend key format
+          dayKey = `weekend_${dateString}`;
+        } else {
+          // For regular days, use the standard day name
+          dayKey = DAYS_MAP[selectedDate.getDay() as keyof typeof DAYS_MAP];
+        }
+        
         const daySchedule = await scheduleService.getScheduleForDay(
           scheduleData,
-          DAYS_MAP[selectedDate.getDay() as keyof typeof DAYS_MAP],
+          dayKey,
           selectedDate // Pass the actual date to check for recovery days
         );
         setTodaySchedule(daySchedule);
@@ -591,8 +605,9 @@ export default function DayView() {
             </View>
           ) : (
               todaySchedule.map((item, index) => {
-                // Skip recovery-info items as we now display a banner
+                // Keep the recovery-info item but just use it to display the banner
                 if (item.period === 'recovery-info') {
+                  // We're already showing the recovery day banner separately
                   return null;
                 }
 
