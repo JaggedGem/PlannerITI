@@ -8,12 +8,8 @@ module.exports = () => {
   
   // Add your API keys here from environment variables
   const apiKey = process.env.API_KEY || '';
-  const apiUrl = process.env.API_URL || '';
+  const gravatarApiKey = process.env.GRAVATAR_API_KEY || '';
   // Add other environment variables as needed
-
-  console.log(`Building app variant: ${appVariant}`);
-  console.log(`Using Android package: ${androidPackage}`);
-  console.log(`Using iOS bundle identifier: ${iosBundleIdentifier}`);
 
   return {
     ...config,
@@ -30,7 +26,7 @@ module.exports = () => {
       extra: {
         ...config.expo.extra,
         apiKey,
-        apiUrl,
+        gravatarApiKey,
         // Add other environment variables as needed
       },
     },
