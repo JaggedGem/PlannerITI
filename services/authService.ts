@@ -1,14 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform, DeviceEventEmitter } from 'react-native';
 import * as crypto from 'crypto-js';
-import Constants from 'expo-constants';
+import { GRAVATAR_API_KEY, API_KEY } from '@env';
 
 const API_URL = 'https://papi.jagged.me';
 const GRAVATAR_API_URL = 'https://api.gravatar.com/v3';
-
-// Get API keys securely from Expo config
-const GRAVATAR_API_KEY = Constants.expoConfig?.extra?.gravatarApiKey ?? '';
-const API_KEY = Constants.expoConfig?.extra?.apiKey ?? '';
 
 const AUTH_STATE_CHANGE_EVENT = 'auth_state_changed';
 const SKIP_LOGIN_KEY = '@planner_skip_login';

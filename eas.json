@@ -25,7 +25,9 @@
       "env": {
         "APP_VARIANT": "production",
         "ANDROID_PACKAGE": "me.jagged.planneriti",
-        "IOS_BUNDLE_IDENTIFIER": "me.jagged.planneriti"
+        "IOS_BUNDLE_IDENTIFIER": "me.jagged.planneriti",
+        "API_KEY": "u5Xq2LgBSIWgyocdGoB7bx1IhJZ723XUkwwoKqSbDtc",
+        "GRAVATAR_API_KEY": "3388:gk-4gEEX2o9HTSw8y7vJFDZgMEMnKukJZH-0CqUS7IKHIBa1S7FXJIb9ulBba8i6"
       }
     }
   },
