@@ -2,9 +2,27 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform, DeviceEventEmitter } from 'react-native';
 import * as crypto from 'crypto-js';
 import { GRAVATAR_API_KEY, API_KEY } from '@env';
+import Constants from 'expo-constants';
 
 const API_URL = 'https://papi.jagged.me';
 const GRAVATAR_API_URL = 'https://api.gravatar.com/v3';
+
+// Fallback to extra from expo-constants if env vars are not available
+const getEnvVars = () => {
+  const gravatarKey = GRAVATAR_API_KEY || Constants.expoConfig?.extra?.GRAVATAR_API_KEY;
+  const apiKey = API_KEY || Constants.expoConfig?.extra?.API_KEY;
+
+  if (!gravatarKey || !apiKey) {
+    console.warn('Environment variables not properly configured. Please check .env file or EAS secrets.');
+  }
+
+  return {
+    GRAVATAR_API_KEY: gravatarKey,
+    API_KEY: apiKey,
+  };
+};
+
+const envVars = getEnvVars();
 
 const AUTH_STATE_CHANGE_EVENT = 'auth_state_changed';
 const SKIP_LOGIN_KEY = '@planner_skip_login';
@@ -66,7 +84,7 @@ export const getGravatarProfile = async (email: string): Promise<GravatarProfile
       method: 'GET',
       headers: {
         'Accept': 'application/json',
-        'Bearer': GRAVATAR_API_KEY,
+        'Bearer': envVars.GRAVATAR_API_KEY,
       },
     });
 
@@ -122,7 +140,7 @@ class AuthService {
   private async makeAuthRequest(endpoint: string, method: string, body?: any): Promise<any> {
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
-      'api-key': API_KEY
+      'api-key': envVars.API_KEY
     };
 
     if (this.token) {
