@@ -7,9 +7,25 @@ module.exports = () => {
   const iosBundleIdentifier = process.env.IOS_BUNDLE_IDENTIFIER || 'me.jagged.planneriti';
   
   // Add your API keys here from environment variables
-  const apiKey = process.env.API_KEY || '';
-  const gravatarApiKey = process.env.GRAVATAR_API_KEY || '';
-  // Add other environment variables as needed
+  const apiKey = process.env.API_KEY;
+  const gravatarApiKey = process.env.GRAVATAR_API_KEY;
+
+  // Validate required environment variables
+  if (!apiKey) {
+    throw new Error('API_KEY environment variable is required');
+  }
+
+  // Configure variant-specific settings
+  const variantConfig = {
+    production: {
+      androidPackage,
+      iosBundleIdentifier,
+    },
+    development: {
+      androidPackage: `${androidPackage}.dev`,
+      iosBundleIdentifier: `${iosBundleIdentifier}.dev`,
+    },
+  }[appVariant] || variantConfig.production;
 
   return {
     ...config,
@@ -17,17 +33,17 @@ module.exports = () => {
       ...config.expo,
       android: {
         ...config.expo.android,
-        package: androidPackage,
+        package: variantConfig.androidPackage,
       },
       ios: {
         ...config.expo.ios,
-        bundleIdentifier: iosBundleIdentifier,
+        bundleIdentifier: variantConfig.iosBundleIdentifier,
       },
       extra: {
         ...config.expo.extra,
         apiKey,
         gravatarApiKey,
-        // Add other environment variables as needed
+        environment: appVariant,
       },
     },
   };
