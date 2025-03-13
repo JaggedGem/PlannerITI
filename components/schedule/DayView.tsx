@@ -631,13 +631,17 @@ export default function DayView() {
                     }]}>
                       <View style={[styles.timeContainer, {
                         borderRightColor: 'rgba(138, 138, 141, 0.2)'
-                      }]}>
-                        <View style={styles.timeWrapper}>
+                      }]}
+                      >
+                        <Text style={[styles.time, { marginBottom: 'auto' }]}>
+                          {formatTimeByLocale(item.startTime, settings.language === 'en')}
+                        </Text>
+                        
+                        {/* Dot positioned in the middle */}
+                        <View style={styles.timeDotContainer}>
                           <View style={[styles.timeDot, { backgroundColor: getSubjectColor(item.className) }]} />
-                          <Text style={[styles.time, { marginBottom: 'auto' }]}>
-                            {formatTimeByLocale(item.startTime, settings.language === 'en')}
-                          </Text>
                         </View>
+                        
                         <Text style={[styles.time, { marginTop: 'auto' }]}>
                           {formatTimeByLocale(item.endTime, settings.language === 'en')}
                         </Text>
@@ -806,6 +810,7 @@ type Styles = {
   timeLeftText: TextStyle;
   timeWrapper: ViewStyle;
   timeDot: ViewStyle;
+  timeDotContainer: ViewStyle;
   classHeaderRow: ViewStyle;
   statusText: TextStyle;
   activeStatusText: TextStyle;
@@ -1076,8 +1081,8 @@ const styles = StyleSheet.create<Styles>({
     backgroundColor: '#FF3B30',
     borderRadius: 6,
     shadowColor: '#FF3B30',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
+    shadowOffset:{ width: 0, height: 0 },
+    shadowOpacity: .5,
     shadowRadius: 6,
     elevation: 8,
   },
@@ -1122,18 +1127,20 @@ const styles = StyleSheet.create<Styles>({
   timeWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 'auto',
   },
   timeDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    marginRight: 6,
     shadowColor: '#fff',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
     shadowRadius: 4,
     elevation: 3,
+  },
+  timeDotContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   classHeaderRow: {
     flexDirection: 'row',
