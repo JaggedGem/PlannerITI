@@ -198,10 +198,10 @@ export default function DayView() {
       if (scheduleData) {
         let dayKey;
         const dateString = selectedDate.toISOString().split('T')[0]; // Format as YYYY-MM-DD
-        
+
         // Check if this is a recovery day
         const isRecDay = scheduleService.isRecoveryDay(selectedDate);
-        
+
         if (isRecDay) {
           // For recovery days, use the special weekend key format
           dayKey = `weekend_${dateString}`;
@@ -209,7 +209,7 @@ export default function DayView() {
           // For regular days, use the standard day name
           dayKey = DAYS_MAP[selectedDate.getDay() as keyof typeof DAYS_MAP];
         }
-        
+
         const daySchedule = await scheduleService.getScheduleForDay(
           scheduleData,
           dayKey,
@@ -474,6 +474,7 @@ export default function DayView() {
                 </Text>
               </TouchableOpacity>
             </View>
+
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color="#3478F6" />
               <Text style={styles.loadingText}>{t('schedule').loading}</Text>
@@ -559,7 +560,7 @@ export default function DayView() {
               style={styles.leftGradient}
               pointerEvents="none"
             />
-            
+
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -600,7 +601,7 @@ export default function DayView() {
                 </TouchableOpacity>
               ))}
             </ScrollView>
-            
+
             {/* Right gradient fade */}
             <LinearGradient
               colors={['rgba(20, 20, 20, 0)', '#141414']}
@@ -655,12 +656,12 @@ export default function DayView() {
                         <Text style={[styles.time, { marginBottom: 'auto' }]}>
                           {formatTimeByLocale(item.startTime, settings.language === 'en')}
                         </Text>
-                        
+
                         {/* Dot positioned in the middle */}
                         <View style={styles.timeDotContainer}>
                           <View style={[styles.timeDot, { backgroundColor: getSubjectColor(item.className) }]} />
                         </View>
-                        
+
                         <Text style={[styles.time, { marginTop: 'auto' }]}>
                           {formatTimeByLocale(item.endTime, settings.language === 'en')}
                         </Text>
@@ -889,24 +890,23 @@ const styles = StyleSheet.create<Styles>({
   },
   headerTop: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 24,
+    gap: 12,
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: '700',
     color: '#FFFFFF',
-    flex: 1,
-    marginRight: 16,
+    textAlign: 'center',
     letterSpacing: 0.5,
   },
   weekInfo: {
-    backgroundColor: '#2C3DCD', // More vibrant blue
+    backgroundColor: '#2C3DCD',
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 16,
-    marginTop: 20,
   },
   weekText: {
     color: '#FFFFFF',
@@ -930,6 +930,7 @@ const styles = StyleSheet.create<Styles>({
     width: '100%',
     paddingHorizontal: 0,
     marginBottom: 8,
+    position: 'relative', // Added for absolute positioning of indicators
   },
   dateListContent: {
     flexDirection: 'row',
@@ -1354,7 +1355,7 @@ scheduleContainer: {
     width: '100%',
   },
   recoveryDayInfoButton: {
-    width: 24, 
+    width: 24,
     height: 24,
     borderRadius: 12,
     overflow: 'hidden',
@@ -1370,5 +1371,29 @@ scheduleContainer: {
     top: 12,
     right: 12,
     zIndex: 101,
+  },
+
+  scrollIndicator: {
+    position: 'absolute',
+    top: '50%',
+    zIndex: 20,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(50, 50, 50, 0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transform: [{ translateY: -15 }],
+  },
+  scrollIndicatorLeft: {
+    left: 8,
+  },
+  scrollIndicatorRight: {
+    right: 8,
+  },
+  scrollIndicatorArrow: {
+    color: 'white',
+    fontSize: 20,
+    fontWeight: 'bold',
   },
 });
