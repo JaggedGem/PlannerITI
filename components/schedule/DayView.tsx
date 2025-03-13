@@ -551,6 +551,15 @@ export default function DayView() {
             </TouchableOpacity>
           </View>
           <View style={styles.dateList}>
+            {/* Left gradient fade */}
+            <LinearGradient
+              colors={['#141414', 'rgba(20, 20, 20, 0)']}
+              start={{x: 0, y: 0}}
+              end={{x: 1, y: 0}}
+              style={styles.leftGradient}
+              pointerEvents="none"
+            />
+            
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -591,6 +600,15 @@ export default function DayView() {
                 </TouchableOpacity>
               ))}
             </ScrollView>
+            
+            {/* Right gradient fade */}
+            <LinearGradient
+              colors={['rgba(20, 20, 20, 0)', '#141414']}
+              start={{x: 0, y: 0}}
+              end={{x: 1, y: 0}}
+              style={styles.rightGradient}
+              pointerEvents="none"
+            />
           </View>
         </View>
       </View>
@@ -722,7 +740,7 @@ export default function DayView() {
               })
             )}
         </ScrollView>
-        
+
         {/* Position the recovery day info button at the top right corner */}
         {recoveryDay && (
           <View style={styles.fixedRecoveryInfoContainer}>
@@ -730,7 +748,7 @@ export default function DayView() {
           </View>
         )}
       </View>
-      
+
       <ViewModeMenu
         isOpen={isMenuOpen}
         onClose={() => setIsMenuOpen(false)}
@@ -786,7 +804,7 @@ type Styles = {
   activeDateText: TextStyle;
   todayText: TextStyle;
   todayDot: ViewStyle;
-  scheduleContainer: ViewStyle;
+scheduleContainer: ViewStyle;
   scheduleItem: ViewStyle;
   classCard: ViewStyle;
   timeContainer: ViewStyle;
@@ -819,10 +837,12 @@ type Styles = {
   loadingText: TextStyle;
   errorContainer: ViewStyle;
   errorText: TextStyle;
-  weekInfo2: ViewStyle;
+    weekInfo2: ViewStyle;
   weekText2: TextStyle;
   headerContainer: ViewStyle;
   contentContainer: ViewStyle;
+  leftGradient: ViewStyle;
+  rightGradient: ViewStyle;
   selectedDayText: TextStyle;
   selectedDay: ViewStyle;
   groupName: TextStyle;
@@ -886,6 +906,7 @@ const styles = StyleSheet.create<Styles>({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 16,
+    marginTop: 20,
   },
   weekText: {
     color: '#FFFFFF',
@@ -966,7 +987,7 @@ const styles = StyleSheet.create<Styles>({
     backgroundColor: '#2C3DCD',
     marginTop: 4,
   },
-  scheduleContainer: {
+scheduleContainer: {
     flex: 1,
     paddingHorizontal: 20,
     backgroundColor: '#0A0A0A',
@@ -1082,7 +1103,7 @@ const styles = StyleSheet.create<Styles>({
     backgroundColor: '#FF3B30',
     borderRadius: 6,
     shadowColor: '#FF3B30',
-    shadowOffset:{ width: 0, height: 0 },
+    shadowOffset: { width: 0, height: 0 },
     shadowOpacity: .5,
     shadowRadius: 6,
     elevation: 8,
@@ -1178,12 +1199,30 @@ const styles = StyleSheet.create<Styles>({
     fontSize: 16,
     textAlign: 'center',
   },
-  headerContainer: {
+    headerContainer: {
     zIndex: 10,
   },
   contentContainer: {
     flex: 1,
     zIndex: 1,
+  },
+  leftGradient: {
+    position: 'absolute',
+    left: 0,
+    width: 40,
+    top: 0,
+    bottom: 0,
+    zIndex: 10,
+    pointerEvents: 'none',
+  },
+  rightGradient: {
+    position: 'absolute',
+    right: 0,
+    width: 40,
+    top: 0,
+    bottom: 0,
+    zIndex: 10,
+    pointerEvents: 'none',
   },
   selectedDayText: {
     color: '#FFFFFF',
