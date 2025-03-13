@@ -54,6 +54,7 @@ interface RecoveryDayInfoProps {
 
 const RecoveryDayInfo = ({ reason }: RecoveryDayInfoProps) => {
   const [showInfo, setShowInfo] = useState(false);
+  const { t } = useTranslation();
 
   // Add animated value for popup transitions
   const popupAnimation = useAnimatedStyle(() => {
@@ -110,7 +111,7 @@ const RecoveryDayInfo = ({ reason }: RecoveryDayInfoProps) => {
       >
         <View style={styles.recoveryDayTooltip}>
           <View style={styles.recoveryDayTooltipHeader}>
-            <Text style={styles.recoveryDayTooltipTitle}>Recovery Day</Text>
+            <Text style={styles.recoveryDayTooltipTitle}>{t('recovery').recoveryDay}</Text>
             <TouchableOpacity
               style={styles.closeTooltipButton}
               onPress={() => setShowInfo(false)}
@@ -120,7 +121,7 @@ const RecoveryDayInfo = ({ reason }: RecoveryDayInfoProps) => {
             </TouchableOpacity>
           </View>
           <Text style={styles.recoveryDayTooltipReason}>
-            {reason || 'No reason provided'}
+            {reason || t('recovery').noReason}
           </Text>
         </View>
       </Animated.View>

@@ -146,6 +146,10 @@ type TranslationType = {
       noSubjects: string;
     };
   };
+  recovery: {
+    recoveryDay: string;
+    noReason: string;
+  };
   update: {
     availableTitle: string;
     availableMessage: string;
@@ -418,6 +422,10 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         upcoming: 'Upcoming',
         noSubjects: 'No subjects available for Semester {{semester}}',
       },
+    },
+    recovery: {
+      recoveryDay: 'Recovery Day',
+      noReason: 'No reason for this recovery day',
     },
     update: {
       availableTitle: 'Update Available',
@@ -710,6 +718,10 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         noSubjects: 'Nu există materii disponibile pentru Semestrul {{semester}}',
       },
     },
+    recovery: {
+      recoveryDay: 'Zi de Recuperare',
+      noReason: 'Nu există motiv pentru această zi de recuperare',
+    },
     update: {
       availableTitle: 'Actualizare Disponibilă',
       availableMessage: 'O nouă versiune a aplicației este disponibilă. Doriți să o descărcați acum?',
@@ -1000,6 +1012,10 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         upcoming: 'Предстоящие',
         noSubjects: 'Нет предметов для Семестра {{semester}}',
       },
+    },
+    recovery: {
+      recoveryDay: 'День восстановления',
+      noReason: 'Нет причины для этого дня восстановления',
     },
     update: {
       availableTitle: 'Доступно обновление',
