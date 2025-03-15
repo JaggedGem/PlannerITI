@@ -6,10 +6,10 @@ import Constants from "expo-constants";
 const API_URL = 'https://papi.jagged.me';
 const GRAVATAR_API_URL = 'https://api.gravatar.com/v3';
 
-// Fallback to extra from expo-constants if env vars are not available
+// Get environment variables from Expo Constants
 const getEnvVars = () => {
-  const gravatarKey = Constants.expoConfig?.extra?.gravatarApiKey; //GRAVATAR_API_KEY || 
-  const apiKey = Constants.expoConfig?.extra?.apiKey; //API_KEY ||
+  const gravatarKey = Constants.expoConfig?.extra?.gravatarApiKey;
+  const apiKey = Constants.expoConfig?.extra?.apiKey;
 
   if (!gravatarKey || !apiKey) {
     console.warn('Environment variables not properly configured. Please check .env file or EAS secrets.');
