@@ -1,4 +1,7 @@
-const config = require('./app.json');
+import "dotenv/config";
+
+const GRAVATAR_API_KEY = process.env.GRAVATAR_API_KEY;
+const API_KEY = process.env.API_KEY;
 
 // Read environment variables set in eas.json
 module.exports = () => {
@@ -11,29 +14,76 @@ module.exports = () => {
     production: {
       androidPackage,
       iosBundleIdentifier,
+      extra: {
+        gravatarApiKey: GRAVATAR_API_KEY,
+        apiKey: API_KEY
+      }
     },
     development: {
       androidPackage: `${androidPackage}.dev`,
       iosBundleIdentifier: `${iosBundleIdentifier}.dev`,
+      extra: {
+        gravatarApiKey: GRAVATAR_API_KEY,
+        apiKey: API_KEY
+      }
     },
   }[appVariant] || variantConfig.production;
 
   return {
-    ...config,
     expo: {
-      ...config.expo,
-      android: {
-        ...config.expo.android,
-        package: variantConfig.androidPackage,
-      },
+      name: "PlannerITI",
+      slug: "PlannerITI",
+      version: "1.0.0",
+      orientation: "portrait",
+      icon: "assets/images/icon.png",
+      scheme: "myapp",
+      userInterfaceStyle: "automatic",
+      newArchEnabled: true,
       ios: {
-        ...config.expo.ios,
-        bundleIdentifier: variantConfig.iosBundleIdentifier,
+        supportsTablet: true,
+        bundleIdentifier: variantConfig.iosBundleIdentifier
+      },
+      android: {
+        adaptiveIcon: {
+          foregroundImage: "assets/images/adaptive-icon.png",
+          backgroundColor: "#232433"
+        },
+        package: variantConfig.androidPackage
+      },
+      web: {
+        bundler: "metro",
+        output: "static",
+        favicon: "assets/images/favicon.png"
+      },
+      plugins: [
+        "expo-router",
+        [
+          "expo-splash-screen",
+          {
+            "image": "assets/images/splash-icon.png",
+            "imageWidth": 200,
+            "resizeMode": "contain",
+            "backgroundColor": "#232433"
+          }
+        ]
+      ],
+      experiments: {
+        typedRoutes: true
       },
       extra: {
-        ...config.expo.extra,
-        environment: appVariant,
+        router: {
+          origin: false
+        },
+        eas: {
+          projectId: "fe01b043-f283-48db-a683-3c5f23546a96"
+        },
+        environment: appVariant
       },
-    },
+      owner: "planneriti",
+      runtimeVersion: "appVersion",
+      updates: {
+        url: "https://u.expo.dev/fe01b043-f283-48db-a683-3c5f23546a96"
+      }
+    }
   };
 };
