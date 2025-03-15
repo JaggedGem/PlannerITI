@@ -151,11 +151,29 @@ export default function DayView() {
     const monday = new Date(today);
     let daysFromMonday;
 
-    // If it's weekend (Saturday or Sunday), calculate next week's Monday
-    if (currentDay === 0 || currentDay === 6) {
-      daysFromMonday = currentDay === 0 ? 1 : 2; // Sunday: +1, Saturday: +2
+    // Special handling for weekends
+    if (currentDay === 0 || currentDay === 6) { // If weekend (Saturday or Sunday)
+      // Check if current Saturday is a recovery day
+      const currentSaturday = new Date(today);
+      if (currentDay === 0) { // If Sunday
+        currentSaturday.setDate(today.getDate() - 1); // Yesterday was Saturday
+      }
+      
+      const saturdayIsRecovery = scheduleService.isRecoveryDay(currentSaturday) !== null;
+      
+      if (saturdayIsRecovery && currentDay === 6) {
+        // If it's Saturday and it's a recovery day, stay on current week
+        daysFromMonday = 1 - currentDay; // -5 to get to Monday of current week
+      } else if (saturdayIsRecovery && currentDay === 0) {
+        // If it's Sunday and yesterday (Saturday) was a recovery day, stay on current week
+        daysFromMonday = 1 - 7; // -6 to get to Monday of current week
+      } else {
+        // Otherwise, go to next week as before
+        daysFromMonday = currentDay === 0 ? 1 : 2; // Sunday: +1, Saturday: +2
+      }
     } else {
-      daysFromMonday = currentDay === 0 ? -6 : 1 - currentDay;
+      // For weekdays, calculate normally
+      daysFromMonday = 1 - currentDay; // Formula to get to Monday (e.g., if Wednesday (3), -2)
     }
 
     monday.setDate(today.getDate() + daysFromMonday);
@@ -337,10 +355,11 @@ export default function DayView() {
   }, [weekDates]);
 
   const handleDatePress = useCallback((date: Date) => {
-    // Only allow selecting dates within the 5-day range (Monday to Friday)
+    // Only allow selecting dates within the range of available weekDates
     const dateTime = date.getTime();
     const minDate = weekDates[0].date.getTime();
-    const maxDate = weekDates[5].date.getTime();
+    // Use the last element of weekDates array instead of hardcoding index 5
+    const maxDate = weekDates[weekDates.length - 1].date.getTime();
 
     if (dateTime >= minDate && dateTime <= maxDate) {
       setSelectedDate(date);
@@ -929,7 +948,7 @@ const styles = StyleSheet.create<Styles>({
     flexDirection: 'row',
     width: '100%',
     paddingHorizontal: 0,
-    marginBottom: 8,
+    marginBottom: 0,
     position: 'relative', // Added for absolute positioning of indicators
   },
   dateListContent: {
@@ -994,7 +1013,7 @@ scheduleContainer: {
     backgroundColor: '#0A0A0A',
   },
   scheduleItem: {
-    marginBottom: 16,
+    marginBottom: 8,
     zIndex: 1,
   },
   classCard: {
