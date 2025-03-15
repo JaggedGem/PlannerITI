@@ -14,18 +14,10 @@ module.exports = () => {
     production: {
       androidPackage,
       iosBundleIdentifier,
-      extra: {
-        gravatarApiKey: GRAVATAR_API_KEY,
-        apiKey: API_KEY
-      }
     },
     development: {
       androidPackage: `${androidPackage}.dev`,
       iosBundleIdentifier: `${iosBundleIdentifier}.dev`,
-      extra: {
-        gravatarApiKey: GRAVATAR_API_KEY,
-        apiKey: API_KEY
-      }
     },
   }[appVariant] || variantConfig.production;
 
@@ -77,7 +69,9 @@ module.exports = () => {
         eas: {
           projectId: "fe01b043-f283-48db-a683-3c5f23546a96"
         },
-        environment: appVariant
+        environment: appVariant,
+        gravatarApiKey: process.env.GRAVATAR_API_KEY,
+        apiKey: process.env.API_KEY
       },
       owner: "planneriti",
       runtimeVersion: "appVersion",
