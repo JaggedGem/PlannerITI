@@ -962,7 +962,7 @@ export default function Settings() {
               <Image 
                 source={{ uri: gravatarProfile.avatar_url }} 
                 style={styles.avatarImage}
-                defaultSource={require('../../assets/images/default-avatar.png')}
+                defaultSource={require('../../assets/images/default-avatar.jpg')}
               />
             ) : (
               <Text style={styles.avatarText}>
