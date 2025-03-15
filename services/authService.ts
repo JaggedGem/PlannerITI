@@ -1,16 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform, DeviceEventEmitter } from 'react-native';
 import * as crypto from 'crypto-js';
-// import { GRAVATAR_API_KEY, API_KEY } from '@env';
-import Constants from 'expo-constants';
 
 const API_URL = 'https://papi.jagged.me';
 const GRAVATAR_API_URL = 'https://api.gravatar.com/v3';
 
 // Fallback to extra from expo-constants if env vars are not available
 const getEnvVars = () => {
-  const gravatarKey = Constants.expoConfig?.extra?.GRAVATAR_API_KEY; //GRAVATAR_API_KEY || 
-  const apiKey = Constants.expoConfig?.extra?.API_KEY; //API_KEY ||
+  const gravatarKey = '3388:gk-4gEEX2o9HTSw8y7vJFDZgMEMnKukJZH-0CqUS7IKHIBa1S7FXJIb9ulBba8i6'; //GRAVATAR_API_KEY || 
+  const apiKey = 'u5Xq2LgBSIWgyocdGoB7bx1IhJZ723XUkwwoKqSbDtc'; //API_KEY ||
 
   if (!gravatarKey || !apiKey) {
     console.warn('Environment variables not properly configured. Please check .env file or EAS secrets.');
