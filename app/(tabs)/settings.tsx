@@ -8,11 +8,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { DeviceEventEmitter } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useAuthContext } from '@/components/auth/AuthContext';
-import * as WebBrowser from 'expo-web-browser';
 import authService from '@/services/authService';
-import Constants from 'expo-constants';
 
 const IDNP_KEY = '@planner_idnp';
 const IDNP_UPDATE_EVENT = 'idnp_updated';
@@ -913,14 +910,6 @@ export default function Settings() {
     } finally {
       setIsRefreshingAccount(false);
     }
-  };
-
-  const handlePrivacyPolicy = () => {
-    WebBrowser.openBrowserAsync('https://papi.jagged.me/privacy-policy');
-  };
-
-  const handleTermsOfService = () => {
-    WebBrowser.openBrowserAsync('https://papi.jagged.me/terms-of-service');
   };
 
   // Function to render the account section based on authentication state
