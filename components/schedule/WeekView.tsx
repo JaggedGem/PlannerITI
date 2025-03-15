@@ -3,7 +3,7 @@ import { useEffect, useState, useRef } from 'react';
 import { scheduleService, DAYS_MAP, ApiResponse, RecoveryDay } from '@/services/scheduleService';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useTimeUpdate } from '@/hooks/useTimeUpdate';
-import Animated, { useAnimatedStyle, withTiming, withSpring } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, withTiming, withSpring, FadeIn, FadeOut, Layout, useSharedValue } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import ViewModeMenu from './ViewModeMenu';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,16 +11,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 // Get week start (Monday) from current date
 const getWeekStart = (date: Date): Date => {
   const result = new Date(date);
-  const day = result.getDay() || 7; // Convert Sunday (0) to 7
+  const day = result.getDay(); // 0 is Sunday, 1 is Monday, etc.
   
-  // If weekend, get next week's Monday
-  if (day === 6 || day === 0) { // Saturday or Sunday
-    const daysUntilMonday = day === 0 ? 1 : 2; // Sunday: +1, Saturday: +2
-    result.setDate(result.getDate() + daysUntilMonday);
-  } else if (day !== 1) { // If not Monday and not weekend
-    result.setHours(-24 * (day - 1)); // Go back to Monday
+  // Calculate days to Monday
+  let daysToMonday;
+  if (day === 0) { // Sunday
+    daysToMonday = -6; // Go back to last week's Monday
+  } else if (day === 6) { // Saturday
+    daysToMonday = -5; // Go back to this week's Monday
+  } else {
+    daysToMonday = 1 - day; // Regular case: calculate days to Monday
   }
   
+  result.setDate(result.getDate() + daysToMonday);
   return result;
 };
 
@@ -122,7 +125,7 @@ const TimetableItem = ({ item, top, height, color, isActive, timeFormat }: Timet
   const timeDisplay = `${startHour}–${endHour}`;
   
   return (
-    <View 
+    <Animated.View 
       style={[
         styles.timetableItem, 
         { 
@@ -130,6 +133,12 @@ const TimetableItem = ({ item, top, height, color, isActive, timeFormat }: Timet
           height: Math.max(height, 35), // Slightly taller minimum height
         }
       ]}
+      entering={FadeIn
+        .duration(200)
+        .springify()
+        .delay(50)}
+      exiting={FadeOut.duration(150)}
+      layout={Layout.springify()}
     >
       <LinearGradient
         colors={isActive 
@@ -139,16 +148,20 @@ const TimetableItem = ({ item, top, height, color, isActive, timeFormat }: Timet
         end={{ x: 1, y: 1 }}
         style={styles.itemGradient}
       >
-        <Text style={styles.className} numberOfLines={1}>
-          {item.className}
-        </Text>
-        <View style={styles.itemFooter}>
-          <Text style={styles.roomNumber} numberOfLines={1}>
-            {item.roomNumber}
+        <Animated.View entering={FadeIn.duration(250)}>
+          <Text style={styles.className} numberOfLines={1}>
+            {item.className}
           </Text>
+        </Animated.View>
+        <View style={styles.itemFooter}>
+          <Animated.View entering={FadeIn.duration(250).delay(50)}>
+            <Text style={styles.roomNumber} numberOfLines={1}>
+              {item.roomNumber}
+            </Text>
+          </Animated.View>
         </View>
       </LinearGradient>
-    </View>
+    </Animated.View>
   );
 };
 
@@ -343,12 +356,33 @@ export default function WeekView() {
   const [error, setError] = useState<string | null>(null);
   const [settings, setSettings] = useState(scheduleService.getSettings());
   const now = new Date();
-  const isWeekend = now.getDay() === 0 || now.getDay() === 6;
-  const [weekOffset, setWeekOffset] = useState(isWeekend ? 1 : 0);
+  const currentDay = now.getDay();
+  const isWeekend = currentDay === 0 || currentDay === 6;
+  
+  // Check if current Saturday is a recovery day
+  const currentSaturday = new Date(now);
+  if (currentDay === 0) { // If Sunday
+    currentSaturday.setDate(now.getDate() - 1); // Yesterday was Saturday
+  }
+  const saturdayIsRecovery = scheduleService.isRecoveryDay(currentSaturday) !== null;
+  
+  // Initialize weekOffset based on recovery days and weekend status
+  const [weekOffset, setWeekOffset] = useState(() => {
+    if (isWeekend) {
+      if ((currentDay === 6 && saturdayIsRecovery) || // Saturday and it's a recovery day
+          (currentDay === 0 && saturdayIsRecovery)) { // Sunday and yesterday was recovery
+        return 0; // Stay on current week
+      }
+      return 1; // Go to next week
+    }
+    return 0; // Weekday - stay on current week
+  });
   const { t, formatDate } = useTranslation();
   const currentTime = useTimeUpdate();
   const verticalScrollRef = useRef<ScrollView>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [slideDirection, setSlideDirection] = useState<'left' | 'right' | null>(null);
+  const fadeAnim = useSharedValue(1);
 
   // Calculate current week start date (Monday)
   const weekStartDate = new Date();
@@ -498,7 +532,8 @@ export default function WeekView() {
         dayNumber: date.getDate(),
         isToday: date.toDateString() === new Date().toDateString(),
         recoveryDay: recoveryDay,
-        isWeekend: false
+        isWeekend: false,
+        dayKey: DAYS_MAP[date.getDay() as keyof typeof DAYS_MAP]
       };
     } else {
       // Weekend recovery days
@@ -512,7 +547,8 @@ export default function WeekView() {
         dayNumber: date.getDate(),
         isToday: date.toDateString() === new Date().toDateString(),
         recoveryDay: recoveryDay,
-        isWeekend: true
+        isWeekend: true,
+        dayKey: `weekend_${recoveryDay.date}`
       };
     }
   });
@@ -535,8 +571,9 @@ export default function WeekView() {
   // Get current hour for highlighting
   const nowHour = new Date().getHours();
 
-  // Function to navigate between weeks
+  // Function to navigate between weeks with animation
   const navigateWeek = (direction: number) => {
+    setSlideDirection(direction > 0 ? 'right' : 'left');
     setWeekOffset(prev => prev + direction);
   };
 
@@ -576,8 +613,9 @@ export default function WeekView() {
     return `${weekStartFormatted} - ${weekEndFormatted}`;
   };
 
-  // Reset to current week
+  // Reset week offset with animation
   const goToCurrentWeek = () => {
+    setSlideDirection(weekOffset > 0 ? 'left' : 'right');
     setWeekOffset(0);
   };
 
@@ -634,7 +672,15 @@ export default function WeekView() {
           </TouchableOpacity>
           
           <TouchableOpacity onPress={goToCurrentWeek} style={[styles.navButton, weekOffset === 0 && { opacity: 0.5 }]}>
-            <Text style={styles.navButtonText}>{weekDisplayText()}</Text>
+            <Animated.View
+              entering={FadeIn.duration(150)}
+              exiting={FadeOut.duration(150)}
+              layout={Layout.springify()}
+            >
+              <Text style={styles.navButtonText}>
+                {weekDisplayText()}
+              </Text>
+            </Animated.View>
           </TouchableOpacity>
           
           <TouchableOpacity onPress={() => navigateWeek(1)} style={styles.navButton}>
@@ -642,13 +688,17 @@ export default function WeekView() {
           </TouchableOpacity>
         </View>
 
-        {/* Days header */}
-        <View style={styles.daysHeader}>
+        {/* Days header with animation */}
+        <Animated.View 
+          style={styles.daysHeader}
+          entering={FadeIn.duration(200)}
+          layout={Layout.springify()}
+        >
           {/* Empty space for time column alignment */}
           <View style={{ width: timeColumnWidth }} />
           
           {dayDates.map((day, index) => (
-            <View 
+            <Animated.View 
               key={index} 
               style={[
                 styles.dayColumn,
@@ -656,12 +706,14 @@ export default function WeekView() {
                 day.isToday && styles.todayColumn,
                 day.isWeekend && styles.weekendColumn
               ]}
+              entering={FadeIn.duration(200).delay(index * 50)}
+              layout={Layout.springify()}
             >
               <Text style={styles.dayName}>{day.dayName}</Text>
               <Text style={styles.dateText}>{day.dayNumber}</Text>
-            </View>
+            </Animated.View>
           ))}
-        </View>
+        </Animated.View>
       </View>
 
       <View style={styles.content}>
@@ -670,7 +722,11 @@ export default function WeekView() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ minHeight: timetableHeight + 20 }}
         >
-          <View style={styles.timetableContainer}>
+          <Animated.View 
+            style={styles.timetableContainer}
+            entering={FadeIn.duration(200)}
+            layout={Layout.springify()}
+          >
             {/* Time slots column */}
             <View style={[styles.timeColumn, { width: timeColumnWidth }]}>
               {timeSlots.map((hour, index) => {
@@ -719,10 +775,7 @@ export default function WeekView() {
 
               {/* Day columns */}
               {dayDates.map((day, dayIndex) => {
-                const dayKey = day.isWeekend 
-                  ? `weekend_${day.date.toISOString().split('T')[0]}`
-                  : ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'][dayIndex];
-                
+                const dayKey = day.dayKey;
                 const dayItems = weekSchedule[dayKey as keyof typeof weekSchedule] || [];
                 const isToday = day.isToday;
                 const isWeekend = day.isWeekend;
@@ -734,7 +787,7 @@ export default function WeekView() {
                 );
 
                 return (
-                  <View 
+                  <Animated.View 
                     key={`day_${dayIndex}`} 
                     style={[
                       styles.dayContent, 
@@ -746,6 +799,8 @@ export default function WeekView() {
                       isToday && { backgroundColor: 'rgba(52, 120, 246, 0.03)' },
                       (isRecoveryDay || isWeekend) && { backgroundColor: 'rgba(255, 87, 51, 0.05)' }
                     ]}
+                    entering={FadeIn.duration(150).delay(dayIndex * 30)}
+                    layout={Layout.springify()}
                   >
 
                     {/* Show recovery day info button when this is a recovery day */}
@@ -754,10 +809,7 @@ export default function WeekView() {
                     )}
 
                     {/* Render schedule items */}
-                    {filteredItems.map((item, itemIndex) => {
-                      // Skip the recovery day info item as we're handling it differently
-                      if (item.isRecoveryDay) return null;
-                      
+                    {filteredItems.map((item, itemIndex) => {                      
                       const { top, height } = calculateItemPosition(
                         item.startTime,
                         item.endTime,
@@ -777,7 +829,6 @@ export default function WeekView() {
                         roomNumber: item.roomNumber
                       };
 
-                      // Don't add offset for recovery days anymore - let items position naturally
                       return (
                         <TimetableItem 
                           key={itemIndex}
@@ -791,11 +842,11 @@ export default function WeekView() {
                       );
                     })}
 
-                    {/* If day is empty, show empty message */}
+                    {/* Only show empty message if there are no filtered items */}
                     {filteredItems.length === 0 && (
                       <Text style={[
                         styles.emptySchedule,
-                        isRecoveryDay && { marginTop: 30 } // Add some space for recovery icon
+                        isRecoveryDay && { marginTop: 30 }
                       ]}>
                         {t('schedule').noClassesDay}
                       </Text>
@@ -810,11 +861,11 @@ export default function WeekView() {
                         schedule={weekSchedule}
                       />
                     )}
-                  </View>
+                  </Animated.View>
                 );
               })}
             </View>
-          </View>
+          </Animated.View>
         </ScrollView>
       </View>
 
