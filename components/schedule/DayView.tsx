@@ -771,7 +771,8 @@ export default function DayView() {
                                     );
                                     const diffInMs = target.getTime() - now.getTime();
                                     const minutesUntilStart = Math.ceil(diffInMs / (1000 * 60));
-                                    return `In ${minutesUntilStart}m`;
+                                    // Only show if less than 60 minutes
+                                    return minutesUntilStart <= 60 ? `In ${minutesUntilStart}m` : '';
                                   } else if (!previousItem && currentTimeMinutes < startTimeMinutes) {
                                     // If this is the first class and it hasn't started yet
                                     const now = new Date();
@@ -784,7 +785,8 @@ export default function DayView() {
                                     );
                                     const diffInMs = target.getTime() - now.getTime();
                                     const minutesUntilStart = Math.ceil(diffInMs / (1000 * 60));
-                                    return `${t('schedule').in} ${minutesUntilStart}m`;
+                                    // Only show if less than 60 minutes
+                                    return minutesUntilStart <= 60 ? `${t('schedule').in} ${minutesUntilStart}m` : '';
                                   }
                                 }
                                 return '';
@@ -795,7 +797,7 @@ export default function DayView() {
                         <View style={styles.detailsContainer}>
                           <View style={styles.teacherContainer}>
                             <Text style={styles.teacherName}>{item.teacherName}</Text>
-                            {item.group && item.group !== 'Clasă intreagă' && item.group !== 'Clasă intreagă' && (
+                            {item.group && (item.group === 'Subgroup 1' || item.group === 'Subgroup 2') && (
                               <Text style={styles.groupName}>
                                 {item.group === 'Subgroup 1' ? t('subgroup').group1 : t('subgroup').group2}
                               </Text>
