@@ -1,5 +1,6 @@
 import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Dimensions, ViewStyle, TextStyle, ActivityIndicator } from 'react-native';
-import { useEffect, useState, useRef } from 'react';
+import React from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { scheduleService, DAYS_MAP, ApiResponse, RecoveryDay } from '@/services/scheduleService';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useTimeUpdate } from '@/hooks/useTimeUpdate';
@@ -383,6 +384,9 @@ export default function WeekView() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [slideDirection, setSlideDirection] = useState<'left' | 'right' | null>(null);
   const fadeAnim = useSharedValue(1);
+  
+  // Initialize settings ref at the top level
+  const settingsRef = useRef(scheduleService.getSettings());
 
   // Calculate current week start date (Monday)
   const weekStartDate = new Date();
@@ -399,8 +403,8 @@ export default function WeekView() {
     return date;
   };
 
-  // Schedule data fetching function
-  const fetchSchedule = async (groupId?: string) => {
+  // Make fetchSchedule and updateWeekSchedule use useCallback
+  const fetchSchedule = useCallback(async (groupId?: string) => {
     try {
       setIsLoading(true);
       setError(null);
@@ -445,15 +449,10 @@ export default function WeekView() {
       setError(t('schedule').error || 'Failed to load schedule');
       setIsLoading(false);
     }
-  };
+  }, [t, weekStart, settings.selectedGroupId]);
 
-  // Add useEffect for initial schedule load
-  useEffect(() => {
-    fetchSchedule();
-  }, []);
-
-  // Schedule update function (combines regular days and recovery days)
-  const updateWeekSchedule = () => {
+  // Schedule update function wrapped in useCallback
+  const updateWeekSchedule = useCallback(() => {
     if (scheduleData) {
       const recoveryDays = scheduleData.recoveryDays || [];
       const weekendRecoveryDays = recoveryDays.filter(rd => {
@@ -490,7 +489,57 @@ export default function WeekView() {
       
       setWeekSchedule(newWeekSchedule);
     }
-  };
+  }, [scheduleData, weekStart, settings.selectedGroupId]);
+
+  // Add useEffect for initial schedule load
+  useEffect(() => {
+    fetchSchedule();
+  }, []);
+
+  // Settings subscription effect for updates when settings change
+  useEffect(() => {
+    // Capture current references to avoid stale closures
+    const currUpdateWeekSchedule = updateWeekSchedule;
+    const currFetchSchedule = fetchSchedule;
+    const currScheduleData = scheduleData;
+    
+    const updateHandler = () => {
+      // Get latest settings
+      const newSettings = scheduleService.getSettings();
+      const prevSettings = settingsRef.current;
+      
+      // Update the ref and state
+      settingsRef.current = newSettings;
+      setSettings(newSettings);
+      
+      // Skip updates if we don't have schedule data yet
+      if (!currScheduleData) return;
+      
+      // Handle group ID change (full refetch needed)
+      if (newSettings.selectedGroupId !== prevSettings.selectedGroupId) {
+        currFetchSchedule(newSettings.selectedGroupId);
+        return;
+      }
+      
+      // Check if custom periods have changed
+      const oldCustomPeriods = JSON.stringify(prevSettings.customPeriods);
+      const newCustomPeriods = JSON.stringify(newSettings.customPeriods);
+      
+      if (oldCustomPeriods !== newCustomPeriods) {
+        // Force update by calling updateWeekSchedule directly
+        currUpdateWeekSchedule();
+        return;
+      }
+      
+      // For all other changes, also update week schedule
+      currUpdateWeekSchedule();
+    };
+    
+    // Subscribe to settings changes
+    const unsubscribe = scheduleService.subscribe(updateHandler);
+    
+    return () => unsubscribe();
+  }, [scheduleData, updateWeekSchedule, fetchSchedule]);
 
   // Calculate day dates for the week, including weekend recovery days if they exist
   const normalDayCount = 5; // Monday-Friday
