@@ -688,6 +688,32 @@ export const scheduleService = {
       schedules.impar.forEach(item => processScheduleItem(item, false));
     });
 
+    // Add custom periods if they exist and are enabled
+    if (date && this.settings.customPeriods.length > 0) {
+      const currentDayOfWeek = date.getDay();
+      // Map JavaScript's day (0=Sunday) to our days (1=Monday, 5=Friday)
+      const mappedDayOfWeek = currentDayOfWeek === 0 ? 7 : currentDayOfWeek;
+      
+      this.settings.customPeriods.forEach(customPeriod => {
+        // Check if this custom period is enabled and applies to this day
+        if (customPeriod.isEnabled && 
+            (!customPeriod.daysOfWeek || 
+             customPeriod.daysOfWeek.includes(mappedDayOfWeek))) {
+          
+          result.push({
+            period: customPeriod._id,
+            startTime: customPeriod.starttime,
+            endTime: customPeriod.endtime,
+            className: customPeriod.name || 'Custom Period',
+            teacherName: '',
+            roomNumber: '',
+            isCustom: true,
+            color: customPeriod.color || '#4CC9F0'
+          });
+        }
+      });
+    }
+
     // Sort schedule by time
     const sortedSchedule = result.sort((a, b) => {
       // Put recovery day info at the top

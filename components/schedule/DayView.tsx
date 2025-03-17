@@ -141,6 +141,11 @@ export default function DayView() {
   const isEvenWeek = scheduleService.isEvenWeek(selectedDate);
   const { t, formatDate } = useTranslation();
   const recoveryDay = useMemo(() => scheduleService.isRecoveryDay(selectedDate), [selectedDate]);
+  const currentTime = useTimeUpdate();
+  
+  // Initialize refs at the top level
+  const settingsRef = useRef(scheduleService.getSettings());
+  const scrollViewRef = useRef<ScrollView>(null);
 
   // Generate current week dates (Monday to Friday, plus Saturday if it's a recovery day)
   const weekDates = useMemo(() => {
@@ -210,135 +215,7 @@ export default function DayView() {
     return dates;
   }, [currentDate, t]);
 
-  // Update schedule when date changes or scheduleData changes
-  useEffect(() => {
-    const updateSchedule = async () => {
-      if (scheduleData) {
-        let dayKey;
-        const dateString = selectedDate.toISOString().split('T')[0]; // Format as YYYY-MM-DD
-
-        // Check if this is a recovery day
-        const isRecDay = scheduleService.isRecoveryDay(selectedDate);
-
-        if (isRecDay) {
-          // For recovery days, use the special weekend key format
-          dayKey = `weekend_${dateString}`;
-        } else {
-          // For regular days, use the standard day name
-          dayKey = DAYS_MAP[selectedDate.getDay() as keyof typeof DAYS_MAP];
-        }
-
-        const daySchedule = await scheduleService.getScheduleForDay(
-          scheduleData,
-          dayKey,
-          selectedDate // Pass the actual date to check for recovery days
-        );
-        setTodaySchedule(daySchedule);
-      }
-    };
-    updateSchedule();
-  }, [selectedDate, scheduleData]);
-
-  // Initial selected date setup - if weekend, select next Monday
-  useEffect(() => {
-    const today = new Date();
-    const currentDay = today.getDay();
-
-    if (currentDay === 0 || currentDay === 6) { // If weekend
-      const nextMonday = new Date(today);
-      const daysUntilMonday = currentDay === 0 ? 1 : 2;
-      nextMonday.setDate(today.getDate() + daysUntilMonday);
-      setSelectedDate(nextMonday);
-    }
-  }, []);
-
-  const currentTime = useTimeUpdate();
-
-  const isCurrentTimeSlot = (startTime: string, endTime: string): boolean => {
-    const [startHours, startMinutes] = startTime.split(':').map(Number);
-    const [endHours, endMinutes] = endTime.split(':').map(Number);
-    const currentHours = currentTime.getHours();
-    const currentMinutes = currentTime.getMinutes();
-
-    const currentTimeInMinutes = currentHours * 60 + currentMinutes;
-    const startTimeInMinutes = startHours * 60 + startMinutes;
-    const endTimeInMinutes = endHours * 60 + endMinutes;
-
-    return currentTimeInMinutes >= startTimeInMinutes &&
-      currentTimeInMinutes <= endTimeInMinutes;
-  };
-
-  const isCurrentTimeInSchedule = (item: ScheduleItem): boolean => {
-    // First check if selected date is today
-    const today = new Date();
-    const isSelectedDateToday = selectedDate.toDateString() === today.toDateString();
-
-    // If not today, don't show the time indicator
-    if (!isSelectedDateToday) return false;
-
-    const [startHours, startMinutes] = item.startTime.split(':').map(Number);
-    const [endHours, endMinutes] = item.endTime.split(':').map(Number);
-    const currentHours = currentTime.getHours();
-    const currentMinutes = currentTime.getMinutes();
-
-    const currentTimeInMinutes = currentHours * 60 + currentMinutes;
-    const startTimeInMinutes = startHours * 60 + startMinutes;
-    const endTimeInMinutes = endHours * 60 + endMinutes;
-
-    return currentTimeInMinutes >= startTimeInMinutes && currentTimeInMinutes < endTimeInMinutes;
-  };
-
-  // Schedule update function
-  const updateSchedule = async () => {
-    if (scheduleData) {
-      const daySchedule = await scheduleService.getScheduleForDay(
-        scheduleData,
-        DAYS_MAP[selectedDate.getDay() as keyof typeof DAYS_MAP]
-      );
-      setTodaySchedule(daySchedule);
-    }
-  };
-
-  // Settings subscription effect - update for both groupId and subgroup changes
-  useEffect(() => {
-    const unsubscribe = scheduleService.subscribe(() => {
-      const newSettings = scheduleService.getSettings();
-      setSettings(newSettings);
-
-      // Refresh schedule data when the group changes or subgroup changes
-      if (newSettings.selectedGroupId !== settings.selectedGroupId || newSettings.group !== settings.group) {
-        fetchSchedule(newSettings.selectedGroupId);
-      }
-      // Just update today's schedule if only subgroup changed
-      else if (newSettings.group !== settings.group && scheduleData) {
-        updateSchedule();
-      }
-    });
-    return () => unsubscribe();
-  }, [settings.selectedGroupId, settings.group, scheduleData]);
-
-  // Schedule data fetching effect
-  useEffect(() => {
-    fetchSchedule();
-  }, []);
-
-  const fetchSchedule = async (groupId?: string) => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const data = await scheduleService.getClassSchedule(groupId);
-      setScheduleData(data);
-    } catch (error) {
-      setError('Unable to load schedule. Please try again later.');
-      // Silent error handling
-      setIsLoading(false);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const scrollViewRef = useRef<ScrollView>(null);
-
+  // Add these functions after the main hook declarations, before updateSchedule
   const scrollToDate = useCallback((date: Date) => {
     if (!scrollViewRef.current) return;
 
@@ -366,6 +243,111 @@ export default function DayView() {
       scrollToDate(date);
     }
   }, [scrollToDate, weekDates]);
+
+  // Schedule update function using useCallback
+  const updateSchedule = useCallback(async () => {
+    if (scheduleData) {
+      const daySchedule = await scheduleService.getScheduleForDay(
+        scheduleData,
+        DAYS_MAP[selectedDate.getDay() as keyof typeof DAYS_MAP],
+        selectedDate // Pass the selected date to handle recovery days
+      );
+      setTodaySchedule(daySchedule);
+    }
+  }, [scheduleData, selectedDate]);
+
+  // Schedule data fetching function using useCallback
+  const fetchSchedule = useCallback(async (groupId?: string) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const data = await scheduleService.getClassSchedule(groupId);
+      setScheduleData(data);
+    } catch (error) {
+      setError('Unable to load schedule. Please try again later.');
+      // Silent error handling
+      setIsLoading(false);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Settings subscription effect to check for any kind of settings changes
+  useEffect(() => {
+    // Capture current references to avoid stale closures
+    const currentScheduleData = scheduleData;
+    const currentSelectedDate = selectedDate;
+    const currentFetchSchedule = fetchSchedule;
+    
+    const updateHandler = () => {
+      // Get latest settings
+      const newSettings = scheduleService.getSettings();
+      const prevSettings = settingsRef.current;
+      
+      // Update the ref and state
+      settingsRef.current = newSettings;
+      setSettings(newSettings);
+      
+      // Skip updates if we don't have schedule data yet
+      if (!currentScheduleData) return;
+      
+      // Handle group ID change (full refetch needed)
+      if (newSettings.selectedGroupId !== prevSettings.selectedGroupId) {
+        currentFetchSchedule(newSettings.selectedGroupId);
+        return;
+      }
+      
+      // Check explicitly if custom periods have changed using JSON comparison
+      const oldCustomPeriods = JSON.stringify(prevSettings.customPeriods);
+      const newCustomPeriods = JSON.stringify(newSettings.customPeriods);
+      
+      if (oldCustomPeriods !== newCustomPeriods) {
+        // Force update the current schedule for custom period changes
+        updateCurrentSchedule();
+        return;
+      }
+      
+      // For group/subgroup changes
+      if (newSettings.group !== prevSettings.group) {
+        updateCurrentSchedule();
+        return;
+      }
+    };
+    
+    // Helper function to update the schedule with the correct day key
+    const updateCurrentSchedule = async () => {
+      // Make sure scheduleData is not null
+      if (!currentScheduleData) return;
+      
+      let dayKey;
+      const dateString = currentSelectedDate.toISOString().split('T')[0];
+      const isRecDay = scheduleService.isRecoveryDay(currentSelectedDate);
+      
+      if (isRecDay) {
+        dayKey = `weekend_${dateString}`;
+      } else {
+        dayKey = DAYS_MAP[currentSelectedDate.getDay() as keyof typeof DAYS_MAP];
+      }
+      
+      const daySchedule = await scheduleService.getScheduleForDay(
+        currentScheduleData,
+        dayKey,
+        currentSelectedDate
+      );
+      
+      setTodaySchedule(daySchedule);
+    };
+    
+    // Subscribe to settings changes
+    const unsubscribe = scheduleService.subscribe(updateHandler);
+    
+    return () => unsubscribe();
+  }, [scheduleData, selectedDate, fetchSchedule, updateSchedule]);
+
+  // Schedule data fetching effect
+  useEffect(() => {
+    fetchSchedule();
+  }, []);
 
   // Initial scroll to today, only once on mount
   useEffect(() => {
@@ -426,14 +408,14 @@ export default function DayView() {
       const timeSlotDuration = endTimeInMinutes - startTimeInMinutes;
       const progress = (currentTimeInMinutes - startTimeInMinutes) / timeSlotDuration;
 
-      // The height of the container is 80 (the height property of the time indicator is min-height: 25px);
-      const position = progress * (props.containerHeight - 100) + 28; // We need to add the height of the item
-      const showOnTop = -1 * position > props.containerHeight / 2; // Show the text only when we need to show time
-
+      // Improved positioning calculation to avoid overlap
+      // Calculate if the time indicator is in the top half or bottom half
+      const isInTopHalf = progress < 0.5;
+      
       return {
         transform: [{
-          translateY: withTiming(showOnTop ? -24 : 24, { duration: 300 })
-        }],
+          translateY: withTiming(isInTopHalf ? 24 : -24, { duration: 300 })
+        }]
       };
     }, [props.timestamp, props.containerHeight]);
 
@@ -469,6 +451,84 @@ export default function DayView() {
         </Animated.View>
       </View>
     );
+  }, []);
+
+  const isCurrentTimeSlot = (startTime: string, endTime: string): boolean => {
+    const [startHours, startMinutes] = startTime.split(':').map(Number);
+    const [endHours, endMinutes] = endTime.split(':').map(Number);
+    const currentHours = currentTime.getHours();
+    const currentMinutes = currentTime.getMinutes();
+
+    const currentTimeInMinutes = currentHours * 60 + currentMinutes;
+    const startTimeInMinutes = startHours * 60 + startMinutes;
+    const endTimeInMinutes = endHours * 60 + endMinutes;
+
+    return currentTimeInMinutes >= startTimeInMinutes &&
+      currentTimeInMinutes <= endTimeInMinutes;
+  };
+
+  const isCurrentTimeInSchedule = (item: ScheduleItem): boolean => {
+    // First check if selected date is today
+    const today = new Date();
+    const isSelectedDateToday = selectedDate.toDateString() === today.toDateString();
+
+    // If not today, don't show the time indicator
+    if (!isSelectedDateToday) return false;
+
+    const [startHours, startMinutes] = item.startTime.split(':').map(Number);
+    const [endHours, endMinutes] = item.endTime.split(':').map(Number);
+    const currentHours = currentTime.getHours();
+    const currentMinutes = currentTime.getMinutes();
+
+    const currentTimeInMinutes = currentHours * 60 + currentMinutes;
+    const startTimeInMinutes = startHours * 60 + startMinutes;
+    const endTimeInMinutes = endHours * 60 + endMinutes;
+
+    return currentTimeInMinutes >= startTimeInMinutes && currentTimeInMinutes < endTimeInMinutes;
+  };
+
+  // Add back the useEffect for date changes
+  useEffect(() => {
+    // Update schedule whenever selected date changes
+    if (scheduleData) {
+      let dayKey;
+      const dateString = selectedDate.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+
+      // Check if this is a recovery day
+      const isRecDay = scheduleService.isRecoveryDay(selectedDate);
+
+      if (isRecDay) {
+        // For recovery days, use the special weekend key format
+        dayKey = `weekend_${dateString}`;
+      } else {
+        // For regular days, use the standard day name
+        dayKey = DAYS_MAP[selectedDate.getDay() as keyof typeof DAYS_MAP];
+      }
+
+      const fetchDaySchedule = async () => {
+        const daySchedule = await scheduleService.getScheduleForDay(
+          scheduleData,
+          dayKey,
+          selectedDate // Pass the actual date to check for recovery days
+        );
+        setTodaySchedule(daySchedule);
+      };
+      
+      fetchDaySchedule();
+    }
+  }, [selectedDate, scheduleData]);
+
+  // Initial selected date setup - if weekend, select next Monday
+  useEffect(() => {
+    const today = new Date();
+    const currentDay = today.getDay();
+
+    if (currentDay === 0 || currentDay === 6) { // If weekend
+      const nextMonday = new Date(today);
+      const daysUntilMonday = currentDay === 0 ? 1 : 2;
+      nextMonday.setDate(today.getDate() + daysUntilMonday);
+      setSelectedDate(nextMonday);
+    }
   }, []);
 
   if (isLoading && !scheduleData) {
@@ -667,7 +727,8 @@ export default function DayView() {
                       backgroundColor: '#232433',
                       shadowOpacity: 0.1,
                       minHeight: 100,
-                    }]}>
+                    }]}
+                    >
                       <View style={[styles.timeContainer, {
                         borderRightColor: 'rgba(138, 138, 141, 0.2)'
                       }]}
@@ -734,7 +795,7 @@ export default function DayView() {
                         <View style={styles.detailsContainer}>
                           <View style={styles.teacherContainer}>
                             <Text style={styles.teacherName}>{item.teacherName}</Text>
-                            {item.group && item.group !== 'Clasă intreagă' && item.group !== 'Clas� intreag�' && (
+                            {item.group && item.group !== 'Clasă intreagă' && item.group !== 'Clasă intreagă' && (
                               <Text style={styles.groupName}>
                                 {item.group === 'Subgroup 1' ? t('subgroup').group1 : t('subgroup').group2}
                               </Text>
@@ -1165,6 +1226,7 @@ scheduleContainer: {
     shadowOpacity: 0.3,
     shadowRadius: 2,
     elevation: 3,
+    zIndex: 100,
   },
   timeWrapper: {
     flexDirection: 'row',
