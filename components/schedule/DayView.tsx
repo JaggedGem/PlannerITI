@@ -1215,7 +1215,7 @@ const styles = StyleSheet.create<Styles>({
   },
   timeIndicator: {
     position: 'absolute',
-    left: 70,
+    left: 0,
     right: 0,
     height: 2,
     flexDirection: 'row',
@@ -1224,7 +1224,7 @@ const styles = StyleSheet.create<Styles>({
   },
   timeIndicatorLine: {
     position: 'absolute',
-    left: 6,
+    left: 90,
     right: 0,
     height: 2,
     backgroundColor: '#FF3B30',
@@ -1232,7 +1232,7 @@ const styles = StyleSheet.create<Styles>({
   },
   timeIndicatorArrowContainer: {
     position: 'absolute',
-    left: 0,
+    left: 83,
     width: 12,
     height: 12,
     justifyContent: 'center',
@@ -1268,7 +1268,7 @@ const styles = StyleSheet.create<Styles>({
   },
   timeLeftText: {
     position: 'absolute',
-    left: -30,
+    left: 60,
     backgroundColor: '#FF3B30',
     color: 'white',
     fontSize: 12,
