@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { scheduleService, DAYS_MAP, ApiResponse } from '@/services/scheduleService';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useTimeUpdate } from '@/hooks/useTimeUpdate';
-import Animated, { useAnimatedStyle, withTiming, withSpring } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, withTiming, withSpring, FadeIn, FadeOut, useSharedValue, withSequence, withDelay } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import ViewModeMenu from './ViewModeMenu';
 
@@ -146,6 +146,9 @@ export default function DayView() {
   // Initialize refs at the top level
   const settingsRef = useRef(scheduleService.getSettings());
   const scrollViewRef = useRef<ScrollView>(null);
+  const [showFirstTimeIndicator, setShowFirstTimeIndicator] = useState(false);
+  const firstTimeAnimValue = useSharedValue(0);
+  const hasShownFirstTimeIndicator = useRef(false);
 
   // Generate current week dates (Monday to Friday, plus Saturday if it's a recovery day)
   const weekDates = useMemo(() => {
@@ -531,6 +534,41 @@ export default function DayView() {
     }
   }, []);
 
+  useEffect(() => {
+    // Skip animation if data isn't loaded yet
+    if (isLoading || !scheduleData) return;
+    
+    // Only show the first-time indicator once
+    if (!hasShownFirstTimeIndicator.current) {
+      hasShownFirstTimeIndicator.current = true;
+      
+      // Show the first-time indicators after a short delay
+      setTimeout(() => {
+        setShowFirstTimeIndicator(true);
+        
+        // Animate in and then fade out after 2 seconds
+        firstTimeAnimValue.value = withSequence(
+          withTiming(1, { duration: 300 }),
+          withDelay(2000, withTiming(0, { duration: 500 }))
+        );
+        
+        // Hide the component after animation completes
+        setTimeout(() => {
+          setShowFirstTimeIndicator(false);
+        }, 2800);
+      }, 800);
+    }
+  }, [isLoading, scheduleData]);
+
+  const firstTimeAnimStyle = useAnimatedStyle(() => {
+    return {
+      opacity: firstTimeAnimValue.value,
+      transform: [
+        { scale: 0.9 + firstTimeAnimValue.value * 0.1 }
+      ]
+    };
+  }, []);
+
   if (isLoading && !scheduleData) {
     return (
       <SafeAreaView style={styles.container}>
@@ -641,6 +679,7 @@ export default function DayView() {
             />
 
             <ScrollView
+              ref={scrollViewRef}
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.dateListScrollContent}
@@ -689,6 +728,17 @@ export default function DayView() {
               style={styles.rightGradient}
               pointerEvents="none"
             />
+            
+            {/* First-time indicator */}
+            {showFirstTimeIndicator && (
+              <Animated.View style={[styles.firstTimeIndicatorContainer, firstTimeAnimStyle]}>
+                <View style={styles.firstTimeIndicator}>
+                  <Text style={styles.firstTimeIndicatorArrow}>‹</Text>
+                  <Text style={styles.firstTimeIndicatorText}>Swipe to see more</Text>
+                  <Text style={styles.firstTimeIndicatorArrow}>›</Text>
+                </View>
+              </Animated.View>
+            )}
           </View>
         </View>
       </View>
@@ -887,7 +937,7 @@ type Styles = {
   activeDateText: TextStyle;
   todayText: TextStyle;
   todayDot: ViewStyle;
-scheduleContainer: ViewStyle;
+  scheduleContainer: ViewStyle;
   scheduleItem: ViewStyle;
   classCard: ViewStyle;
   timeContainer: ViewStyle;
@@ -920,7 +970,7 @@ scheduleContainer: ViewStyle;
   loadingText: TextStyle;
   errorContainer: ViewStyle;
   errorText: TextStyle;
-    weekInfo2: ViewStyle;
+  weekInfo2: ViewStyle;
   weekText2: TextStyle;
   headerContainer: ViewStyle;
   contentContainer: ViewStyle;
@@ -951,6 +1001,10 @@ scheduleContainer: ViewStyle;
   recoveryDayInfoContainer: ViewStyle;
   recoveryDayInfoWrapper: ViewStyle;
   fixedRecoveryInfoContainer: ViewStyle;
+  firstTimeIndicatorContainer: ViewStyle;
+  firstTimeIndicator: ViewStyle;
+  firstTimeIndicatorText: TextStyle;
+  firstTimeIndicatorArrow: TextStyle;
 };
 
 const styles = StyleSheet.create<Styles>({
@@ -1070,7 +1124,7 @@ const styles = StyleSheet.create<Styles>({
     backgroundColor: '#2C3DCD',
     marginTop: 4,
   },
-scheduleContainer: {
+  scheduleContainer: {
     flex: 1,
     paddingHorizontal: 20,
     backgroundColor: '#0A0A0A',
@@ -1283,7 +1337,7 @@ scheduleContainer: {
     fontSize: 16,
     textAlign: 'center',
   },
-    headerContainer: {
+  headerContainer: {
     zIndex: 10,
   },
   contentContainer: {
@@ -1455,28 +1509,39 @@ scheduleContainer: {
     right: 12,
     zIndex: 101,
   },
-
-  scrollIndicator: {
+  firstTimeIndicatorContainer: {
     position: 'absolute',
-    top: '50%',
-    zIndex: 20,
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: 'rgba(50, 50, 50, 0.5)',
+    left: 0,
+    right: 0,
+    top: -8,
+    zIndex: 30,
     alignItems: 'center',
     justifyContent: 'center',
-    transform: [{ translateY: -15 }],
+    paddingVertical: 8,
   },
-  scrollIndicatorLeft: {
-    left: 8,
+  firstTimeIndicator: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(50, 50, 50, 0.9)',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
   },
-  scrollIndicatorRight: {
-    right: 8,
-  },
-  scrollIndicatorArrow: {
+  firstTimeIndicatorText: {
     color: 'white',
-    fontSize: 20,
+    fontSize: 14,
+    fontWeight: '600',
+    marginHorizontal: 8,
+  },
+  firstTimeIndicatorArrow: {
+    color: '#3478F6',
+    fontSize: 24,
     fontWeight: 'bold',
   },
 });
