@@ -1,123 +1,238 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Colors } from '../../constants/Colors';
-import { useColorScheme } from 'react-native';
-import { Feather } from '@expo/vector-icons';
-import { Assignment } from '../../utils/assignmentStorage';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { Assignment, getPeriodById } from '../../utils/assignmentStorage';
+import { format } from 'date-fns';
+import { Ionicons } from '@expo/vector-icons';
+import Animated, { 
+  useSharedValue, 
+  useAnimatedStyle, 
+  withTiming, 
+  withSpring,
+  FadeIn,
+  Layout 
+} from 'react-native-reanimated';
+import { Period } from '../../services/scheduleService';
 
-type AssignmentItemProps = {
+interface AssignmentItemProps {
   assignment: Assignment;
-  onToggle: (id: string) => void;
-};
-
-export default function AssignmentItem({ assignment, onToggle }: AssignmentItemProps) {
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme];
-
-  // Get course color consistently with DayView.tsx
-  const courseColor = getSubjectColor(assignment.courseCode);
-
-  return (
-    <View style={styles.container}>
-      <TouchableOpacity
-        style={styles.checkbox}
-        onPress={() => onToggle(assignment.id)}
-      >
-        {assignment.isCompleted ? (
-          <View style={[styles.checked, { backgroundColor: courseColor }]}>
-            <Feather name="check" size={14} color="white" />
-          </View>
-        ) : (
-          <View style={[styles.unchecked, { borderColor: '#8A8A8D' }]} />
-        )}
-      </TouchableOpacity>
-      <View style={styles.content}>
-        <Text 
-          style={[
-            styles.title,
-            assignment.isCompleted && styles.completedText
-          ]}
-        >
-          {assignment.title}
-        </Text>
-        {assignment.details ? (
-          <Text style={styles.note}>
-            {assignment.details}
-          </Text>
-        ) : null}
-      </View>
-    </View>
-  );
+  onToggle: () => void;
 }
 
-// Helper function to get subject color consistently with DayView.tsx
-function getSubjectColor(subjectName: string): string {
-  const colors = [
-    '#4169E1', // Royal Blue
-    '#FF69B4', // Hot Pink
-    '#32CD32', // Lime Green
-    '#FF8C00', // Dark Orange
-    '#9370DB', // Medium Purple
-    '#20B2AA', // Light Sea Green
-    '#FF6347', // Tomato
-    '#4682B4', // Steel Blue
-    '#9ACD32', // Yellow Green
-    '#FF4500', // Orange Red
-    '#BA55D3', // Medium Orchid
-    '#2E8B57', // Sea Green
-  ];
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-  // Generate a number from the subject name
-  let hash = 0;
-  for (let i = 0; i < subjectName.length; i++) {
-    hash = subjectName.charCodeAt(i) + ((hash << 5) - hash);
-  }
-
-  // Use the hash to pick a color
-  const index = Math.abs(hash) % colors.length;
-  return colors[index];
+export default function AssignmentItem({ assignment, onToggle }: AssignmentItemProps) {
+  // State for period information
+  const [period, setPeriod] = useState<Period | null>(null);
+  
+  // Animated values for interactive feedback
+  const scale = useSharedValue(1);
+  const opacity = useSharedValue(1);
+  const checkScale = useSharedValue(assignment.isCompleted ? 1 : 0);
+  
+  // Update check animation when completion status changes
+  React.useEffect(() => {
+    checkScale.value = withTiming(assignment.isCompleted ? 1 : 0, {
+      duration: 300,
+    });
+  }, [assignment.isCompleted, checkScale]);
+  
+  // Load period information if assignment has periodId
+  useEffect(() => {
+    const loadPeriodInfo = async () => {
+      if (assignment.periodId) {
+        try {
+          const periodInfo = await getPeriodById(assignment.periodId);
+          if (periodInfo) {
+            setPeriod(periodInfo);
+          }
+        } catch (error) {
+          console.error('Error loading period info:', error);
+        }
+      }
+    };
+    
+    loadPeriodInfo();
+  }, [assignment.periodId]);
+  
+  // Format the due date/time for display
+  const formattedTime = format(new Date(assignment.dueDate), 'h:mm a');
+  
+  // Animation styles
+  const containerStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: scale.value }],
+      opacity: opacity.value,
+    };
+  });
+  
+  const checkboxStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: checkScale.value }],
+      opacity: checkScale.value,
+    };
+  });
+  
+  // Press handlers for interactive feedback
+  const handlePressIn = () => {
+    scale.value = withSpring(0.98, { damping: 12, stiffness: 400 });
+    opacity.value = withTiming(0.9, { duration: 150 });
+  };
+  
+  const handlePressOut = () => {
+    scale.value = withSpring(1, { damping: 15, stiffness: 400 });
+    opacity.value = withTiming(1, { duration: 150 });
+  };
+  
+  // Determine priority styles
+  const priorityColor = assignment.isPriority ? '#FF3B30' : 'transparent';
+  
+  return (
+    <AnimatedPressable
+      style={[styles.container, containerStyle]}
+      onPress={onToggle}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+    >
+      <View style={styles.leftSection}>
+        <View style={styles.checkboxContainer}>
+          <View style={[styles.checkbox, assignment.isCompleted && styles.checkboxChecked]}>
+            <Animated.View style={[styles.checkIcon, checkboxStyle]}>
+              <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+            </Animated.View>
+          </View>
+        </View>
+        
+        <View style={styles.contentContainer}>
+          <Text 
+            style={[
+              styles.title,
+              assignment.isCompleted && styles.completedTitle
+            ]}
+            numberOfLines={2}
+          >
+            {assignment.title}
+          </Text>
+          
+          {assignment.description ? (
+            <Text 
+              style={styles.description}
+              numberOfLines={1}
+            >
+              {assignment.description}
+            </Text>
+          ) : null}
+          
+          {period && (
+            <View style={styles.periodContainer}>
+              <Ionicons name="time-outline" size={12} color="#8A8A8D" style={styles.periodIcon} />
+              <Text style={styles.periodText}>
+                Period {period._id}: {period.starttime} - {period.endtime}
+              </Text>
+            </View>
+          )}
+        </View>
+      </View>
+      
+      <View style={styles.rightSection}>
+        {assignment.isPriority && (
+          <View style={[styles.priorityIndicator, { backgroundColor: priorityColor }]}>
+            <Ionicons name="star" size={12} color="#FFFFFF" />
+          </View>
+        )}
+        <Text style={styles.timeText}>{formattedTime}</Text>
+      </View>
+    </AnimatedPressable>
+  );
 }
 
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#232323',
+    marginBottom: 8,
+    borderRadius: 12,
+    padding: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  leftSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  checkboxContainer: {
+    marginRight: 12,
   },
   checkbox: {
-    marginRight: 12,
-    marginTop: 2,
-  },
-  unchecked: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
-    borderWidth: 1,
-  },
-  checked: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: '#3478F6',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'transparent',
   },
-  content: {
+  checkboxChecked: {
+    backgroundColor: '#3478F6',
+    borderColor: '#3478F6',
+  },
+  checkIcon: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 14,
+    height: 14,
+  },
+  contentContainer: {
     flex: 1,
   },
   title: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '500',
     color: '#FFFFFF',
-    letterSpacing: 0.3,
+    marginBottom: 2,
   },
-  completedText: {
+  completedTitle: {
     textDecorationLine: 'line-through',
-    opacity: 0.7,
+    color: 'rgba(255, 255, 255, 0.5)',
   },
-  note: {
-    fontSize: 14,
-    marginTop: 4,
+  description: {
+    fontSize: 13,
     color: '#8A8A8D',
+    marginBottom: 4,
+  },
+  periodContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  periodIcon: {
+    marginRight: 4,
+  },
+  periodText: {
+    fontSize: 12,
+    color: '#8A8A8D',
+  },
+  rightSection: {
+    alignItems: 'flex-end',
+    marginLeft: 12,
+  },
+  timeText: {
+    fontSize: 12,
+    color: '#8A8A8D',
+    marginTop: 4,
+  },
+  priorityIndicator: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
   },
 }); 
