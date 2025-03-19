@@ -1,28 +1,73 @@
-import React from 'react';
-import { TouchableOpacity, StyleSheet } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import React, { useEffect } from 'react';
+import { StyleSheet, TouchableOpacity, View, Text } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { 
+  useSharedValue, 
+  useAnimatedStyle, 
+  withSpring, 
+  withTiming, 
+  useAnimatedReaction, 
+  Easing 
+} from 'react-native-reanimated';
 
-type FloatingActionButtonProps = {
+interface FloatingActionButtonProps {
   onPress: () => void;
-};
+}
+
+const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
+const AnimatedGradient = Animated.createAnimatedComponent(LinearGradient);
 
 export default function FloatingActionButton({ onPress }: FloatingActionButtonProps) {
+  // Animated values
+  const scale = useSharedValue(1);
+  const opacity = useSharedValue(1);
+  const rotation = useSharedValue(0);
+  
+  // Rotate effect when component mounts
+  useEffect(() => {
+    rotation.value = withTiming(1, { duration: 800, easing: Easing.elastic(1.2) });
+  }, []);
+  
+  // Animation styles
+  const buttonStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        { scale: scale.value },
+        { rotate: `${rotation.value * 360}deg` },
+      ],
+      opacity: opacity.value,
+    };
+  });
+  
+  // Button press handlers
+  const handlePressIn = () => {
+    scale.value = withSpring(0.9, { damping: 10, stiffness: 300 });
+    opacity.value = withTiming(0.9, { duration: 150 });
+  };
+  
+  const handlePressOut = () => {
+    scale.value = withSpring(1, { damping: 15, stiffness: 300 });
+    opacity.value = withTiming(1, { duration: 150 });
+  };
+
   return (
-    <TouchableOpacity
-      style={styles.container}
+    <AnimatedTouchable
+      style={[styles.container, buttonStyle]}
       onPress={onPress}
-      activeOpacity={0.7}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      activeOpacity={1}
     >
-      <LinearGradient
+      <AnimatedGradient
         colors={['#3478F6', '#2C3DCD']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.gradient}
       >
-        <Feather name="plus" size={24} color="white" />
-      </LinearGradient>
-    </TouchableOpacity>
+        <Ionicons name="add" size={32} color="#FFFFFF" />
+      </AnimatedGradient>
+    </AnimatedTouchable>
   );
 }
 
@@ -31,20 +76,18 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 24,
     right: 24,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    borderRadius: 28,
+  },
+  gradient: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    elevation: 5,
-    shadowColor: '#3478F6',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 5,
-    overflow: 'hidden',
-  },
-  gradient: {
-    width: '100%',
-    height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-  },
+  }
 }); 

@@ -14,6 +14,7 @@ import {
   AssignmentGroup
 } from '../../utils/assignmentStorage';
 import { useCallback } from 'react';
+import Animated, { FadeInDown, Layout } from 'react-native-reanimated';
 
 export default function Assignments() {
   const colorScheme = useColorScheme() ?? 'light';
@@ -110,23 +111,31 @@ export default function Assignments() {
           >
             {assignmentGroups.length > 0 ? (
               assignmentGroups.map((group, index) => (
-                <DaySection
+                <Animated.View
                   key={index}
-                  title={group.title}
-                  date={group.date}
-                  assignments={group.assignments}
-                  onToggleAssignment={handleToggleAssignment}
-                />
+                  entering={FadeInDown.duration(300).delay(index * 100)}
+                  layout={Layout.springify()}
+                >
+                  <DaySection
+                    title={group.title}
+                    date={group.date}
+                    assignments={group.assignments}
+                    onToggleAssignment={handleToggleAssignment}
+                  />
+                </Animated.View>
               ))
             ) : (
-              <View style={styles.emptyContainer}>
+              <Animated.View 
+                style={styles.emptyContainer}
+                entering={FadeInDown.duration(300)}
+              >
                 <Text style={styles.emptyText}>
                   No assignments found
                 </Text>
                 <Text style={styles.emptySubtext}>
                   Tap the + button to add a new assignment
                 </Text>
-              </View>
+              </Animated.View>
             )}
           </ScrollView>
         )}

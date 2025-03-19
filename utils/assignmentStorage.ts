@@ -1,47 +1,35 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { scheduleService, Period } from '../services/scheduleService';
+import { format, isSameDay, isToday, isTomorrow, addDays, parseISO } from 'date-fns';
 
-// Define assignment types
-export type ChecklistItem = {
+// Storage key
+const ASSIGNMENTS_STORAGE_KEY = 'assignments';
+
+// Assignment interface
+export interface Assignment {
   id: string;
   title: string;
-  note: string;
-  isCompleted: boolean;
-};
-
-export type Assignment = {
-  id: string;
-  title: string;
-  className: string;
+  description: string;
   courseCode: string;
   courseName: string;
-  details?: string;
-  isPriority: boolean;
-  dueDate: string;
+  dueDate: string; // ISO date string
   isCompleted: boolean;
-};
+  isPriority: boolean;
+  periodId?: string; // Optional period ID from scheduleService
+}
 
-export type AssignmentGroup = {
+// Assignment group interface for grouping by date
+export interface AssignmentGroup {
   title: string;
   date: string;
   assignments: Assignment[];
-};
-
-// Storage keys
-const STORAGE_KEY = 'assignments';
-const COURSES_KEY = 'courses';
-
-// Sample courses
-export const sampleCourses = [
-  { id: 'mgt101', code: 'MGT 101', name: 'Organization Management', color: '#FFB400' },
-  { id: 'ec203', code: 'EC 203', name: 'Principles Macroeconomics', color: '#00B8D9' },
-  { id: 'fn215', code: 'FN 215', name: 'Financial Management', color: '#36B37E' },
-];
+}
 
 // Get all assignments
 export const getAssignments = async (): Promise<Assignment[]> => {
   try {
-    const data = await AsyncStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : [];
+    const assignmentsJson = await AsyncStorage.getItem(ASSIGNMENTS_STORAGE_KEY);
+    return assignmentsJson ? JSON.parse(assignmentsJson) : [];
   } catch (error) {
     console.error('Error getting assignments:', error);
     return [];
@@ -51,130 +39,151 @@ export const getAssignments = async (): Promise<Assignment[]> => {
 // Save assignments
 export const saveAssignments = async (assignments: Assignment[]): Promise<void> => {
   try {
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(assignments));
+    await AsyncStorage.setItem(ASSIGNMENTS_STORAGE_KEY, JSON.stringify(assignments));
   } catch (error) {
     console.error('Error saving assignments:', error);
   }
 };
 
 // Add a new assignment
-export const addAssignment = async (assignment: Assignment): Promise<void> => {
-  try {
-    const assignments = await getAssignments();
-    assignments.push(assignment);
-    await saveAssignments(assignments);
-  } catch (error) {
-    console.error('Error adding assignment:', error);
-  }
+export const addAssignment = async (assignment: Omit<Assignment, 'id' | 'isCompleted'>): Promise<Assignment> => {
+  const newAssignment: Assignment = {
+    ...assignment,
+    id: Date.now().toString(),
+    isCompleted: false,
+  };
+  
+  const assignments = await getAssignments();
+  assignments.push(newAssignment);
+  await saveAssignments(assignments);
+  
+  return newAssignment;
 };
 
-// Update an assignment
-export const updateAssignment = async (updatedAssignment: Assignment): Promise<void> => {
-  try {
-    const assignments = await getAssignments();
-    const index = assignments.findIndex(a => a.id === updatedAssignment.id);
-    
-    if (index !== -1) {
-      assignments[index] = updatedAssignment;
-      await saveAssignments(assignments);
-    }
-  } catch (error) {
-    console.error('Error updating assignment:', error);
+// Toggle assignment completion
+export const toggleAssignmentCompletion = async (id: string): Promise<void> => {
+  const assignments = await getAssignments();
+  const index = assignments.findIndex(a => a.id === id);
+  
+  if (index !== -1) {
+    assignments[index].isCompleted = !assignments[index].isCompleted;
+    await saveAssignments(assignments);
   }
 };
 
 // Delete an assignment
 export const deleteAssignment = async (id: string): Promise<void> => {
-  try {
-    const assignments = await getAssignments();
-    const filteredAssignments = assignments.filter(a => a.id !== id);
-    await saveAssignments(filteredAssignments);
-  } catch (error) {
-    console.error('Error deleting assignment:', error);
-  }
+  const assignments = await getAssignments();
+  const filteredAssignments = assignments.filter(a => a.id !== id);
+  await saveAssignments(filteredAssignments);
 };
 
-// Toggle assignment completion
-export const toggleAssignmentCompletion = async (id: string): Promise<void> => {
-  try {
-    const assignments = await getAssignments();
-    const index = assignments.findIndex(a => a.id === id);
-    
-    if (index !== -1) {
-      assignments[index].isCompleted = !assignments[index].isCompleted;
-      await saveAssignments(assignments);
-    }
-  } catch (error) {
-    console.error('Error toggling assignment completion:', error);
+// Update an assignment
+export const updateAssignment = async (id: string, updates: Partial<Assignment>): Promise<void> => {
+  const assignments = await getAssignments();
+  const index = assignments.findIndex(a => a.id === id);
+  
+  if (index !== -1) {
+    assignments[index] = { ...assignments[index], ...updates };
+    await saveAssignments(assignments);
   }
 };
 
 // Group assignments by date
 export const groupAssignmentsByDate = (assignments: Assignment[]): AssignmentGroup[] => {
-  const today = new Date();
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
+  // Create a map to group assignments by date
+  const groupMap: Map<string, Assignment[]> = new Map();
   
-  const todayStr = today.toDateString();
-  const tomorrowStr = tomorrow.toDateString();
-  
-  const groups: { [key: string]: AssignmentGroup } = {};
-  
-  // Initialize today and tomorrow groups
-  groups[todayStr] = { title: 'Today', date: formatDate(today), assignments: [] };
-  groups[tomorrowStr] = { title: 'Tomorrow', date: formatDate(tomorrow), assignments: [] };
-  
-  // Group assignments
-  assignments.forEach(assignment => {
-    const dueDate = new Date(assignment.dueDate);
-    const dueDateStr = dueDate.toDateString();
-    
-    if (!groups[dueDateStr]) {
-      groups[dueDateStr] = {
-        title: formatDateTitle(dueDate),
-        date: formatDate(dueDate),
-        assignments: [],
-      };
-    }
-    
-    groups[dueDateStr].assignments.push(assignment);
+  // Sort assignments by due date
+  const sortedAssignments = [...assignments].sort((a, b) => {
+    return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
   });
   
-  // Sort groups by date
-  return Object.values(groups)
-    .filter(group => group.assignments.length > 0 || group.title === 'Today' || group.title === 'Tomorrow')
-    .sort((a, b) => {
-      if (a.title === 'Today') return -1;
-      if (b.title === 'Today') return 1;
-      if (a.title === 'Tomorrow') return -1;
-      if (b.title === 'Tomorrow') return 1;
-      return 0;
+  // Group assignments by day
+  sortedAssignments.forEach(assignment => {
+    const dueDate = new Date(assignment.dueDate);
+    let dateKey = format(dueDate, 'yyyy-MM-dd');
+    
+    if (!groupMap.has(dateKey)) {
+      groupMap.set(dateKey, []);
+    }
+    
+    groupMap.get(dateKey)?.push(assignment);
+  });
+  
+  // Convert map to array of groups
+  const groups: AssignmentGroup[] = [];
+  
+  groupMap.forEach((assignmentsForDate, dateKey) => {
+    const date = parseISO(dateKey);
+    let title = format(date, 'EEEE, MMM d');
+    
+    // Special handling for today and tomorrow
+    if (isToday(date)) {
+      title = 'Today';
+    } else if (isTomorrow(date)) {
+      title = 'Tomorrow';
+    }
+    
+    groups.push({
+      title,
+      date: format(date, 'MMMM d, yyyy'),
+      assignments: assignmentsForDate,
     });
+  });
+  
+  return groups;
 };
 
-// Format date for display
-const formatDate = (date: Date): string => {
-  const options: Intl.DateTimeFormatOptions = { 
-    weekday: 'long',
-    month: 'long', 
-    day: 'numeric',
-    year: 'numeric'
-  };
+// Get all course names and codes
+export const getCourses = async (): Promise<{code: string, name: string}[]> => {
+  const assignments = await getAssignments();
   
-  return date.toLocaleDateString('en-US', options);
+  // Create a map to deduplicate courses
+  const coursesMap = new Map<string, {code: string, name: string}>();
+  
+  assignments.forEach(assignment => {
+    if (!coursesMap.has(assignment.courseCode)) {
+      coursesMap.set(assignment.courseCode, {
+        code: assignment.courseCode,
+        name: assignment.courseName
+      });
+    }
+  });
+  
+  // Convert map to array
+  return Array.from(coursesMap.values());
 };
 
-// Format date title
-const formatDateTitle = (date: Date): string => {
-  const today = new Date();
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  
-  if (date.toDateString() === today.toDateString()) {
-    return 'Today';
-  } else if (date.toDateString() === tomorrow.toDateString()) {
-    return 'Tomorrow';
-  } else {
-    return formatDate(date);
+// Get all periods from schedule service
+export const getSchedulePeriods = async (): Promise<Period[]> => {
+  try {
+    // Get the current selected group ID from scheduleService
+    const { selectedGroupId } = scheduleService.getSettings();
+    
+    // Fetch the schedule for the selected group
+    const scheduleData = await scheduleService.getClassSchedule(selectedGroupId);
+    
+    // Return the periods from the schedule data
+    return scheduleData.periods || [];
+  } catch (error) {
+    console.error('Error getting schedule periods:', error);
+    return [];
   }
+};
+
+// Get a formatted list of periods for the assignment form
+export const getFormattedPeriods = async (): Promise<{label: string, value: string}[]> => {
+  const periods = await getSchedulePeriods();
+  
+  return periods.map(period => ({
+    label: `Period ${period._id}: ${period.starttime} - ${period.endtime}`,
+    value: period._id
+  }));
+};
+
+// Get period by ID
+export const getPeriodById = async (periodId: string): Promise<Period | undefined> => {
+  const periods = await getSchedulePeriods();
+  return periods.find(period => period._id === periodId);
 }; 
