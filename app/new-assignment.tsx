@@ -31,7 +31,7 @@ export default function NewAssignmentScreen() {
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('');
   const [useNextPeriod, setUseNextPeriod] = useState(true);
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
-  const [nextPeriodInfo, setNextPeriodInfo] = useState<{day: string, time: string} | null>(null);
+  const [nextPeriodInfo, setNextPeriodInfo] = useState<{day: string, time: string, weekText?: string} | null>(null);
   const [loadingNextPeriod, setLoadingNextPeriod] = useState(false);
   
   // Subject selection states
@@ -57,8 +57,106 @@ export default function NewAssignmentScreen() {
         // Set filtered subjects based on selection mode
         updateFilteredSubjects(subjectsData, subjectSelectionMode);
         
-        // Set default subject if available
-        if (subjectsData.length > 0) {
+        // Find current active period or first period of the day
+        const scheduleData = await scheduleService.getClassSchedule();
+        const today = new Date();
+        const dayIndex = today.getDay(); // 0 = Sunday, 6 = Saturday
+        
+        // Skip if weekend unless there's a recovery day
+        if (dayIndex !== 0 && dayIndex !== 6) {
+          // Convert day index to day name
+          const dayName = dayIndex === 1 ? 'monday' :
+                          dayIndex === 2 ? 'tuesday' :
+                          dayIndex === 3 ? 'wednesday' :
+                          dayIndex === 4 ? 'thursday' :
+                          dayIndex === 5 ? 'friday' : 'monday';
+          
+          // Check if this is an even or odd week
+          const isEvenWeek = scheduleService.isEvenWeek(today);
+          
+          // Get today's schedule
+          const todaySchedule = scheduleService.getScheduleForDay(scheduleData, dayName, today);
+          
+          // Find current active period or the next period
+          const now = new Date();
+          const currentHour = now.getHours();
+          const currentMinute = now.getMinutes();
+          const currentTimeInMinutes = currentHour * 60 + currentMinute;
+          
+          // Filter periods by current week type
+          const relevantPeriods = todaySchedule.filter(
+            period => period.isEvenWeek === undefined || period.isEvenWeek === isEvenWeek
+          );
+          
+          // Find current or closest upcoming period
+          let targetPeriod = null;
+          
+          // Find if a period is currently in progress
+          for (const period of relevantPeriods) {
+            if (!period.startTime || !period.endTime) continue;
+            
+            const [startHour, startMinute] = period.startTime.split(':').map(Number);
+            const [endHour, endMinute] = period.endTime.split(':').map(Number);
+            
+            const startTimeInMinutes = startHour * 60 + startMinute;
+            const endTimeInMinutes = endHour * 60 + endMinute;
+            
+            // Check if this period is currently in progress or we're just after it (within 15 minutes)
+            if ((currentTimeInMinutes >= startTimeInMinutes && currentTimeInMinutes <= endTimeInMinutes) ||
+                (currentTimeInMinutes > endTimeInMinutes && currentTimeInMinutes <= endTimeInMinutes + 10)) {
+              targetPeriod = period;
+              break;
+            }
+          }
+          
+          // If no current period, find the first period of the day
+          if (!targetPeriod && relevantPeriods.length > 0) {
+            // Sort periods by start time
+            const sortedPeriods = [...relevantPeriods].sort((a, b) => {
+              if (!a.startTime) return 1;
+              if (!b.startTime) return -1;
+              
+              const [aHours, aMinutes] = a.startTime.split(':').map(Number);
+              const [bHours, bMinutes] = b.startTime.split(':').map(Number);
+              
+              return (aHours * 60 + aMinutes) - (bHours * 60 + bMinutes);
+            });
+            
+            // Get the first period of the day
+            targetPeriod = sortedPeriods[0];
+          }
+          
+          // Set selected subject based on the target period
+          if (targetPeriod && targetPeriod.className) {
+            // Find corresponding subject in subjects list
+            const matchingSubject = subjectsData.find(
+              subject => subject.name === targetPeriod.className
+            );
+            
+            if (matchingSubject) {
+              setSelectedSubjectId(matchingSubject.id);
+              setCourseName(matchingSubject.name);
+              updateNextPeriodInfo(matchingSubject.id).catch(err => 
+                console.error("Error updating next period info:", err)
+              );
+            } else if (subjectsData.length > 0) {
+              // Fallback to first subject if no matching subject found
+              setSelectedSubjectId(subjectsData[0].id);
+              setCourseName(subjectsData[0].name);
+              updateNextPeriodInfo(subjectsData[0].id).catch(err => 
+                console.error("Error updating next period info:", err)
+              );
+            }
+          } else if (subjectsData.length > 0) {
+            // If no target period found, default to first subject
+            setSelectedSubjectId(subjectsData[0].id);
+            setCourseName(subjectsData[0].name);
+            updateNextPeriodInfo(subjectsData[0].id).catch(err => 
+              console.error("Error updating next period info:", err)
+            );
+          }
+        } else if (subjectsData.length > 0) {
+          // Weekend fallback - use first subject
           setSelectedSubjectId(subjectsData[0].id);
           setCourseName(subjectsData[0].name);
           updateNextPeriodInfo(subjectsData[0].id).catch(err => 
@@ -67,6 +165,14 @@ export default function NewAssignmentScreen() {
         }
       } catch (error) {
         console.error('Error loading subjects:', error);
+        // Fallback on error - select first subject if available
+        if (subjects.length > 0) {
+          setSelectedSubjectId(subjects[0].id);
+          setCourseName(subjects[0].name);
+          updateNextPeriodInfo(subjects[0].id).catch(err => 
+            console.error("Error updating next period info:", err)
+          );
+        }
       } finally {
         setLoadingSubjects(false);
       }
@@ -234,10 +340,25 @@ export default function NewAssignmentScreen() {
           // Format time
           const formattedTime = formatPeriodTime(subjectPeriod.startTime);
           
+          // Calculate which week this is relative to the current date
+          const currentWeek = Math.floor(today.getTime() / (7 * 24 * 60 * 60 * 1000));
+          const dueWeek = Math.floor(searchDate.getTime() / (7 * 24 * 60 * 60 * 1000));
+          const weekDifference = dueWeek - currentWeek;
+          
+          let weekText = '';
+          if (weekDifference === 0) {
+            weekText = 'this week';
+          } else if (weekDifference === 1) {
+            weekText = 'next week';
+          } else {
+            weekText = `in ${weekDifference} weeks`;
+          }
+          
           // Set next period info
           setNextPeriodInfo({
             day: dayString,
-            time: formattedTime
+            time: formattedTime,
+            weekText: weekText
           });
           
           // Update due date to match next period
@@ -423,9 +544,11 @@ export default function NewAssignmentScreen() {
 
   // Toggle next period selection
   const toggleNextPeriod = () => {
-    setUseNextPeriod(!useNextPeriod);
-    if (!useNextPeriod) {
-      setShowAdvancedOptions(false);
+    const newValue = !useNextPeriod;
+    setUseNextPeriod(newValue);
+    // If turning off next period, always show advanced options
+    if (!newValue) {
+      setShowAdvancedOptions(true);
     }
   };
 
@@ -563,7 +686,8 @@ export default function NewAssignmentScreen() {
                       </View>
                     ) : nextPeriodInfo ? (
                       <Text style={styles.nextPeriodText}>
-                        This assignment will be due on {nextPeriodInfo.day} at {nextPeriodInfo.time}
+                        This assignment will be due {nextPeriodInfo.weekText ? `${nextPeriodInfo.weekText} on ` : 'on '}
+                        {nextPeriodInfo.day} at {nextPeriodInfo.time}
                       </Text>
                     ) : (
                       <Text style={styles.nextPeriodText}>
@@ -575,27 +699,8 @@ export default function NewAssignmentScreen() {
               </Animated.View>
             )}
             
-            {/* Show/Hide Advanced Options Button */}
-            {!useNextPeriod && (
-              <Animated.View entering={FadeInUp.duration(300).delay(250)}>
-                <TouchableOpacity 
-                  style={styles.advancedOptionsButton}
-                  onPress={() => setShowAdvancedOptions(!showAdvancedOptions)}
-                >
-                  <Text style={styles.advancedOptionsButtonText}>
-                    {showAdvancedOptions ? 'Hide Advanced Options' : 'Show Advanced Options'}
-                  </Text>
-                  <Ionicons 
-                    name={showAdvancedOptions ? "chevron-up" : "chevron-down"} 
-                    size={20} 
-                    color="#3478F6" 
-                  />
-                </TouchableOpacity>
-              </Animated.View>
-            )}
-            
             {/* Advanced Options Panel (Due Date & Time) */}
-            {!useNextPeriod && showAdvancedOptions && (
+            {!useNextPeriod && (
               <>
                 <Animated.View entering={FadeInUp.duration(300).delay(300)}>
                   <Text style={styles.label}>Due Date</Text>
