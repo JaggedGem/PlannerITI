@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   StyleSheet, 
   View, 
@@ -13,7 +13,8 @@ import {
   Alert,
   FlatList,
   Modal,
-  Animated as RNAnimated
+  Animated as RNAnimated,
+  Dimensions
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -27,7 +28,12 @@ import Animated, {
   FadeOut,
   Layout,
   SlideInRight,
-  SlideOutLeft
+  SlideOutLeft,
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  withSequence
 } from 'react-native-reanimated';
 
 // Add this custom toggle component at the top level, before the NewAssignmentScreen function
@@ -89,7 +95,7 @@ const CustomToggle = ({
             width: thumbSize,
             height: thumbSize,
             borderRadius: thumbSize / 2,
-            backgroundColor: disabled ? '#777777' : value ? '#2C3DCD' : '#f4f3f4',
+            backgroundColor: disabled ? '#777777' : value ? '#FFFFFF' : '#f4f3f4',
             transform: [{ translateX: thumbPosition }],
             shadowColor: '#000',
             shadowOffset: { width: 0, height: 1 },
@@ -100,6 +106,544 @@ const CustomToggle = ({
         />
       </RNAnimated.View>
     </TouchableOpacity>
+  );
+};
+
+// Add Day names array for the mini calendar
+const DAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
+// Add quick date options
+const QUICK_DATE_OPTIONS = [
+  { label: 'Today', days: 0 },
+  { label: 'Tomorrow', days: 1 },
+  { label: 'Next Week', days: 7 },
+  { label: 'In 2 Weeks', days: 14 },
+];
+
+// Add time presets
+const TIME_PRESETS = [
+  { label: '1st Period', hour: 8, minute: 0 },
+  { label: '2nd Period', hour: 9, minute: 30 },
+  { label: '3rd Period', hour: 11, minute: 20 },
+  { label: '4th Period', hour: 12, minute: 50 },
+  { label: '5th Period', hour: 14, minute: 20 },
+];
+
+// Add DatePicker component
+const DatePicker = ({ 
+  selectedDate, 
+  onDateChange,
+  formatDate
+}: { 
+  selectedDate: Date; 
+  onDateChange: (date: Date) => void;
+  formatDate: (date: Date) => string;
+}) => {
+  const [calendarMonth, setCalendarMonth] = useState(new Date(selectedDate));
+  const [showCalendar, setShowCalendar] = useState(false);
+  const chevronRotation = useSharedValue(0);
+  const monthTransition = useSharedValue(0);
+  const selectedCellScale = useSharedValue(1);
+  
+  // Update chevron rotation when calendar visibility changes
+  useEffect(() => {
+    chevronRotation.value = withSpring(showCalendar ? 1 : 0, {
+      damping: 15,
+      stiffness: 150,
+      mass: 0.6,
+    });
+  }, [showCalendar]);
+  
+  // Animate chevron rotation
+  const chevronStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        { rotate: `${chevronRotation.value * 180}deg` }
+      ]
+    };
+  });
+
+  // Update calendar to match selected date's month
+  useEffect(() => {
+    // Only update if the month is different than the current view
+    if (calendarMonth.getMonth() !== selectedDate.getMonth() || 
+        calendarMonth.getFullYear() !== selectedDate.getFullYear()) {
+      // Trigger month change animation
+      monthTransition.value = selectedDate > calendarMonth ? 1 : -1;
+      
+      // Then update the month
+      setCalendarMonth(new Date(selectedDate));
+      
+      // Reset transition value after animation
+      setTimeout(() => {
+        monthTransition.value = 0;
+      }, 300);
+    }
+  }, [selectedDate]);
+  
+  // Month change animation style
+  const monthAnimStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        { 
+          translateX: withSpring(
+            monthTransition.value * 0, // No horizontal movement
+            { damping: 18, stiffness: 150 }
+          ) 
+        },
+        { 
+          scale: withSpring(
+            monthTransition.value === 0 ? 1 : 0.96, 
+            { damping: 15, stiffness: 180 }
+          ) 
+        },
+        {
+          translateY: withSpring(
+            monthTransition.value === 0 ? 0 : monthTransition.value * 10,
+            { damping: 15, stiffness: 180 }
+          )
+        }
+      ],
+      opacity: withSpring(
+        monthTransition.value === 0 ? 1 : 0.7,
+        { damping: 20, stiffness: 180 }
+      )
+    };
+  });
+  
+  // Generate calendar days for current month view
+  const generateCalendarDays = () => {
+    const year = calendarMonth.getFullYear();
+    const month = calendarMonth.getMonth();
+    
+    // Get first day of month and total days in month
+    const firstDayOfMonth = new Date(year, month, 1);
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    
+    // Get the day of week for the first day (0 = Sunday, 6 = Saturday)
+    const firstDayOfWeek = firstDayOfMonth.getDay();
+    
+    // Create array for calendar grid (6 rows x 7 columns max)
+    const calendarDays = [];
+    
+    // Previous month days to show
+    for (let i = 0; i < firstDayOfWeek; i++) {
+      const prevMonthDate = new Date(year, month, -firstDayOfWeek + i + 1);
+      calendarDays.push({
+        date: prevMonthDate,
+        isCurrentMonth: false,
+        isSelected: false,
+        isToday: isSameDay(prevMonthDate, new Date())
+      });
+    }
+    
+    // Current month days
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(year, month, day);
+      calendarDays.push({
+        date,
+        isCurrentMonth: true,
+        isSelected: isSameDay(date, selectedDate),
+        isToday: isSameDay(date, new Date())
+      });
+    }
+    
+    // Next month days to fill the grid (if needed)
+    const totalDaysShown = calendarDays.length;
+    const remainingDays = 42 - totalDaysShown; // 6 rows x 7 days
+    
+    for (let i = 1; i <= remainingDays; i++) {
+      const nextMonthDate = new Date(year, month + 1, i);
+      calendarDays.push({
+        date: nextMonthDate,
+        isCurrentMonth: false,
+        isSelected: false,
+        isToday: isSameDay(nextMonthDate, new Date())
+      });
+    }
+    
+    return calendarDays;
+  };
+  
+  const isSameDay = (date1: Date, date2: Date) => {
+    return date1.getDate() === date2.getDate() &&
+           date1.getMonth() === date2.getMonth() &&
+           date1.getFullYear() === date2.getFullYear();
+  };
+  
+  const navigateMonth = (direction: number) => {
+    // Set transition direction for animation
+    monthTransition.value = direction;
+    
+    // Update the month
+    const newMonth = new Date(calendarMonth);
+    newMonth.setMonth(calendarMonth.getMonth() + direction);
+    setCalendarMonth(newMonth);
+    
+    // Reset transition value after animation
+    setTimeout(() => {
+      monthTransition.value = 0;
+    }, 300);
+  };
+  
+  const selectDate = (date: Date) => {
+    // Animate the selected cell with a pulse effect
+    selectedCellScale.value = withSequence(
+      withTiming(1.1, { duration: 120 }),
+      withTiming(1, { duration: 120 })
+    );
+    
+    const newDate = new Date(selectedDate);
+    newDate.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
+    onDateChange(newDate);
+    
+    // Close calendar with a slight delay for better UX
+    setTimeout(() => {
+      setShowCalendar(false);
+    }, 200);
+  };
+  
+  const selectQuickOption = (days: number) => {
+    const today = new Date();
+    const newDate = new Date();
+    newDate.setDate(today.getDate() + days);
+    
+    // If the new date is in a different month than current view, 
+    // set the proper direction for transition animation
+    if (newDate.getMonth() !== calendarMonth.getMonth() || 
+        newDate.getFullYear() !== calendarMonth.getFullYear()) {
+      
+      monthTransition.value = newDate > calendarMonth ? 1 : -1;
+      setCalendarMonth(new Date(newDate));
+      
+      // Reset transition value after animation
+      setTimeout(() => {
+        monthTransition.value = 0;
+      }, 300);
+    }
+    
+    // Update the selected date
+    const updatedDate = new Date(selectedDate);
+    updatedDate.setFullYear(newDate.getFullYear(), newDate.getMonth(), newDate.getDate());
+    onDateChange(updatedDate);
+  };
+  
+  const calendarDays = generateCalendarDays();
+  
+  // Check if today is in current view
+  const today = new Date();
+  const isCurrentDayInView = calendarDays.some(day => 
+    day.isCurrentMonth && isSameDay(day.date, today)
+  );
+  
+  return (
+    <View style={styles.datePickerContainer}>
+      <View style={styles.dateSelectionHeader}>
+        <TouchableOpacity
+          style={styles.dateDisplay}
+          onPress={() => setShowCalendar(!showCalendar)}
+        >
+          <Text style={styles.dateText}>{formatDate(selectedDate)}</Text>
+          <Animated.View style={chevronStyle}>
+            <Ionicons
+              name="chevron-down"
+              size={18}
+              color="#8A8A8D"
+            />
+          </Animated.View>
+        </TouchableOpacity>
+      </View>
+
+      {/* Quick date options */}
+      <View style={styles.quickDateOptions}>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.quickDateScrollContent}
+        >
+          {QUICK_DATE_OPTIONS.map((option, index) => {
+            const optionDate = new Date();
+            optionDate.setDate(optionDate.getDate() + option.days);
+            const isSelected = isSameDay(selectedDate, optionDate);
+            
+            return (
+              <TouchableOpacity
+                key={index}
+                style={[
+                  styles.quickDateButton,
+                  isSelected && styles.quickDateButtonSelected
+                ]}
+                onPress={() => selectQuickOption(option.days)}
+              >
+                <Text style={[
+                  styles.quickDateButtonText,
+                  isSelected && styles.quickDateButtonTextSelected
+                ]}>
+                  {option.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+
+      {/* Mini Calendar with improved animations */}
+      <Animated.View 
+        layout={Layout.springify().damping(15).stiffness(150).mass(0.8)}
+        style={[
+          styles.calendarContainerWrapper,
+          { height: showCalendar ? undefined : 0, overflow: showCalendar ? 'visible' : 'hidden' }
+        ]}
+      >
+        <Animated.View 
+          entering={FadeIn.duration(150).springify()}
+          exiting={FadeOut.duration(100)}
+          style={styles.calendarContainer}
+        >
+          <View style={styles.calendarHeader}>
+            <TouchableOpacity onPress={() => navigateMonth(-1)}>
+              <Ionicons name="chevron-back" size={20} color="#FFFFFF" />
+            </TouchableOpacity>
+            
+            <Animated.Text style={[styles.calendarTitle, monthAnimStyle]}>
+              {calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+            </Animated.Text>
+            
+            <TouchableOpacity onPress={() => navigateMonth(1)}>
+              <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+          
+          <View style={styles.calendarDaysHeader}>
+            {DAYS.map((day, index) => (
+              <Text key={index} style={styles.calendarDayHeaderText}>{day}</Text>
+            ))}
+          </View>
+          
+          <Animated.View 
+            style={[styles.calendarGrid, monthAnimStyle]}
+          >
+            {calendarDays.map((day, index) => {
+              const isToday = isSameDay(day.date, new Date());
+              const isSelected = isSameDay(day.date, selectedDate);
+              
+              // Use static styles instead of animated styles for each cell to avoid performance issues
+              return (
+                <View key={index} style={styles.calendarDayWrapper}>
+                  <TouchableOpacity
+                    style={[
+                      styles.calendarDay,
+                      isSelected && styles.calendarDaySelected,
+                      isToday && styles.calendarDayToday,
+                      !day.isCurrentMonth && styles.calendarDayOtherMonth
+                    ]}
+                    onPress={() => selectDate(day.date)}
+                    disabled={!day.isCurrentMonth}
+                  >
+                    <Text style={[
+                      styles.calendarDayText,
+                      isSelected && styles.calendarDayTextSelected,
+                      isToday && styles.calendarDayTextToday,
+                      !day.isCurrentMonth && styles.calendarDayTextOtherMonth
+                    ]}>
+                      {day.date.getDate()}
+                    </Text>
+                    {isToday && <View style={styles.todayDot} />}
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
+          </Animated.View>
+          
+          {/* Show "Today" button if current day is not in view */}
+          {!isCurrentDayInView && (
+            <TouchableOpacity
+              style={styles.todayButton}
+              onPress={() => {
+                monthTransition.value = new Date() > calendarMonth ? 1 : -1;
+                const today = new Date();
+                setCalendarMonth(new Date(today.getFullYear(), today.getMonth(), 1));
+                setTimeout(() => {
+                  monthTransition.value = 0;
+                }, 300);
+              }}
+            >
+              <Text style={styles.todayButtonText}>Today</Text>
+            </TouchableOpacity>
+          )}
+        </Animated.View>
+      </Animated.View>
+    </View>
+  );
+};
+
+// Add TimePicker component
+const TimePicker = ({ 
+  selectedTime, 
+  onTimeChange 
+}: { 
+  selectedTime: Date; 
+  onTimeChange: (date: Date) => void;
+}) => {
+  const hours = Array.from({ length: 12 }, (_, i) => i + 1);
+  const minutes = Array.from({ length: 12 }, (_, i) => i * 5);
+  
+  const getTimeString = (date: Date) => {
+    const hours = date.getHours() > 12 ? date.getHours() - 12 : date.getHours() === 0 ? 12 : date.getHours();
+    const minutes = date.getMinutes() < 10 ? `0${date.getMinutes()}` : date.getMinutes();
+    const period = date.getHours() >= 12 ? 'PM' : 'AM';
+    return `${hours}:${minutes} ${period}`;
+  };
+  
+  const updateHour = (hour: number) => {
+    const newTime = new Date(selectedTime);
+    const isPM = selectedTime.getHours() >= 12;
+    const adjustedHour = isPM ? (hour === 12 ? 12 : hour + 12) : (hour === 12 ? 0 : hour);
+    newTime.setHours(adjustedHour);
+    onTimeChange(newTime);
+  };
+  
+  const updateMinute = (minute: number) => {
+    const newTime = new Date(selectedTime);
+    newTime.setMinutes(minute);
+    onTimeChange(newTime);
+  };
+  
+  const toggleAmPm = () => {
+    const newTime = new Date(selectedTime);
+    const currentHours = newTime.getHours();
+    const newHours = currentHours >= 12 
+      ? (currentHours === 12 ? 0 : currentHours - 12)
+      : (currentHours === 0 ? 12 : currentHours + 12);
+    newTime.setHours(newHours);
+    onTimeChange(newTime);
+  };
+  
+  return (
+    <View style={styles.timePickerContainer}>
+      <Text style={styles.timeDisplay}>{getTimeString(selectedTime)}</Text>
+      
+      <View style={styles.timePresetContainer}>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.timePresetScrollContent}
+        >
+          {TIME_PRESETS.map((preset, index) => {
+            const presetDate = new Date(selectedTime);
+            presetDate.setHours(preset.hour, preset.minute);
+            const presetTimeString = getTimeString(presetDate);
+            
+            return (
+              <TouchableOpacity
+                key={index}
+                style={[
+                  styles.timePresetButton,
+                  selectedTime.getHours() === preset.hour && 
+                  selectedTime.getMinutes() === preset.minute && 
+                  styles.timePresetButtonSelected
+                ]}
+                onPress={() => {
+                  const newTime = new Date(selectedTime);
+                  newTime.setHours(preset.hour, preset.minute);
+                  onTimeChange(newTime);
+                }}
+              >
+                <Text style={[
+                  styles.timePresetButtonText,
+                  selectedTime.getHours() === preset.hour && 
+                  selectedTime.getMinutes() === preset.minute && 
+                  styles.timePresetButtonTextSelected
+                ]}>
+                  {preset.label} ({presetTimeString})
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+      
+      <View style={styles.timeWheelContainer}>
+        <View style={styles.timeWheelGroup}>
+          <Text style={styles.timeWheelLabel}>Hour</Text>
+          <View style={styles.timeWheel}>
+            <TouchableOpacity 
+              style={styles.timeWheelButton}
+              onPress={() => {
+                const currentHour = selectedTime.getHours() % 12 || 12;
+                const nextHour = currentHour === 12 ? 1 : currentHour + 1;
+                updateHour(nextHour);
+              }}
+            >
+              <Ionicons name="chevron-up" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+            
+            <Text style={styles.timeWheelText}>
+              {selectedTime.getHours() % 12 || 12}
+            </Text>
+            
+            <TouchableOpacity 
+              style={styles.timeWheelButton}
+              onPress={() => {
+                const currentHour = selectedTime.getHours() % 12 || 12;
+                const prevHour = currentHour === 1 ? 12 : currentHour - 1;
+                updateHour(prevHour);
+              }}
+            >
+              <Ionicons name="chevron-down" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+        </View>
+        
+        <Text style={styles.timeWheelSeparator}>:</Text>
+        
+        <View style={styles.timeWheelGroup}>
+          <Text style={styles.timeWheelLabel}>Minute</Text>
+          <View style={styles.timeWheel}>
+            <TouchableOpacity 
+              style={styles.timeWheelButton}
+              onPress={() => {
+                const currentMinute = selectedTime.getMinutes();
+                const nextMinute = Math.min(55, currentMinute + 5);
+                if (currentMinute === 55) updateMinute(0);
+                else updateMinute(nextMinute);
+              }}
+            >
+              <Ionicons name="chevron-up" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+            
+            <Text style={styles.timeWheelText}>
+              {selectedTime.getMinutes() < 10 
+                ? `0${selectedTime.getMinutes()}` 
+                : selectedTime.getMinutes()}
+            </Text>
+            
+            <TouchableOpacity 
+              style={styles.timeWheelButton}
+              onPress={() => {
+                const currentMinute = selectedTime.getMinutes();
+                if (currentMinute === 0) updateMinute(55);
+                else updateMinute(Math.max(0, currentMinute - 5));
+              }}
+            >
+              <Ionicons name="chevron-down" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+        </View>
+        
+        <View style={styles.timeWheelGroup}>
+          <Text style={styles.timeWheelLabel}>AM/PM</Text>
+          <TouchableOpacity 
+            style={styles.amPmToggle}
+            onPress={toggleAmPm}
+          >
+            <Text style={styles.amPmToggleText}>
+              {selectedTime.getHours() >= 12 ? 'PM' : 'AM'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
   );
 };
 
@@ -324,7 +868,7 @@ export default function NewAssignmentScreen() {
           
           // If no subjects found for today, show first 5
           if (todaySubjects.length === 0) {
-            setFilteredSubjects(allSubjects.slice(0, 5));
+      setFilteredSubjects(allSubjects.slice(0, 5));
           } else {
             setFilteredSubjects(todaySubjects);
           }
@@ -786,95 +1330,19 @@ export default function NewAssignmentScreen() {
               >
                 <Animated.View entering={FadeInUp.duration(200).delay(50)}>
                   <Text style={styles.label}>Due Date</Text>
-                  <View style={styles.datePickerContainer}>
-                    <View style={styles.dateButtonsRow}>
-                      <TouchableOpacity 
-                        style={styles.dateAdjustButton} 
-                        onPress={() => adjustDate(-1)}
-                      >
-                        <Ionicons name="chevron-back" size={22} color="#2C3DCD" />
-                      </TouchableOpacity>
-                      
-                      <View style={styles.dateDisplay}>
-                        <Text style={styles.dateText}>{formatDate(dueDate)}</Text>
-                      </View>
-                      
-                      <TouchableOpacity 
-                        style={styles.dateAdjustButton} 
-                        onPress={() => adjustDate(1)}
-                      >
-                        <Ionicons name="chevron-forward" size={22} color="#2C3DCD" />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                </Animated.View>
+                  <DatePicker
+                    selectedDate={dueDate}
+                    onDateChange={setDueDate}
+                    formatDate={formatDate}
+                  />
+              </Animated.View>
                 
                 <Animated.View entering={FadeInUp.duration(200).delay(100)}>
                   <Text style={styles.label}>Due Time</Text>
-                  <View style={styles.datePickerContainer}>
-                    <View style={styles.timeButtonsRow}>
-                      <View style={styles.timeSection}>
-                        <TouchableOpacity 
-                          style={styles.timeAdjustButton} 
-                          onPress={() => adjustHour(1)}
-                        >
-                          <Ionicons name="chevron-up" size={22} color="#2C3DCD" />
-                        </TouchableOpacity>
-                        
-                        <Text style={styles.timeText}>
-                          {dueDate.getHours() > 12 ? dueDate.getHours() - 12 : dueDate.getHours() === 0 ? 12 : dueDate.getHours()}
-                        </Text>
-                        
-                        <TouchableOpacity 
-                          style={styles.timeAdjustButton} 
-                          onPress={() => adjustHour(-1)}
-                        >
-                          <Ionicons name="chevron-down" size={22} color="#2C3DCD" />
-                        </TouchableOpacity>
-                      </View>
-                      
-                      <Text style={styles.timeSeparator}>:</Text>
-                      
-                      <View style={styles.timeSection}>
-                        <TouchableOpacity 
-                          style={styles.timeAdjustButton} 
-                          onPress={() => adjustMinute(5)}
-                        >
-                          <Ionicons name="chevron-up" size={22} color="#2C3DCD" />
-                        </TouchableOpacity>
-                        
-                        <Text style={styles.timeText}>
-                          {dueDate.getMinutes() < 10 ? `0${dueDate.getMinutes()}` : dueDate.getMinutes()}
-                        </Text>
-                        
-                        <TouchableOpacity 
-                          style={styles.timeAdjustButton} 
-                          onPress={() => adjustMinute(-5)}
-                        >
-                          <Ionicons name="chevron-down" size={22} color="#2C3DCD" />
-                        </TouchableOpacity>
-                      </View>
-                      
-                      <View style={styles.timeSection}>
-                        <TouchableOpacity 
-                          style={styles.timeAdjustButton} 
-                          onPress={() => {
-                            const newDate = new Date(dueDate);
-                            if (newDate.getHours() >= 12) {
-                              newDate.setHours(newDate.getHours() - 12);
-                            } else {
-                              newDate.setHours(newDate.getHours() + 12);
-                            }
-                            setDueDate(newDate);
-                          }}
-                        >
-                          <Text style={styles.amPmText}>
-                            {dueDate.getHours() >= 12 ? 'PM' : 'AM'}
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  </View>
+                  <TimePicker
+                    selectedTime={dueDate}
+                    onTimeChange={setDueDate}
+                  />
                 </Animated.View>
               </Animated.View>
             )}
@@ -910,49 +1378,49 @@ export default function NewAssignmentScreen() {
             </View>
             
             <View style={styles.tabsContainer}>
-              <View style={styles.segmentedControl}>
-                <TouchableOpacity 
-                  style={[
-                    styles.segmentButton, 
-                    subjectSelectionMode === 'recent' && styles.segmentButtonActive
-                  ]}
-                  onPress={() => setSubjectSelectionMode('recent')}
-                >
-                  <Text style={[
-                    styles.segmentButtonText,
-                    subjectSelectionMode === 'recent' && styles.segmentButtonTextActive
-                  ]}>Recent</Text>
-                </TouchableOpacity>
+            <View style={styles.segmentedControl}>
+              <TouchableOpacity 
+                style={[
+                  styles.segmentButton, 
+                  subjectSelectionMode === 'recent' && styles.segmentButtonActive
+                ]}
+                onPress={() => setSubjectSelectionMode('recent')}
+              >
+                <Text style={[
+                  styles.segmentButtonText,
+                  subjectSelectionMode === 'recent' && styles.segmentButtonTextActive
+                ]}>Recent</Text>
+              </TouchableOpacity>
                 
                 <View style={styles.segmentSeparator} />
                 
-                <TouchableOpacity 
-                  style={[
-                    styles.segmentButton, 
-                    subjectSelectionMode === 'all' && styles.segmentButtonActive
-                  ]}
-                  onPress={() => setSubjectSelectionMode('all')}
-                >
-                  <Text style={[
-                    styles.segmentButtonText,
-                    subjectSelectionMode === 'all' && styles.segmentButtonTextActive
-                  ]}>All</Text>
-                </TouchableOpacity>
+              <TouchableOpacity 
+                style={[
+                  styles.segmentButton, 
+                  subjectSelectionMode === 'all' && styles.segmentButtonActive
+                ]}
+                onPress={() => setSubjectSelectionMode('all')}
+              >
+                <Text style={[
+                  styles.segmentButtonText,
+                  subjectSelectionMode === 'all' && styles.segmentButtonTextActive
+                ]}>All</Text>
+              </TouchableOpacity>
                 
                 <View style={styles.segmentSeparator} />
                 
-                <TouchableOpacity 
-                  style={[
-                    styles.segmentButton, 
-                    subjectSelectionMode === 'custom' && styles.segmentButtonActive
-                  ]}
-                  onPress={() => setSubjectSelectionMode('custom')}
-                >
-                  <Text style={[
-                    styles.segmentButtonText,
-                    subjectSelectionMode === 'custom' && styles.segmentButtonTextActive
-                  ]}>Custom</Text>
-                </TouchableOpacity>
+              <TouchableOpacity 
+                style={[
+                  styles.segmentButton, 
+                  subjectSelectionMode === 'custom' && styles.segmentButtonActive
+                ]}
+                onPress={() => setSubjectSelectionMode('custom')}
+              >
+                <Text style={[
+                  styles.segmentButtonText,
+                  subjectSelectionMode === 'custom' && styles.segmentButtonTextActive
+                ]}>Custom</Text>
+              </TouchableOpacity>
               </View>
             </View>
             
@@ -1206,21 +1674,20 @@ const styles = StyleSheet.create({
   },
   datePickerContainer: {
     backgroundColor: '#1A1A1A',
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#333333',
+    overflow: 'hidden',
+    marginTop: 8,
+  },
+  dateSelectionHeader: {
     padding: 12,
-  },
-  dateButtonsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  dateAdjustButton: {
-    padding: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333333',
   },
   dateDisplay: {
-    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
   },
   dateText: {
@@ -1228,34 +1695,192 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
   },
-  timeButtonsRow: {
+  quickDateOptions: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333333',
+  },
+  quickDateScrollContent: {
+    paddingHorizontal: 12,
+    gap: 8,
+  },
+  quickDateButton: {
+    backgroundColor: '#242424',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginRight: 8,
+  },
+  quickDateButtonSelected: {
+    backgroundColor: '#2C3DCD',
+  },
+  quickDateButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  quickDateButtonTextSelected: {
+    fontWeight: '600',
+  },
+  calendarContainerWrapper: {
+    width: '100%',
+  },
+  calendarContainer: {
+    padding: 12,
+  },
+  calendarHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
+    marginBottom: 14,
   },
-  timeSection: {
-    alignItems: 'center',
-    width: 60,
-  },
-  timeAdjustButton: {
-    padding: 8,
-  },
-  timeText: {
+  calendarTitle: {
     color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  timeSeparator: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '600',
-    marginHorizontal: 8,
-  },
-  amPmText: {
-    color: '#2C3DCD',
     fontSize: 16,
     fontWeight: '600',
-    marginLeft: 16,
+  },
+  calendarDaysHeader: {
+    flexDirection: 'row',
+    marginBottom: 10,
+  },
+  calendarDayHeaderText: {
+    flex: 1,
+    textAlign: 'center',
+    color: '#8A8A8D',
+    fontWeight: '600',
+    fontSize: 12,
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  calendarDayWrapper: {
+    width: `${100 / 7}%`,
+    padding: 1,
+  },
+  calendarDay: {
+    width: '100%',
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 20,
+  },
+  calendarDayText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '400',
+  },
+  calendarDaySelected: {
+    backgroundColor: '#2C3DCD',
+    borderRadius: 20,
+  },
+  calendarDayTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  calendarDayToday: {
+    borderWidth: 1,
+    borderColor: '#2C3DCD',
+    borderRadius: 20,
+  },
+  calendarDayTextToday: {
+    color: '#2C3DCD',
+    fontWeight: '600',
+  },
+  calendarDayOtherMonth: {
+    opacity: 0.5,
+  },
+  calendarDayTextOtherMonth: {
+    color: '#666666',
+  },
+  
+  // Time picker styles
+  timePickerContainer: {
+    backgroundColor: '#1A1A1A',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#333333',
+    overflow: 'hidden',
+    marginTop: 8,
+    padding: 12,
+  },
+  timeDisplay: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  timePresetContainer: {
+    marginBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333333',
+    paddingBottom: 16,
+  },
+  timePresetScrollContent: {
+    gap: 8,
+  },
+  timePresetButton: {
+    backgroundColor: '#242424',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginRight: 8,
+  },
+  timePresetButtonSelected: {
+    backgroundColor: '#2C3DCD',
+  },
+  timePresetButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  timePresetButtonTextSelected: {
+    fontWeight: '600',
+  },
+  timeWheelContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  timeWheelGroup: {
+    alignItems: 'center',
+    marginHorizontal: 8,
+  },
+  timeWheelLabel: {
+    color: '#8A8A8D',
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  timeWheel: {
+    alignItems: 'center',
+  },
+  timeWheelButton: {
+    padding: 8,
+  },
+  timeWheelText: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '600',
+    marginVertical: 4,
+  },
+  timeWheelSeparator: {
+    color: '#FFFFFF',
+    fontSize: 24,
+    fontWeight: '600',
+    marginHorizontal: 4,
+  },
+  amPmToggle: {
+    backgroundColor: '#2C3DCD',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginTop: 20,
+  },
+  amPmToggleText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
   subjectCard: {
     flexDirection: 'row',
@@ -1443,5 +2068,29 @@ const styles = StyleSheet.create({
   },
   activeStatusText: {
     color: '#2C3DCD',
+  },
+  todayButton: {
+    alignSelf: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#2A2A2A',
+    borderRadius: 16,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#3A3A3A',
+  },
+  todayButtonText: {
+    color: '#2C3DCD',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  todayDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#2C3DCD',
+    position: 'absolute',
+    bottom: 4,
+    alignSelf: 'center',
   },
 }); 
