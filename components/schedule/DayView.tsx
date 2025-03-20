@@ -7,6 +7,10 @@ import { useTimeUpdate } from '@/hooks/useTimeUpdate';
 import Animated, { useAnimatedStyle, withTiming, withSpring, FadeIn, FadeOut, useSharedValue, withSequence, withDelay } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import ViewModeMenu from './ViewModeMenu';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Key for storing whether the tutorial has been shown
+const TUTORIAL_SHOWN_KEY = 'schedule_tutorial_shown';
 
 const formatTimeByLocale = (time: string, isEnglish: boolean) => {
   if (!isEnglish) return time;
@@ -149,6 +153,25 @@ export default function DayView() {
   const [showFirstTimeIndicator, setShowFirstTimeIndicator] = useState(false);
   const firstTimeAnimValue = useSharedValue(0);
   const hasShownFirstTimeIndicator = useRef(false);
+  const [tutorialShown, setTutorialShown] = useState(true); // Assume shown by default, will be updated
+
+  // Check if tutorial has been shown before
+  useEffect(() => {
+    const checkTutorialShown = async () => {
+      try {
+        const value = await AsyncStorage.getItem(TUTORIAL_SHOWN_KEY);
+        if (value === null) {
+          // Tutorial has not been shown before
+          setTutorialShown(false);
+        }
+      } catch (e) {
+        // Error reading value, assume it hasn't been shown
+        setTutorialShown(false);
+      }
+    };
+    
+    checkTutorialShown();
+  }, []);
 
   // Generate current week dates (Monday to Friday, plus Saturday if it's a recovery day)
   const weekDates = useMemo(() => {
@@ -235,15 +258,19 @@ export default function DayView() {
   }, [weekDates]);
 
   const handleDatePress = useCallback((date: Date) => {
-    // Only allow selecting dates within the range of available weekDates
+    // Immediately set the selected date for better responsiveness
+    setSelectedDate(date);
+    
+    // Only scroll if within the range of available weekDates
     const dateTime = date.getTime();
     const minDate = weekDates[0].date.getTime();
-    // Use the last element of weekDates array instead of hardcoding index 5
     const maxDate = weekDates[weekDates.length - 1].date.getTime();
 
     if (dateTime >= minDate && dateTime <= maxDate) {
-      setSelectedDate(date);
-      scrollToDate(date);
+      // Use requestAnimationFrame for smoother UI updates
+      requestAnimationFrame(() => {
+        scrollToDate(date);
+      });
     }
   }, [scrollToDate, weekDates]);
 
@@ -535,10 +562,10 @@ export default function DayView() {
   }, []);
 
   useEffect(() => {
-    // Skip animation if data isn't loaded yet
-    if (isLoading || !scheduleData) return;
+    // Skip animation if data isn't loaded yet or if tutorial has been shown before
+    if (isLoading || !scheduleData || tutorialShown) return;
     
-    // Only show the first-time indicator once
+    // Only show the first-time indicator once and save the state
     if (!hasShownFirstTimeIndicator.current) {
       hasShownFirstTimeIndicator.current = true;
       
@@ -555,10 +582,15 @@ export default function DayView() {
         // Hide the component after animation completes
         setTimeout(() => {
           setShowFirstTimeIndicator(false);
+          
+          // Save that tutorial has been shown
+          AsyncStorage.setItem(TUTORIAL_SHOWN_KEY, 'true').catch(err => {
+            console.error('Error saving tutorial state:', err);
+          });
         }, 2800);
       }, 800);
     }
-  }, [isLoading, scheduleData]);
+  }, [isLoading, scheduleData, tutorialShown]);
 
   const firstTimeAnimStyle = useAnimatedStyle(() => {
     return {

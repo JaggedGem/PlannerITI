@@ -16,6 +16,7 @@ export interface Assignment {
   isCompleted: boolean;
   isPriority: boolean;
   periodId?: string; // Optional period ID from scheduleService
+  subjectId?: string; // Optional subject ID from scheduleService
 }
 
 // Assignment group interface for grouping by date
