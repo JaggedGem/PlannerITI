@@ -79,13 +79,20 @@ export type SubGroupType = 'Subgroup 1' | 'Subgroup 2';
 export type Language = 'en' | 'ro' | 'ru';
 export type ScheduleView = 'day' | 'week';
 
-interface UserSettings {
+export interface UserSettings {
   group: SubGroupType;
   language: Language;
   selectedGroupId: string;
   selectedGroupName: string;
   scheduleView: ScheduleView;
   customPeriods: CustomPeriod[];
+}
+
+// New interface for Subject
+export interface Subject {
+  id: string;
+  name: string;
+  isCustom?: boolean;
 }
 
 const API_BASE_URL = 'https://orar-api.ceiti.md/v1';
@@ -116,7 +123,8 @@ export const CACHE_KEYS = {
   LAST_FETCH_PREFIX: 'last_schedule_fetch_',
   GROUPS: 'groups_cache',
   RECOVERY_DAYS: 'recovery_days_cache',
-  LAST_RECOVERY_SYNC: 'last_recovery_days_sync'
+  LAST_RECOVERY_SYNC: 'last_recovery_days_sync',
+  SUBJECTS: 'subjects_cache' // New cache key for subjects
 };
 
 const CACHE_EXPIRY = 3 * 24 * 60 * 60 * 1000; // 3 days in milliseconds
@@ -178,6 +186,7 @@ export const scheduleService = {
   listeners: new Set<SettingsListener>(),
   cachedGroups: [] as Group[],
   cachedRecoveryDays: [] as RecoveryDay[],
+  cachedSubjects: [] as Subject[],
 
   subscribe(listener: SettingsListener) {
     this.listeners.add(listener);
@@ -461,12 +470,128 @@ export const scheduleService = {
       // Apply recovery day transformations
       const transformedData = this.transformScheduleData(data);
       
+      // Extract and store unique subjects
+      await this.extractAndStoreSubjects(transformedData);
+      
       await this.cacheSchedule(groupId, transformedData);
       return transformedData;
     } catch (error) {
       // Silent error handling
       throw error;
     }
+  },
+
+  async extractAndStoreSubjects(data: ApiResponse): Promise<void> {
+    try {
+      const subjects = new Map<string, Subject>();
+      
+      // Process each day in the schedule
+      Object.values(data.data).forEach(daySchedule => {
+        // Process each period in the day
+        Object.values(daySchedule).forEach(schedules => {
+          // Process schedules for both, even and odd weeks
+          ['both', 'par', 'impar'].forEach(weekType => {
+            const items = (schedules as any)[weekType] as ScheduleItem[];
+            items.forEach(item => {
+              const subjectName = item.subjectid.name;
+              const subjectId = `subject_${subjectName.replace(/\s+/g, '_').toLowerCase()}`;
+              
+              if (!subjects.has(subjectId)) {
+                subjects.set(subjectId, {
+                  id: subjectId,
+                  name: subjectName
+                });
+              }
+            });
+          });
+        });
+      });
+      
+      // Add custom periods as subjects
+      this.settings.customPeriods.forEach(period => {
+        const customId = `custom_${period._id}`;
+        if (!subjects.has(customId) && period.name) {
+          subjects.set(customId, {
+            id: customId,
+            name: period.name,
+            isCustom: true
+          });
+        }
+      });
+      
+      // Convert map to array and store
+      this.cachedSubjects = Array.from(subjects.values());
+      await AsyncStorage.setItem(CACHE_KEYS.SUBJECTS, JSON.stringify(this.cachedSubjects));
+    } catch (error) {
+      console.error('Error extracting subjects:', error);
+    }
+  },
+  
+  // Get the list of unique subjects
+  async getSubjects(): Promise<Subject[]> {
+    try {
+      // Return cached subjects if available
+      if (this.cachedSubjects.length > 0) {
+        return this.cachedSubjects;
+      }
+      
+      // Try to load subjects from storage
+      const cachedSubjects = await AsyncStorage.getItem(CACHE_KEYS.SUBJECTS);
+      if (cachedSubjects) {
+        this.cachedSubjects = JSON.parse(cachedSubjects);
+        return this.cachedSubjects;
+      }
+      
+      // If no cached subjects and we have schedule data, extract subjects
+      if (this.settings.selectedGroupId) {
+        const scheduleData = await this.getClassSchedule(this.settings.selectedGroupId);
+        await this.extractAndStoreSubjects(scheduleData);
+        return this.cachedSubjects;
+      }
+      
+      return [];
+    } catch (error) {
+      console.error('Error getting subjects:', error);
+      return [];
+    }
+  },
+  
+  // Add a custom subject
+  async addCustomSubject(name: string): Promise<Subject> {
+    const newSubject: Subject = {
+      id: `custom_subject_${Date.now()}`,
+      name,
+      isCustom: true
+    };
+    
+    this.cachedSubjects.push(newSubject);
+    await AsyncStorage.setItem(CACHE_KEYS.SUBJECTS, JSON.stringify(this.cachedSubjects));
+    return newSubject;
+  },
+  
+  // Update a subject
+  async updateSubject(id: string, updates: Partial<Subject>): Promise<boolean> {
+    const index = this.cachedSubjects.findIndex(s => s.id === id);
+    if (index !== -1) {
+      this.cachedSubjects[index] = {
+        ...this.cachedSubjects[index],
+        ...updates
+      };
+      await AsyncStorage.setItem(CACHE_KEYS.SUBJECTS, JSON.stringify(this.cachedSubjects));
+      return true;
+    }
+    return false;
+  },
+  
+  // Delete a custom subject
+  async deleteCustomSubject(id: string): Promise<boolean> {
+    const index = this.cachedSubjects.findIndex(s => s.id === id && s.isCustom);
+    if (index !== -1) {
+      this.cachedSubjects.splice(index, 1);
+      await AsyncStorage.setItem(CACHE_KEYS.SUBJECTS, JSON.stringify(this.cachedSubjects));
+      return true;
+    }
+    return false;
   },
 
   async hasInternetConnection(): Promise<boolean> {
@@ -801,6 +926,12 @@ export const scheduleService = {
   const cachedRecoveryDays = await AsyncStorage.getItem(CACHE_KEYS.RECOVERY_DAYS);
   if (cachedRecoveryDays) {
     scheduleService.cachedRecoveryDays = JSON.parse(cachedRecoveryDays);
+  }
+  
+  // Load subjects into memory immediately
+  const cachedSubjects = await AsyncStorage.getItem(CACHE_KEYS.SUBJECTS);
+  if (cachedSubjects) {
+    scheduleService.cachedSubjects = JSON.parse(cachedSubjects);
   }
   
   scheduleService.syncPeriodTimes(); // Initial sync

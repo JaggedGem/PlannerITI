@@ -10,121 +10,100 @@ import {
   Platform,
   StatusBar,
   ActivityIndicator,
-  Alert
+  Alert,
+  FlatList,
+  Modal
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { addAssignment, getCourses } from '../utils/assignmentStorage';
-import { scheduleService, Period, DAYS_MAP } from '../services/scheduleService';
-import { Picker } from '@react-native-picker/picker';
+import { addAssignment } from '../utils/assignmentStorage';
+import { scheduleService, DAYS_MAP, Subject } from '../services/scheduleService';
 import Animated, { FadeInUp } from 'react-native-reanimated';
-
-// Define picker item type
-interface PickerItem {
-  label: string;
-  value: string;
-  day?: string;
-  time?: string;
-  color?: string;
-}
-
-interface Course {
-  code: string;
-  name: string;
-}
-
-interface UniquePeriod {
-  id: string;
-  className: string;
-  day: string;
-  period: string;
-  time: string;
-}
 
 export default function NewAssignmentScreen() {
   // Form state
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [courseCode, setCourseCode] = useState('');
   const [courseName, setCourseName] = useState('');
   const [dueDate, setDueDate] = useState(new Date());
   const [isPriority, setIsPriority] = useState(false);
-  const [selectedPeriodId, setSelectedPeriodId] = useState<string>('');
-  const [availableCourses, setAvailableCourses] = useState<Course[]>([]);
+  const [selectedSubjectId, setSelectedSubjectId] = useState<string>('');
   
-  // Periods data
-  const [uniquePeriods, setUniquePeriods] = useState<UniquePeriod[]>([]);
-  const [loadingPeriods, setLoadingPeriods] = useState(true);
-  const [viewMode, setViewMode] = useState<'courses' | 'periods'>('courses');
+  // Subject selection states
+  const [subjectSelectionMode, setSubjectSelectionMode] = useState<'recent'|'all'|'custom'>('recent');
+  
+  // Subjects data
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [loadingSubjects, setLoadingSubjects] = useState(true);
+  const [filteredSubjects, setFilteredSubjects] = useState<Subject[]>([]);
+  const [searchText, setSearchText] = useState('');
+  
+  // Modal state
+  const [isSubjectsModalVisible, setIsSubjectsModalVisible] = useState(false);
   
   useEffect(() => {
-    // Load periods directly from scheduleService
-    const loadPeriods = async () => {
-      setLoadingPeriods(true);
+    // Load subjects from scheduleService
+    const loadSubjects = async () => {
+      setLoadingSubjects(true);
       try {
-        const { selectedGroupId } = scheduleService.getSettings();
-        const scheduleData = await scheduleService.getClassSchedule(selectedGroupId);
+        const subjectsData = await scheduleService.getSubjects();
+        setSubjects(subjectsData);
         
-        // Create a Map to track unique periods by their class name
-        const periodsMap = new Map<string, UniquePeriod>();
+        // Set filtered subjects based on selection mode
+        updateFilteredSubjects(subjectsData, subjectSelectionMode);
         
-        // Process all days of the week
-        Object.entries(DAYS_MAP).forEach(([dayNum, dayName]) => {
-          const formattedDayName = dayName.charAt(0).toUpperCase() + dayName.slice(1);
-          const dayItems = scheduleService.getScheduleForDay(scheduleData, dayName as any);
-          
-          // Process each period of the day
-          dayItems.forEach(item => {
-            // Skip recovery info items
-            if (item.period === 'recovery-info') return;
-            
-            // Create unique ID for this specific period
-            const periodId = `${dayName}_${item.period}`;
-            
-            // Create period object
-            const periodObj: UniquePeriod = {
-              id: periodId,
-              className: item.className,
-              day: formattedDayName,
-              period: item.period,
-              time: `${item.startTime} - ${item.endTime}`
-            };
-            
-            // Use class name as a key to avoid duplicates
-            if (!periodsMap.has(item.className)) {
-              periodsMap.set(item.className, periodObj);
-            }
-          });
-        });
-        
-        // Convert Map to array
-        setUniquePeriods(Array.from(periodsMap.values()));
-      } catch (error) {
-        console.error('Error loading periods:', error);
-      } finally {
-        setLoadingPeriods(false);
-      }
-    };
-    
-    // Load available courses
-    const loadCourses = async () => {
-      try {
-        const courses = await getCourses();
-        setAvailableCourses(courses);
-        if (courses.length > 0) {
-          setCourseCode(courses[0].code);
-          setCourseName(courses[0].name);
+        // Set default subject if available
+        if (subjectsData.length > 0) {
+          setSelectedSubjectId(subjectsData[0].id);
+          setCourseName(subjectsData[0].name);
         }
       } catch (error) {
-        console.error('Error loading courses:', error);
+        console.error('Error loading subjects:', error);
+      } finally {
+        setLoadingSubjects(false);
       }
     };
     
-    loadPeriods();
-    loadCourses();
+    loadSubjects();
   }, []);
+  
+  // Update filtered subjects when mode changes
+  useEffect(() => {
+    updateFilteredSubjects(subjects, subjectSelectionMode);
+  }, [subjectSelectionMode, subjects]);
+  
+  // Filter subjects based on search text
+  useEffect(() => {
+    if (searchText) {
+      const filtered = subjects.filter(subject => 
+        subject.name.toLowerCase().includes(searchText.toLowerCase())
+      );
+      setFilteredSubjects(filtered);
+    } else {
+      updateFilteredSubjects(subjects, subjectSelectionMode);
+    }
+  }, [searchText, subjects, subjectSelectionMode]);
+  
+  const updateFilteredSubjects = (allSubjects: Subject[], mode: string) => {
+    if (mode === 'recent') {
+      // Show recent subjects (first 5)
+      setFilteredSubjects(allSubjects.slice(0, 5));
+    } else if (mode === 'all') {
+      // Show all subjects
+      setFilteredSubjects(allSubjects);
+    } else if (mode === 'custom') {
+      // Show only custom subjects
+      const customSubjects = allSubjects.filter(s => s.isCustom);
+      
+      // Ensure unique subjects by ID
+      const uniqueSubjects = Array.from(
+        new Map(customSubjects.map(item => [item.id, item])).values()
+      );
+      
+      setFilteredSubjects(uniqueSubjects);
+    }
+  };
   
   // Format date for display
   const formatDate = (date: Date) => {
@@ -147,7 +126,7 @@ export default function NewAssignmentScreen() {
 
   // Save assignment and navigate back
   const handleSave = async () => {
-    if (!title || !courseCode) {
+    if (!title || !courseName) {
       Alert.alert("Error", "Please enter a title and select a course");
       return;
     }
@@ -155,14 +134,54 @@ export default function NewAssignmentScreen() {
     await addAssignment({
       title,
       description,
-      courseCode,
-      courseName: courseName || courseCode,
+      courseCode: '',
+      courseName: courseName,
       dueDate: dueDate.toISOString(),
       isPriority,
-      periodId: selectedPeriodId || undefined
+      subjectId: selectedSubjectId || undefined
     });
     
     router.back();
+  };
+  
+  // Add new custom subject
+  const handleAddCustomSubject = async () => {
+    if (!courseName) {
+      Alert.alert("Error", "Please enter a course name");
+      return;
+    }
+    
+    // Check if this custom subject already exists
+    const existingSubject = subjects.find(
+      s => s.isCustom && s.name.toLowerCase() === courseName.toLowerCase()
+    );
+    
+    if (existingSubject) {
+      // If it exists, just select it instead of creating a duplicate
+      setSelectedSubjectId(existingSubject.id);
+      Alert.alert("Info", `Subject "${courseName}" already exists and has been selected.`);
+      setIsSubjectsModalVisible(false);
+      return;
+    }
+    
+    try {
+      const newSubject = await scheduleService.addCustomSubject(courseName);
+      
+      // Add to subjects array without duplicates
+      setSubjects(prev => {
+        // Ensure no duplicates by checking IDs
+        const exists = prev.some(s => s.id === newSubject.id);
+        if (exists) return prev;
+        return [...prev, newSubject];
+      });
+      
+      setSelectedSubjectId(newSubject.id);
+      Alert.alert("Success", `Added new subject: ${courseName}`);
+      setIsSubjectsModalVisible(false);
+    } catch (error) {
+      console.error("Error adding custom subject:", error);
+      Alert.alert("Error", "Failed to add custom subject");
+    }
   };
   
   // Cancel and navigate back
@@ -189,6 +208,34 @@ export default function NewAssignmentScreen() {
     setDueDate(newDate);
   };
 
+  // Render a subject item for the modal
+  const renderSubjectItem = ({ item }: { item: Subject }) => (
+    <TouchableOpacity
+      style={[
+        styles.subjectCard,
+        selectedSubjectId === item.id && styles.subjectCardSelected
+      ]}
+      onPress={() => {
+        setSelectedSubjectId(item.id);
+        setCourseName(item.name);
+        setIsSubjectsModalVisible(false);
+      }}
+    >
+      <View style={styles.subjectMainInfo}>
+        <Text style={styles.subjectName}>{item.name}</Text>
+        {item.isCustom && (
+          <Text style={styles.customBadge}>Custom</Text>
+        )}
+      </View>
+      {selectedSubjectId === item.id && (
+        <Ionicons name="checkmark-circle" size={24} color="#3478F6" />
+      )}
+    </TouchableOpacity>
+  );
+
+  // Find the currently selected subject
+  const selectedSubject = subjects.find(s => s.id === selectedSubjectId);
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" />
@@ -201,306 +248,283 @@ export default function NewAssignmentScreen() {
           </TouchableOpacity>
           <TouchableOpacity 
             onPress={handleSave} 
-            style={[styles.saveButton, (!title || !courseCode) && styles.saveButtonDisabled]}
-            disabled={!title || !courseCode}
+            style={[styles.saveButton, (!title || !courseName) && styles.saveButtonDisabled]}
+            disabled={!title || !courseName}
           >
             <Text style={styles.saveButtonText}>Save</Text>
           </TouchableOpacity>
         </View>
       </View>
       
-      <ScrollView style={styles.formContainer} showsVerticalScrollIndicator={false}>
-        <Animated.View entering={FadeInUp.duration(300).delay(50)}>
-          <Text style={styles.label}>Title</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Assignment title"
-            placeholderTextColor="#8A8A8D"
-            value={title}
-            onChangeText={setTitle}
-            maxLength={50}
-          />
-        </Animated.View>
-        
-        <Animated.View entering={FadeInUp.duration(300).delay(100)}>
-          <Text style={styles.label}>Description (Optional)</Text>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            placeholder="Add details about the assignment"
-            placeholderTextColor="#8A8A8D"
-            value={description}
-            onChangeText={setDescription}
-            multiline
-            maxLength={200}
-          />
-        </Animated.View>
-        
-        <Animated.View entering={FadeInUp.duration(300).delay(150)}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.label}>Course or Period</Text>
+      <FlatList
+        data={[{ key: 'formContent' }]}
+        showsVerticalScrollIndicator={false}
+        keyExtractor={item => item.key}
+        renderItem={({ item }) => (
+          <View style={styles.formContainer}>
+            <Animated.View entering={FadeInUp.duration(300).delay(50)}>
+              <Text style={styles.label}>Title</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Assignment title"
+                placeholderTextColor="#8A8A8D"
+                value={title}
+                onChangeText={setTitle}
+                maxLength={50}
+              />
+            </Animated.View>
+            
+            <Animated.View entering={FadeInUp.duration(300).delay(100)}>
+              <Text style={styles.label}>Description (Optional)</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                placeholder="Add details about the assignment"
+                placeholderTextColor="#8A8A8D"
+                value={description}
+                onChangeText={setDescription}
+                multiline
+                maxLength={200}
+              />
+            </Animated.View>
+            
+            <Animated.View entering={FadeInUp.duration(300).delay(150)}>
+              <Text style={styles.label}>Subject</Text>
+              <TouchableOpacity
+                style={styles.subjectSelector}
+                onPress={() => setIsSubjectsModalVisible(true)}
+              >
+                {selectedSubject ? (
+                  <View style={styles.selectedSubjectDisplay}>
+                    <Text style={styles.selectedSubjectText}>{selectedSubject.name}</Text>
+                    {selectedSubject.isCustom && (
+                      <Text style={styles.customBadgeSmall}>Custom</Text>
+                    )}
+                  </View>
+                ) : (
+                  <Text style={styles.subjectPlaceholder}>Select a subject</Text>
+                )}
+                <Ionicons name="chevron-down" size={20} color="#8A8A8D" />
+              </TouchableOpacity>
+            </Animated.View>
+            
+            <Animated.View entering={FadeInUp.duration(300).delay(250)}>
+              <Text style={styles.label}>Due Date</Text>
+              <View style={styles.datePickerContainer}>
+                <View style={styles.dateButtonsRow}>
+                  <TouchableOpacity 
+                    style={styles.dateAdjustButton} 
+                    onPress={() => adjustDate(-1)}
+                  >
+                    <Ionicons name="chevron-back" size={22} color="#3478F6" />
+                  </TouchableOpacity>
+                  
+                  <View style={styles.dateDisplay}>
+                    <Text style={styles.dateText}>{formatDate(dueDate)}</Text>
+                  </View>
+                  
+                  <TouchableOpacity 
+                    style={styles.dateAdjustButton} 
+                    onPress={() => adjustDate(1)}
+                  >
+                    <Ionicons name="chevron-forward" size={22} color="#3478F6" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </Animated.View>
+            
+            <Animated.View entering={FadeInUp.duration(300).delay(300)}>
+              <Text style={styles.label}>Due Time</Text>
+              <View style={styles.datePickerContainer}>
+                <View style={styles.timeButtonsRow}>
+                  <View style={styles.timeSection}>
+                    <TouchableOpacity 
+                      style={styles.timeAdjustButton} 
+                      onPress={() => adjustHour(1)}
+                    >
+                      <Ionicons name="chevron-up" size={22} color="#3478F6" />
+                    </TouchableOpacity>
+                    
+                    <Text style={styles.timeText}>
+                      {dueDate.getHours() > 12 ? dueDate.getHours() - 12 : dueDate.getHours() === 0 ? 12 : dueDate.getHours()}
+                    </Text>
+                    
+                    <TouchableOpacity 
+                      style={styles.timeAdjustButton} 
+                      onPress={() => adjustHour(-1)}
+                    >
+                      <Ionicons name="chevron-down" size={22} color="#3478F6" />
+                    </TouchableOpacity>
+                  </View>
+                  
+                  <Text style={styles.timeSeparator}>:</Text>
+                  
+                  <View style={styles.timeSection}>
+                    <TouchableOpacity 
+                      style={styles.timeAdjustButton} 
+                      onPress={() => adjustMinute(5)}
+                    >
+                      <Ionicons name="chevron-up" size={22} color="#3478F6" />
+                    </TouchableOpacity>
+                    
+                    <Text style={styles.timeText}>
+                      {dueDate.getMinutes() < 10 ? `0${dueDate.getMinutes()}` : dueDate.getMinutes()}
+                    </Text>
+                    
+                    <TouchableOpacity 
+                      style={styles.timeAdjustButton} 
+                      onPress={() => adjustMinute(-5)}
+                    >
+                      <Ionicons name="chevron-down" size={22} color="#3478F6" />
+                    </TouchableOpacity>
+                  </View>
+                  
+                  <View style={styles.timeSection}>
+                    <TouchableOpacity 
+                      style={styles.timeAdjustButton} 
+                      onPress={() => {
+                        const newDate = new Date(dueDate);
+                        if (newDate.getHours() >= 12) {
+                          newDate.setHours(newDate.getHours() - 12);
+                        } else {
+                          newDate.setHours(newDate.getHours() + 12);
+                        }
+                        setDueDate(newDate);
+                      }}
+                    >
+                      <Text style={styles.amPmText}>
+                        {dueDate.getHours() >= 12 ? 'PM' : 'AM'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            </Animated.View>
+            
+            <Animated.View entering={FadeInUp.duration(300).delay(400)} style={styles.priorityContainer}>
+              <Text style={styles.label}>Mark as Priority</Text>
+              <Switch
+                value={isPriority}
+                onValueChange={setIsPriority}
+                trackColor={{ false: '#3e3e3e', true: '#2C3DCD' }}
+                thumbColor={isPriority ? '#3478F6' : '#f4f3f4'}
+                ios_backgroundColor="#3e3e3e"
+              />
+            </Animated.View>
+            
+            {/* Add spacing at the bottom for better scroll experience */}
+            <View style={styles.bottomSpacing} />
+          </View>
+        )}
+      />
+      
+      {/* Subject Selection Modal */}
+      <Modal
+        visible={isSubjectsModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsSubjectsModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Subject</Text>
+              <TouchableOpacity onPress={() => setIsSubjectsModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+            
             <View style={styles.segmentedControl}>
               <TouchableOpacity 
                 style={[
                   styles.segmentButton, 
-                  viewMode === 'courses' && styles.segmentButtonActive
+                  subjectSelectionMode === 'recent' && styles.segmentButtonActive
                 ]}
-                onPress={() => setViewMode('courses')}
+                onPress={() => setSubjectSelectionMode('recent')}
               >
                 <Text style={[
                   styles.segmentButtonText,
-                  viewMode === 'courses' && styles.segmentButtonTextActive
-                ]}>Courses</Text>
+                  subjectSelectionMode === 'recent' && styles.segmentButtonTextActive
+                ]}>Recent</Text>
               </TouchableOpacity>
               <TouchableOpacity 
                 style={[
                   styles.segmentButton, 
-                  viewMode === 'periods' && styles.segmentButtonActive
+                  subjectSelectionMode === 'all' && styles.segmentButtonActive
                 ]}
-                onPress={() => setViewMode('periods')}
+                onPress={() => setSubjectSelectionMode('all')}
               >
                 <Text style={[
                   styles.segmentButtonText,
-                  viewMode === 'periods' && styles.segmentButtonTextActive
-                ]}>Periods</Text>
+                  subjectSelectionMode === 'all' && styles.segmentButtonTextActive
+                ]}>All</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[
+                  styles.segmentButton, 
+                  subjectSelectionMode === 'custom' && styles.segmentButtonActive
+                ]}
+                onPress={() => setSubjectSelectionMode('custom')}
+              >
+                <Text style={[
+                  styles.segmentButtonText,
+                  subjectSelectionMode === 'custom' && styles.segmentButtonTextActive
+                ]}>Custom</Text>
               </TouchableOpacity>
             </View>
-          </View>
-          
-          {viewMode === 'courses' ? (
-            <View style={styles.pickerContainer}>
-              {availableCourses.length > 0 ? (
-                <View>
-                  {availableCourses.map((course) => (
-                    <TouchableOpacity
-                      key={course.code}
-                      style={[
-                        styles.courseCard,
-                        courseCode === course.code && styles.courseCardSelected
-                      ]}
-                      onPress={() => {
-                        setCourseCode(course.code);
-                        setCourseName(course.name);
-                      }}
-                    >
-                      <View style={styles.courseInfo}>
-                        <Text style={styles.courseCode}>{course.code}</Text>
-                        <Text style={styles.courseName}>{course.name}</Text>
-                      </View>
-                      {courseCode === course.code && (
-                        <Ionicons name="checkmark-circle" size={24} color="#3478F6" />
-                      )}
-                    </TouchableOpacity>
-                  ))}
-                  <TouchableOpacity
-                    style={styles.newCourseButton}
-                    onPress={() => {
-                      setCourseCode('');
-                      setCourseName('');
-                    }}
+            
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search subjects..."
+              placeholderTextColor="#8A8A8D"
+              value={searchText}
+              onChangeText={setSearchText}
+            />
+            
+            {loadingSubjects ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color="#3478F6" />
+                <Text style={styles.loadingText}>Loading subjects...</Text>
+              </View>
+            ) : filteredSubjects.length > 0 ? (
+              <FlatList
+                data={filteredSubjects}
+                renderItem={renderSubjectItem}
+                keyExtractor={item => item.id}
+                style={styles.subjectsList}
+              />
+            ) : (
+              <View style={styles.noSubjectsContainer}>
+                <Text style={styles.noSubjectsText}>
+                  {subjectSelectionMode === 'custom' 
+                    ? 'No custom subjects found'
+                    : 'No subjects found'}
+                </Text>
+              </View>
+            )}
+            
+            {subjectSelectionMode === 'custom' && (
+              <View style={styles.customInputContainer}>
+                <View style={styles.courseInputRow}>
+                  <TextInput
+                    style={styles.courseInput}
+                    value={courseName}
+                    onChangeText={setCourseName}
+                    placeholder="Enter subject name"
+                    placeholderTextColor="#8A8A8D"
+                  />
+                  <TouchableOpacity 
+                    style={styles.addButton}
+                    onPress={handleAddCustomSubject}
+                    disabled={!courseName}
                   >
-                    <Ionicons name="add-circle-outline" size={20} color="#3478F6" />
-                    <Text style={styles.newCourseText}>Add New Course</Text>
+                    <Text style={styles.addButtonText}>Add</Text>
                   </TouchableOpacity>
                 </View>
-              ) : (
-                <View style={styles.courseInputContainer}>
-                  <View style={styles.courseInputRow}>
-                    <Text style={styles.courseInputLabel}>Course Code:</Text>
-                    <TextInput
-                      style={styles.courseInput}
-                      value={courseCode}
-                      onChangeText={setCourseCode}
-                      placeholder="e.g. MATH101"
-                      placeholderTextColor="#8A8A8D"
-                    />
-                  </View>
-                  <View style={styles.courseInputRow}>
-                    <Text style={styles.courseInputLabel}>Course Name:</Text>
-                    <TextInput
-                      style={styles.courseInput}
-                      value={courseName}
-                      onChangeText={setCourseName}
-                      placeholder="e.g. Calculus"
-                      placeholderTextColor="#8A8A8D"
-                    />
-                  </View>
-                </View>
-              )}
-            </View>
-          ) : (
-            <View style={styles.pickerContainer}>
-              {loadingPeriods ? (
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="small" color="#3478F6" />
-                  <Text style={styles.loadingText}>Loading periods...</Text>
-                </View>
-              ) : (
-                <View>
-                  {uniquePeriods.map((period) => (
-                    <TouchableOpacity
-                      key={period.id}
-                      style={[
-                        styles.periodCard,
-                        selectedPeriodId === period.id && styles.periodCardSelected
-                      ]}
-                      onPress={() => {
-                        setSelectedPeriodId(period.id);
-                        setCourseCode(''); // Clear course when period is selected
-                        setCourseName(period.className);
-                      }}
-                    >
-                      <View style={styles.periodMainInfo}>
-                        <Text style={styles.periodClassName}>{period.className}</Text>
-                        <Text style={styles.periodDetails}>
-                          {period.day}, Period {period.period}
-                        </Text>
-                      </View>
-                      <View style={styles.periodTimeInfo}>
-                        <Text style={styles.periodTime}>{period.time}</Text>
-                        {selectedPeriodId === period.id && (
-                          <Ionicons name="checkmark-circle" size={24} color="#3478F6" />
-                        )}
-                      </View>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-            </View>
-          )}
-          
-          {courseCode === '' && viewMode === 'courses' && (
-            <View style={styles.courseInputContainer}>
-              <View style={styles.courseInputRow}>
-                <Text style={styles.courseInputLabel}>Course Code:</Text>
-                <TextInput
-                  style={styles.courseInput}
-                  value={courseCode}
-                  onChangeText={setCourseCode}
-                  placeholder="e.g. MATH101"
-                  placeholderTextColor="#8A8A8D"
-                />
               </View>
-              <View style={styles.courseInputRow}>
-                <Text style={styles.courseInputLabel}>Course Name:</Text>
-                <TextInput
-                  style={styles.courseInput}
-                  value={courseName}
-                  onChangeText={setCourseName}
-                  placeholder="e.g. Calculus"
-                  placeholderTextColor="#8A8A8D"
-                />
-              </View>
-            </View>
-          )}
-        </Animated.View>
-        
-        <Animated.View entering={FadeInUp.duration(300).delay(250)}>
-          <Text style={styles.label}>Due Date</Text>
-          <View style={styles.datePickerContainer}>
-            <View style={styles.dateButtonsRow}>
-              <TouchableOpacity 
-                style={styles.dateAdjustButton} 
-                onPress={() => adjustDate(-1)}
-              >
-                <Ionicons name="chevron-back" size={22} color="#3478F6" />
-              </TouchableOpacity>
-              
-              <View style={styles.dateDisplay}>
-                <Text style={styles.dateText}>{formatDate(dueDate)}</Text>
-              </View>
-              
-              <TouchableOpacity 
-                style={styles.dateAdjustButton} 
-                onPress={() => adjustDate(1)}
-              >
-                <Ionicons name="chevron-forward" size={22} color="#3478F6" />
-              </TouchableOpacity>
-            </View>
+            )}
           </View>
-        </Animated.View>
-        
-        <Animated.View entering={FadeInUp.duration(300).delay(300)}>
-          <Text style={styles.label}>Due Time</Text>
-          <View style={styles.datePickerContainer}>
-            <View style={styles.timeButtonsRow}>
-              <View style={styles.timeSection}>
-                <TouchableOpacity 
-                  style={styles.timeAdjustButton} 
-                  onPress={() => adjustHour(1)}
-                >
-                  <Ionicons name="chevron-up" size={22} color="#3478F6" />
-                </TouchableOpacity>
-                
-                <Text style={styles.timeText}>
-                  {dueDate.getHours() > 12 ? dueDate.getHours() - 12 : dueDate.getHours() === 0 ? 12 : dueDate.getHours()}
-                </Text>
-                
-                <TouchableOpacity 
-                  style={styles.timeAdjustButton} 
-                  onPress={() => adjustHour(-1)}
-                >
-                  <Ionicons name="chevron-down" size={22} color="#3478F6" />
-                </TouchableOpacity>
-              </View>
-              
-              <Text style={styles.timeSeparator}>:</Text>
-              
-              <View style={styles.timeSection}>
-                <TouchableOpacity 
-                  style={styles.timeAdjustButton} 
-                  onPress={() => adjustMinute(5)}
-                >
-                  <Ionicons name="chevron-up" size={22} color="#3478F6" />
-                </TouchableOpacity>
-                
-                <Text style={styles.timeText}>
-                  {dueDate.getMinutes() < 10 ? `0${dueDate.getMinutes()}` : dueDate.getMinutes()}
-                </Text>
-                
-                <TouchableOpacity 
-                  style={styles.timeAdjustButton} 
-                  onPress={() => adjustMinute(-5)}
-                >
-                  <Ionicons name="chevron-down" size={22} color="#3478F6" />
-                </TouchableOpacity>
-              </View>
-              
-              <View style={styles.timeSection}>
-                <TouchableOpacity 
-                  style={styles.timeAdjustButton} 
-                  onPress={() => {
-                    const newDate = new Date(dueDate);
-                    if (newDate.getHours() >= 12) {
-                      newDate.setHours(newDate.getHours() - 12);
-                    } else {
-                      newDate.setHours(newDate.getHours() + 12);
-                    }
-                    setDueDate(newDate);
-                  }}
-                >
-                  <Text style={styles.amPmText}>
-                    {dueDate.getHours() >= 12 ? 'PM' : 'AM'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Animated.View>
-        
-        <Animated.View entering={FadeInUp.duration(300).delay(400)} style={styles.priorityContainer}>
-          <Text style={styles.label}>Mark as Priority</Text>
-          <Switch
-            value={isPriority}
-            onValueChange={setIsPriority}
-            trackColor={{ false: '#3e3e3e', true: '#2C3DCD' }}
-            thumbColor={isPriority ? '#3478F6' : '#f4f3f4'}
-            ios_backgroundColor="#3e3e3e"
-          />
-        </Animated.View>
-        
-        {/* Add spacing at the bottom for better scroll experience */}
-        <View style={styles.bottomSpacing} />
-      </ScrollView>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -594,10 +618,13 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: '#333333',
+    marginVertical: 12,
   },
   segmentButton: {
+    flex: 1,
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 8,
+    alignItems: 'center',
   },
   segmentButtonActive: {
     backgroundColor: '#3478F6',
@@ -624,48 +651,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#333333',
     overflow: 'hidden',
-  },
-  picker: {
-    color: '#FFFFFF',
-    backgroundColor: 'transparent',
-  },
-  pickerItem: {
-    fontSize: 16,
-    height: 120,
-    color: '#FFFFFF',
-  },
-  courseInputContainer: {
-    padding: 12,
-  },
-  courseInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  courseInputLabel: {
-    width: 100,
-    color: '#FFFFFF',
-    fontSize: 14,
-  },
-  courseInput: {
-    flex: 1,
-    color: '#FFFFFF',
-    fontSize: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333333',
-    paddingVertical: 4,
-  },
-  bottomSpacing: {
-    height: 40,
+    minHeight: 100,
+    maxHeight: 300,
   },
   loadingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#1A1A1A',
     borderRadius: 8,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#333333',
+    padding: 20,
+    justifyContent: 'center',
   },
   loadingText: {
     color: '#8A8A8D',
@@ -724,7 +719,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 16,
   },
-  courseCard: {
+  subjectCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -732,65 +727,135 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#333333',
   },
-  courseCardSelected: {
+  subjectCardSelected: {
     backgroundColor: 'rgba(52, 120, 246, 0.1)',
   },
-  courseInfo: {
+  subjectMainInfo: {
     flex: 1,
-  },
-  courseCode: {
-    color: '#3478F6',
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  courseName: {
-    color: '#FFFFFF',
-    fontSize: 14,
-  },
-  newCourseButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    justifyContent: 'center',
   },
-  newCourseText: {
-    color: '#3478F6',
+  subjectName: {
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '500',
+  },
+  customBadge: {
+    backgroundColor: '#3478F6',
+    color: '#FFFFFF',
+    fontSize: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    overflow: 'hidden',
     marginLeft: 8,
   },
-  periodCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333333',
+  customBadgeSmall: {
+    backgroundColor: '#3478F6',
+    color: '#FFFFFF',
+    fontSize: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginLeft: 8,
   },
-  periodCardSelected: {
-    backgroundColor: 'rgba(52, 120, 246, 0.1)',
-  },
-  periodMainInfo: {
+  subjectsList: {
     flex: 1,
   },
-  periodClassName: {
-    color: '#3478F6',
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  periodDetails: {
+  searchInput: {
+    backgroundColor: '#242424',
     color: '#FFFFFF',
-    fontSize: 14,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#333333',
+    marginBottom: 8,
   },
-  periodTimeInfo: {
+  noSubjectsContainer: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+  },
+  noSubjectsText: {
+    color: '#8A8A8D',
+    fontSize: 16,
+  },
+  customInputContainer: {
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#333333',
+  },
+  courseInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  periodTime: {
+  courseInput: {
+    flex: 1,
+    color: '#FFFFFF',
+    fontSize: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333333',
+    paddingVertical: 8,
+    marginRight: 10,
+  },
+  addButton: {
+    backgroundColor: '#3478F6',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  addButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  bottomSpacing: {
+    height: 40,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#141414',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    height: '70%',
+    padding: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  subjectSelector: {
+    backgroundColor: '#1A1A1A',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#333333',
+    padding: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  selectedSubjectDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  selectedSubjectText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+  },
+  subjectPlaceholder: {
     color: '#8A8A8D',
-    fontSize: 14,
-    marginRight: 8,
+    fontSize: 16,
   }
 }); 
