@@ -20,23 +20,27 @@ export default function SegmentedControl({
   return (
     <View style={styles.container}>
       {segments.map((segment, index) => (
-        <TouchableOpacity
-          key={index}
-          style={[
-            styles.segment,
-            index === selectedIndex && styles.selectedSegment,
-          ]}
-          onPress={() => onChange(index)}
-        >
-          <Text
+        <React.Fragment key={index}>
+          {index > 0 && (
+            <View style={styles.separator} />
+          )}
+          <TouchableOpacity
             style={[
-              styles.segmentText,
-              index === selectedIndex ? styles.selectedSegmentText : null,
+              styles.segment,
+              index === selectedIndex && styles.selectedSegment,
             ]}
+            onPress={() => onChange(index)}
           >
-            {segment}
-          </Text>
-        </TouchableOpacity>
+            <Text
+              style={[
+                styles.segmentText,
+                index === selectedIndex ? styles.selectedSegmentText : null,
+              ]}
+            >
+              {segment}
+            </Text>
+          </TouchableOpacity>
+        </React.Fragment>
       ))}
     </View>
   );
@@ -49,6 +53,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#1A1A1A',
     marginTop: 4,
+    position: 'relative',
   },
   segment: {
     flex: 1,
@@ -67,5 +72,11 @@ const styles = StyleSheet.create({
   selectedSegmentText: {
     color: '#FFFFFF',
     fontWeight: '700',
+  },
+  separator: {
+    width: 1,
+    backgroundColor: '#333333',
+    alignSelf: 'stretch',
+    marginVertical: 8,
   },
 }); 
