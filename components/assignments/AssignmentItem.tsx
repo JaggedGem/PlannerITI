@@ -16,11 +16,20 @@ import { Period } from '../../services/scheduleService';
 interface AssignmentItemProps {
   assignment: Assignment;
   onToggle: () => void;
+  onDelete?: () => void;
+  showDueDate?: boolean;
+  dueDateLabel?: string;
 }
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-export default function AssignmentItem({ assignment, onToggle }: AssignmentItemProps) {
+export default function AssignmentItem({ 
+  assignment, 
+  onToggle, 
+  onDelete, 
+  showDueDate = false,
+  dueDateLabel 
+}: AssignmentItemProps) {
   // State for period information
   const [period, setPeriod] = useState<Period | null>(null);
   
@@ -32,7 +41,7 @@ export default function AssignmentItem({ assignment, onToggle }: AssignmentItemP
   // Update check animation when completion status changes
   React.useEffect(() => {
     checkScale.value = withTiming(assignment.isCompleted ? 1 : 0, {
-      duration: 300,
+      duration: 150,
     });
   }, [assignment.isCompleted, checkScale]);
   
@@ -75,12 +84,12 @@ export default function AssignmentItem({ assignment, onToggle }: AssignmentItemP
   // Press handlers for interactive feedback
   const handlePressIn = () => {
     scale.value = withSpring(0.98, { damping: 12, stiffness: 400 });
-    opacity.value = withTiming(0.9, { duration: 150 });
+    opacity.value = withTiming(0.9, { duration: 100 });
   };
   
   const handlePressOut = () => {
     scale.value = withSpring(1, { damping: 15, stiffness: 400 });
-    opacity.value = withTiming(1, { duration: 150 });
+    opacity.value = withTiming(1, { duration: 100 });
   };
   
   // Determine priority styles
@@ -130,6 +139,15 @@ export default function AssignmentItem({ assignment, onToggle }: AssignmentItemP
               </Text>
             </View>
           )}
+          
+          {showDueDate && dueDateLabel && (
+            <View style={styles.dueDateContainer}>
+              <Ionicons name="calendar-outline" size={12} color="#8A8A8D" style={styles.periodIcon} />
+              <Text style={styles.dueDateText}>
+                Due: {dueDateLabel}
+              </Text>
+            </View>
+          )}
         </View>
       </View>
       
@@ -140,6 +158,16 @@ export default function AssignmentItem({ assignment, onToggle }: AssignmentItemP
           </View>
         )}
         <Text style={styles.timeText}>{formattedTime}</Text>
+        
+        {onDelete && (
+          <Pressable 
+            style={styles.deleteButton}
+            onPress={onDelete}
+            hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
+          >
+            <Ionicons name="trash-outline" size={16} color="#FF3B30" />
+          </Pressable>
+        )}
       </View>
     </AnimatedPressable>
   );
@@ -218,6 +246,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#8A8A8D',
   },
+  dueDateContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  dueDateText: {
+    fontSize: 12,
+    color: '#8A8A8D',
+    fontWeight: '500',
+  },
   rightSection: {
     alignItems: 'flex-end',
     marginLeft: 12,
@@ -234,5 +272,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,
+  },
+  deleteButton: {
+    marginTop: 8,
+    padding: 2,
   },
 }); 

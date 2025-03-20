@@ -22,6 +22,7 @@ type DaySectionProps = {
   date: string;
   assignments: Assignment[];
   onToggleAssignment: (id: string) => void;
+  onDeleteAssignment?: (id: string) => void;
 };
 
 interface EnhancedAssignment extends Assignment {
@@ -33,6 +34,20 @@ const getDayColor = (title: string): [string, string] => {
     return ['#4A76F1', '#2C3DCD'] as [string, string];
   } else if (title.includes('Tomorrow')) {
     return ['#614FE0', '#4A2CD0'] as [string, string];
+  } else if (title.startsWith('Monday')) {
+    return ['#3A6073', '#16222A'] as [string, string];
+  } else if (title.startsWith('Tuesday')) {
+    return ['#3F5C6C', '#203A43'] as [string, string];
+  } else if (title.startsWith('Wednesday')) {
+    return ['#5B5F97', '#373860'] as [string, string];
+  } else if (title.startsWith('Thursday')) {
+    return ['#4B6073', '#252f3b'] as [string, string];
+  } else if (title.startsWith('Friday')) {
+    return ['#526175', '#2E3951'] as [string, string];
+  } else if (title.startsWith('Saturday')) {
+    return ['#755B69', '#3F2E38'] as [string, string];
+  } else if (title.startsWith('Sunday')) {
+    return ['#5E4266', '#39274A'] as [string, string];
   } else {
     return ['#333440', '#1F1F28'] as [string, string];
   }
@@ -40,7 +55,7 @@ const getDayColor = (title: string): [string, string] => {
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-export default function DaySection({ title, date, assignments, onToggleAssignment }: DaySectionProps) {
+export default function DaySection({ title, date, assignments, onToggleAssignment, onDeleteAssignment }: DaySectionProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const rotation = useSharedValue(0);
   const [enhancedAssignments, setEnhancedAssignments] = useState<EnhancedAssignment[]>([]);
@@ -74,7 +89,9 @@ export default function DaySection({ title, date, assignments, onToggleAssignmen
   // Group assignments by course and sort by period if available
   const groupedByCourse: { [key: string]: EnhancedAssignment[] } = {};
   enhancedAssignments.forEach(assignment => {
-    const courseCode = assignment.courseCode;
+    // Use a default value if courseCode is empty
+    const courseCode = assignment.courseCode || `uncategorized-${assignment.id}`;
+    
     if (!groupedByCourse[courseCode]) {
       groupedByCourse[courseCode] = [];
     }
@@ -105,9 +122,9 @@ export default function DaySection({ title, date, assignments, onToggleAssignmen
   const toggleCollapse = () => {
     setIsCollapsed(!isCollapsed);
     rotation.value = withSequence(
-      withTiming(rotation.value + 0.05, { duration: 100 }),
+      withTiming(rotation.value + 0.05, { duration: 50 }),
       withTiming(isCollapsed ? 0 : 0.5, { 
-        duration: 300,
+        duration: 150,
         easing: Easing.bezier(0.25, 0.1, 0.25, 1)
       })
     );
@@ -124,7 +141,7 @@ export default function DaySection({ title, date, assignments, onToggleAssignmen
   return (
     <Animated.View 
       style={styles.container}
-      layout={Layout.springify().mass(0.8)}
+      layout={Layout.springify().mass(0.5)}
     >
       <AnimatedPressable 
         onPress={toggleCollapse}
@@ -157,22 +174,24 @@ export default function DaySection({ title, date, assignments, onToggleAssignmen
       {!isCollapsed && (
         <Animated.View 
           style={styles.content}
-          entering={FadeIn.duration(300)}
-          exiting={FadeOut.duration(200)}
-          layout={Layout.springify()}
+          entering={FadeIn.duration(150)}
+          exiting={FadeOut.duration(100)}
+          layout={Layout.springify().mass(0.5)}
         >
           {Object.entries(groupedByCourse).map(([courseCode, courseAssignments], index) => (
             <Animated.View
               key={courseCode}
-              entering={FadeIn.duration(300).delay(index * 100)}
-              layout={Layout.springify()}
+              entering={FadeIn.duration(150).delay(index * 50)}
+              layout={Layout.springify().mass(0.5)}
               style={styles.courseSection}
             >
               <CourseSection
                 courseCode={courseCode}
-                courseName={courseAssignments[0].courseName}
+                courseName={courseAssignments[0].courseName || 'Uncategorized'}
                 assignments={courseAssignments}
                 onToggleAssignment={onToggleAssignment}
+                onDeleteAssignment={onDeleteAssignment}
+                showDueDate={false}
               />
             </Animated.View>
           ))}

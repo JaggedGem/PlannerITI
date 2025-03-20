@@ -9,12 +9,41 @@ import FloatingActionButton from '../../components/assignments/FloatingActionBut
 import { 
   getAssignments, 
   toggleAssignmentCompletion, 
+  deleteAssignment,
   Assignment, 
   groupAssignmentsByDate,
-  AssignmentGroup
+  AssignmentGroup,
+  getCourses
 } from '../../utils/assignmentStorage';
 import { useCallback } from 'react';
-import Animated, { FadeInDown, Layout } from 'react-native-reanimated';
+import Animated, { FadeInDown, Layout, FadeOut } from 'react-native-reanimated';
+import CourseSection from '../../components/assignments/CourseSection';
+
+// Function to group assignments by course
+const groupAssignmentsByCourse = (assignments: Assignment[]): {[key: string]: Assignment[]} => {
+  const groupedAssignments: {[key: string]: Assignment[]} = {};
+  
+  assignments.forEach(assignment => {
+    // Handle assignments with empty course codes
+    const courseKey = assignment.courseCode || `uncategorized-${assignment.id}`;
+    const courseName = assignment.courseName || 'Uncategorized';
+    
+    if (!groupedAssignments[courseKey]) {
+      groupedAssignments[courseKey] = [];
+    }
+    
+    groupedAssignments[courseKey].push(assignment);
+  });
+  
+  // Sort each course's assignments by due date
+  Object.keys(groupedAssignments).forEach(key => {
+    groupedAssignments[key].sort((a, b) => 
+      new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
+    );
+  });
+  
+  return groupedAssignments;
+};
 
 export default function Assignments() {
   const colorScheme = useColorScheme() ?? 'light';
@@ -23,7 +52,9 @@ export default function Assignments() {
   
   const [selectedSegmentIndex, setSelectedSegmentIndex] = useState(0);
   const [assignmentGroups, setAssignmentGroups] = useState<AssignmentGroup[]>([]);
+  const [courseGroups, setCourseGroups] = useState<{[key: string]: Assignment[]}>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [allAssignments, setAllAssignments] = useState<Assignment[]>([]);
   
   const segments = ['Due date', 'Classes', 'Priority'];
   
@@ -32,19 +63,27 @@ export default function Assignments() {
     setIsLoading(true);
     try {
       const assignments = await getAssignments();
+      setAllAssignments(assignments);
+      
       let filteredAssignments = [...assignments];
       
       // Apply filtering based on selected segment
       if (selectedSegmentIndex === 2) {
         // Filter by priority
         filteredAssignments = assignments.filter(a => a.isPriority);
+        
+        // Group by date for priority view
+        const groups = groupAssignmentsByDate(filteredAssignments);
+        setAssignmentGroups(groups);
       } else if (selectedSegmentIndex === 1) {
-        // Sort by class
-        filteredAssignments.sort((a, b) => a.courseCode.localeCompare(b.courseCode));
+        // Group by class for class view
+        const grouped = groupAssignmentsByCourse(assignments);
+        setCourseGroups(grouped);
+      } else {
+        // Group by date for default view
+        const groups = groupAssignmentsByDate(filteredAssignments);
+        setAssignmentGroups(groups);
       }
-      
-      const groups = groupAssignmentsByDate(filteredAssignments);
-      setAssignmentGroups(groups);
     } catch (error) {
       console.error('Error loading assignments:', error);
     } finally {
@@ -72,13 +111,163 @@ export default function Assignments() {
   
   // Toggle assignment completion
   const handleToggleAssignment = async (id: string) => {
+    // Update local state first for instant UI feedback
+    const updatedAssignments = allAssignments.map(a => 
+      a.id === id ? {...a, isCompleted: !a.isCompleted} : a
+    );
+    setAllAssignments(updatedAssignments);
+    
+    // Apply filtering based on selected segment
+    if (selectedSegmentIndex === 2) {
+      // Filter by priority
+      const filteredAssignments = updatedAssignments.filter(a => a.isPriority);
+      const groups = groupAssignmentsByDate(filteredAssignments);
+      setAssignmentGroups(groups);
+    } else if (selectedSegmentIndex === 1) {
+      // Group by class
+      const grouped = groupAssignmentsByCourse(updatedAssignments);
+      setCourseGroups(grouped);
+    } else {
+      // Group by date
+      const groups = groupAssignmentsByDate(updatedAssignments);
+      setAssignmentGroups(groups);
+    }
+    
+    // Then update the database
     await toggleAssignmentCompletion(id);
-    loadAssignments();
+  };
+  
+  // Delete assignment
+  const handleDeleteAssignment = async (id: string) => {
+    // Update local state first for instant UI feedback
+    const updatedAssignments = allAssignments.filter(a => a.id !== id);
+    setAllAssignments(updatedAssignments);
+    
+    // Apply filtering based on selected segment
+    if (selectedSegmentIndex === 2) {
+      // Filter by priority
+      const filteredAssignments = updatedAssignments.filter(a => a.isPriority);
+      const groups = groupAssignmentsByDate(filteredAssignments);
+      setAssignmentGroups(groups);
+    } else if (selectedSegmentIndex === 1) {
+      // Group by class
+      const grouped = groupAssignmentsByCourse(updatedAssignments);
+      setCourseGroups(grouped);
+    } else {
+      // Group by date
+      const groups = groupAssignmentsByDate(updatedAssignments);
+      setAssignmentGroups(groups);
+    }
+    
+    // Then update the database
+    await deleteAssignment(id);
   };
   
   // Navigate to new assignment screen
   const handleAddAssignment = () => {
     router.push('/new-assignment');
+  };
+  
+  // Render content based on selected segment
+  const renderContent = () => {
+    if (isLoading) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#3478F6" />
+          <Text style={styles.loadingText}>Loading assignments...</Text>
+        </View>
+      );
+    }
+    
+    // Classes view (grouped by course)
+    if (selectedSegmentIndex === 1) {
+      const courseKeys = Object.keys(courseGroups);
+      
+      if (courseKeys.length === 0) {
+        return (
+          <Animated.View 
+            style={styles.emptyContainer}
+            entering={FadeInDown.duration(150)}
+          >
+            <Text style={styles.emptyText}>
+              No assignments found
+            </Text>
+            <Text style={styles.emptySubtext}>
+              Tap the + button to add a new assignment
+            </Text>
+          </Animated.View>
+        );
+      }
+      
+      return (
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {courseKeys.map((courseCode, index) => (
+            <Animated.View
+              key={`course-${courseCode}`}
+              entering={FadeInDown.duration(150).delay(index * 50)}
+              exiting={FadeOut.duration(100)}
+              layout={Layout.springify().mass(0.5)}
+              style={styles.courseContainer}
+            >
+              <CourseSection
+                courseCode={courseCode}
+                courseName={courseGroups[courseCode][0].courseName || 'Uncategorized'}
+                assignments={courseGroups[courseCode]}
+                onToggleAssignment={handleToggleAssignment}
+                onDeleteAssignment={handleDeleteAssignment}
+                showDueDate={true}
+              />
+            </Animated.View>
+          ))}
+        </ScrollView>
+      );
+    }
+    
+    // Due date or Priority view (grouped by date)
+    if (assignmentGroups.length === 0) {
+      return (
+        <Animated.View 
+          style={styles.emptyContainer}
+          entering={FadeInDown.duration(150)}
+        >
+          <Text style={styles.emptyText}>
+            No assignments found
+          </Text>
+          <Text style={styles.emptySubtext}>
+            Tap the + button to add a new assignment
+          </Text>
+        </Animated.View>
+      );
+    }
+    
+    return (
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {assignmentGroups.map((group, index) => (
+          <Animated.View
+            key={`${group.date}-${index}`}
+            entering={FadeInDown.duration(150).delay(index * 50)}
+            exiting={FadeOut.duration(100)}
+            layout={Layout.springify().mass(0.5)}
+          >
+            <DaySection
+              title={group.title}
+              date={group.date}
+              assignments={group.assignments}
+              onToggleAssignment={handleToggleAssignment}
+              onDeleteAssignment={handleDeleteAssignment}
+            />
+          </Animated.View>
+        ))}
+      </ScrollView>
+    );
   };
 
   return (
@@ -98,48 +287,7 @@ export default function Assignments() {
       </View>
       
       <View style={styles.contentContainer}>
-        {isLoading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#3478F6" />
-            <Text style={styles.loadingText}>Loading assignments...</Text>
-          </View>
-        ) : (
-          <ScrollView
-            style={styles.scrollView}
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
-          >
-            {assignmentGroups.length > 0 ? (
-              assignmentGroups.map((group, index) => (
-                <Animated.View
-                  key={index}
-                  entering={FadeInDown.duration(300).delay(index * 100)}
-                  layout={Layout.springify()}
-                >
-                  <DaySection
-                    title={group.title}
-                    date={group.date}
-                    assignments={group.assignments}
-                    onToggleAssignment={handleToggleAssignment}
-                  />
-                </Animated.View>
-              ))
-            ) : (
-              <Animated.View 
-                style={styles.emptyContainer}
-                entering={FadeInDown.duration(300)}
-              >
-                <Text style={styles.emptyText}>
-                  No assignments found
-                </Text>
-                <Text style={styles.emptySubtext}>
-                  Tap the + button to add a new assignment
-                </Text>
-              </Animated.View>
-            )}
-          </ScrollView>
-        )}
-        
+        {renderContent()}
         <FloatingActionButton onPress={handleAddAssignment} />
       </View>
     </SafeAreaView>
@@ -209,5 +357,8 @@ const styles = StyleSheet.create({
   emptySubtext: {
     fontSize: 14,
     color: '#8A8A8D',
+  },
+  courseContainer: {
+    marginBottom: 8,
   },
 });
