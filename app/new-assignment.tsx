@@ -154,9 +154,16 @@ export default function NewAssignmentScreen() {
         // Get schedule for this day
         const daySchedule = scheduleService.getScheduleForDay(scheduleData, dayName, searchDate);
         
-        // Find the first period for this subject
+        // Check if this is an even or odd week
+        const isEvenWeek = scheduleService.isEvenWeek(searchDate);
+        
+        // Find the first period for this subject that matches both:
+        // 1. The correct subject name
+        // 2. Either has no isEvenWeek property (applies to both weeks), 
+        //    or its isEvenWeek property matches the current week's type
         const subjectPeriod = daySchedule.find(period => 
           period.className === subject.name && 
+          (period.isEvenWeek === undefined || period.isEvenWeek === isEvenWeek) &&
           // If we're looking at today, only include periods that haven't started yet
           (i > 0 || (
             period.startTime && 
