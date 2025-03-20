@@ -94,8 +94,64 @@ export default function NewAssignmentScreen() {
   
   const updateFilteredSubjects = (allSubjects: Subject[], mode: string) => {
     if (mode === 'recent') {
-      // Show recent subjects (first 5)
+      // Get current day or Friday if weekend
+      const today = new Date();
+      const dayIndex = today.getDay(); // 0 = Sunday, 6 = Saturday
+      
+      // If it's weekend, use Friday's schedule
+      const targetDayIndex = (dayIndex === 0 || dayIndex === 6) ? 5 : dayIndex;
+      
+      // Convert day index to day name
+      const dayName = targetDayIndex === 1 ? 'monday' :
+                      targetDayIndex === 2 ? 'tuesday' :
+                      targetDayIndex === 3 ? 'wednesday' :
+                      targetDayIndex === 4 ? 'thursday' :
+                      targetDayIndex === 5 ? 'friday' : 'monday'; // Default to Monday
+      
+      // Get subjects for the current day asynchronously
+      const getTodaySubjects = async () => {
+        try {
+          // Get schedule data
+          const scheduleData = await scheduleService.getClassSchedule();
+          
+          // Check if this is an even or odd week
+          const isEvenWeek = scheduleService.isEvenWeek(today);
+          
+          // Get today's schedule
+          const todaySchedule = scheduleService.getScheduleForDay(scheduleData, dayName, today);
+          
+          // Extract unique subjects from today's schedule, considering week type
+          const todaySubjectNames = new Set<string>();
+          todaySchedule.forEach(period => {
+            // Only include periods that are for all weeks or match the current week type
+            if (period.className && (period.isEvenWeek === undefined || period.isEvenWeek === isEvenWeek)) {
+              todaySubjectNames.add(period.className);
+            }
+          });
+          
+          // Filter subjects that are in today's schedule
+          const todaySubjects = allSubjects.filter(subject => 
+            todaySubjectNames.has(subject.name)
+          );
+          
+          // If no subjects found for today, show first 5
+          if (todaySubjects.length === 0) {
+            setFilteredSubjects(allSubjects.slice(0, 5));
+          } else {
+            setFilteredSubjects(todaySubjects);
+          }
+        } catch (error) {
+          console.error('Error getting today subjects:', error);
+          // Fallback to first 5 subjects
+          setFilteredSubjects(allSubjects.slice(0, 5));
+        }
+      };
+      
+      // Initial set to avoid delay
       setFilteredSubjects(allSubjects.slice(0, 5));
+      
+      // Update with today's subjects
+      getTodaySubjects();
     } else if (mode === 'all') {
       // Show all subjects
       setFilteredSubjects(allSubjects);
@@ -126,12 +182,12 @@ export default function NewAssignmentScreen() {
       // Get the schedule data for the current group
       const scheduleData = await scheduleService.getClassSchedule();
       
-      // Get today's date and the next 7 days to search for upcoming periods
+      // Get today's date and the next 14 days to search for upcoming periods (extended to handle bi-weekly classes)
       const today = new Date();
       let foundNextPeriod = false;
       
-      // Search through the next 7 days to find the next period for this subject
-      for (let i = 0; i < 7; i++) {
+      // Search through the next 14 days to find the next period for this subject
+      for (let i = 0; i <= 14; i++) {
         const searchDate = new Date(today);
         searchDate.setDate(today.getDate() + i);
         
@@ -195,18 +251,20 @@ export default function NewAssignmentScreen() {
         }
       }
       
-      // If no next period was found in the next 7 days
+      // If no next period was found in the next 14 days
       if (!foundNextPeriod) {
         // Create a default due date (today + 2 days)
         const defaultDate = new Date();
         defaultDate.setDate(defaultDate.getDate() + 2);
         defaultDate.setHours(10, 30, 0, 0);
-        
-        setNextPeriodInfo({
-          day: "No upcoming classes found",
-          time: "10:30 AM"
-        });
         setDueDate(defaultDate);
+        
+        // Disable "Use next period" and show advanced options instead
+        setUseNextPeriod(false);
+        setShowAdvancedOptions(true);
+        
+        // Set next period info to null to indicate no period was found
+        setNextPeriodInfo(null);
       }
     } catch (error) {
       console.error('Error getting next period:', error);
@@ -216,10 +274,12 @@ export default function NewAssignmentScreen() {
       fallbackDate.setHours(10, 30, 0, 0);
       setDueDate(fallbackDate);
       
-      setNextPeriodInfo({
-        day: "Next class",
-        time: "10:30 AM"
-      });
+      // Disable "Use next period" and show advanced options instead
+      setUseNextPeriod(false);
+      setShowAdvancedOptions(true);
+      
+      // Set next period info to null
+      setNextPeriodInfo(null);
     } finally {
       setLoadingNextPeriod(false);
     }
@@ -468,15 +528,31 @@ export default function NewAssignmentScreen() {
             {selectedSubjectId && (
               <Animated.View entering={FadeInUp.duration(300).delay(200)} style={styles.nextPeriodContainer}>
                 <View style={styles.nextPeriodHeader}>
-                  <Text style={styles.label}>Use Next Period</Text>
+                  <Text style={[styles.label, !nextPeriodInfo && styles.labelDisabled]}>Use Next Period</Text>
                   <Switch
                     value={useNextPeriod}
                     onValueChange={toggleNextPeriod}
-                    trackColor={{ false: '#3e3e3e', true: '#2C3DCD' }}
-                    thumbColor={useNextPeriod ? '#3478F6' : '#f4f3f4'}
-                    ios_backgroundColor="#3e3e3e"
+                    trackColor={{ 
+                      false: !nextPeriodInfo ? '#222222' : '#3e3e3e', 
+                      true: !nextPeriodInfo ? '#444444' : '#2C3DCD' 
+                    }}
+                    thumbColor={!nextPeriodInfo 
+                      ? '#777777' 
+                      : useNextPeriod ? '#3478F6' : '#f4f3f4'}
+                    ios_backgroundColor={!nextPeriodInfo ? '#222222' : '#3e3e3e'}
+                    disabled={!nextPeriodInfo}
+                    style={!nextPeriodInfo ? {opacity: 0.5} : {}}
                   />
                 </View>
+                
+                {!nextPeriodInfo && selectedSubjectId && (
+                  <View style={styles.warningContainer}>
+                    <Ionicons name="alert-circle" size={16} color="#FFA500" />
+                    <Text style={styles.warningText}>
+                      No upcoming classes found for {selectedSubject?.name || "this subject"} in the next two weeks.
+                    </Text>
+                  </View>
+                )}
                 
                 {useNextPeriod && (
                   <View style={styles.nextPeriodInfo}>
@@ -491,7 +567,7 @@ export default function NewAssignmentScreen() {
                       </Text>
                     ) : (
                       <Text style={styles.nextPeriodText}>
-                        No upcoming classes found. Default due date set.
+                        No upcoming classes found. Please set a custom due date below.
                       </Text>
                     )}
                   </View>
@@ -1118,5 +1194,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 4,
+  },
+  labelDisabled: {
+    color: '#777777',
+  },
+  warningContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 8,
+    paddingBottom: 4,
+    borderTopWidth: 1,
+    borderTopColor: '#333333',
+    marginTop: 8,
+  },
+  warningText: {
+    color: '#FFA500',
+    fontSize: 13,
+    marginLeft: 6,
+    flex: 1,
   },
 }); 
