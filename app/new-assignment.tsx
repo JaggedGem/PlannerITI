@@ -12,14 +12,96 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Modal
+  Modal,
+  Animated as RNAnimated
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { addAssignment } from '../utils/assignmentStorage';
 import { scheduleService, DAYS_MAP, Subject } from '../services/scheduleService';
-import Animated, { FadeInUp } from 'react-native-reanimated';
+import Animated, { 
+  FadeInUp, 
+  FadeOutDown, 
+  FadeIn, 
+  FadeOut,
+  Layout,
+  SlideInRight,
+  SlideOutLeft
+} from 'react-native-reanimated';
+
+// Add this custom toggle component at the top level, before the NewAssignmentScreen function
+const CustomToggle = ({ 
+  value, 
+  onValueChange, 
+  disabled = false, 
+  size = 'medium' 
+}: { 
+  value: boolean; 
+  onValueChange: (value: boolean) => void; 
+  disabled?: boolean;
+  size?: 'small' | 'medium';
+}) => {
+  const animatedValue = React.useRef(new RNAnimated.Value(value ? 1 : 0)).current;
+  
+  React.useEffect(() => {
+    RNAnimated.timing(animatedValue, {
+      toValue: value ? 1 : 0,
+      duration: 200,
+      useNativeDriver: false,
+    }).start();
+  }, [value]);
+  
+  const trackWidth = size === 'small' ? 40 : 50;
+  const trackHeight = size === 'small' ? 22 : 28;
+  const thumbSize = size === 'small' ? 18 : 24;
+  const thumbMargin = (trackHeight - thumbSize) / 2;
+  
+  const thumbPosition = animatedValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: [thumbMargin, trackWidth - thumbSize - thumbMargin]
+  });
+  
+  const trackColor = animatedValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: disabled ? ['#222222', '#444444'] : ['#2A2A2A', '#2C3DCD']
+  });
+  
+  return (
+    <TouchableOpacity 
+      activeOpacity={0.8}
+      onPress={() => !disabled && onValueChange(!value)}
+      style={{ opacity: disabled ? 0.5 : 1 }}
+    >
+      <RNAnimated.View 
+        style={{
+          width: trackWidth,
+          height: trackHeight,
+          borderRadius: trackHeight / 2,
+          backgroundColor: trackColor,
+          justifyContent: 'center',
+          borderWidth: 1,
+          borderColor: value ? '#2C3DCD' : '#4D4D4D',
+        }}
+      >
+        <RNAnimated.View 
+          style={{
+            width: thumbSize,
+            height: thumbSize,
+            borderRadius: thumbSize / 2,
+            backgroundColor: disabled ? '#777777' : value ? '#2C3DCD' : '#f4f3f4',
+            transform: [{ translateX: thumbPosition }],
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.2,
+            shadowRadius: 1,
+            elevation: 2,
+          }}
+        />
+      </RNAnimated.View>
+    </TouchableOpacity>
+  );
+};
 
 export default function NewAssignmentScreen() {
   // Form state
@@ -101,7 +183,7 @@ export default function NewAssignmentScreen() {
             const startTimeInMinutes = startHour * 60 + startMinute;
             const endTimeInMinutes = endHour * 60 + endMinute;
             
-            // Check if this period is currently in progress or we're just after it (within 15 minutes)
+            // Check if this period is currently in progress or we're just after it (within 10 minutes)
             if ((currentTimeInMinutes >= startTimeInMinutes && currentTimeInMinutes <= endTimeInMinutes) ||
                 (currentTimeInMinutes > endTimeInMinutes && currentTimeInMinutes <= endTimeInMinutes + 10)) {
               targetPeriod = period;
@@ -568,7 +650,7 @@ export default function NewAssignmentScreen() {
         )}
       </View>
       {selectedSubjectId === item.id && (
-        <Ionicons name="checkmark-circle" size={24} color="#3478F6" />
+        <Ionicons name="checkmark-circle" size={24} color="#2C3DCD" />
       )}
     </TouchableOpacity>
   );
@@ -591,7 +673,7 @@ export default function NewAssignmentScreen() {
             style={[styles.saveButton, (!title || !courseName) && styles.saveButtonDisabled]}
             disabled={!title || !courseName}
           >
-            <Text style={styles.saveButtonText}>Save</Text>
+            <Text style={[styles.saveButtonText, (!title || !courseName) && styles.saveButtonTextDisabled]}>Save</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -652,19 +734,10 @@ export default function NewAssignmentScreen() {
               <Animated.View entering={FadeInUp.duration(300).delay(200)} style={styles.nextPeriodContainer}>
                 <View style={styles.nextPeriodHeader}>
                   <Text style={[styles.label, !nextPeriodInfo && styles.labelDisabled]}>Use Next Period</Text>
-                  <Switch
+                  <CustomToggle
                     value={useNextPeriod}
                     onValueChange={toggleNextPeriod}
-                    trackColor={{ 
-                      false: !nextPeriodInfo ? '#222222' : '#3e3e3e', 
-                      true: !nextPeriodInfo ? '#444444' : '#2C3DCD' 
-                    }}
-                    thumbColor={!nextPeriodInfo 
-                      ? '#777777' 
-                      : useNextPeriod ? '#3478F6' : '#f4f3f4'}
-                    ios_backgroundColor={!nextPeriodInfo ? '#222222' : '#3e3e3e'}
                     disabled={!nextPeriodInfo}
-                    style={!nextPeriodInfo ? {opacity: 0.5} : {}}
                   />
                 </View>
                 
@@ -678,10 +751,15 @@ export default function NewAssignmentScreen() {
                 )}
                 
                 {useNextPeriod && (
-                  <View style={styles.nextPeriodInfo}>
+                  <Animated.View 
+                    entering={FadeIn.duration(200)} 
+                    exiting={FadeOut.duration(200)}
+                    layout={Layout.springify()}
+                    style={styles.nextPeriodInfo}
+                  >
                     {loadingNextPeriod ? (
                       <View style={styles.loadingNextPeriod}>
-                        <ActivityIndicator size="small" color="#3478F6" />
+                        <ActivityIndicator size="small" color="#2C3DCD" />
                         <Text style={styles.nextPeriodText}>Finding next class period...</Text>
                       </View>
                     ) : nextPeriodInfo ? (
@@ -694,15 +772,19 @@ export default function NewAssignmentScreen() {
                         No upcoming classes found. Please set a custom due date below.
                       </Text>
                     )}
-                  </View>
+                  </Animated.View>
                 )}
               </Animated.View>
             )}
             
             {/* Advanced Options Panel (Due Date & Time) */}
             {!useNextPeriod && (
-              <>
-                <Animated.View entering={FadeInUp.duration(300).delay(300)}>
+              <Animated.View 
+                entering={FadeInUp.duration(200)}
+                exiting={FadeOutDown.duration(200)}
+                layout={Layout.springify()}
+              >
+                <Animated.View entering={FadeInUp.duration(200).delay(50)}>
                   <Text style={styles.label}>Due Date</Text>
                   <View style={styles.datePickerContainer}>
                     <View style={styles.dateButtonsRow}>
@@ -710,7 +792,7 @@ export default function NewAssignmentScreen() {
                         style={styles.dateAdjustButton} 
                         onPress={() => adjustDate(-1)}
                       >
-                        <Ionicons name="chevron-back" size={22} color="#3478F6" />
+                        <Ionicons name="chevron-back" size={22} color="#2C3DCD" />
                       </TouchableOpacity>
                       
                       <View style={styles.dateDisplay}>
@@ -721,13 +803,13 @@ export default function NewAssignmentScreen() {
                         style={styles.dateAdjustButton} 
                         onPress={() => adjustDate(1)}
                       >
-                        <Ionicons name="chevron-forward" size={22} color="#3478F6" />
+                        <Ionicons name="chevron-forward" size={22} color="#2C3DCD" />
                       </TouchableOpacity>
                     </View>
                   </View>
                 </Animated.View>
                 
-                <Animated.View entering={FadeInUp.duration(300).delay(350)}>
+                <Animated.View entering={FadeInUp.duration(200).delay(100)}>
                   <Text style={styles.label}>Due Time</Text>
                   <View style={styles.datePickerContainer}>
                     <View style={styles.timeButtonsRow}>
@@ -736,7 +818,7 @@ export default function NewAssignmentScreen() {
                           style={styles.timeAdjustButton} 
                           onPress={() => adjustHour(1)}
                         >
-                          <Ionicons name="chevron-up" size={22} color="#3478F6" />
+                          <Ionicons name="chevron-up" size={22} color="#2C3DCD" />
                         </TouchableOpacity>
                         
                         <Text style={styles.timeText}>
@@ -747,7 +829,7 @@ export default function NewAssignmentScreen() {
                           style={styles.timeAdjustButton} 
                           onPress={() => adjustHour(-1)}
                         >
-                          <Ionicons name="chevron-down" size={22} color="#3478F6" />
+                          <Ionicons name="chevron-down" size={22} color="#2C3DCD" />
                         </TouchableOpacity>
                       </View>
                       
@@ -758,7 +840,7 @@ export default function NewAssignmentScreen() {
                           style={styles.timeAdjustButton} 
                           onPress={() => adjustMinute(5)}
                         >
-                          <Ionicons name="chevron-up" size={22} color="#3478F6" />
+                          <Ionicons name="chevron-up" size={22} color="#2C3DCD" />
                         </TouchableOpacity>
                         
                         <Text style={styles.timeText}>
@@ -769,7 +851,7 @@ export default function NewAssignmentScreen() {
                           style={styles.timeAdjustButton} 
                           onPress={() => adjustMinute(-5)}
                         >
-                          <Ionicons name="chevron-down" size={22} color="#3478F6" />
+                          <Ionicons name="chevron-down" size={22} color="#2C3DCD" />
                         </TouchableOpacity>
                       </View>
                       
@@ -794,17 +876,14 @@ export default function NewAssignmentScreen() {
                     </View>
                   </View>
                 </Animated.View>
-              </>
+              </Animated.View>
             )}
             
             <Animated.View entering={FadeInUp.duration(300).delay(400)} style={styles.priorityContainer}>
               <Text style={styles.label}>Mark as Priority</Text>
-              <Switch
+              <CustomToggle
                 value={isPriority}
                 onValueChange={setIsPriority}
-                trackColor={{ false: '#3e3e3e', true: '#2C3DCD' }}
-                thumbColor={isPriority ? '#3478F6' : '#f4f3f4'}
-                ios_backgroundColor="#3e3e3e"
               />
             </Animated.View>
             
@@ -830,43 +909,51 @@ export default function NewAssignmentScreen() {
               </TouchableOpacity>
             </View>
             
-            <View style={styles.segmentedControl}>
-              <TouchableOpacity 
-                style={[
-                  styles.segmentButton, 
-                  subjectSelectionMode === 'recent' && styles.segmentButtonActive
-                ]}
-                onPress={() => setSubjectSelectionMode('recent')}
-              >
-                <Text style={[
-                  styles.segmentButtonText,
-                  subjectSelectionMode === 'recent' && styles.segmentButtonTextActive
-                ]}>Recent</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[
-                  styles.segmentButton, 
-                  subjectSelectionMode === 'all' && styles.segmentButtonActive
-                ]}
-                onPress={() => setSubjectSelectionMode('all')}
-              >
-                <Text style={[
-                  styles.segmentButtonText,
-                  subjectSelectionMode === 'all' && styles.segmentButtonTextActive
-                ]}>All</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[
-                  styles.segmentButton, 
-                  subjectSelectionMode === 'custom' && styles.segmentButtonActive
-                ]}
-                onPress={() => setSubjectSelectionMode('custom')}
-              >
-                <Text style={[
-                  styles.segmentButtonText,
-                  subjectSelectionMode === 'custom' && styles.segmentButtonTextActive
-                ]}>Custom</Text>
-              </TouchableOpacity>
+            <View style={styles.tabsContainer}>
+              <View style={styles.segmentedControl}>
+                <TouchableOpacity 
+                  style={[
+                    styles.segmentButton, 
+                    subjectSelectionMode === 'recent' && styles.segmentButtonActive
+                  ]}
+                  onPress={() => setSubjectSelectionMode('recent')}
+                >
+                  <Text style={[
+                    styles.segmentButtonText,
+                    subjectSelectionMode === 'recent' && styles.segmentButtonTextActive
+                  ]}>Recent</Text>
+                </TouchableOpacity>
+                
+                <View style={styles.segmentSeparator} />
+                
+                <TouchableOpacity 
+                  style={[
+                    styles.segmentButton, 
+                    subjectSelectionMode === 'all' && styles.segmentButtonActive
+                  ]}
+                  onPress={() => setSubjectSelectionMode('all')}
+                >
+                  <Text style={[
+                    styles.segmentButtonText,
+                    subjectSelectionMode === 'all' && styles.segmentButtonTextActive
+                  ]}>All</Text>
+                </TouchableOpacity>
+                
+                <View style={styles.segmentSeparator} />
+                
+                <TouchableOpacity 
+                  style={[
+                    styles.segmentButton, 
+                    subjectSelectionMode === 'custom' && styles.segmentButtonActive
+                  ]}
+                  onPress={() => setSubjectSelectionMode('custom')}
+                >
+                  <Text style={[
+                    styles.segmentButtonText,
+                    subjectSelectionMode === 'custom' && styles.segmentButtonTextActive
+                  ]}>Custom</Text>
+                </TouchableOpacity>
+              </View>
             </View>
             
             <TextInput
@@ -879,15 +966,17 @@ export default function NewAssignmentScreen() {
             
             {loadingSubjects ? (
               <View style={styles.loadingContainer}>
-                <ActivityIndicator size="small" color="#3478F6" />
+                <ActivityIndicator size="small" color="#2C3DCD" />
                 <Text style={styles.loadingText}>Loading subjects...</Text>
               </View>
             ) : filteredSubjects.length > 0 ? (
-              <FlatList
+              <Animated.FlatList
                 data={filteredSubjects}
                 renderItem={renderSubjectItem}
                 keyExtractor={item => item.id}
                 style={styles.subjectsList}
+                entering={FadeIn.duration(300)}
+                key={subjectSelectionMode}
               />
             ) : (
               <View style={styles.noSubjectsContainer}>
@@ -964,18 +1053,23 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   saveButton: {
-    backgroundColor: '#3478F6',
+    backgroundColor: '#2C3DCD',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
   },
   saveButtonDisabled: {
-    backgroundColor: 'rgba(52, 120, 246, 0.4)',
+    backgroundColor: '#292929',
+    borderWidth: 1,
+    borderColor: '#3e3e3e',
   },
   saveButtonText: {
     color: '#FFFFFF',
     fontSize: 17,
     fontWeight: '600',
+  },
+  saveButtonTextDisabled: {
+    color: '#6e6e6e',
   },
   formContainer: {
     flex: 1,
@@ -1011,20 +1105,21 @@ const styles = StyleSheet.create({
   segmentedControl: {
     flexDirection: 'row',
     backgroundColor: '#1A1A1A',
-    borderRadius: 8,
+    borderRadius: 10,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: '#333333',
-    marginVertical: 12,
   },
   segmentButton: {
     flex: 1,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 10,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   segmentButtonActive: {
-    backgroundColor: '#3478F6',
+    backgroundColor: '#2C3DCD',
+    borderRadius: 8,
   },
   segmentButtonText: {
     color: '#FFFFFF',
@@ -1034,6 +1129,12 @@ const styles = StyleSheet.create({
   segmentButtonTextActive: {
     color: '#FFFFFF',
     fontWeight: '600',
+  },
+  segmentSeparator: {
+    width: 1,
+    backgroundColor: '#333333',
+    alignSelf: 'stretch',
+    marginVertical: 8,
   },
   priorityContainer: {
     flexDirection: 'row',
@@ -1151,7 +1252,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 8,
   },
   amPmText: {
-    color: '#3478F6',
+    color: '#2C3DCD',
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 16,
@@ -1160,12 +1261,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 12,
+    padding: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#333333',
+    backgroundColor: '#1C1C1E',
+    marginHorizontal: 2,
+    marginVertical: 2,
+    borderRadius: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.5,
+    elevation: 2,
   },
   subjectCardSelected: {
-    backgroundColor: 'rgba(52, 120, 246, 0.1)',
+    backgroundColor: '#0F1A4A',
+    borderColor: '#2C3DCD',
+    borderWidth: 1,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2C3DCD',
   },
   subjectMainInfo: {
     flex: 1,
@@ -1178,7 +1292,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   customBadge: {
-    backgroundColor: '#3478F6',
+    backgroundColor: '#2C3DCD',
     color: '#FFFFFF',
     fontSize: 12,
     paddingHorizontal: 8,
@@ -1188,7 +1302,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   customBadgeSmall: {
-    backgroundColor: '#3478F6',
+    backgroundColor: '#2C3DCD',
     color: '#FFFFFF',
     fontSize: 10,
     paddingHorizontal: 6,
@@ -1199,6 +1313,8 @@ const styles = StyleSheet.create({
   },
   subjectsList: {
     flex: 1,
+    paddingHorizontal: 2,
+    paddingTop: 4,
   },
   searchInput: {
     backgroundColor: '#242424',
@@ -1238,7 +1354,7 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   addButton: {
-    backgroundColor: '#3478F6',
+    backgroundColor: '#2C3DCD',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
@@ -1256,7 +1372,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#141414',
+    backgroundColor: '#121214',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     height: '70%',
@@ -1272,6 +1388,13 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  tabsContainer: {
+    marginVertical: 12,
+    borderRadius: 12,
+    overflow: 'hidden',
+    padding: 2,
+    backgroundColor: '#1C1C1E',
   },
   subjectSelector: {
     backgroundColor: '#1A1A1A',
@@ -1317,5 +1440,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginLeft: 6,
     flex: 1,
+  },
+  activeStatusText: {
+    color: '#2C3DCD',
   },
 }); 
