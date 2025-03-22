@@ -25,7 +25,7 @@ const groupAssignmentsByCourse = (assignments: Assignment[]): {[key: string]: As
   
   assignments.forEach(assignment => {
     // Handle assignments with empty course codes
-    const courseKey = assignment.courseCode || `uncategorized-${assignment.id}`;
+    const courseKey = assignment.courseCode || assignment.courseName || `uncategorized-${assignment.id}`;
     const courseName = assignment.courseName || 'Uncategorized';
     
     if (!groupedAssignments[courseKey]) {
@@ -35,11 +35,16 @@ const groupAssignmentsByCourse = (assignments: Assignment[]): {[key: string]: As
     groupedAssignments[courseKey].push(assignment);
   });
   
-  // Sort each course's assignments by due date
+  // Sort each course's assignments by due date then by type
   Object.keys(groupedAssignments).forEach(key => {
-    groupedAssignments[key].sort((a, b) => 
-      new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
-    );
+    groupedAssignments[key].sort((a, b) => {
+      // First compare by due date
+      const dateComparison = new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+      if (dateComparison !== 0) return dateComparison;
+      
+      // If same date, sort by assignment type
+      return a.assignmentType.localeCompare(b.assignmentType);
+    });
   });
   
   return groupedAssignments;

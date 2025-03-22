@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
-import { Assignment, getPeriodById } from '../../utils/assignmentStorage';
+import { Assignment, getPeriodById, AssignmentType } from '../../utils/assignmentStorage';
 import { format } from 'date-fns';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { 
@@ -22,6 +22,54 @@ interface AssignmentItemProps {
 }
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+// Function to get icon for each assignment type
+const getAssignmentTypeIcon = (type: AssignmentType): any => {
+  switch (type) {
+    case AssignmentType.HOMEWORK:
+      return 'book-outline';
+    case AssignmentType.TEST:
+      return 'document-text-outline';
+    case AssignmentType.EXAM:
+      return 'school-outline';
+    case AssignmentType.PROJECT:
+      return 'construct-outline';
+    case AssignmentType.QUIZ:
+      return 'clipboard-outline';
+    case AssignmentType.LAB:
+      return 'flask-outline';
+    case AssignmentType.ESSAY:
+      return 'create-outline';
+    case AssignmentType.PRESENTATION:
+      return 'easel-outline';
+    default:
+      return 'ellipsis-horizontal-outline';
+  }
+};
+
+// Function to get color for each assignment type
+const getAssignmentTypeColor = (type: AssignmentType): string => {
+  switch (type) {
+    case AssignmentType.HOMEWORK:
+      return '#3478F6'; // iOS Blue
+    case AssignmentType.TEST:
+      return '#FF9500'; // iOS Orange
+    case AssignmentType.EXAM:
+      return '#FF3B30'; // iOS Red
+    case AssignmentType.PROJECT:
+      return '#5E5CE6'; // iOS Purple
+    case AssignmentType.QUIZ:
+      return '#FF375F'; // iOS Pink
+    case AssignmentType.LAB:
+      return '#64D2FF'; // iOS Light Blue
+    case AssignmentType.ESSAY:
+      return '#30D158'; // iOS Green
+    case AssignmentType.PRESENTATION:
+      return '#FFD60A'; // iOS Yellow
+    default:
+      return '#8E8E93'; // iOS Gray
+  }
+};
 
 export default function AssignmentItem({ 
   assignment, 
@@ -95,9 +143,20 @@ export default function AssignmentItem({
   // Determine priority styles
   const priorityColor = assignment.isPriority ? '#FF3B30' : 'transparent';
   
+  // Get assignment type icon and color
+  const typeIcon = getAssignmentTypeIcon(assignment.assignmentType);
+  const typeColor = getAssignmentTypeColor(assignment.assignmentType);
+  
+  // Display style for orphaned assignments
+  const isOrphaned = assignment.isOrphaned;
+  
   return (
     <AnimatedPressable
-      style={[styles.container, containerStyle]}
+      style={[
+        styles.container, 
+        containerStyle,
+        isOrphaned && styles.orphanedContainer
+      ]}
       onPress={onToggle}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
@@ -112,42 +171,67 @@ export default function AssignmentItem({
         </View>
         
         <View style={styles.contentContainer}>
-          <Text 
-            style={[
-              styles.title,
-              assignment.isCompleted && styles.completedTitle
-            ]}
-            numberOfLines={2}
-          >
-            {assignment.title}
-          </Text>
+          <View style={styles.titleRow}>
+            <View style={[styles.typeIndicator, { backgroundColor: isOrphaned ? '#8E8E93' : typeColor }]}>
+              <Ionicons name={isOrphaned ? 'alert-circle' : typeIcon} size={12} color="#FFFFFF" />
+            </View>
+            <Text 
+              style={[
+                styles.title,
+                assignment.isCompleted && styles.completedTitle,
+                isOrphaned && styles.orphanedText
+              ]}
+              numberOfLines={2}
+            >
+              {assignment.title}
+            </Text>
+          </View>
           
           {assignment.description ? (
             <Text 
-              style={styles.description}
+              style={[
+                styles.description,
+                isOrphaned && styles.orphanedDescription
+              ]}
               numberOfLines={1}
             >
               {assignment.description}
             </Text>
           ) : null}
           
-          {period && (
-            <View style={styles.periodContainer}>
-              <Ionicons name="time-outline" size={12} color="#8A8A8D" style={styles.periodIcon} />
-              <Text style={styles.periodText}>
-                Period {period._id}: {period.starttime} - {period.endtime}
-              </Text>
-            </View>
-          )}
-          
-          {showDueDate && dueDateLabel && (
-            <View style={styles.dueDateContainer}>
-              <Ionicons name="calendar-outline" size={12} color="#8A8A8D" style={styles.periodIcon} />
-              <Text style={styles.dueDateText}>
-                Due: {dueDateLabel}
-              </Text>
-            </View>
-          )}
+          <View style={styles.metadataContainer}>
+            {isOrphaned ? (
+              <View style={styles.orphanedBadge}>
+                <Text style={styles.orphanedBadgeText}>
+                  Orphaned: Group changed
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.typeTextContainer}>
+                <Text style={[styles.typeText, { color: typeColor }]}>
+                  {assignment.assignmentType}
+                </Text>
+              </View>
+            )}
+            
+            {period && !isOrphaned && (
+              <View style={styles.periodContainer}>
+                <Ionicons name="time-outline" size={12} color="#8A8A8D" style={styles.periodIcon} />
+                <Text style={styles.periodText}>
+                  Period {period._id}: {period.starttime} - {period.endtime}
+                </Text>
+              </View>
+            )}
+            
+            {showDueDate && dueDateLabel && (
+              <View style={styles.dueDateContainer}>
+                <Ionicons name="calendar-outline" size={12} color="#8A8A8D" style={styles.periodIcon} />
+                <Text style={styles.dueDateText}>
+                  Due: {dueDateLabel}
+                </Text>
+              </View>
+            )}
+          </View>
         </View>
       </View>
       
@@ -219,11 +303,24 @@ const styles = StyleSheet.create({
   contentContainer: {
     flex: 1,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  typeIndicator: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 6,
+  },
   title: {
     fontSize: 16,
     fontWeight: '500',
     color: '#FFFFFF',
-    marginBottom: 2,
+    flex: 1,
   },
   completedTitle: {
     textDecorationLine: 'line-through',
@@ -234,10 +331,25 @@ const styles = StyleSheet.create({
     color: '#8A8A8D',
     marginBottom: 4,
   },
+  metadataContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  typeTextContainer: {
+    marginRight: 8,
+    marginBottom: 2,
+  },
+  typeText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
   periodContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 2,
+    marginRight: 8,
+    marginBottom: 2,
   },
   periodIcon: {
     marginRight: 4,
@@ -249,32 +361,55 @@ const styles = StyleSheet.create({
   dueDateContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 4,
+    marginBottom: 2,
   },
   dueDateText: {
     fontSize: 12,
     color: '#8A8A8D',
-    fontWeight: '500',
   },
   rightSection: {
     alignItems: 'flex-end',
-    marginLeft: 12,
-  },
-  timeText: {
-    fontSize: 12,
-    color: '#8A8A8D',
-    marginTop: 4,
+    justifyContent: 'center',
+    marginLeft: 8,
   },
   priorityIndicator: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,
   },
+  timeText: {
+    fontSize: 12,
+    color: '#8A8A8D',
+    marginBottom: 4,
+  },
   deleteButton: {
-    marginTop: 8,
-    padding: 2,
+    padding: 4,
+  },
+  orphanedContainer: {
+    backgroundColor: '#1E1E1E',
+    borderWidth: 1,
+    borderColor: '#3A3A3A',
+    opacity: 0.8
+  },
+  orphanedText: {
+    color: '#8E8E93',
+  },
+  orphanedBadge: {
+    backgroundColor: '#E0383E',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginRight: 8,
+  },
+  orphanedBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  orphanedDescription: {
+    color: '#6E6E73',
   },
 }); 

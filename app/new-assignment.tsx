@@ -19,8 +19,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { addAssignment } from '../utils/assignmentStorage';
+import { addAssignment, AssignmentType } from '../utils/assignmentStorage';
 import { scheduleService, DAYS_MAP, Subject } from '../services/scheduleService';
+import { useTranslation } from '@/hooks/useTranslation';
 import Animated, { 
   FadeInUp, 
   FadeOutDown, 
@@ -647,7 +648,43 @@ const TimePicker = ({
   );
 };
 
+// Define keyword mappings for different languages
+const ASSIGNMENT_TYPE_KEYWORDS = {
+  en: {
+    [AssignmentType.HOMEWORK]: ['homework', 'assignment', 'exercise', 'task', 'work'],
+    [AssignmentType.TEST]: ['test', 'quiz', 'evaluation', 'assessment'],
+    [AssignmentType.EXAM]: ['exam', 'final', 'midterm', 'examination'],
+    [AssignmentType.PROJECT]: ['project', 'design', 'develop'],
+    [AssignmentType.QUIZ]: ['quiz', 'questionnaire', 'questions'],
+    [AssignmentType.LAB]: ['lab', 'laboratory', 'experiment', 'practical'],
+    [AssignmentType.ESSAY]: ['essay', 'paper', 'composition', 'writing', 'report'],
+    [AssignmentType.PRESENTATION]: ['presentation', 'slides', 'speech', 'talk', 'demo']
+  },
+  ro: {
+    [AssignmentType.HOMEWORK]: ['temă', 'tema', 'exercițiu', 'exercitiu', 'sarcină', 'sarcina', 'lucrare'],
+    [AssignmentType.TEST]: ['test', 'testare', 'evaluare', 'verificare'],
+    [AssignmentType.EXAM]: ['examen', 'examinare', 'sesiune', 'finală', 'finala'],
+    [AssignmentType.PROJECT]: ['proiect', 'proiecte', 'plan'],
+    [AssignmentType.QUIZ]: ['quiz', 'chestionar', 'întrebări', 'intrebari', 'test rapid'],
+    [AssignmentType.LAB]: ['laborator', 'lab', 'experiment', 'practică', 'practica'],
+    [AssignmentType.ESSAY]: ['eseu', 'compunere', 'lucrare', 'redactare', 'articol'],
+    [AssignmentType.PRESENTATION]: ['prezentare', 'discurs', 'slide', 'expunere', 'slideuri']
+  },
+  ru: {
+    [AssignmentType.HOMEWORK]: ['домашняя', 'домашка', 'задание', 'упражнение', 'работа', 'домашнее'],
+    [AssignmentType.TEST]: ['тест', 'контрольная', 'проверка', 'контроль'],
+    [AssignmentType.EXAM]: ['экзамен', 'сессия', 'итоговый', 'финальный'],
+    [AssignmentType.PROJECT]: ['проект', 'разработка', 'проектирование'],
+    [AssignmentType.QUIZ]: ['опрос', 'викторина', 'тест', 'вопросы'],
+    [AssignmentType.LAB]: ['лабораторная', 'лаба', 'эксперимент', 'практика'],
+    [AssignmentType.ESSAY]: ['эссе', 'сочинение', 'письмо', 'статья', 'доклад'],
+    [AssignmentType.PRESENTATION]: ['презентация', 'доклад', 'слайды', 'выступление']
+  }
+};
+
 export default function NewAssignmentScreen() {
+  const { t, currentLanguage } = useTranslation();
+  
   // Form state
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -659,6 +696,11 @@ export default function NewAssignmentScreen() {
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
   const [nextPeriodInfo, setNextPeriodInfo] = useState<{day: string, time: string, weekText?: string} | null>(null);
   const [loadingNextPeriod, setLoadingNextPeriod] = useState(false);
+  const [assignmentType, setAssignmentType] = useState<AssignmentType>(AssignmentType.HOMEWORK);
+  const [autoDetectedType, setAutoDetectedType] = useState<boolean>(false);
+  
+  // Assignment type modal state
+  const [isTypeModalVisible, setIsTypeModalVisible] = useState(false);
   
   // Subject selection states
   const [subjectSelectionMode, setSubjectSelectionMode] = useState<'recent'|'all'|'custom'>('recent');
@@ -688,8 +730,9 @@ export default function NewAssignmentScreen() {
         const today = new Date();
         const dayIndex = today.getDay(); // 0 = Sunday, 6 = Saturday
         
-        // Skip if weekend unless there's a recovery day
+        // Handle weekday vs weekend separately
         if (dayIndex !== 0 && dayIndex !== 6) {
+          // Weekday case
           // Convert day index to day name
           const dayName = dayIndex === 1 ? 'monday' :
                           dayIndex === 2 ? 'tuesday' :
@@ -714,10 +757,10 @@ export default function NewAssignmentScreen() {
             period => period.isEvenWeek === undefined || period.isEvenWeek === isEvenWeek
           );
           
-          // Find current or closest upcoming period
+          // Find current or next period (within 10 minutes)
           let targetPeriod = null;
           
-          // Find if a period is currently in progress
+          // First check for current period or one that just ended (within 10 mins)
           for (const period of relevantPeriods) {
             if (!period.startTime || !period.endTime) continue;
             
@@ -727,15 +770,20 @@ export default function NewAssignmentScreen() {
             const startTimeInMinutes = startHour * 60 + startMinute;
             const endTimeInMinutes = endHour * 60 + endMinute;
             
-            // Check if this period is currently in progress or we're just after it (within 10 minutes)
-            if ((currentTimeInMinutes >= startTimeInMinutes && currentTimeInMinutes <= endTimeInMinutes) ||
-                (currentTimeInMinutes > endTimeInMinutes && currentTimeInMinutes <= endTimeInMinutes + 10)) {
+            // Check if this period is currently in progress
+            if (currentTimeInMinutes >= startTimeInMinutes && currentTimeInMinutes <= endTimeInMinutes) {
+              targetPeriod = period;
+              break;
+            }
+            
+            // Check if period just ended (within 10 minutes)
+            if (currentTimeInMinutes > endTimeInMinutes && currentTimeInMinutes <= endTimeInMinutes + 10) {
               targetPeriod = period;
               break;
             }
           }
           
-          // If no current period, find the first period of the day
+          // If no current period, get first period of the day
           if (!targetPeriod && relevantPeriods.length > 0) {
             // Sort periods by start time
             const sortedPeriods = [...relevantPeriods].sort((a, b) => {
@@ -781,13 +829,68 @@ export default function NewAssignmentScreen() {
               console.error("Error updating next period info:", err)
             );
           }
-        } else if (subjectsData.length > 0) {
-          // Weekend fallback - use first subject
-          setSelectedSubjectId(subjectsData[0].id);
-          setCourseName(subjectsData[0].name);
-          updateNextPeriodInfo(subjectsData[0].id).catch(err => 
-            console.error("Error updating next period info:", err)
+        } else {
+          // Weekend case - get Friday's schedule
+          const fridayName = 'friday';
+          const fridayDate = new Date(today);
+          
+          // Calculate how many days to go back to get to Friday (5 = Friday)
+          const daysToFriday = dayIndex === 0 ? 2 : 1; // Sunday: go back 2, Saturday: go back 1
+          fridayDate.setDate(today.getDate() - daysToFriday);
+          
+          // Check if this is an even or odd week for Friday
+          const isEvenWeek = scheduleService.isEvenWeek(fridayDate);
+          
+          // Get Friday's schedule
+          const fridaySchedule = scheduleService.getScheduleForDay(scheduleData, fridayName, fridayDate);
+          
+          // Filter periods by week type for Friday
+          const relevantFridayPeriods = fridaySchedule.filter(
+            period => period.isEvenWeek === undefined || period.isEvenWeek === isEvenWeek
           );
+          
+          // Sort Friday periods by start time
+          const sortedFridayPeriods = [...relevantFridayPeriods].sort((a, b) => {
+            if (!a.startTime) return 1;
+            if (!b.startTime) return -1;
+            
+            const [aHours, aMinutes] = a.startTime.split(':').map(Number);
+            const [bHours, bMinutes] = b.startTime.split(':').map(Number);
+            
+            return (aHours * 60 + aMinutes) - (bHours * 60 + bMinutes);
+          });
+          
+          // Get the first period of Friday if available
+          if (sortedFridayPeriods.length > 0) {
+            const fridayFirstPeriod = sortedFridayPeriods[0];
+            
+            // Find corresponding subject in subjects list
+            const matchingSubject = subjectsData.find(
+              subject => subject.name === fridayFirstPeriod.className
+            );
+            
+            if (matchingSubject) {
+              setSelectedSubjectId(matchingSubject.id);
+              setCourseName(matchingSubject.name);
+              updateNextPeriodInfo(matchingSubject.id).catch(err => 
+                console.error("Error updating next period info:", err)
+              );
+            } else if (subjectsData.length > 0) {
+              // Fallback to first subject if no matching subject found
+              setSelectedSubjectId(subjectsData[0].id);
+              setCourseName(subjectsData[0].name);
+              updateNextPeriodInfo(subjectsData[0].id).catch(err => 
+                console.error("Error updating next period info:", err)
+              );
+            }
+          } else if (subjectsData.length > 0) {
+            // No Friday periods - use first subject
+            setSelectedSubjectId(subjectsData[0].id);
+            setCourseName(subjectsData[0].name);
+            updateNextPeriodInfo(subjectsData[0].id).catch(err => 
+              console.error("Error updating next period info:", err)
+            );
+          }
         }
       } catch (error) {
         console.error('Error loading subjects:', error);
@@ -811,6 +914,16 @@ export default function NewAssignmentScreen() {
   useEffect(() => {
     updateFilteredSubjects(subjects, subjectSelectionMode);
   }, [subjectSelectionMode, subjects]);
+  
+  // Add this new useEffect to update next period info when subjects or selectedSubjectId changes
+  useEffect(() => {
+    // Only try to update if we have a selected subject ID and subjects have loaded
+    if (selectedSubjectId && subjects.length > 0) {
+      updateNextPeriodInfo(selectedSubjectId).catch(err => 
+        console.error("Error updating next period info:", err)
+      );
+    }
+  }, [selectedSubjectId, subjects]);
   
   // Filter subjects based on search text
   useEffect(() => {
@@ -1082,7 +1195,8 @@ export default function NewAssignmentScreen() {
       courseName: courseName,
       dueDate: dueDate.toISOString(),
       isPriority,
-      subjectId: selectedSubjectId || undefined
+      subjectId: selectedSubjectId || undefined,
+      assignmentType: assignmentType
     });
     
     router.back();
@@ -1186,9 +1300,12 @@ export default function NewAssignmentScreen() {
         selectedSubjectId === item.id && styles.subjectCardSelected
       ]}
       onPress={() => handleSubjectSelect(item)}
+      activeOpacity={0.7}
     >
       <View style={styles.subjectMainInfo}>
-        <Text style={styles.subjectName}>{item.name}</Text>
+        <Text style={styles.subjectName} numberOfLines={1} ellipsizeMode="tail">
+          {item.name}
+        </Text>
         {item.isCustom && (
           <Text style={styles.customBadge}>Custom</Text>
         )}
@@ -1198,6 +1315,151 @@ export default function NewAssignmentScreen() {
       )}
     </TouchableOpacity>
   );
+
+  // Function to detect assignment type from title
+  const detectAssignmentTypeFromTitle = (text: string) => {
+    if (!text) return null;
+    
+    // Convert to lowercase for case-insensitive matching
+    const lowerText = text.toLowerCase();
+    
+    // Get keywords based on current language (default to English if language not supported)
+    const keywordsMap = ASSIGNMENT_TYPE_KEYWORDS[currentLanguage as 'en' | 'ro' | 'ru'] || ASSIGNMENT_TYPE_KEYWORDS.en;
+    
+    // Check each assignment type's keywords
+    for (const [type, keywords] of Object.entries(keywordsMap)) {
+      for (const keyword of keywords) {
+        // Look for whole word matches or word boundaries where possible
+        const wordPattern = new RegExp(`\\b${keyword}\\b|\\s${keyword}|^${keyword}|${keyword}\\s|${keyword}$`, 'i');
+        if (wordPattern.test(lowerText) || lowerText.includes(keyword)) {
+          return type as AssignmentType;
+        }
+      }
+    }
+    
+    // If no match in current language, try other languages as fallback
+    for (const lang of Object.keys(ASSIGNMENT_TYPE_KEYWORDS) as Array<'en' | 'ro' | 'ru'>) {
+      if (lang === currentLanguage) continue; // Skip current language as we already checked it
+      
+      const otherLangKeywords = ASSIGNMENT_TYPE_KEYWORDS[lang];
+      for (const [type, keywords] of Object.entries(otherLangKeywords)) {
+        for (const keyword of keywords) {
+          // Look for whole word matches or word boundaries where possible
+          const wordPattern = new RegExp(`\\b${keyword}\\b|\\s${keyword}|^${keyword}|${keyword}\\s|${keyword}$`, 'i');
+          if (wordPattern.test(lowerText) || lowerText.includes(keyword)) {
+            return type as AssignmentType;
+          }
+        }
+      }
+    }
+    
+    return null;
+  };
+  
+  // Update title and check for assignment type
+  const handleTitleChange = (text: string) => {
+    setTitle(text);
+    
+    // Only try to auto-detect if the user hasn't manually selected a type yet
+    // or if auto-detection has already happened (so we can update it)
+    if (!text || (!autoDetectedType && assignmentType !== AssignmentType.HOMEWORK)) {
+      return;
+    }
+    
+    const detectedType = detectAssignmentTypeFromTitle(text);
+    if (detectedType) {
+      setAssignmentType(detectedType);
+      setAutoDetectedType(true);
+    }
+  };
+  
+  // Handle manual type selection
+  const handleTypeSelection = (type: AssignmentType) => {
+    setAssignmentType(type);
+    setIsTypeModalVisible(false);
+    setAutoDetectedType(false); // User manually selected a type
+  };
+
+  // Render a type item for selection
+  const renderTypeItem = (type: AssignmentType) => {
+    // Get icon for this specific type
+    const getIconForType = () => {
+      switch (type) {
+        case AssignmentType.HOMEWORK:
+          return 'book-outline';
+        case AssignmentType.TEST:
+          return 'document-text-outline';
+        case AssignmentType.EXAM:
+          return 'school-outline';
+        case AssignmentType.PROJECT:
+          return 'construct-outline';
+        case AssignmentType.QUIZ:
+          return 'clipboard-outline';
+        case AssignmentType.LAB:
+          return 'flask-outline';
+        case AssignmentType.ESSAY:
+          return 'create-outline';
+        case AssignmentType.PRESENTATION:
+          return 'easel-outline';
+        default:
+          return 'ellipsis-horizontal-outline';
+      }
+    };
+
+    return (
+      <TouchableOpacity
+        key={type}
+        style={[
+          styles.typeCard,
+          assignmentType === type && styles.typeCardSelected
+        ]}
+        onPress={() => handleTypeSelection(type)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.typeMainInfo}>
+          <Ionicons 
+            name={getIconForType()} 
+            size={24} 
+            color={assignmentType === type ? "#2C3DCD" : "#FFFFFF"} 
+            style={{marginRight: 12}}
+          />
+          <Text style={[
+            styles.typeName,
+            assignmentType === type && {color: '#2C3DCD', fontWeight: '600'}
+          ]}>
+            {type}
+          </Text>
+        </View>
+        {assignmentType === type && (
+          <Ionicons name="checkmark-circle" size={24} color="#2C3DCD" />
+        )}
+      </TouchableOpacity>
+    );
+  };
+
+  // Get icon for current assignment type in the selector
+  const getTypeIcon = () => {
+    switch (assignmentType) {
+      case AssignmentType.HOMEWORK:
+        return 'book-outline';
+      case AssignmentType.TEST:
+        return 'document-text-outline';
+      case AssignmentType.EXAM:
+        return 'school-outline';
+      case AssignmentType.PROJECT:
+        return 'construct-outline';
+      case AssignmentType.QUIZ:
+        return 'clipboard-outline';
+      case AssignmentType.LAB:
+        return 'flask-outline';
+      case AssignmentType.ESSAY:
+        return 'create-outline';
+      case AssignmentType.PRESENTATION:
+        return 'easel-outline';
+      default:
+        return 'ellipsis-horizontal-outline';
+    }
+  };
 
   // Find the currently selected subject
   const selectedSubject = subjects.find(s => s.id === selectedSubjectId);
@@ -1235,9 +1497,29 @@ export default function NewAssignmentScreen() {
                 placeholder="Assignment title"
                 placeholderTextColor="#8A8A8D"
                 value={title}
-                onChangeText={setTitle}
+                onChangeText={handleTitleChange}
                 maxLength={50}
               />
+              {autoDetectedType && (
+                <Text style={styles.autoDetectedNote}>
+                  Assignment type automatically detected
+                </Text>
+              )}
+            </Animated.View>
+            
+            {/* Add Assignment Type Selector */}
+            <Animated.View entering={FadeInUp.duration(300).delay(75)}>
+              <Text style={styles.label}>Assignment Type</Text>
+              <TouchableOpacity
+                style={styles.typeSelector}
+                onPress={() => setIsTypeModalVisible(true)}
+              >
+                <View style={styles.typeDisplay}>
+                  <Ionicons name={getTypeIcon()} size={20} color="#FFFFFF" style={styles.typeIcon} />
+                  <Text style={styles.typeText}>{assignmentType}</Text>
+                </View>
+                <Ionicons name="chevron-down" size={20} color="#8A8A8D" />
+              </TouchableOpacity>
             </Animated.View>
             
             <Animated.View entering={FadeInUp.duration(300).delay(100)}>
@@ -1372,7 +1654,10 @@ export default function NewAssignmentScreen() {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Select Subject</Text>
-              <TouchableOpacity onPress={() => setIsSubjectsModalVisible(false)}>
+              <TouchableOpacity 
+                onPress={() => setIsSubjectsModalVisible(false)}
+                hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
+              >
                 <Ionicons name="close" size={24} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
@@ -1438,14 +1723,18 @@ export default function NewAssignmentScreen() {
                 <Text style={styles.loadingText}>Loading subjects...</Text>
               </View>
             ) : filteredSubjects.length > 0 ? (
-              <Animated.FlatList
-                data={filteredSubjects}
-                renderItem={renderSubjectItem}
-                keyExtractor={item => item.id}
-                style={styles.subjectsList}
-                entering={FadeIn.duration(300)}
-                key={subjectSelectionMode}
-              />
+              <View style={{ flex: 1 }}>
+                <Animated.FlatList
+                  data={filteredSubjects}
+                  renderItem={renderSubjectItem}
+                  keyExtractor={item => item.id}
+                  style={styles.subjectsList}
+                  contentContainerStyle={{ paddingBottom: 20 }}
+                  showsVerticalScrollIndicator={true}
+                  entering={FadeIn.duration(300)}
+                  key={`subjects-list-${subjectSelectionMode}`}
+                />
+              </View>
             ) : (
               <View style={styles.noSubjectsContainer}>
                 <Text style={styles.noSubjectsText}>
@@ -1476,6 +1765,32 @@ export default function NewAssignmentScreen() {
                 </View>
               </View>
             )}
+          </View>
+        </View>
+      </Modal>
+      
+      {/* Assignment Type Selection Modal */}
+      <Modal
+        visible={isTypeModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsTypeModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Assignment Type</Text>
+              <TouchableOpacity 
+                onPress={() => setIsTypeModalVisible(false)}
+                hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
+              >
+                <Ionicons name="close" size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={styles.typesList}>
+              {Object.values(AssignmentType).map(type => renderTypeItem(type))}
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -1940,6 +2255,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 2,
     paddingTop: 4,
+    width: '100%',
   },
   searchInput: {
     backgroundColor: '#242424',
@@ -2002,6 +2318,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 20,
     height: '70%',
     padding: 20,
+    width: '100%',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -2092,5 +2409,77 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 4,
     alignSelf: 'center',
+  },
+  // Type selection styles
+  typeSelector: {
+    backgroundColor: '#1A1A1A',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#333333',
+    padding: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  typeDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  typeIcon: {
+    marginRight: 10,
+  },
+  typeText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+  },
+  typesList: {
+    flex: 1,
+    paddingHorizontal: 2,
+    paddingTop: 4,
+    width: '100%',
+  },
+  typeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333333',
+    backgroundColor: '#1C1C1E',
+    marginHorizontal: 2,
+    marginVertical: 2,
+    borderRadius: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.5,
+    elevation: 2,
+  },
+  typeCardSelected: {
+    backgroundColor: '#0F1A4A',
+    borderColor: '#2C3DCD',
+    borderWidth: 1,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2C3DCD',
+  },
+  typeMainInfo: {
+    flex: 1,
+  },
+  typeName: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  typeIconContainer: {
+    marginRight: 10,
+  },
+  typeNameSelected: {
+    color: '#2C3DCD',
+  },
+  autoDetectedNote: {
+    color: '#8A8A8D',
+    fontSize: 12,
+    marginTop: 4,
+    fontStyle: 'italic'
   },
 }); 
