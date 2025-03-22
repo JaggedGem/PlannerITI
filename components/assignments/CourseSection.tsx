@@ -85,12 +85,20 @@ export default function CourseSection({
   
   // Group assignments by period if they have periodInfo
   const groupedByPeriod: { [key: string]: Assignment[] } = {
-    'noPeriod': [] // For assignments without a period
+    'noPeriod': [], // For assignments without a period
+    'orphaned': []  // Special group for orphaned assignments
   };
   
   // Sort and group assignments
   assignments.forEach((assignment) => {
     const enhancedAssignment = assignment as EnhancedAssignment;
+    
+    // Handle orphaned assignments separately
+    if (assignment.isOrphaned) {
+      groupedByPeriod['orphaned'].push(assignment);
+      return;
+    }
+    
     if (enhancedAssignment.periodInfo) {
       const periodId = enhancedAssignment.periodInfo._id;
       if (!groupedByPeriod[periodId]) {
@@ -104,13 +112,30 @@ export default function CourseSection({
   
   // Sort period keys numerically
   const sortedPeriodIds = Object.keys(groupedByPeriod)
-    .filter(id => id !== 'noPeriod')
+    .filter(id => id !== 'noPeriod' && id !== 'orphaned')
     .sort((a, b) => parseInt(a) - parseInt(b));
   
   // Add 'noPeriod' at the end if it has assignments
   if (groupedByPeriod['noPeriod'].length > 0) {
     sortedPeriodIds.push('noPeriod');
   }
+  
+  // Add 'orphaned' at the very end if it has assignments
+  if (groupedByPeriod['orphaned'].length > 0) {
+    sortedPeriodIds.push('orphaned');
+  }
+  
+  // Sort the assignments within each period by due date and then by assignment type
+  sortedPeriodIds.forEach(periodId => {
+    groupedByPeriod[periodId].sort((a, b) => {
+      // First compare by due date
+      const dateComparison = new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+      if (dateComparison !== 0) return dateComparison;
+      
+      // If same date, sort by assignment type
+      return a.assignmentType.localeCompare(b.assignmentType);
+    });
+  });
 
   return (
     <Animated.View 
@@ -123,7 +148,7 @@ export default function CourseSection({
         <View style={styles.header}>
           <View style={[styles.dot, { backgroundColor: subjectColor }]} />
           <Text style={[styles.courseTitle, { color: subjectColor }]}>
-            {safeCode.startsWith('uncategorized') ? safeName : `${safeCode} ${safeName}`}
+            {safeName}
           </Text>
           {onEditCourse && (
             <TouchableOpacity style={styles.editButton} onPress={onEditCourse}>
@@ -138,7 +163,20 @@ export default function CourseSection({
         <View style={styles.assignmentsContainer}>
           {sortedPeriodIds.map((periodId, groupIndex) => (
             <View key={periodId} style={styles.periodGroup}>
-              {periodId !== 'noPeriod' && (
+              {/* Special header for orphaned assignments */}
+              {periodId === 'orphaned' && (
+                <View style={styles.orphanedHeader}>
+                  <View style={styles.periodHeaderContent}>
+                    <Ionicons name="alert-circle" size={14} color="#FF3B30" style={styles.periodIcon} />
+                    <Text style={styles.orphanedPeriodText}>
+                      Orphaned assignments (from different group)
+                    </Text>
+                  </View>
+                </View>
+              )}
+              
+              {/* Regular period header */}
+              {periodId !== 'noPeriod' && periodId !== 'orphaned' && (
                 <View style={styles.periodHeader}>
                   {/* Use the first assignment's periodInfo to show period details */}
                   {(groupedByPeriod[periodId][0] as EnhancedAssignment).periodInfo && (
@@ -254,6 +292,20 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   periodText: {
+    fontSize: 12,
+    color: '#AAAAAA',
+    fontWeight: '500',
+  },
+  orphanedHeader: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 6,
+    marginHorizontal: 8,
+    marginBottom: 6,
+    marginTop: 8,
+  },
+  orphanedPeriodText: {
     fontSize: 12,
     color: '#AAAAAA',
     fontWeight: '500',

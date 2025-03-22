@@ -89,18 +89,19 @@ export default function DaySection({ title, date, assignments, onToggleAssignmen
   // Group assignments by course and sort by period if available
   const groupedByCourse: { [key: string]: EnhancedAssignment[] } = {};
   enhancedAssignments.forEach(assignment => {
-    // Use a default value if courseCode is empty
-    const courseCode = assignment.courseCode || `uncategorized-${assignment.id}`;
+    // Use courseName as the grouping key to ensure same subject assignments stay together
+    // Fall back to id if courseName is empty
+    const courseKey = assignment.courseName || assignment.courseCode || `uncategorized-${assignment.id}`;
     
-    if (!groupedByCourse[courseCode]) {
-      groupedByCourse[courseCode] = [];
+    if (!groupedByCourse[courseKey]) {
+      groupedByCourse[courseKey] = [];
     }
-    groupedByCourse[courseCode].push(assignment);
+    groupedByCourse[courseKey].push(assignment);
   });
   
-  // Sort assignments in each course group by period if available
-  Object.keys(groupedByCourse).forEach(courseCode => {
-    groupedByCourse[courseCode].sort((a, b) => {
+  // Sort assignments in each course group by period if available, then by type
+  Object.keys(groupedByCourse).forEach(courseKey => {
+    groupedByCourse[courseKey].sort((a, b) => {
       // First sort by period
       if (a.periodInfo && b.periodInfo) {
         const periodA = parseInt(a.periodInfo._id);
@@ -115,7 +116,11 @@ export default function DaySection({ title, date, assignments, onToggleAssignmen
       }
       
       // Then by due date
-      return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+      const dateComparison = new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+      if (dateComparison !== 0) return dateComparison;
+      
+      // Finally by assignment type
+      return a.assignmentType.localeCompare(b.assignmentType);
     });
   });
   
@@ -178,15 +183,15 @@ export default function DaySection({ title, date, assignments, onToggleAssignmen
           exiting={FadeOut.duration(100)}
           layout={Layout.springify().mass(0.5)}
         >
-          {Object.entries(groupedByCourse).map(([courseCode, courseAssignments], index) => (
+          {Object.entries(groupedByCourse).map(([courseKey, courseAssignments], index) => (
             <Animated.View
-              key={courseCode}
+              key={courseKey}
               entering={FadeIn.duration(150).delay(index * 50)}
               layout={Layout.springify().mass(0.5)}
               style={styles.courseSection}
             >
               <CourseSection
-                courseCode={courseCode}
+                courseCode={courseAssignments[0].courseCode || courseKey}
                 courseName={courseAssignments[0].courseName || 'Uncategorized'}
                 assignments={courseAssignments}
                 onToggleAssignment={onToggleAssignment}

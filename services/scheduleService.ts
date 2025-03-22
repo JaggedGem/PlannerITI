@@ -360,7 +360,7 @@ export const scheduleService = {
     }
   },
 
-  async getClassSchedule(groupId: string = ''): Promise<ApiResponse> {
+  async getClassSchedule(groupId: string = '', forceRefresh: boolean = false): Promise<ApiResponse> {
     const id = groupId || this.settings.selectedGroupId;
     
     try {
@@ -378,7 +378,7 @@ export const scheduleService = {
       // Check if we need to refresh the cache in the background
       const shouldRefetch = await this.shouldRefetchSchedule(id);
       
-      if (shouldRefetch) {
+      if (shouldRefetch || forceRefresh) {
         // Fetch new data in the background
         this.fetchAndCacheSchedule(id).catch(() => {});
         // Also refresh recovery days in background if needed
@@ -915,6 +915,35 @@ export const scheduleService = {
     };
     this.saveSettings();
     this.notifyListeners();
+  },
+
+  // Force refresh subjects for a specific group
+  async refreshSubjects(groupId?: string): Promise<Subject[]> {
+    try {
+      // Use provided group ID or current selectedGroupId
+      const targetGroupId = groupId || this.settings.selectedGroupId;
+      
+      if (!targetGroupId) {
+        return [];
+      }
+      
+      console.log(`Forcing subject refresh for group: ${targetGroupId}`);
+      
+      // Clear the cached subjects
+      this.cachedSubjects = [];
+      
+      // Get fresh schedule data
+      const scheduleData = await this.getClassSchedule(targetGroupId, true);
+      
+      // Extract and store subjects
+      await this.extractAndStoreSubjects(scheduleData);
+      
+      console.log(`Refreshed subjects: ${this.cachedSubjects.length}`);
+      return this.cachedSubjects;
+    } catch (error) {
+      console.error('Error refreshing subjects:', error);
+      return [];
+    }
   },
 };
 

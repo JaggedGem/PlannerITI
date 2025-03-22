@@ -10,6 +10,9 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { DeviceEventEmitter } from 'react-native';
 import { useAuthContext } from '@/components/auth/AuthContext';
 import authService from '@/services/authService';
+import { 
+  handleGroupChange as handleOrphanedAssignments 
+} from '../../utils/assignmentStorage';
 
 const IDNP_KEY = '@planner_idnp';
 const IDNP_UPDATE_EVENT = 'idnp_updated';
@@ -31,7 +34,7 @@ const languages = {
   ru: { name: 'Русский', icon: '🇷🇺' }
 };
 
-const groups: SubGroupType[] = ['Subgroup 1', 'Subgroup 2'];
+const SUBGROUPS: SubGroupType[] = ['Subgroup 1', 'Subgroup 2'];
 
 // Array of theme-appropriate colors for random selection
 const THEME_COLORS = [
@@ -546,6 +549,27 @@ export default function Settings() {
     }, [])
   );
 
+  // Use useFocusEffect to ensure settings are up to date when the screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      // Update settings from the service when the screen comes into focus
+      setSettings(scheduleService.getSettings());
+      
+      // Check auth state
+      const checkAuthState = async () => {
+        try {
+          // Check if the skip login flag is set
+          const hasSkipped = await AsyncStorage.getItem(SKIP_LOGIN_KEY);
+          setSkipLogin(hasSkipped === 'true');
+        } catch (error) {
+          // Silent error handling
+        }
+      };
+
+      checkAuthState();
+    }, [])
+  );
+
   // Custom clear IDNP function
   const handleClearIdnp = useCallback(() => {
     setConfirmDialogType('idnp');
@@ -594,10 +618,26 @@ export default function Settings() {
   }, []);
 
   const handleGroupSelection = useCallback((group: Group) => {
+    // Get the current settings to preserve the subgroup selection
+    const currentSettings = scheduleService.getSettings();
+    
+    // Update the group settings - maintain the current subgroup or set default if not set
     scheduleService.updateSettings({ 
       selectedGroupId: group._id,
-      selectedGroupName: group.name
+      selectedGroupName: group.name,
+      group: currentSettings.group || SUBGROUPS[0]
     });
+    
+    // Handle orphaned assignments asynchronously after settings update
+    setTimeout(async () => {
+      try {
+        // Pass the group ID (string) to handle orphaned assignments
+        await handleOrphanedAssignments(group._id);
+      } catch (error) {
+        console.error("Error handling group change for assignments:", error);
+      }
+    }, 100);
+    
     setShowGroupModal(false);
     setSearchQuery('');
   }, []);
@@ -659,7 +699,9 @@ export default function Settings() {
   // Effect hooks
   useEffect(() => {
     const unsubscribe = scheduleService.subscribe(() => {
-      setSettings(scheduleService.getSettings());
+      const updatedSettings = scheduleService.getSettings();
+      console.log("Settings updated:", updatedSettings);
+      setSettings(updatedSettings);
     });
 
     const fetchGroups = async () => {
@@ -1179,7 +1221,7 @@ export default function Settings() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('settings').subGroup}</Text>
           <View style={styles.optionsContainer}>
-            {groups.map(group => (
+            {SUBGROUPS.map(group => (
               <TouchableOpacity
                 key={group}
                 style={[
