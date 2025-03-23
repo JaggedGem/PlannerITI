@@ -176,13 +176,15 @@ const DatePicker = ({
   onDateChange,
   formatDate,
   days = DAYS_DEFAULT,
-  quickDateOptions = QUICK_DATE_OPTIONS_DEFAULT
+  quickDateOptions = QUICK_DATE_OPTIONS_DEFAULT,
+  currentLanguage
 }: { 
   selectedDate: Date; 
   onDateChange: (date: Date) => void;
   formatDate: (date: Date) => string;
   days?: string[];
   quickDateOptions?: { label: string, days: number }[];
+  currentLanguage: string;
 }) => {
   const [calendarMonth, setCalendarMonth] = useState(new Date(selectedDate));
   const [showCalendar, setShowCalendar] = useState(false);
@@ -455,7 +457,7 @@ const DatePicker = ({
               <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
             </TouchableOpacity>
             <Text style={styles.calendarTitle}>
-              {format(calendarMonth, 'MMMM yyyy')}
+              {calendarMonth.toLocaleDateString(currentLanguage, { month: 'long', year: 'numeric' })}
             </Text>
             <TouchableOpacity onPress={() => navigateMonth(1)}>
               <Ionicons name="chevron-forward" size={22} color="#FFFFFF" />
@@ -535,6 +537,7 @@ const TimePicker = ({
   onTimeChange: (date: Date) => void;
   timePresets?: { label: string, hour: number, minute: number }[];
 }) => {
+  const { currentLanguage } = useTranslation();
   const hours = Array.from({ length: 12 }, (_, i) => i + 1);
   const minutes = Array.from({ length: 12 }, (_, i) => i * 5);
   
@@ -544,11 +547,22 @@ const TimePicker = ({
   const amPmScale = useSharedValue(1);
   const presetButtonScale = useSharedValue(1);
   
+  // Use 24-hour format for Romanian and Russian
+  const shouldUse24HourFormat = currentLanguage === 'ro' || currentLanguage === 'ru';
+  
   const getTimeString = (date: Date) => {
-    const hours = date.getHours() > 12 ? date.getHours() - 12 : date.getHours() === 0 ? 12 : date.getHours();
-    const minutes = date.getMinutes() < 10 ? `0${date.getMinutes()}` : date.getMinutes();
-    const period = date.getHours() >= 12 ? 'PM' : 'AM';
-    return `${hours}:${minutes} ${period}`;
+    if (shouldUse24HourFormat) {
+      // 24-hour format for Romanian and Russian
+      const hours = date.getHours().toString().padStart(2, '0');
+      const minutes = date.getMinutes().toString().padStart(2, '0');
+      return `${hours}:${minutes}`;
+    } else {
+      // 12-hour format with AM/PM for English
+      const hours = date.getHours() > 12 ? date.getHours() - 12 : date.getHours() === 0 ? 12 : date.getHours();
+      const minutes = date.getMinutes() < 10 ? `0${date.getMinutes()}` : date.getMinutes();
+      const period = date.getHours() >= 12 ? 'PM' : 'AM';
+      return `${hours}:${minutes} ${period}`;
+    }
   };
   
   const updateHour = (hour: number) => {
@@ -559,9 +573,17 @@ const TimePicker = ({
     );
     
     const newTime = new Date(selectedTime);
-    const isPM = selectedTime.getHours() >= 12;
-    const adjustedHour = isPM ? (hour === 12 ? 12 : hour + 12) : (hour === 12 ? 0 : hour);
-    newTime.setHours(adjustedHour);
+    
+    if (shouldUse24HourFormat) {
+      // In 24-hour format, just set the hour directly
+      newTime.setHours(hour);
+    } else {
+      // In 12-hour format, adjust based on AM/PM
+      const isPM = selectedTime.getHours() >= 12;
+      const adjustedHour = isPM ? (hour === 12 ? 12 : hour + 12) : (hour === 12 ? 0 : hour);
+      newTime.setHours(adjustedHour);
+    }
+    
     onTimeChange(newTime);
   };
   
@@ -694,24 +716,42 @@ const TimePicker = ({
             <TouchableOpacity 
               style={styles.timeWheelButton}
               onPress={() => {
-                const currentHour = selectedTime.getHours() % 12 || 12;
-                const nextHour = currentHour === 12 ? 1 : currentHour + 1;
-                updateHour(nextHour);
+                if (shouldUse24HourFormat) {
+                  // 24-hour format logic
+                  const currentHour = selectedTime.getHours();
+                  const nextHour = currentHour === 23 ? 0 : currentHour + 1;
+                  updateHour(nextHour);
+                } else {
+                  // 12-hour format logic
+                  const currentHour = selectedTime.getHours() % 12 || 12;
+                  const nextHour = currentHour === 12 ? 1 : currentHour + 1;
+                  updateHour(nextHour);
+                }
               }}
             >
               <Ionicons name="chevron-up" size={24} color="#FFFFFF" />
             </TouchableOpacity>
             
             <Animated.Text style={[styles.timeWheelText, hourAnimStyle]}>
-              {selectedTime.getHours() % 12 || 12}
+              {shouldUse24HourFormat 
+                ? selectedTime.getHours().toString().padStart(2, '0') 
+                : (selectedTime.getHours() % 12 || 12)}
             </Animated.Text>
             
             <TouchableOpacity 
               style={styles.timeWheelButton}
               onPress={() => {
-                const currentHour = selectedTime.getHours() % 12 || 12;
-                const prevHour = currentHour === 1 ? 12 : currentHour - 1;
-                updateHour(prevHour);
+                if (shouldUse24HourFormat) {
+                  // 24-hour format logic
+                  const currentHour = selectedTime.getHours();
+                  const prevHour = currentHour === 0 ? 23 : currentHour - 1;
+                  updateHour(prevHour);
+                } else {
+                  // 12-hour format logic
+                  const currentHour = selectedTime.getHours() % 12 || 12;
+                  const prevHour = currentHour === 1 ? 12 : currentHour - 1;
+                  updateHour(prevHour);
+                }
               }}
             >
               <Ionicons name="chevron-down" size={24} color="#FFFFFF" />
@@ -755,19 +795,21 @@ const TimePicker = ({
           </View>
         </View>
         
-        <View style={styles.timeWheelGroup}>
-          <Text style={styles.timeWheelLabel}>AM/PM</Text>
-          <Animated.View style={amPmAnimStyle}>
-            <TouchableOpacity 
-              style={styles.amPmToggle}
-              onPress={toggleAmPm}
-            >
-              <Text style={styles.amPmToggleText}>
-                {selectedTime.getHours() >= 12 ? 'PM' : 'AM'}
-              </Text>
-            </TouchableOpacity>
-          </Animated.View>
-        </View>
+        {!shouldUse24HourFormat && (
+          <View style={styles.timeWheelGroup}>
+            <Text style={styles.timeWheelLabel}>AM/PM</Text>
+            <Animated.View style={amPmAnimStyle}>
+              <TouchableOpacity 
+                style={styles.amPmToggle}
+                onPress={toggleAmPm}
+              >
+                <Text style={styles.amPmToggleText}>
+                  {selectedTime.getHours() >= 12 ? 'PM' : 'AM'}
+                </Text>
+              </TouchableOpacity>
+            </Animated.View>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -1769,6 +1811,7 @@ export default function NewAssignmentScreen() {
                     formatDate={formatDate}
                     days={DAYS}
                     quickDateOptions={QUICK_DATE_OPTIONS}
+                    currentLanguage={currentLanguage}
                   />
               </Animated.View>
                 
