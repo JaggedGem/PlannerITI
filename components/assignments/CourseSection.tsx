@@ -8,6 +8,7 @@ import { Assignment } from '../../utils/assignmentStorage';
 import Animated, { FadeIn, Layout } from 'react-native-reanimated';
 import { Period } from '../../services/scheduleService';
 import { format, isToday, isTomorrow } from 'date-fns';
+import { useTranslation } from '@/hooks/useTranslation';
 
 // Interface for assignment with optional period info
 interface EnhancedAssignment extends Assignment {
@@ -55,13 +56,21 @@ const getSubjectColor = (courseCode: string): string => {
 // Format the due date to a human-readable string
 const formatDueDay = (dateString: string): string => {
   const date = new Date(dateString);
+  const { t, currentLanguage } = useTranslation();
   
   if (isToday(date)) {
-    return 'Today';
+    return t('assignments').days.today;
   } else if (isTomorrow(date)) {
-    return 'Tomorrow';
+    return t('assignments').days.tomorrow;
   } else {
-    return format(date, 'EEE, MMM d'); // e.g. "Mon, Jan 15"
+    // Get the localized day of week
+    const dayOfWeek = t('weekdays').short[date.getDay()];
+    
+    // Get the localized month name
+    const month = t('months')[date.getMonth()];
+    
+    // Format as "Day, Month Day" in the current language
+    return `${dayOfWeek}, ${month} ${date.getDate()}`;
   }
 };
 
@@ -76,10 +85,11 @@ export default function CourseSection({
 }: CourseSectionProps) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
+  const { t } = useTranslation();
   
   // Ensure we have a valid course code and name
-  const safeCode = courseCode || 'Uncategorized';
-  const safeName = courseName || 'Assignment';
+  const safeCode = courseCode || t('assignments').common.uncategorized;
+  const safeName = courseName || t('assignments').types.other;
   
   const subjectColor = getSubjectColor(safeCode);
   
@@ -169,7 +179,7 @@ export default function CourseSection({
                   <View style={styles.periodHeaderContent}>
                     <Ionicons name="alert-circle" size={14} color="#FF3B30" style={styles.periodIcon} />
                     <Text style={styles.orphanedPeriodText}>
-                      Orphaned assignments (from different group)
+                      {t('assignments').common.orphanedAssignments}
                     </Text>
                   </View>
                 </View>
@@ -183,7 +193,7 @@ export default function CourseSection({
                     <View style={styles.periodHeaderContent}>
                       <Ionicons name="time-outline" size={14} color="#8A8A8D" style={styles.periodIcon} />
                       <Text style={styles.periodText}>
-                        Period {(groupedByPeriod[periodId][0] as EnhancedAssignment).periodInfo!._id}: {
+                        {t('assignments').common.period} {(groupedByPeriod[periodId][0] as EnhancedAssignment).periodInfo!._id}: {
                           (groupedByPeriod[periodId][0] as EnhancedAssignment).periodInfo!.starttime
                         } - {
                           (groupedByPeriod[periodId][0] as EnhancedAssignment).periodInfo!.endtime

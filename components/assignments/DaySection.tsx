@@ -16,6 +16,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { Period } from '../../services/scheduleService';
+import { useTranslation } from '@/hooks/useTranslation';
 
 type DaySectionProps = {
   title: string;
@@ -29,24 +30,25 @@ interface EnhancedAssignment extends Assignment {
   periodInfo?: Period;
 }
 
-const getDayColor = (title: string): [string, string] => {
-  if (title.includes('Today')) {
+// Get day color based on day name - moved outside component
+const getDayColor = (title: string, t: any): [string, string] => {
+  if (title.includes(t('assignments').days.today)) {
     return ['#4A76F1', '#2C3DCD'] as [string, string];
-  } else if (title.includes('Tomorrow')) {
+  } else if (title.includes(t('assignments').days.tomorrow)) {
     return ['#614FE0', '#4A2CD0'] as [string, string];
-  } else if (title.startsWith('Monday')) {
+  } else if (title.startsWith(t('assignments').days.monday)) {
     return ['#3A6073', '#16222A'] as [string, string];
-  } else if (title.startsWith('Tuesday')) {
+  } else if (title.startsWith(t('assignments').days.tuesday)) {
     return ['#3F5C6C', '#203A43'] as [string, string];
-  } else if (title.startsWith('Wednesday')) {
+  } else if (title.startsWith(t('assignments').days.wednesday)) {
     return ['#5B5F97', '#373860'] as [string, string];
-  } else if (title.startsWith('Thursday')) {
+  } else if (title.startsWith(t('assignments').days.thursday)) {
     return ['#4B6073', '#252f3b'] as [string, string];
-  } else if (title.startsWith('Friday')) {
+  } else if (title.startsWith(t('assignments').days.friday)) {
     return ['#526175', '#2E3951'] as [string, string];
-  } else if (title.startsWith('Saturday')) {
+  } else if (title.startsWith(t('assignments').days.saturday)) {
     return ['#755B69', '#3F2E38'] as [string, string];
-  } else if (title.startsWith('Sunday')) {
+  } else if (title.startsWith(t('assignments').days.sunday)) {
     return ['#5E4266', '#39274A'] as [string, string];
   } else {
     return ['#333440', '#1F1F28'] as [string, string];
@@ -59,6 +61,7 @@ export default function DaySection({ title, date, assignments, onToggleAssignmen
   const [isCollapsed, setIsCollapsed] = useState(false);
   const rotation = useSharedValue(0);
   const [enhancedAssignments, setEnhancedAssignments] = useState<EnhancedAssignment[]>([]);
+  const { t } = useTranslation();
   
   // Fetch period info for assignments with periodId
   useEffect(() => {
@@ -141,7 +144,7 @@ export default function DaySection({ title, date, assignments, onToggleAssignmen
     };
   });
   
-  const colors = getDayColor(title);
+  const colors = getDayColor(title, t);
   
   return (
     <Animated.View 
@@ -192,7 +195,7 @@ export default function DaySection({ title, date, assignments, onToggleAssignmen
             >
               <CourseSection
                 courseCode={courseAssignments[0].courseCode || courseKey}
-                courseName={courseAssignments[0].courseName || 'Uncategorized'}
+                courseName={courseAssignments[0].courseName || t('assignments').common.uncategorized}
                 assignments={courseAssignments}
                 onToggleAssignment={onToggleAssignment}
                 onDeleteAssignment={onDeleteAssignment}
