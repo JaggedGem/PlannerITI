@@ -64,6 +64,33 @@ type TranslationType = {
       deleteConfirmMessage: string;
       delete: string;
     };
+    notifications: {
+      title: string;
+      enabled: string;
+      enabledDescription: string;
+      disabledDescription: string;
+      time: string;
+      timeSettings: string;
+      timeDescription: string;
+      selectTime: string;
+      reminderDays: string;
+      reminderDaysDescription: string;
+      importantAssignments: string;
+      otherAssignments: string;
+      exams: string;
+      tests: string;
+      quizzes: string;
+      homework: string;
+      projects: string;
+      other: string;
+      dailyReminders: string;
+      dailyRemindersDescription: string;
+      dailyExams: string;
+      dailyTests: string;
+      dailyQuizzes: string;
+      testNotification: string;
+      days: string;
+    };
   };
   schedule: {
     noClassesWeekend: string;
@@ -422,6 +449,33 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         deleteConfirmMessage: 'Are you sure you want to delete this period?',
         delete: 'Delete',
       },
+      notifications: {
+        title: 'Notifications',
+        enabled: 'Enable Notifications',
+        enabledDescription: 'You will receive reminders for upcoming assignments',
+        disabledDescription: 'You will not receive any assignment notifications',
+        time: 'Notification Time',
+        timeSettings: 'Time Settings',
+        timeDescription: 'When notifications will be sent each day',
+        selectTime: 'Select Time',
+        reminderDays: 'Reminder Days',
+        reminderDaysDescription: 'How many days before the due date to send notifications',
+        importantAssignments: 'Important Assignments',
+        otherAssignments: 'Other Assignments',
+        exams: 'Exams',
+        tests: 'Tests',
+        quizzes: 'Quizzes',
+        homework: 'Homework',
+        projects: 'Projects',
+        other: 'Other',
+        dailyReminders: 'Daily Reminders',
+        dailyRemindersDescription: 'Send additional reminders every day until the due date',
+        dailyExams: 'For Exams',
+        dailyTests: 'For Tests',
+        dailyQuizzes: 'For Quizzes',
+        testNotification: 'Send Test Notification',
+        days: 'days'
+      }
     },
     schedule: {
       noClassesWeekend: 'No classes on weekends',
@@ -798,6 +852,33 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         deleteConfirmMessage: 'Sigur doriți să ștergeți această lecție?',
         delete: 'Șterge',
       },
+      notifications: {
+        title: 'Notificări',
+        enabled: 'Activează Notificările',
+        enabledDescription: 'Vei primi notificări pentru temele viitoare',
+        disabledDescription: 'Nu vei primi nicio notificare despre teme',
+        time: 'Ora Notificării',
+        timeSettings: 'Setări Oră',
+        timeDescription: 'Când vor fi trimise notificările în fiecare zi',
+        selectTime: 'Selectează Ora',
+        reminderDays: 'Zile de Reamintire',
+        reminderDaysDescription: 'Cu câte zile înainte de data scadentă să se trimită notificări',
+        importantAssignments: 'Teme Importante',
+        otherAssignments: 'Alte Teme',
+        exams: 'Examene',
+        tests: 'Teste',
+        quizzes: 'Quizuri',
+        homework: 'Teme',
+        projects: 'Proiecte',
+        other: 'Altele',
+        dailyReminders: 'Reamintiri Zilnice',
+        dailyRemindersDescription: 'Trimite notificări suplimentare în fiecare zi până la data scadentă',
+        dailyExams: 'Pentru Examene',
+        dailyTests: 'Pentru Teste',
+        dailyQuizzes: 'Pentru Quizuri',
+        testNotification: 'Trimite Notificare de Test',
+        days: 'zile'
+      }
     },
     schedule: {
       noClassesWeekend: 'Nu sunt lecții în weekend',
@@ -1057,31 +1138,31 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         idnpSecurity: {
           title: 'Securitatea IDNP',
           content: [
-            'IDNP-ul dvs. este stocat în siguranță pe serverul nostru cu criptare înainte de transmitere și în timpul stocării, ceea ce face imposibilă decriptarea fără parola dvs. sau interceptarea de către persoane rău intenționate.',
-            'Puteți alege să stocați IDNP-ul local pe dispozitivul dvs. în loc să îl sincronizați cu serverul dacă considerați că nu este sigur și să îl păstrați doar pe dispozitiv.',
-            'Nu împărtășim IDNP-ul dvs. cu terțe părți.'
+            'Your IDNP is stored securely on our server with encryption before transit and at rest which makes it impossible to decrypt without your password or intercepted by malicious people.',
+            'You can choose to store your IDNP locally on your device instead of syncing it with the server if you feel that it\'s not secure and store it only on-device.',
+            'We do not share your IDNP with third parties.'
           ]
         },
         passwordSecurity: {
           title: 'Securitatea Parolei',
           content: [
-            'Folosim criptare puternică pentru a vă proteja parola, criptând-o înainte să ajungă pe serverul nostru, ceea ce înseamnă că nici dacă am vrea nu am putea să vă vedem parola.',
-            'Parola dvs. nu este niciodată stocată în text simplu și este folosită doar pentru a cripta IDNP-ul înainte să ajungă pe serverul nostru.',
-            'Nu împărtășiți niciodată parola cu nimeni.'
+            'We use strong encryption to protect your password, encrypting it even before it reaches our server which means that even if we wanted we wouldn\'t be able to see your password.',
+            'Your password is never stored in plain text and is only used to encrypt your IDNP before it reaches our server.',
+            'Never share your password with anyone.'
           ]
         },
         dataStorage: {
           title: 'Stocarea Datelor',
           content: [
-            'Datele dvs. sunt stocate în siguranță fie pe serverul nostru, fie local pe dispozitivul dvs.',
-            'Puteți opta să nu mai folosiți serviciile noastre în orice moment.'
+            'Your data is stored securely either on our server or locally on your device.',
+            'You can opt out from our services at any time.',
           ]
         },
         thirdParty: {
           title: 'Servicii Terțe',
           content: [
-            'Nu împărtășim datele dvs. cu terțe părți.',
-            'Putem folosi servicii terțe pentru a îmbunătăți aplicația noastră.'
+            'We do not share your data with third parties.',
+            'We may use third-party services to improve our app.'
           ]
         },
         rights: {
@@ -1174,6 +1255,33 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         deleteConfirmMessage: 'Вы уверены, что хотите удалить этот период?',
         delete: 'Удалить',
       },
+      notifications: {
+        title: 'Уведомления',
+        enabled: 'Включить уведомления',
+        enabledDescription: 'Вы будете получать напоминания о предстоящих заданиях',
+        disabledDescription: 'Вы не будете получать никаких уведомлений о заданиях',
+        time: 'Время уведомления',
+        timeSettings: 'Настройки времени',
+        timeDescription: 'Когда уведомления будут отправляться каждый день',
+        selectTime: 'Выбрать время',
+        reminderDays: 'Дни напоминания',
+        reminderDaysDescription: 'За сколько дней до срока отправлять уведомления',
+        importantAssignments: 'Важные задания',
+        otherAssignments: 'Другие задания',
+        exams: 'Экзамены',
+        tests: 'Тесты',
+        quizzes: 'Контрольные',
+        homework: 'Домашние задания',
+        projects: 'Проекты',
+        other: 'Другое',
+        dailyReminders: 'Ежедневные напоминания',
+        dailyRemindersDescription: 'Отправлять дополнительные напоминания каждый день до срока выполнения',
+        dailyExams: 'Для экзаменов',
+        dailyTests: 'Для тестов',
+        dailyQuizzes: 'Для контрольных',
+        testNotification: 'Отправить тестовое уведомление',
+        days: 'дней'
+      }
     },
     schedule: {
       noClassesWeekend: 'Нет занятий в выходные',
