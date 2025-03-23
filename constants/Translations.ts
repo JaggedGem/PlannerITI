@@ -96,6 +96,7 @@ type TranslationType = {
     loading: string;
     empty: string;
     addNew: string;
+    save: string;
     segments: {
       dueDate: string;
       classes: string;
@@ -130,7 +131,46 @@ type TranslationType = {
       friday: string;
       saturday: string;
       sunday: string;
+      nextWeek: string;
+      inTwoWeeks: string;
+      thisWeek: string;
+      in: string;
+      weeks: string;
     };
+    titlePlaceholder: string;
+    description: string;
+    descriptionPlaceholder: string;
+    optional: string;
+    type: string;
+    autoDetectedType: string;
+    dueDate: string;
+    dueTime: string;
+    markAsPriority: string;
+    selectSubject: string;
+    periods: {
+      first: string;
+      second: string;
+      third: string;
+      fourth: string;
+      fifth: string;
+    };
+    useNextPeriod: string;
+    noUpcomingClasses: string;
+    inNextTwoWeeks: string;
+    findingNextClass: string;
+    assignmentDueText: string;
+    on: string;
+    at: string;
+    thisSubject: string;
+    noUpcomingClassesFound: string;
+    recent: string;
+    all: string;
+    custom: string;
+    loadingSubjects: string;
+    noSubjects: string;
+    noCustomSubjects: string;
+    enterSubjectName: string;
+    add: string;
   };
   grades: {
     title: string;
@@ -413,7 +453,8 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       title: 'Assignments',
       loading: 'Loading assignments...',
       empty: 'No assignments found',
-      addNew: 'Tap the + button to add a new assignment',
+      addNew: 'New Assignment',
+      save: 'Save',
       segments: {
         dueDate: 'Due date',
         classes: 'Classes',
@@ -448,7 +489,46 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         friday: 'Friday',
         saturday: 'Saturday',
         sunday: 'Sunday',
+        nextWeek: 'Next Week',
+        inTwoWeeks: 'In 2 Weeks',
+        thisWeek: 'this week',
+        in: 'in',
+        weeks: 'weeks',
       },
+      titlePlaceholder: 'Assignment title',
+      description: 'Description',
+      descriptionPlaceholder: 'Add details about the assignment',
+      optional: 'Optional',
+      type: 'Assignment Type',
+      autoDetectedType: 'Assignment type automatically detected',
+      dueDate: 'Due Date',
+      dueTime: 'Due Time',
+      markAsPriority: 'Mark as Priority',
+      selectSubject: 'Select Subject',
+      periods: {
+        first: '1st Period',
+        second: '2nd Period',
+        third: '3rd Period',
+        fourth: '4th Period',
+        fifth: '5th Period',
+      },
+      useNextPeriod: 'Use Next Period',
+      noUpcomingClasses: 'No upcoming classes found for',
+      inNextTwoWeeks: 'in the next two weeks',
+      findingNextClass: 'Finding next class period...',
+      assignmentDueText: 'This assignment will be due',
+      on: 'on',
+      at: 'at',
+      thisSubject: 'this subject',
+      noUpcomingClassesFound: 'No upcoming classes found. Please set a custom due date below.',
+      recent: 'Recent',
+      all: 'All',
+      custom: 'Custom',
+      loadingSubjects: 'Loading subjects...',
+      noSubjects: 'No subjects found',
+      noCustomSubjects: 'No custom subjects found',
+      enterSubjectName: 'Enter subject name',
+      add: 'Add',
     },
     grades: {
       title: 'Grades',
@@ -749,7 +829,8 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       title: 'Teme',
       loading: 'Se încarcă temele...',
       empty: 'Nu s-au găsit teme',
-      addNew: 'Apasă butonul + pentru a adăuga o temă nouă',
+      save: 'Salvează',
+      addNew: 'Temă Nouă',
       segments: {
         dueDate: 'Data scadentă',
         classes: 'Clase',
@@ -784,7 +865,46 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         friday: 'Vineri',
         saturday: 'Sâmbătă',
         sunday: 'Duminică',
+        nextWeek: 'Săptămâna Viitoare',
+        inTwoWeeks: 'În 2 Săptămâni',
+        thisWeek: 'această săptămână',
+        in: 'în',
+        weeks: 'săptămâni',
       },
+      titlePlaceholder: 'Titlul temei',
+      description: 'Descriere',
+      descriptionPlaceholder: 'Adaugă detalii despre temă',
+      optional: 'Opțional',
+      type: 'Tipul Temei',
+      autoDetectedType: 'Tipul temei detectat automat',
+      dueDate: 'Data Scadentă',
+      dueTime: 'Ora Scadentă',
+      markAsPriority: 'Marchează ca Prioritate',
+      selectSubject: 'Selectează Materia',
+      periods: {
+        first: 'Perioada 1',
+        second: 'Perioada 2',
+        third: 'Perioada 3',
+        fourth: 'Perioada 4',
+        fifth: 'Perioada 5',
+      },
+      useNextPeriod: 'Folosește Următoarea Oră',
+      noUpcomingClasses: 'Nu s-au găsit ore viitoare pentru',
+      inNextTwoWeeks: 'în următoarele două săptămâni',
+      findingNextClass: 'Se caută următoarea oră...',
+      assignmentDueText: 'Această temă va fi scadentă',
+      on: 'pe',
+      at: 'la',
+      thisSubject: 'această materie',
+      noUpcomingClassesFound: 'Nu s-au găsit ore viitoare. Vă rugăm să setați o dată personalizată mai jos.',
+      recent: 'Recente',
+      all: 'Toate',
+      custom: 'Personalizate',
+      loadingSubjects: 'Se încarcă materiile...',
+      noSubjects: 'Nu s-au găsit materii',
+      noCustomSubjects: 'Nu s-au găsit materii personalizate',
+      enterSubjectName: 'Introduceți numele materiei',
+      add: 'Adaugă',
     },
     grades: {
       title: 'Note',
@@ -931,7 +1051,7 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
           title: 'Colectarea Datelor',
           content: [
             'Colectăm date pentru a oferi servicii mai bune utilizatorilor noștri.',
-            'Datele pe care le colectăm includ informații personale precum numele, adresa de email și IDNP (opțional).'
+            'Datele pe care le colectăm includ informații personale precum numele, email address și IDNP (opțional).'
           ]
         },
         idnpSecurity: {
@@ -1085,7 +1205,8 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       title: 'Задания',
       loading: 'Загрузка заданий...',
       empty: 'Задания не найдены',
-      addNew: 'Нажмите кнопку + чтобы добавить новое задание',
+      addNew: 'Новое Задание',
+      save: 'Сохранить',
       segments: {
         dueDate: 'Срок сдачи',
         classes: 'Классы',
@@ -1120,7 +1241,46 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         friday: 'Пятница',
         saturday: 'Суббота',
         sunday: 'Воскресенье',
+        nextWeek: 'Следующая Неделя',
+        inTwoWeeks: 'Через 2 Недели',
+        thisWeek: 'на этой неделе',
+        in: 'через',
+        weeks: 'недели',
       },
+      titlePlaceholder: 'Название задания',
+      description: 'Описание',
+      descriptionPlaceholder: 'Добавьте детали о задании',
+      optional: 'Необязательно',
+      type: 'Тип Задания',
+      autoDetectedType: 'Тип задания определен автоматически',
+      dueDate: 'Срок Сдачи',
+      dueTime: 'Время Сдачи',
+      markAsPriority: 'Отметить как Приоритетное',
+      selectSubject: 'Выбрать Предмет',
+      periods: {
+        first: '1-й Период',
+        second: '2-й Период',
+        third: '3-й Период',
+        fourth: '4-й Период',
+        fifth: '5-й Период',
+      },
+      useNextPeriod: 'Использовать Следующий Урок',
+      noUpcomingClasses: 'Не найдены предстоящие уроки для',
+      inNextTwoWeeks: 'в ближайшие две недели',
+      findingNextClass: 'Поиск следующего урока...',
+      assignmentDueText: 'Срок сдачи этого задания',
+      on: 'в',
+      at: 'в',
+      thisSubject: 'этот предмет',
+      noUpcomingClassesFound: 'Предстоящие уроки не найдены. Пожалуйста, установите пользовательскую дату ниже.',
+      recent: 'Недавние',
+      all: 'Все',
+      custom: 'Пользовательские',
+      loadingSubjects: 'Загрузка предметов...',
+      noSubjects: 'Предметы не найдены',
+      noCustomSubjects: 'Пользовательские предметы не найдены',
+      enterSubjectName: 'Введите название предмета',
+      add: 'Добавить',
     },
     grades: {
       title: 'Оценки',

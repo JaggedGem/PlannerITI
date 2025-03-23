@@ -54,9 +54,8 @@ const getSubjectColor = (courseCode: string): string => {
 };
 
 // Format the due date to a human-readable string
-const formatDueDay = (dateString: string): string => {
+const formatDueDay = (dateString: string, t: any, currentLanguage: string): string => {
   const date = new Date(dateString);
-  const { t, currentLanguage } = useTranslation();
   
   if (isToday(date)) {
     return t('assignments').days.today;
@@ -85,7 +84,7 @@ export default function CourseSection({
 }: CourseSectionProps) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
-  const { t } = useTranslation();
+  const { t, currentLanguage } = useTranslation();
   
   // Ensure we have a valid course code and name
   const safeCode = courseCode || t('assignments').common.uncategorized;
@@ -215,7 +214,7 @@ export default function CourseSection({
                     onToggle={() => onToggleAssignment(assignment.id)}
                     onDelete={onDeleteAssignment ? () => onDeleteAssignment(assignment.id) : undefined}
                     showDueDate={showDueDate}
-                    dueDateLabel={formatDueDay(assignment.dueDate)}
+                    dueDateLabel={formatDueDay(assignment.dueDate, t, currentLanguage)}
                   />
                 </Animated.View>
               ))}
