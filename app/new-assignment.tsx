@@ -107,15 +107,24 @@ const CustomToggle = ({
   );
 };
 
-// Add Day names array for the mini calendar
-const DAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+// Add Day names array for the mini calendar - will be replaced with translations inside component
+const DAYS_DEFAULT = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
-// Add quick date options
-const QUICK_DATE_OPTIONS = [
+// Basic structure for quick options, will be populated with translations inside component
+const QUICK_DATE_OPTIONS_DEFAULT = [
   { label: 'Today', days: 0 },
   { label: 'Tomorrow', days: 1 },
   { label: 'Next Week', days: 7 },
   { label: 'In 2 Weeks', days: 14 },
+];
+
+// Basic structure for time presets, will be populated with translations inside component
+const TIME_PRESETS_DEFAULT = [
+  { label: '1st Period', hour: 8, minute: 0 },
+  { label: '2nd Period', hour: 9, minute: 30 },
+  { label: '3rd Period', hour: 11, minute: 20 },
+  { label: '4th Period', hour: 12, minute: 50 },
+  { label: '5th Period', hour: 14, minute: 20 },
 ];
 
 // Extract QuickOption component outside DatePicker for better stability
@@ -161,24 +170,19 @@ const QuickOption = React.memo(({
   );
 });
 
-// Add TIME_PRESETS
-const TIME_PRESETS = [
-  { label: '1st Period', hour: 8, minute: 0 },
-  { label: '2nd Period', hour: 9, minute: 30 },
-  { label: '3rd Period', hour: 11, minute: 20 },
-  { label: '4th Period', hour: 12, minute: 50 },
-  { label: '5th Period', hour: 14, minute: 20 },
-];
-
 // Add DatePicker component
 const DatePicker = ({ 
   selectedDate, 
   onDateChange,
-  formatDate
+  formatDate,
+  days = DAYS_DEFAULT,
+  quickDateOptions = QUICK_DATE_OPTIONS_DEFAULT
 }: { 
   selectedDate: Date; 
   onDateChange: (date: Date) => void;
   formatDate: (date: Date) => string;
+  days?: string[];
+  quickDateOptions?: { label: string, days: number }[];
 }) => {
   const [calendarMonth, setCalendarMonth] = useState(new Date(selectedDate));
   const [showCalendar, setShowCalendar] = useState(false);
@@ -426,16 +430,22 @@ const DatePicker = ({
       </View>
       
       <View style={styles.quickOptionsContainer}>
-        {QUICK_DATE_OPTIONS.map((option, index) => (
-          <QuickOption
-            key={`quick-option-${option.days}`}
-            days={option.days}
-            label={option.label}
-            index={index}
-            selectedDate={selectedDate}
-            onSelect={selectQuickOption}
-          />
-        ))}
+        <ScrollView 
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.quickOptionsScrollContent}
+        >
+          {quickDateOptions.map((option, index) => (
+            <QuickOption
+              key={`quick-option-${option.days}`}
+              days={option.days}
+              label={option.label}
+              index={index}
+              selectedDate={selectedDate}
+              onSelect={selectQuickOption}
+            />
+          ))}
+        </ScrollView>
       </View>
       
       <Animated.View style={calendarContainerStyle}>
@@ -453,7 +463,7 @@ const DatePicker = ({
           </View>
           
           <View style={styles.calendarDaysHeader}>
-            {DAYS.map((day, index) => (
+            {days.map((day, index) => (
               <Text key={index} style={styles.calendarDayHeaderText}>{day}</Text>
             ))}
           </View>
@@ -480,9 +490,9 @@ const DatePicker = ({
                   >
                     <Text style={[
                       styles.calendarDayText,
-                      isSelected && styles.calendarDayTextSelected,
-                      isToday && styles.calendarDayTextToday,
-                      !day.isCurrentMonth && styles.calendarDayTextOtherMonth
+                      !day.isCurrentMonth && styles.calendarDayTextOtherMonth,
+                      isToday && !isSelected && styles.calendarDayTextToday,  // Only apply today text color if not selected
+                      isSelected && styles.calendarDayTextSelected,  // Always apply selected text style last
                     ]}>
                       {day.date.getDate()}
                     </Text>
@@ -518,10 +528,12 @@ const DatePicker = ({
 // Add TimePicker component
 const TimePicker = ({ 
   selectedTime, 
-  onTimeChange 
+  onTimeChange,
+  timePresets = TIME_PRESETS_DEFAULT
 }: { 
   selectedTime: Date; 
   onTimeChange: (date: Date) => void;
+  timePresets?: { label: string, hour: number, minute: number }[];
 }) => {
   const hours = Array.from({ length: 12 }, (_, i) => i + 1);
   const minutes = Array.from({ length: 12 }, (_, i) => i * 5);
@@ -617,6 +629,7 @@ const TimePicker = ({
     );
   };
   
+  // Remove the custom renderPresets function and restore the original ScrollView with mapping
   return (
     <View style={styles.timePickerContainer}>
       <Animated.Text 
@@ -633,16 +646,16 @@ const TimePicker = ({
       
       <View style={styles.timePresetContainer}>
         <ScrollView 
-          horizontal 
+          horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.timePresetScrollContent}
         >
-          {TIME_PRESETS.map((preset, index) => {
+          {timePresets.map((preset, index) => {
             const presetDate = new Date(selectedTime);
             presetDate.setHours(preset.hour, preset.minute);
             const presetTimeString = getTimeString(presetDate);
             const isSelected = selectedTime.getHours() === preset.hour && 
-                            selectedTime.getMinutes() === preset.minute;
+                           selectedTime.getMinutes() === preset.minute;
             
             return (
               <Animated.View
@@ -1186,7 +1199,7 @@ export default function NewAssignmentScreen() {
         
         if (subjectPeriod) {
           // Get readable day format
-          const dayString = searchDate.toLocaleDateString('en-US', { weekday: 'long' });
+          const dayString = searchDate.toLocaleDateString(currentLanguage, { weekday: 'long' });
           
           // Format time
           const formattedTime = formatPeriodTime(subjectPeriod.startTime);
@@ -1198,11 +1211,11 @@ export default function NewAssignmentScreen() {
           
           let weekText = '';
           if (weekDifference === 0) {
-            weekText = 'this week';
+            weekText = t('assignments').days.thisWeek;
           } else if (weekDifference === 1) {
-            weekText = 'next week';
+            weekText = t('assignments').days.nextWeek;
           } else {
-            weekText = `in ${weekDifference} weeks`;
+            weekText = `${t('assignments').days.in} ${weekDifference} ${t('assignments').days.weeks}`;
           }
           
           // Set next period info
@@ -1276,7 +1289,7 @@ export default function NewAssignmentScreen() {
   
   // Format date for display
   const formatDate = (date: Date) => {
-    return date.toLocaleDateString('en-US', {
+    return date.toLocaleDateString(currentLanguage, {
       weekday: 'short',
       month: 'short',
       day: 'numeric',
@@ -1286,7 +1299,7 @@ export default function NewAssignmentScreen() {
   
   // Format time for display
   const formatTime = (date: Date) => {
-    return date.toLocaleTimeString('en-US', {
+    return date.toLocaleTimeString(currentLanguage, {
       hour: 'numeric',
       minute: '2-digit',
       hour12: true
@@ -1539,7 +1552,7 @@ export default function NewAssignmentScreen() {
             styles.typeName,
             assignmentType === type && {color: '#2C3DCD', fontWeight: '600'}
           ]}>
-            {type}
+            {t('assignments').types[type.toLowerCase() as 'homework' | 'test' | 'exam' | 'project' | 'quiz' | 'lab' | 'essay' | 'presentation' | 'other']}
           </Text>
         </View>
         {assignmentType === type && (
@@ -1576,22 +1589,42 @@ export default function NewAssignmentScreen() {
   // Find the currently selected subject
   const selectedSubject = subjects.find(s => s.id === selectedSubjectId);
 
+  // Replace DAYS and QUICK_DATE_OPTIONS with dynamic translations
+  const DAYS = t('weekdays').short;
+  
+  // Define date options with proper fallbacks
+  const QUICK_DATE_OPTIONS = [
+    { label: t('assignments').days.today, days: 0 },
+    { label: t('assignments').days.tomorrow, days: 1 },
+    { label: t('assignments').days.nextWeek, days: 7 },
+    { label: t('assignments').days.inTwoWeeks, days: 14 },
+  ];
+  
+  // Define time presets with translations
+  const TIME_PRESETS = [
+    { label: t('assignments').periods.first, hour: 8, minute: 0 },
+    { label: t('assignments').periods.second, hour: 9, minute: 30 },
+    { label: t('assignments').periods.third, hour: 11, minute: 20 },
+    { label: t('assignments').periods.fourth, hour: 12, minute: 50 },
+    { label: t('assignments').periods.fifth, hour: 14, minute: 20 },
+  ];
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" />
       
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>New Assignment</Text>
+        <Text style={styles.headerTitle}>{t('assignments').addNew}</Text>
         <View style={styles.headerButtons}>
           <TouchableOpacity onPress={handleCancel} style={styles.cancelButton}>
-            <Text style={styles.cancelButtonText}>Cancel</Text>
+            <Text style={styles.cancelButtonText}>{t('settings').customPeriods.cancel}</Text>
           </TouchableOpacity>
           <TouchableOpacity 
             onPress={handleSave} 
             style={[styles.saveButton, (!title || !courseName) && styles.saveButtonDisabled]}
             disabled={!title || !courseName}
           >
-            <Text style={[styles.saveButtonText, (!title || !courseName) && styles.saveButtonTextDisabled]}>Save</Text>
+            <Text style={[styles.saveButtonText, (!title || !courseName) && styles.saveButtonTextDisabled]}>{t('assignments').save}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1603,10 +1636,10 @@ export default function NewAssignmentScreen() {
         renderItem={({ item }) => (
           <View style={styles.formContainer}>
             <Animated.View entering={FadeIn.duration(300).delay(50)}>
-              <Text style={styles.label}>Title</Text>
+              <Text style={styles.label}>{t('assignments').title}</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Assignment title"
+                placeholder={t('assignments').titlePlaceholder}
                 placeholderTextColor="#8A8A8D"
                 value={title}
                 onChangeText={handleTitleChange}
@@ -1614,31 +1647,33 @@ export default function NewAssignmentScreen() {
               />
               {autoDetectedType && (
                 <Text style={styles.autoDetectedNote}>
-                  Assignment type automatically detected
+                  {t('assignments').autoDetectedType}
                 </Text>
               )}
             </Animated.View>
             
             {/* Add Assignment Type Selector */}
             <Animated.View entering={FadeIn.duration(300).delay(75)}>
-              <Text style={styles.label}>Assignment Type</Text>
+              <Text style={styles.label}>{t('assignments').type}</Text>
               <TouchableOpacity
                 style={styles.typeSelector}
                 onPress={() => setIsTypeModalVisible(true)}
               >
                 <View style={styles.typeDisplay}>
                   <Ionicons name={getTypeIcon()} size={20} color="#FFFFFF" style={styles.typeIcon} />
-                  <Text style={styles.typeText}>{assignmentType}</Text>
+                  <Text style={styles.typeText}>
+                    {t('assignments').types[assignmentType.toLowerCase() as 'homework' | 'test' | 'exam' | 'project' | 'quiz' | 'lab' | 'essay' | 'presentation' | 'other']}
+                  </Text>
                 </View>
                 <Ionicons name="chevron-down" size={20} color="#8A8A8D" />
               </TouchableOpacity>
             </Animated.View>
             
             <Animated.View entering={FadeIn.duration(300).delay(100)}>
-              <Text style={styles.label}>Description (Optional)</Text>
+              <Text style={styles.label}>{t('assignments').description} ({t('assignments').optional})</Text>
               <TextInput
                 style={[styles.input, styles.textArea]}
-                placeholder="Add details about the assignment"
+                placeholder={t('assignments').descriptionPlaceholder}
                 placeholderTextColor="#8A8A8D"
                 value={description}
                 onChangeText={setDescription}
@@ -1648,7 +1683,7 @@ export default function NewAssignmentScreen() {
             </Animated.View>
             
             <Animated.View entering={FadeIn.duration(300).delay(150)}>
-              <Text style={styles.label}>Subject</Text>
+              <Text style={styles.label}>{t('grades').form.subject}</Text>
               <TouchableOpacity
                 style={styles.subjectSelector}
                 onPress={() => setIsSubjectsModalVisible(true)}
@@ -1657,11 +1692,11 @@ export default function NewAssignmentScreen() {
                   <View style={styles.selectedSubjectDisplay}>
                     <Text style={styles.selectedSubjectText}>{selectedSubject.name}</Text>
                     {selectedSubject.isCustom && (
-                      <Text style={styles.customBadgeSmall}>Custom</Text>
+                      <Text style={styles.customBadgeSmall}>{t('assignments').custom}</Text>
                     )}
                   </View>
                 ) : (
-                  <Text style={styles.subjectPlaceholder}>Select a subject</Text>
+                  <Text style={styles.subjectPlaceholder}>{t('assignments').selectSubject}</Text>
                 )}
                 <Ionicons name="chevron-down" size={20} color="#8A8A8D" />
               </TouchableOpacity>
@@ -1675,7 +1710,7 @@ export default function NewAssignmentScreen() {
                     styles.label, 
                     !nextPeriodInfo && styles.labelDisabled,
                     { marginTop: 0, marginBottom: 0 }
-                  ]}>Use Next Period</Text>
+                  ]}>{t('assignments').useNextPeriod}</Text>
                   <CustomToggle
                     value={useNextPeriod}
                     onValueChange={toggleNextPeriod}
@@ -1687,7 +1722,7 @@ export default function NewAssignmentScreen() {
                   <View style={styles.warningContainer}>
                     <Ionicons name="alert-circle" size={16} color="#FFA500" />
                     <Text style={styles.warningText}>
-                      No upcoming classes found for {selectedSubject?.name || "this subject"} in the next two weeks.
+                      {t('assignments').noUpcomingClasses} {selectedSubject?.name || t('assignments').thisSubject} {t('assignments').inNextTwoWeeks}
                     </Text>
                   </View>
                 )}
@@ -1702,16 +1737,16 @@ export default function NewAssignmentScreen() {
                     {loadingNextPeriod ? (
                       <View style={styles.loadingNextPeriod}>
                         <ActivityIndicator size="small" color="#2C3DCD" />
-                        <Text style={styles.nextPeriodText}>Finding next class period...</Text>
+                        <Text style={styles.nextPeriodText}>{t('assignments').findingNextClass}</Text>
                       </View>
                     ) : nextPeriodInfo ? (
                       <Text style={styles.nextPeriodText}>
-                        This assignment will be due {nextPeriodInfo.weekText ? `${nextPeriodInfo.weekText} on ` : 'on '}
-                        {nextPeriodInfo.day} at {nextPeriodInfo.time}
+                        {t('assignments').assignmentDueText} {nextPeriodInfo.weekText ? `${nextPeriodInfo.weekText} ${t('assignments').on} ` : `${t('assignments').on} `}
+                        {nextPeriodInfo.day} {t('assignments').at} {nextPeriodInfo.time}
                       </Text>
                     ) : (
                       <Text style={styles.nextPeriodText}>
-                        No upcoming classes found. Please set a custom due date below.
+                        {t('assignments').noUpcomingClassesFound}
                       </Text>
                     )}
                   </Animated.View>
@@ -1727,26 +1762,29 @@ export default function NewAssignmentScreen() {
                 layout={Layout.springify()}
               >
                 <Animated.View entering={FadeIn.duration(200).delay(50)}>
-                  <Text style={styles.label}>Due Date</Text>
+                  <Text style={styles.label}>{t('assignments').dueDate}</Text>
                   <DatePicker
                     selectedDate={dueDate}
                     onDateChange={setDueDate}
                     formatDate={formatDate}
+                    days={DAYS}
+                    quickDateOptions={QUICK_DATE_OPTIONS}
                   />
               </Animated.View>
                 
                 <Animated.View entering={FadeIn.duration(200).delay(100)}>
-                  <Text style={styles.label}>Due Time</Text>
+                  <Text style={styles.label}>{t('assignments').dueTime}</Text>
                   <TimePicker
                     selectedTime={dueDate}
                     onTimeChange={setDueDate}
+                    timePresets={TIME_PRESETS}
                   />
                 </Animated.View>
               </Animated.View>
             )}
             
             <Animated.View entering={FadeIn.duration(300).delay(400)} style={styles.priorityContainer}>
-              <Text style={styles.label}>Mark as Priority</Text>
+              <Text style={styles.label}>{t('assignments').markAsPriority}</Text>
               <CustomToggle
                 value={isPriority}
                 onValueChange={setIsPriority}
@@ -1769,7 +1807,7 @@ export default function NewAssignmentScreen() {
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Subject</Text>
+              <Text style={styles.modalTitle}>{t('assignments').selectSubject}</Text>
               <TouchableOpacity 
                 onPress={() => setIsSubjectsModalVisible(false)}
                 hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
@@ -1790,7 +1828,7 @@ export default function NewAssignmentScreen() {
                 <Text style={[
                   styles.segmentButtonText,
                   subjectSelectionMode === 'recent' && styles.segmentButtonTextActive
-                ]}>Recent</Text>
+                ]}>{t('assignments').recent}</Text>
               </TouchableOpacity>
                 
                 <View style={styles.segmentSeparator} />
@@ -1805,7 +1843,7 @@ export default function NewAssignmentScreen() {
                 <Text style={[
                   styles.segmentButtonText,
                   subjectSelectionMode === 'all' && styles.segmentButtonTextActive
-                ]}>All</Text>
+                ]}>{t('assignments').all}</Text>
               </TouchableOpacity>
                 
                 <View style={styles.segmentSeparator} />
@@ -1820,14 +1858,14 @@ export default function NewAssignmentScreen() {
                 <Text style={[
                   styles.segmentButtonText,
                   subjectSelectionMode === 'custom' && styles.segmentButtonTextActive
-                ]}>Custom</Text>
+                ]}>{t('assignments').custom}</Text>
               </TouchableOpacity>
               </View>
             </View>
             
             <TextInput
               style={styles.searchInput}
-              placeholder="Search subjects..."
+              placeholder={t('settings').group.search}
               placeholderTextColor="#8A8A8D"
               value={searchText}
               onChangeText={setSearchText}
@@ -1836,7 +1874,7 @@ export default function NewAssignmentScreen() {
             {loadingSubjects ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="small" color="#2C3DCD" />
-                <Text style={styles.loadingText}>Loading subjects...</Text>
+                <Text style={styles.loadingText}>{t('assignments').loadingSubjects}</Text>
               </View>
             ) : filteredSubjects.length > 0 ? (
               <View style={{ flex: 1 }}>
@@ -1855,8 +1893,8 @@ export default function NewAssignmentScreen() {
               <View style={styles.noSubjectsContainer}>
                 <Text style={styles.noSubjectsText}>
                   {subjectSelectionMode === 'custom' 
-                    ? 'No custom subjects found'
-                    : 'No subjects found'}
+                    ? t('assignments').noCustomSubjects
+                    : t('assignments').noSubjects}
                 </Text>
               </View>
             )}
@@ -1868,7 +1906,7 @@ export default function NewAssignmentScreen() {
                     style={styles.courseInput}
                     value={courseName}
                     onChangeText={setCourseName}
-                    placeholder="Enter subject name"
+                    placeholder={t('assignments').enterSubjectName}
                     placeholderTextColor="#8A8A8D"
                   />
                   <TouchableOpacity 
@@ -1876,7 +1914,7 @@ export default function NewAssignmentScreen() {
                     onPress={handleAddCustomSubject}
                     disabled={!courseName}
                   >
-                    <Text style={styles.addButtonText}>Add</Text>
+                    <Text style={styles.addButtonText}>{t('assignments').add}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -1895,7 +1933,7 @@ export default function NewAssignmentScreen() {
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Assignment Type</Text>
+              <Text style={styles.modalTitle}>{t('assignments').type}</Text>
               <TouchableOpacity 
                 onPress={() => setIsTypeModalVisible(false)}
                 hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
@@ -2126,27 +2164,27 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   quickOptionsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     marginVertical: 10,
-    paddingHorizontal: 2,
+  },
+  quickOptionsScrollContent: {
+    paddingHorizontal: 5,
+    paddingBottom: 5,
   },
   quickDateButton: {
     backgroundColor: '#242424',
     paddingVertical: 10,
-    paddingHorizontal: 8, // Reduce horizontal padding to fit text
+    paddingHorizontal: 15,
     borderRadius: 8,
     alignItems: 'center',
-    flex: 1,
-    marginHorizontal: 3, // Reduce margin to help with spacing
-    minWidth: 60, // Ensure minimum width
+    marginHorizontal: 6,
+    minWidth: 80,
   },
   quickDateButtonSelected: {
     backgroundColor: '#2C3DCD',
   },
   quickDateButtonText: {
     color: '#FFFFFF',
-    fontSize: 12, // Reduce font size slightly to ensure text fits
+    fontSize: 14,
     fontWeight: '500',
     textAlign: 'center', // Ensure text is centered
   },
@@ -2214,7 +2252,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   calendarDayTextSelected: {
-    color: '#FFFFFF',
+    color: '#FFFFFF',  // Ensure this is white
     fontWeight: '600',
   },
   calendarDayTextToday: {
@@ -2584,5 +2622,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
     fontStyle: 'italic'
+  },
+  timePickerWrapper: {
+    backgroundColor: '#1A1A1A',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
   },
 }); 
