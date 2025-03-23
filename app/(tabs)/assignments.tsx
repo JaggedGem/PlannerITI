@@ -15,6 +15,7 @@ import {
   AssignmentGroup,
   getCourses
 } from '../../utils/assignmentStorage';
+import { scheduleAllNotifications, cancelNotificationsForAssignment } from '@/utils/notificationUtils';
 import { useCallback } from 'react';
 import Animated, { FadeInDown, Layout, FadeOut } from 'react-native-reanimated';
 import CourseSection from '../../components/assignments/CourseSection';
@@ -565,14 +566,57 @@ export default function Assignments() {
       if (lastSegmentRef.current !== selectedSegmentIndex) {
         setSelectedSegmentIndex(lastSegmentRef.current);
       }
-    }, [fetchAssignments])
+      
+      // Schedule notifications only when app is first loaded, not on every focus
+      // We rely on the time-based throttling in scheduleAllNotifications to prevent excessive updates
+      const updateNotifications = async () => {
+        try {
+          // Get the assignments but don't trigger notifications every time
+          // The scheduleAllNotifications function now has built-in throttling
+          const assignments = await getAssignments();
+          
+          // This will only update if enough time has passed since the last update
+          await scheduleAllNotifications(assignments);
+        } catch (error) {
+          console.error('Error updating notifications:', error);
+        }
+      };
+      
+      updateNotifications();
+    }, [fetchAssignments, selectedSegmentIndex])
   );
   
   // Toggle assignment completion with optimized state update
   const handleToggleAssignment = useCallback(async (id: string) => {
-    setAllAssignments(current => 
-      current.map(a => a.id === id ? {...a, isCompleted: !a.isCompleted} : a)
-    );
+    // Update local state immediately for UI responsiveness
+    setAllAssignments(current => {
+      const assignments = current.map(a => a.id === id ? {...a, isCompleted: !a.isCompleted} : a);
+      
+      // Schedule a notification update when an assignment is toggled
+      // This ensures completed items don't get notifications and uncompleted items get rescheduled
+      const updateNotifications = async () => {
+        try {
+          // Focus on this specific assignment to reduce unnecessary processing
+          const assignment = assignments.find(a => a.id === id);
+          if (assignment) {
+            if (assignment.isCompleted) {
+              // If completed, just cancel notifications for this assignment
+              await cancelNotificationsForAssignment(id);
+            } else {
+              // If uncompleted, reschedule all notifications to be safe
+              await scheduleAllNotifications(assignments);
+            }
+          }
+        } catch (error) {
+          console.error('Error updating notifications after toggle:', error);
+        }
+      };
+      
+      // Trigger the notification update in the background
+      updateNotifications();
+      
+      return assignments;
+    });
     
     // Update database in background
     toggleAssignmentCompletion(id).catch(err => 
@@ -582,7 +626,24 @@ export default function Assignments() {
   
   // Delete assignment with optimized state update
   const handleDeleteAssignment = useCallback(async (id: string) => {
-    setAllAssignments(current => current.filter(a => a.id !== id));
+    // Update local state immediately
+    setAllAssignments(current => {
+      const filteredAssignments = current.filter(a => a.id !== id);
+      
+      // Cancel notifications for the deleted assignment
+      const cancelNotification = async () => {
+        try {
+          await cancelNotificationsForAssignment(id);
+        } catch (error) {
+          console.error('Error canceling notifications for deleted assignment:', error);
+        }
+      };
+      
+      // Trigger the notification cancellation in the background
+      cancelNotification();
+      
+      return filteredAssignments;
+    });
     
     // Update database in background
     deleteAssignment(id).catch(err => 
