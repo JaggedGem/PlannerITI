@@ -12,6 +12,7 @@ import Animated, {
   Layout 
 } from 'react-native-reanimated';
 import { Period } from '../../services/scheduleService';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface AssignmentItemProps {
   assignment: Assignment;
@@ -22,6 +23,32 @@ interface AssignmentItemProps {
 }
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+// Function to get translated label for each assignment type
+const getAssignmentTypeLabel = (type: AssignmentType): string => {
+  const { t } = useTranslation();
+  
+  switch (type) {
+    case AssignmentType.HOMEWORK:
+      return t('assignments').types.homework;
+    case AssignmentType.TEST:
+      return t('assignments').types.test;
+    case AssignmentType.EXAM:
+      return t('assignments').types.exam;
+    case AssignmentType.PROJECT:
+      return t('assignments').types.project;
+    case AssignmentType.QUIZ:
+      return t('assignments').types.quiz;
+    case AssignmentType.LAB:
+      return t('assignments').types.lab;
+    case AssignmentType.ESSAY:
+      return t('assignments').types.essay;
+    case AssignmentType.PRESENTATION:
+      return t('assignments').types.presentation;
+    default:
+      return t('assignments').types.other;
+  }
+};
 
 // Function to get icon for each assignment type
 const getAssignmentTypeIcon = (type: AssignmentType): any => {
@@ -80,6 +107,7 @@ export default function AssignmentItem({
 }: AssignmentItemProps) {
   // State for period information
   const [period, setPeriod] = useState<Period | null>(null);
+  const { t, currentLanguage } = useTranslation();
   
   // Animated values for interactive feedback
   const scale = useSharedValue(1);
@@ -111,8 +139,17 @@ export default function AssignmentItem({
     loadPeriodInfo();
   }, [assignment.periodId]);
   
-  // Format the due date/time for display
-  const formattedTime = format(new Date(assignment.dueDate), 'h:mm a');
+  // Format the due date/time for display with localization
+  const formattedTime = (() => {
+    const date = new Date(assignment.dueDate);
+    
+    // Format time as localized string (e.g., "3:30 PM" or "15:30")
+    if (currentLanguage === 'en') {
+      return format(date, 'h:mm a');  // 12-hour format with AM/PM
+    } else {
+      return format(date, 'HH:mm');   // 24-hour format
+    }
+  })();
   
   // Animation styles
   const containerStyle = useAnimatedStyle(() => {
@@ -146,6 +183,7 @@ export default function AssignmentItem({
   // Get assignment type icon and color
   const typeIcon = getAssignmentTypeIcon(assignment.assignmentType);
   const typeColor = getAssignmentTypeColor(assignment.assignmentType);
+  const typeLabel = getAssignmentTypeLabel(assignment.assignmentType);
   
   // Display style for orphaned assignments
   const isOrphaned = assignment.isOrphaned;
@@ -203,13 +241,13 @@ export default function AssignmentItem({
             {isOrphaned ? (
               <View style={styles.orphanedBadge}>
                 <Text style={styles.orphanedBadgeText}>
-                  Orphaned: Group changed
+                  {t('assignments').common.orphanedReason}
                 </Text>
               </View>
             ) : (
               <View style={styles.typeTextContainer}>
                 <Text style={[styles.typeText, { color: typeColor }]}>
-                  {assignment.assignmentType}
+                  {typeLabel}
                 </Text>
               </View>
             )}
@@ -218,7 +256,7 @@ export default function AssignmentItem({
               <View style={styles.periodContainer}>
                 <Ionicons name="time-outline" size={12} color="#8A8A8D" style={styles.periodIcon} />
                 <Text style={styles.periodText}>
-                  Period {period._id}: {period.starttime} - {period.endtime}
+                  {t('assignments').common.period} {period._id}: {period.starttime} - {period.endtime}
                 </Text>
               </View>
             )}
@@ -227,7 +265,7 @@ export default function AssignmentItem({
               <View style={styles.dueDateContainer}>
                 <Ionicons name="calendar-outline" size={12} color="#8A8A8D" style={styles.periodIcon} />
                 <Text style={styles.dueDateText}>
-                  Due: {dueDateLabel}
+                  {t('assignments').common.due}: {dueDateLabel}
                 </Text>
               </View>
             )}

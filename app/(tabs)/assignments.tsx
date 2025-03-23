@@ -18,6 +18,7 @@ import {
 import { useCallback } from 'react';
 import Animated, { FadeInDown, Layout, FadeOut } from 'react-native-reanimated';
 import CourseSection from '../../components/assignments/CourseSection';
+import { useTranslation } from '@/hooks/useTranslation';
 
 // Function to group assignments by course
 const groupAssignmentsByCourse = (assignments: Assignment[]): {[key: string]: Assignment[]} => {
@@ -54,6 +55,7 @@ export default function Assignments() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const darkMode = colorScheme === 'dark';
+  const { t, formatDate } = useTranslation();
   
   const [selectedSegmentIndex, setSelectedSegmentIndex] = useState(0);
   const [assignmentGroups, setAssignmentGroups] = useState<AssignmentGroup[]>([]);
@@ -61,7 +63,7 @@ export default function Assignments() {
   const [isLoading, setIsLoading] = useState(true);
   const [allAssignments, setAllAssignments] = useState<Assignment[]>([]);
   
-  const segments = ['Due date', 'Classes', 'Priority'];
+  const segments = [t('assignments').segments.dueDate, t('assignments').segments.classes, t('assignments').segments.priority];
   
   // Load assignments initially and when screen comes into focus
   const loadAssignments = useCallback(async () => {
@@ -78,7 +80,7 @@ export default function Assignments() {
         filteredAssignments = assignments.filter(a => a.isPriority);
         
         // Group by date for priority view
-        const groups = groupAssignmentsByDate(filteredAssignments);
+        const groups = groupAssignmentsByDate(filteredAssignments, t, formatDate);
         setAssignmentGroups(groups);
       } else if (selectedSegmentIndex === 1) {
         // Group by class for class view
@@ -86,7 +88,7 @@ export default function Assignments() {
         setCourseGroups(grouped);
       } else {
         // Group by date for default view
-        const groups = groupAssignmentsByDate(filteredAssignments);
+        const groups = groupAssignmentsByDate(filteredAssignments, t, formatDate);
         setAssignmentGroups(groups);
       }
     } catch (error) {
@@ -94,7 +96,7 @@ export default function Assignments() {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedSegmentIndex]);
+  }, [selectedSegmentIndex, t, formatDate]);
   
   // Initial load
   useEffect(() => {
@@ -126,7 +128,7 @@ export default function Assignments() {
     if (selectedSegmentIndex === 2) {
       // Filter by priority
       const filteredAssignments = updatedAssignments.filter(a => a.isPriority);
-      const groups = groupAssignmentsByDate(filteredAssignments);
+      const groups = groupAssignmentsByDate(filteredAssignments, t, formatDate);
       setAssignmentGroups(groups);
     } else if (selectedSegmentIndex === 1) {
       // Group by class
@@ -134,7 +136,7 @@ export default function Assignments() {
       setCourseGroups(grouped);
     } else {
       // Group by date
-      const groups = groupAssignmentsByDate(updatedAssignments);
+      const groups = groupAssignmentsByDate(updatedAssignments, t, formatDate);
       setAssignmentGroups(groups);
     }
     
@@ -152,7 +154,7 @@ export default function Assignments() {
     if (selectedSegmentIndex === 2) {
       // Filter by priority
       const filteredAssignments = updatedAssignments.filter(a => a.isPriority);
-      const groups = groupAssignmentsByDate(filteredAssignments);
+      const groups = groupAssignmentsByDate(filteredAssignments, t, formatDate);
       setAssignmentGroups(groups);
     } else if (selectedSegmentIndex === 1) {
       // Group by class
@@ -160,7 +162,7 @@ export default function Assignments() {
       setCourseGroups(grouped);
     } else {
       // Group by date
-      const groups = groupAssignmentsByDate(updatedAssignments);
+      const groups = groupAssignmentsByDate(updatedAssignments, t, formatDate);
       setAssignmentGroups(groups);
     }
     
@@ -179,7 +181,7 @@ export default function Assignments() {
       return (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#3478F6" />
-          <Text style={styles.loadingText}>Loading assignments...</Text>
+          <Text style={styles.loadingText}>{t('assignments').loading}</Text>
         </View>
       );
     }
@@ -195,10 +197,10 @@ export default function Assignments() {
             entering={FadeInDown.duration(150)}
           >
             <Text style={styles.emptyText}>
-              No assignments found
+              {t('assignments').empty}
             </Text>
             <Text style={styles.emptySubtext}>
-              Tap the + button to add a new assignment
+              {t('assignments').addNew}
             </Text>
           </Animated.View>
         );
@@ -240,10 +242,10 @@ export default function Assignments() {
           entering={FadeInDown.duration(150)}
         >
           <Text style={styles.emptyText}>
-            No assignments found
+            {t('assignments').empty}
           </Text>
           <Text style={styles.emptySubtext}>
-            Tap the + button to add a new assignment
+            {t('assignments').addNew}
           </Text>
         </Animated.View>
       );
@@ -281,7 +283,7 @@ export default function Assignments() {
       
       <View style={styles.headerContainer}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Assignments</Text>
+          <Text style={styles.headerTitle}>{t('assignments').title}</Text>
           
           <SegmentedControl
             segments={segments}

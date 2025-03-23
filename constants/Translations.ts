@@ -91,6 +91,47 @@ type TranslationType = {
     settings: string;
     grades: string;
   };
+  assignments: {
+    title: string;
+    loading: string;
+    empty: string;
+    addNew: string;
+    segments: {
+      dueDate: string;
+      classes: string;
+      priority: string;
+    };
+    common: {
+      uncategorized: string;
+      period: string;
+      due: string;
+      orphaned: string;
+      orphanedAssignments: string;
+      orphanedReason: string;
+    };
+    types: {
+      homework: string;
+      test: string;
+      exam: string;
+      project: string;
+      quiz: string;
+      lab: string;
+      essay: string;
+      presentation: string;
+      other: string;
+    };
+    days: {
+      today: string;
+      tomorrow: string;
+      monday: string;
+      tuesday: string;
+      wednesday: string;
+      thursday: string;
+      friday: string;
+      saturday: string;
+      sunday: string;
+    };
+  };
   grades: {
     title: string;
     average: string;
@@ -367,6 +408,47 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       assignments: 'Assignments',
       settings: 'Settings',
       grades: 'Grades',
+    },
+    assignments: {
+      title: 'Assignments',
+      loading: 'Loading assignments...',
+      empty: 'No assignments found',
+      addNew: 'Tap the + button to add a new assignment',
+      segments: {
+        dueDate: 'Due date',
+        classes: 'Classes',
+        priority: 'Priority',
+      },
+      common: {
+        uncategorized: 'Uncategorized',
+        period: 'Period',
+        due: 'Due',
+        orphaned: 'Orphaned',
+        orphanedAssignments: 'Orphaned assignments (from different group)',
+        orphanedReason: 'Orphaned: Group changed',
+      },
+      types: {
+        homework: 'Homework',
+        test: 'Test',
+        exam: 'Exam',
+        project: 'Project',
+        quiz: 'Quiz',
+        lab: 'Lab',
+        essay: 'Essay',
+        presentation: 'Presentation',
+        other: 'Other',
+      },
+      days: {
+        today: 'Today',
+        tomorrow: 'Tomorrow',
+        monday: 'Monday',
+        tuesday: 'Tuesday',
+        wednesday: 'Wednesday',
+        thursday: 'Thursday',
+        friday: 'Friday',
+        saturday: 'Saturday',
+        sunday: 'Sunday',
+      },
     },
     grades: {
       title: 'Grades',
@@ -663,6 +745,47 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       settings: 'Setări',
       grades: 'Note'
     },
+    assignments: {
+      title: 'Teme',
+      loading: 'Se încarcă temele...',
+      empty: 'Nu s-au găsit teme',
+      addNew: 'Apasă butonul + pentru a adăuga o temă nouă',
+      segments: {
+        dueDate: 'Data scadentă',
+        classes: 'Clase',
+        priority: 'Prioritate',
+      },
+      common: {
+        uncategorized: 'Necategorizat',
+        period: 'Perioada',
+        due: 'Scadent',
+        orphaned: 'Orfan',
+        orphanedAssignments: 'Teme orfane (din alt grup)',
+        orphanedReason: 'Orfan: Grup schimbat',
+      },
+      types: {
+        homework: 'Temă',
+        test: 'Test',
+        exam: 'Examen',
+        project: 'Proiect',
+        quiz: 'Quiz',
+        lab: 'Laborator',
+        essay: 'Eseu',
+        presentation: 'Prezentare',
+        other: 'Altele',
+      },
+      days: {
+        today: 'Astăzi',
+        tomorrow: 'Mâine',
+        monday: 'Luni',
+        tuesday: 'Marți',
+        wednesday: 'Miercuri',
+        thursday: 'Joi',
+        friday: 'Vineri',
+        saturday: 'Sâmbătă',
+        sunday: 'Duminică',
+      },
+    },
     grades: {
       title: 'Note',
       average: 'Media',
@@ -957,6 +1080,47 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       assignments: 'Задания',
       settings: 'Настройки',
       grades: 'Оценки',
+    },
+    assignments: {
+      title: 'Задания',
+      loading: 'Загрузка заданий...',
+      empty: 'Задания не найдены',
+      addNew: 'Нажмите кнопку + чтобы добавить новое задание',
+      segments: {
+        dueDate: 'Срок сдачи',
+        classes: 'Классы',
+        priority: 'Приоритет',
+      },
+      common: {
+        uncategorized: 'Без категории',
+        period: 'Период',
+        due: 'Срок',
+        orphaned: 'Потерянные',
+        orphanedAssignments: 'Потерянные задания (из другой группы)',
+        orphanedReason: 'Потеряно: Группа изменена',
+      },
+      types: {
+        homework: 'Домашнее задание',
+        test: 'Тест',
+        exam: 'Экзамен',
+        project: 'Проект',
+        quiz: 'Опрос',
+        lab: 'Лабораторная',
+        essay: 'Эссе',
+        presentation: 'Презентация',
+        other: 'Другое',
+      },
+      days: {
+        today: 'Сегодня',
+        tomorrow: 'Завтра',
+        monday: 'Понедельник',
+        tuesday: 'Вторник',
+        wednesday: 'Среда',
+        thursday: 'Четверг',
+        friday: 'Пятница',
+        saturday: 'Суббота',
+        sunday: 'Воскресенье',
+      },
     },
     grades: {
       title: 'Оценки',
