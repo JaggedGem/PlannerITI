@@ -19,6 +19,10 @@ module.exports = () => {
       androidPackage: `${androidPackage}.dev`,
       iosBundleIdentifier: `${iosBundleIdentifier}.dev`,
     },
+    beta: {
+      androidPackage: `${androidPackage}.beta`,
+      iosBundleIdentifier: `${iosBundleIdentifier}.beta`,
+    },
   }[appVariant] || variantConfig.production;
 
   return {

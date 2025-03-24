@@ -16,6 +16,20 @@
         "GRAVATAR_API_KEY": "3388:gk-4gEEX2o9HTSw8y7vJFDZgMEMnKukJZH-0CqUS7IKHIBa1S7FXJIb9ulBba8i6"
       }
     },
+    "beta": {
+      "distribution": "internal",
+      "channel": "beta",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "APP_VARIANT": "beta",
+        "ANDROID_PACKAGE": "me.jagged.planneriti.beta",
+        "IOS_BUNDLE_IDENTIFIER": "me.jagged.planneriti.beta",
+        "API_KEY": "u5Xq2LgBSIWgyocdGoB7bx1IhJZ723XUkwwoKqSbDtc",
+        "GRAVATAR_API_KEY": "3388:gk-4gEEX2o9HTSw8y7vJFDZgMEMnKukJZH-0CqUS7IKHIBa1S7FXJIb9ulBba8i6"
+      }
+    },
     "production": {
       "autoIncrement": true,
       "channel": "production",
