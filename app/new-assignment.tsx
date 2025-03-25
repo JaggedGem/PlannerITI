@@ -31,8 +31,14 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { format, isToday, isTomorrow, isSameDay } from 'date-fns';
 import { addAssignment, AssignmentType } from '../utils/assignmentStorage';
-import { scheduleService, DAYS_MAP, Subject } from '../services/scheduleService';
+import { scheduleService, DAYS_MAP, Subject, CustomPeriod } from '../services/scheduleService';
 import { useTranslation } from '@/hooks/useTranslation';
+
+// Extend Subject type to include custom period properties
+interface ExtendedSubject extends Subject {
+  isCustomPeriod?: boolean;
+  color?: string;
+}
 
 // Add this custom toggle component at the top level, before the NewAssignmentScreen function
 const CustomToggle = ({ 
@@ -873,10 +879,13 @@ export default function NewAssignmentScreen() {
   const [subjectSelectionMode, setSubjectSelectionMode] = useState<'recent'|'all'|'custom'>('recent');
   
   // Subjects data
-  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [subjects, setSubjects] = useState<ExtendedSubject[]>([]);
   const [loadingSubjects, setLoadingSubjects] = useState(true);
-  const [filteredSubjects, setFilteredSubjects] = useState<Subject[]>([]);
+  const [filteredSubjects, setFilteredSubjects] = useState<ExtendedSubject[]>([]);
   const [searchText, setSearchText] = useState('');
+  
+  // Custom periods from settings
+  const [customPeriods, setCustomPeriods] = useState<CustomPeriod[]>([]);
   
   // Modal state
   const [isSubjectsModalVisible, setIsSubjectsModalVisible] = useState(false);
@@ -886,8 +895,13 @@ export default function NewAssignmentScreen() {
     const loadSubjects = async () => {
       setLoadingSubjects(true);
       try {
-        const subjectsData = await scheduleService.getSubjects();
+        // Cast the result to ExtendedSubject[] to ensure type compatibility
+        const subjectsData = await scheduleService.getSubjects() as ExtendedSubject[];
         setSubjects(subjectsData);
+        
+        // Load custom periods from settings
+        const settings = scheduleService.getSettings();
+        setCustomPeriods(settings.customPeriods);
         
         // Set filtered subjects based on selection mode
         updateFilteredSubjects(subjectsData, subjectSelectionMode);
@@ -1113,7 +1127,7 @@ export default function NewAssignmentScreen() {
   // Update filtered subjects when mode changes
   useEffect(() => {
     updateFilteredSubjects(subjects, subjectSelectionMode);
-  }, [subjectSelectionMode, subjects]);
+  }, [subjectSelectionMode, subjects, customPeriods]);
   
   // Add this new useEffect to update next period info when subjects or selectedSubjectId changes
   useEffect(() => {
@@ -1137,7 +1151,7 @@ export default function NewAssignmentScreen() {
     }
   }, [searchText, subjects, subjectSelectionMode]);
   
-  const updateFilteredSubjects = (allSubjects: Subject[], mode: string) => {
+  const updateFilteredSubjects = (allSubjects: ExtendedSubject[], mode: string) => {
     if (mode === 'recent') {
       // Get current day or Friday if weekend
       const today = new Date();
@@ -1195,7 +1209,7 @@ export default function NewAssignmentScreen() {
           // Filter and sort subjects that are in today's schedule based on their appearance time
           const todaySubjects = todaySubjectNames
             .map(name => allSubjects.find(subject => subject.name === name))
-            .filter(subject => subject !== undefined) as Subject[];
+            .filter(subject => subject !== undefined) as ExtendedSubject[];
           
           // If no subjects found for today, show first 5
           if (todaySubjects.length === 0) {
@@ -1219,15 +1233,18 @@ export default function NewAssignmentScreen() {
       // Show all subjects
       setFilteredSubjects(allSubjects);
     } else if (mode === 'custom') {
-      // Show only custom subjects
-      const customSubjects = allSubjects.filter(s => s.isCustom);
+      // For custom mode, we'll create temporary Subject objects from customPeriods
+      const customSubjectsFromPeriods = customPeriods
+        .filter(period => period.isEnabled)
+        .map(period => ({
+          id: period._id,
+          name: period.name || 'Custom Period',
+          isCustom: true,
+          isCustomPeriod: true, // Flag to identify this is from a custom period
+          color: period.color
+        }));
       
-      // Ensure unique subjects by ID
-      const uniqueSubjects = Array.from(
-        new Map(customSubjects.map(item => [item.id, item])).values()
-      );
-      
-      setFilteredSubjects(uniqueSubjects);
+      setFilteredSubjects(customSubjectsFromPeriods);
     }
   };
   
@@ -1489,52 +1506,6 @@ export default function NewAssignmentScreen() {
     router.back();
   };
   
-  // Add new custom subject
-  const handleAddCustomSubject = async () => {
-    if (!courseName) {
-      Alert.alert("Error", "Please enter a course name");
-      return;
-    }
-    
-    // Check if this custom subject already exists
-    const existingSubject = subjects.find(
-      s => s.isCustom && s.name.toLowerCase() === courseName.toLowerCase()
-    );
-    
-    if (existingSubject) {
-      // If it exists, just select it instead of creating a duplicate
-      setSelectedSubjectId(existingSubject.id);
-      updateNextPeriodInfo(existingSubject.id).catch(err => 
-        console.error("Error updating next period info:", err)
-      );
-      Alert.alert("Info", `Subject "${courseName}" already exists and has been selected.`);
-      setIsSubjectsModalVisible(false);
-      return;
-    }
-    
-    try {
-      const newSubject = await scheduleService.addCustomSubject(courseName);
-      
-      // Add to subjects array without duplicates
-      setSubjects(prev => {
-        // Ensure no duplicates by checking IDs
-        const exists = prev.some(s => s.id === newSubject.id);
-        if (exists) return prev;
-        return [...prev, newSubject];
-      });
-      
-      setSelectedSubjectId(newSubject.id);
-      updateNextPeriodInfo(newSubject.id).catch(err => 
-        console.error("Error updating next period info:", err)
-      );
-      Alert.alert("Success", `Added new subject: ${courseName}`);
-      setIsSubjectsModalVisible(false);
-    } catch (error) {
-      console.error("Error adding custom subject:", error);
-      Alert.alert("Error", "Failed to add custom subject");
-    }
-  };
-  
   // Cancel and navigate back
   const handleCancel = () => {
     router.back();
@@ -1560,7 +1531,7 @@ export default function NewAssignmentScreen() {
   };
 
   // Handle subject selection and next period update
-  const handleSubjectSelect = (subject: Subject) => {
+  const handleSubjectSelect = (subject: ExtendedSubject) => {
     setSelectedSubjectId(subject.id);
     setCourseName(subject.name);
     updateNextPeriodInfo(subject.id).catch(err => 
@@ -1580,11 +1551,13 @@ export default function NewAssignmentScreen() {
   };
 
   // Render a subject item for the modal
-  const renderSubjectItem = ({ item }: { item: Subject }) => (
+  const renderSubjectItem = ({ item }: { item: ExtendedSubject }) => (
     <TouchableOpacity
       style={[
         styles.subjectCard,
-        selectedSubjectId === item.id && styles.subjectCardSelected
+        selectedSubjectId === item.id && styles.subjectCardSelected,
+        // Add colored border for custom periods
+        item.isCustomPeriod && { borderLeftWidth: 4, borderLeftColor: item.color || '#2C3DCD' }
       ]}
       onPress={() => handleSubjectSelect(item)}
       activeOpacity={0.7}
@@ -1593,7 +1566,9 @@ export default function NewAssignmentScreen() {
         <Text style={styles.subjectName} numberOfLines={1} ellipsizeMode="tail">
           {item.name}
         </Text>
-        {item.isCustom && (
+        {item.isCustomPeriod ? (
+          <Text style={[styles.customBadge, { backgroundColor: item.color || '#2C3DCD' }]}>Period</Text>
+        ) : item.isCustom && (
           <Text style={styles.customBadge}>Custom</Text>
         )}
       </View>
@@ -2084,22 +2059,40 @@ export default function NewAssignmentScreen() {
             
             {subjectSelectionMode === 'custom' && (
               <View style={styles.customInputContainer}>
-                <View style={styles.courseInputRow}>
-                  <TextInput
-                    style={styles.courseInput}
-                    value={courseName}
-                    onChangeText={setCourseName}
-                    placeholder={t('assignments').enterSubjectName}
-                    placeholderTextColor="#8A8A8D"
-                  />
-                  <TouchableOpacity 
-                    style={styles.addButton}
-                    onPress={handleAddCustomSubject}
-                    disabled={!courseName}
-                  >
-                    <Text style={styles.addButtonText}>{t('assignments').add}</Text>
-                  </TouchableOpacity>
-                </View>
+                <Text style={styles.modalSubtitle}>{'Select a custom period'}</Text>
+                {customPeriods.length === 0 ? (
+                  <View style={styles.emptyListContainer}>
+                    <Text style={styles.emptyListText}>{t('settings').customPeriods.noPeriodsYet}</Text>
+                    <TouchableOpacity
+                      style={styles.settingsLinkButton}
+                      onPress={() => {
+                        setIsSubjectsModalVisible(false);
+                        router.push('/(tabs)/settings');
+                      }}
+                    >
+                      <Text style={styles.settingsLinkButtonText}>{'Go to Settings'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : filteredSubjects.length > 0 ? (
+                  <View style={{ flex: 1 }}>
+                    <Animated.FlatList
+                      data={filteredSubjects}
+                      renderItem={renderSubjectItem}
+                      keyExtractor={item => item.id}
+                      style={styles.subjectsList}
+                      contentContainerStyle={{ paddingBottom: 20 }}
+                      showsVerticalScrollIndicator={true}
+                    />
+                  </View>
+                ) : (
+                  <View style={styles.emptyListContainer}>
+                    <Text style={styles.emptyListText}>
+                      {searchText
+                        ? `${t('settings').group.notFound || 'No periods found matching'} "${searchText}"`
+                        : 'No enabled custom periods found'}
+                    </Text>
+                  </View>
+                )}
               </View>
             )}
           </View>
@@ -2811,5 +2804,42 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
+  },
+  emptyListContainer: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyListText: {
+    color: '#8A8A8D',
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  settingsLinkButton: {
+    backgroundColor: '#2C3DCD',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  settingsLinkButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  modalSubtitle: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    marginBottom: 12,
+    marginTop: 4,
+  },
+  customPeriodsContainer: {
+    flex: 1,
+  },
+  noPeriods: {
+    color: '#8A8A8D',
+    fontSize: 16,
+    textAlign: 'center',
+    padding: 20,
   },
 }); 
