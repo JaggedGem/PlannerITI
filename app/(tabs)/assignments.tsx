@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, memo, useRef, useLayoutEffect } from 'react';
-import { StyleSheet, ScrollView, SafeAreaView, StatusBar, View, Text, ActivityIndicator, Platform, InteractionManager } from 'react-native';
+import { StyleSheet, ScrollView, SafeAreaView, StatusBar, View, Text, ActivityIndicator, Platform, InteractionManager, AppState } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { useColorScheme } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
@@ -20,6 +20,14 @@ import { useCallback } from 'react';
 import Animated, { FadeInDown, Layout, FadeOut } from 'react-native-reanimated';
 import CourseSection from '../../components/assignments/CourseSection';
 import { useTranslation } from '@/hooks/useTranslation';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Add circuit breaker constants
+const CRASH_DETECTION_KEY = 'assignment_tab_crash_detection';
+const CRASH_COUNT_KEY = 'assignment_tab_crash_count';
+const LAST_CRASH_TIME_KEY = 'assignment_tab_last_crash_time';
+const MAX_CRASHES = 3;
+const CRASH_WINDOW_MS = 60000; // 1 minute
 
 // Function to group assignments by course - super-optimized version
 const groupAssignmentsByCourse = (assignments: Assignment[]): {[key: string]: Assignment[]} => {
@@ -317,659 +325,384 @@ const DateGroupedView = memo(({
   );
 });
 
-export default function Assignments() {
+// Error boundary component
+interface ErrorBoundaryProps {
+  children: React.ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  errorCount: number;
+}
+
+class AssignmentsErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  state: ErrorBoundaryState = { hasError: false, errorCount: 0 };
+  
+  static getDerivedStateFromError(error: unknown): Partial<ErrorBoundaryState> {
+    // Update state so the next render will show the fallback UI
+    return { hasError: true };
+  }
+  
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
+    // Increment error count
+    this.setState(prevState => ({
+      errorCount: prevState.errorCount + 1
+    }));
+    
+    // Store error info in AsyncStorage to track crash patterns
+    try {
+      AsyncStorage.getItem(CRASH_DETECTION_KEY).then(value => {
+        const crashData = value ? JSON.parse(value) : { count: 0, lastTime: Date.now() };
+        crashData.count += 1;
+        crashData.lastTime = Date.now();
+        AsyncStorage.setItem(CRASH_DETECTION_KEY, JSON.stringify(crashData));
+      });
+    } catch (e) {
+      // Silently handle error in crash detection
+    }
+  }
+  
+  componentDidUpdate(prevProps: ErrorBoundaryProps, prevState: ErrorBoundaryState): void {
+    // Reset error state after a moment to attempt recovery
+    if (this.state.hasError && !prevState.hasError) {
+      setTimeout(() => {
+        this.setState({ hasError: false });
+      }, 1000);
+    }
+  }
+
+  render() {
+    if (this.state.hasError) {
+      // Fallback UI when an error occurs
+      return (
+        <SafeAreaView style={styles.container}>
+          <StatusBar barStyle="light-content" />
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorTitle}>Something went wrong</Text>
+            <Text style={styles.errorMessage}>The app is recovering...</Text>
+            {this.state.errorCount > 2 && (
+              <Text style={styles.errorHint}>
+                Tip: Avoid rapid switching between tabs
+              </Text>
+            )}
+          </View>
+        </SafeAreaView>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+// Define the main Assignments component - this needs to be before AssignmentsWithErrorBoundary
+const Assignments = () => {
   const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme];
-  const darkMode = colorScheme === 'dark';
   const { t, formatDate } = useTranslation();
   
   const [selectedSegmentIndex, setSelectedSegmentIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [allAssignments, setAllAssignments] = useState<Assignment[]>([]);
+  const [isSafeMode, setIsSafeMode] = useState(false);
   
-  // Pre-computed view caches
-  const [hasPrecomputedCourses, setHasPrecomputedCourses] = useState(false);
-  const [isTransitioningFromClasses, setIsTransitioningFromClasses] = useState(false);
-  const [isRapidSwitching, setIsRapidSwitching] = useState(false);
+  // Track which tabs have been viewed already to disable animations after first view
+  const [hasViewedTab, setHasViewedTab] = useState<{[key: number]: boolean}>({0: false, 1: false, 2: false});
   
-  // Add a forced refresh counter to trigger recalculation when needed
-  const [forceRefreshCounter, setForceRefreshCounter] = useState(0);
+  // Track if a tab switch is currently in progress
+  const [isTabSwitching, setIsTabSwitching] = useState(false);
+  
+  // Use refs to store memoized data to prevent recalculations
+  const memoizedDataRef = useRef<{
+    dateGroups: AssignmentGroup[];
+    priorityGroups: AssignmentGroup[];
+    courseGroups: {[key: string]: Assignment[]};
+  }>({
+    dateGroups: [],
+    priorityGroups: [],
+    courseGroups: {}
+  });
   
   const segments = [t('assignments').segments.dueDate, t('assignments').segments.classes, t('assignments').segments.priority];
-
-  // Reference to store last active segment for restoration
-  const lastSegmentRef = useRef(0);
-  const prevSegmentRef = useRef(0);
-  const pendingTimersRef = useRef<Array<NodeJS.Timeout>>([]);
-  const pendingRAFRef = useRef<number | null>(null);
-  const isTabSwitchingRef = useRef(false);
-  const isMountedRef = useRef(true);
-  const lastSwitchTimeRef = useRef(Date.now());
-  const cooldownTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const switchCountRef = useRef(0);
-  const pendingTabIndexRef = useRef<number | null>(null);
-  const pendingInteractionsRef = useRef<Array<{cancel: () => void}>>([]);
   
-  // Add a ref to track pending notification operations
-  const pendingNotificationOpRef = useRef<boolean>(false);
-  
-  // Clear all pending operations
-  const clearPendingOperations = useCallback(() => {
-    if (pendingRAFRef.current) {
-      cancelAnimationFrame(pendingRAFRef.current);
-      pendingRAFRef.current = null;
-    }
-    
-    pendingTimersRef.current.forEach(timer => clearTimeout(timer));
-    pendingTimersRef.current = [];
-    
-    if (cooldownTimerRef.current) {
-      clearTimeout(cooldownTimerRef.current);
-      cooldownTimerRef.current = null;
-    }
-    
-    // Cancel any pending interaction manager tasks
-    pendingInteractionsRef.current.forEach(interaction => {
-      if (interaction && interaction.cancel) {
-        interaction.cancel();
-      }
-    });
-    pendingInteractionsRef.current = [];
-  }, []);
-  
-  // Full reset of the tab state to recover from any inconsistent state
-  const performFullReset = useCallback(() => {
-    // First clean up any pending operations
-    clearPendingOperations();
-    
-    // Reset all internal state flags
-    isTabSwitchingRef.current = false;
-    pendingTabIndexRef.current = null;
-    switchCountRef.current = 0;
-    
-    // Force a refresh of the memoized data by incrementing the counter
-    setForceRefreshCounter(prev => prev + 1);
-    
-    // Reset to non-transitioning state
-    setIsTransitioningFromClasses(false);
-    
-    // Set loading true briefly to force a clean rerender
-    setIsLoading(true);
-    
-    // Schedule a fetch of assignments to ensure fresh data
-    const refreshTimer = setTimeout(() => {
-      if (isMountedRef.current) {
-        fetchAssignments();
-      }
-    }, 50);
-    
-    pendingTimersRef.current.push(refreshTimer);
-  }, [clearPendingOperations]);
-  
-  // Debounced segment change implementation
-  const debouncedTabChange = useCallback((index: number) => {
-    // Clear any pending tab changes
-    if (pendingTabIndexRef.current !== null) {
-      pendingTabIndexRef.current = index;
-      return;
-    }
-    
-    // Set the pending tab index
-    pendingTabIndexRef.current = index;
-    
-    // Process the tab change after a short delay
-    const timer = setTimeout(() => {
-      if (!isMountedRef.current) return;
-      
-      const indexToSet = pendingTabIndexRef.current;
-      pendingTabIndexRef.current = null;
-      
-      if (indexToSet !== null && indexToSet !== selectedSegmentIndex) {
-        setSelectedSegmentIndex(indexToSet);
-        lastSegmentRef.current = indexToSet;
-      }
-      
-      isTabSwitchingRef.current = false;
-    }, isRapidSwitching ? 70 : 20); // Shorter delays to be more responsive
-    
-    pendingTimersRef.current.push(timer);
-  }, [selectedSegmentIndex, isRapidSwitching]);
-  
-  // Fetch assignments from storage with proper error handling
+  // Simple fetch assignments implementation with data caching
   const fetchAssignments = useCallback(async () => {
-    if (isTabSwitchingRef.current && isRapidSwitching) return; // Skip during rapid switching
-    
-    if (isMountedRef.current) {
-      setIsLoading(true);
-    }
-    
     try {
-      // Use a safe pattern for async operations
+      setIsLoading(true);
       const assignments = await getAssignments();
-      
-      // Avoid state updates if component unmounted during async operation
-      if (!isMountedRef.current) return;
-      
       setAllAssignments(assignments);
       
-      // If not in rapid switching mode, precompute in background
-      if (!isRapidSwitching) {
-        // After loading assignments, precompute course grouping in the background
-        const interaction = InteractionManager.runAfterInteractions(() => {
-          if (!isMountedRef.current) return;
-          
-          // This will run in background after UI interactions are done
-          try {
-            groupAssignmentsByCourse(assignments);
-            if (isMountedRef.current) {
-              setHasPrecomputedCourses(true);
-            }
-          } catch (error) {
-            console.error('Error precomputing courses:', error);
-          }
-        });
-        
-        // Store the interaction for potential cancellation
-        pendingInteractionsRef.current.push(interaction);
-        
-        return () => {
-          try {
-            interaction.cancel();
-          } catch (e) {
-            // Ignore errors from cancellation
-          }
-        };
-      }
+      // Precompute all data once to avoid jank during tab switches
+      const priorityAssignments = assignments.filter(a => a.isPriority);
+      memoizedDataRef.current = {
+        dateGroups: groupAssignmentsByDate(assignments, t, formatDate),
+        priorityGroups: groupAssignmentsByDate(priorityAssignments, t, formatDate),
+        courseGroups: groupAssignmentsByCourse(assignments)
+      };
     } catch (error) {
-      console.error('Error loading assignments:', error);
-      // Recover from error by returning to a stable state
-      if (isMountedRef.current) {
-        setIsLoading(false);
-      }
+      // Silently handle error
     } finally {
-      if (isMountedRef.current) {
       setIsLoading(false);
-      }
     }
-  }, [isRapidSwitching]);
+  }, [t, formatDate]);
   
-  // Exit rapid switching mode with safety measures
-  const exitRapidSwitchingMode = useCallback(() => {
-    if (!isMountedRef.current) return;
-    
-    // First set the flag to false
-    setIsRapidSwitching(false);
-    
-    // Reset switch counter
-    switchCountRef.current = 0;
-    
-    // Perform a full state reset to ensure clean continuation
-    performFullReset();
-    
-    // If we're on the Classes tab and courses aren't precomputed, do that now
-    if (selectedSegmentIndex === 1 && !hasPrecomputedCourses) {
-      // Schedule computation in the next frame
-      pendingRAFRef.current = requestAnimationFrame(() => {
-        const interaction = InteractionManager.runAfterInteractions(() => {
-          if (!isMountedRef.current) return;
-          setHasPrecomputedCourses(true);
-        });
-        pendingInteractionsRef.current.push(interaction);
-      });
-    }
-  }, [selectedSegmentIndex, hasPrecomputedCourses, performFullReset]);
+  // Add useFocusEffect to refresh assignments when returning to this screen
+  // This ensures new assignments are loaded when created
+  useFocusEffect(
+    useCallback(() => {
+      fetchAssignments();
+      
+      return () => {
+        // Cleanup when screen is unfocused
+      };
+    }, [fetchAssignments])
+  );
   
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      isMountedRef.current = false;
-      isTabSwitchingRef.current = false;
-      clearPendingOperations();
-    };
-  }, [clearPendingOperations]);
-  
-  // Memoized priority assignments - now with refresh counter
-  const priorityAssignments = useMemo(() => {
-    return allAssignments.filter(a => a.isPriority);
-  }, [allAssignments, forceRefreshCounter]);
-  
-  // Memoized assignment groups by date - now with refresh counter
-  const dateAssignmentGroups = useMemo(() => {
-    return groupAssignmentsByDate(allAssignments, t, formatDate);
-  }, [allAssignments, t, formatDate, forceRefreshCounter]);
-  
-  // Memoized priority assignment groups by date - now with refresh counter
-  const priorityAssignmentGroups = useMemo(() => {
-    return groupAssignmentsByDate(priorityAssignments, t, formatDate);
-  }, [priorityAssignments, t, formatDate, forceRefreshCounter]);
-  
-  // Lazy-computed assignment groups by course - now with refresh counter and safer computation
-  const courseAssignmentGroups = useMemo(() => {
-    try {
-      // If we're not even planning to view the courses tab, defer computation
-      if (selectedSegmentIndex !== 1 && !hasPrecomputedCourses) {
-        return {};
-      }
-      return groupAssignmentsByCourse(allAssignments);
-    } catch (error) {
-      console.error('Error computing course groups:', error);
-      return {}; // Return empty object on error rather than crashing
-    }
-  }, [allAssignments, selectedSegmentIndex, hasPrecomputedCourses, forceRefreshCounter]);
-  
-  // Initial load
+  // Load assignments when component mounts
   useEffect(() => {
     fetchAssignments();
   }, [fetchAssignments]);
   
-  // Safer notification scheduling with concurrency and error checking
-  const safeScheduleNotifications = useCallback(async (assignments: Assignment[], isTabSwitch = false) => {
-    // Skip if we're in rapid switching mode
-    if (isRapidSwitching) {
-      console.log('Skipping notification scheduling during rapid switching');
-      return;
-    }
-    
-    // Skip if there's already a pending notification operation
-    if (pendingNotificationOpRef.current) {
-      console.log('Skipping notification scheduling - another operation in progress');
-      return;
-    }
-    
-    try {
-      // Set the flag to prevent concurrent operations
-      pendingNotificationOpRef.current = true;
-      
-      // Call the actual scheduling function
-      await scheduleAllNotifications(assignments, isTabSwitch);
-    } catch (error) {
-      console.error('Error in safeScheduleNotifications:', error);
-    } finally {
-      // Always clear the flag when done
-      pendingNotificationOpRef.current = false;
-    }
-  }, [isRapidSwitching]);
-  
-  // Refresh when the screen comes into focus
-  useFocusEffect(
-    useCallback(() => {
-      fetchAssignments();
-      // Restore last active segment
-      if (lastSegmentRef.current !== selectedSegmentIndex) {
-        setSelectedSegmentIndex(lastSegmentRef.current);
-      }
-      
-      // Schedule notifications only when app is first loaded, not on every focus
-      // We rely on the time-based throttling in scheduleAllNotifications to prevent excessive updates
-      const updateNotifications = async () => {
-        try {
-          // Get the assignments but don't trigger notifications every time
-          // The scheduleAllNotifications function now has built-in throttling
-          const assignments = await getAssignments();
-          
-          // This will only update if enough time has passed since the last update
-          await safeScheduleNotifications(assignments, false);
-        } catch (error) {
-          console.error('Error updating notifications:', error);
-        }
-      };
-      
-      updateNotifications();
-    }, [fetchAssignments, selectedSegmentIndex, safeScheduleNotifications])
-  );
-  
-  // Toggle assignment completion with optimized state update
-  const handleToggleAssignment = useCallback(async (id: string) => {
-    // Update local state immediately for UI responsiveness
-    setAllAssignments(current => {
-      const assignments = current.map(a => a.id === id ? {...a, isCompleted: !a.isCompleted} : a);
-      
-      // Schedule a notification update when an assignment is toggled
-      // This ensures completed items don't get notifications and uncompleted items get rescheduled
-      const updateNotifications = async () => {
-        try {
-          // Focus on this specific assignment to reduce unnecessary processing
-          const assignment = assignments.find(a => a.id === id);
-          if (assignment) {
-            if (assignment.isCompleted) {
-              // If completed, just cancel notifications for this assignment
-              await cancelNotificationsForAssignment(id);
-            } else {
-              // If uncompleted, reschedule all notifications to be safe
-              await safeScheduleNotifications(assignments, false);
-            }
-          }
-        } catch (error) {
-          console.error('Error updating notifications after toggle:', error);
-        }
-      };
-      
-      // Trigger the notification update in the background
-      updateNotifications();
-      
-      return assignments;
-    });
-    
-    // Update database in background
-    toggleAssignmentCompletion(id).catch(err => 
-      console.error('Error toggling assignment:', err)
-    );
-  }, [safeScheduleNotifications]);
-  
-  // Delete assignment with optimized state update
-  const handleDeleteAssignment = useCallback(async (id: string) => {
-    // Update local state immediately
-    setAllAssignments(current => {
-      const filteredAssignments = current.filter(a => a.id !== id);
-      
-      // Cancel notifications for the deleted assignment
-      const cancelNotification = async () => {
-        try {
-          await cancelNotificationsForAssignment(id);
-        } catch (error) {
-          console.error('Error canceling notifications for deleted assignment:', error);
-        }
-      };
-      
-      // Trigger the notification cancellation in the background
-      cancelNotification();
-      
-      return filteredAssignments;
-    });
-    
-    // Update database in background
-    deleteAssignment(id).catch(err => 
-      console.error('Error deleting assignment:', err)
-    );
-  }, []);
-  
-  // Check if user is continuously/rapidly switching tabs with safety checks
-  const checkRapidSwitching = useCallback(() => {
-    try {
-      const now = Date.now();
-      const timeSinceLastSwitch = now - lastSwitchTimeRef.current;
-      lastSwitchTimeRef.current = now;
-      
-      // Reset counter if it's been a while since last switch
-      if (timeSinceLastSwitch > 350) { // Reduced from 500ms
-        switchCountRef.current = 0;
-        if (isRapidSwitching) {
-          exitRapidSwitchingMode();
-        }
-      }
-      
-      // Increment switch counter
-      switchCountRef.current++;
-      
-      // If user has switched tabs quickly multiple times, activate rapid switching mode
-      // Require more switches (4 vs 3) and allow slightly more time between them (250ms vs 200ms)
-      if (switchCountRef.current >= 4 && timeSinceLastSwitch < 250 && !isRapidSwitching) {
-        setIsRapidSwitching(true);
-        
-        // Cancel any previous cooldown
-        if (cooldownTimerRef.current) {
-          clearTimeout(cooldownTimerRef.current);
-          cooldownTimerRef.current = null;
-        }
-        
-        // Schedule exit from rapid switching mode after a cooldown period
-        cooldownTimerRef.current = setTimeout(() => {
-          if (!isMountedRef.current) return;
-          exitRapidSwitchingMode();
-          cooldownTimerRef.current = null;
-        }, 800); // Reduced from 1500ms to 800ms for faster return to normal mode
-      }
-    } catch (error) {
-      console.error('Error in checkRapidSwitching:', error);
-      // Safe recovery - exit rapid switching mode if there's an error
-      if (isRapidSwitching && isMountedRef.current) {
-        exitRapidSwitchingMode();
-      }
-    }
-  }, [isRapidSwitching, exitRapidSwitchingMode]);
-  
-  // Crash-resistant segment change handler with special transitions FROM Classes and rapid switching detection
+  // Handle segment change with debounce to prevent rapid switching
   const handleSegmentChange = useCallback((index: number) => {
-    try {
-      if (index === selectedSegmentIndex) return; // Skip if already on this tab
-      
-      // Detect rapid switching
-      checkRapidSwitching();
-      
-      // If we're already switching and in rapid switch mode, just queue the tab change
-      if (isTabSwitchingRef.current && isRapidSwitching) {
-        debouncedTabChange(index);
-        return;
-      }
-      
-      // Set tab switching flag to avoid concurrent operations
-      isTabSwitchingRef.current = true;
-      
-      // Clear any pending operations from previous tab switches
-      clearPendingOperations();
-      
-      // Track which segment we're coming from
-      prevSegmentRef.current = selectedSegmentIndex;
-      
-      // During rapid switching, just update the state directly with minimal effects
-      if (isRapidSwitching) {
-        debouncedTabChange(index);
-        return;
-      }
-      
-      // Special handling for transitioning FROM Classes tab
-      if (prevSegmentRef.current === 1 && index !== 1) {
-        // Set transition flag to optimize DateGroupedView rendering
-        if (isMountedRef.current) {
-          setIsTransitioningFromClasses(true);
-        }
-        
-        // First update the segment immediately
-        if (isMountedRef.current) {
-          setSelectedSegmentIndex(index);
-          lastSegmentRef.current = index;
-        }
-        
-        // Then after animations have settled, clear the transition flag
-        const timer = setTimeout(() => {
-          if (isMountedRef.current) {
-            setIsTransitioningFromClasses(false);
-            isTabSwitchingRef.current = false; // Reset flag
-          }
-        }, 150); // just enough time for initial render without animations
-        
-        pendingTimersRef.current.push(timer);
-        return;
-      }
-      
-      // If switching TO Classes view but not precomputed yet, show loading
-      if (index === 1 && !hasPrecomputedCourses) {
-        if (isMountedRef.current) {
-          setIsLoading(true);
-        }
-        
-        // Defer state update to next frame
-        pendingRAFRef.current = requestAnimationFrame(() => {
-          if (!isMountedRef.current) return;
-          
-          setSelectedSegmentIndex(index);
-          lastSegmentRef.current = index;
-          
-          // Allow time for UI to show loading state before heavy computation
-          const timer = setTimeout(() => {
-            if (!isMountedRef.current) return;
-            
-            // The useMemo for courseAssignmentGroups will now compute since selectedSegmentIndex === 1
-            const interaction = InteractionManager.runAfterInteractions(() => {
-              if (!isMountedRef.current) return;
-              
-              setHasPrecomputedCourses(true);
-              setIsLoading(false);
-              isTabSwitchingRef.current = false; // Reset flag
-            });
-            
-            pendingInteractionsRef.current.push(interaction);
-          }, 10);
-          
-          pendingTimersRef.current.push(timer);
-        });
-      } else {
-        // For other transitions, just set the index - already precomputed
-        if (isMountedRef.current) {
-          setSelectedSegmentIndex(index);
-          lastSegmentRef.current = index;
-        }
-        isTabSwitchingRef.current = false; // Reset flag
-        
-        // Only schedule notifications if not in rapid switching mode
-        if (!isRapidSwitching) {
-          // Schedule notifications with the tab switch flag to apply cooldown
-          const updateTabChangeNotifications = async () => {
-            try {
-              const assignments = await getAssignments();
-              await safeScheduleNotifications(assignments, true);
-            } catch (error) {
-              console.error('Error updating notifications on tab change:', error);
-            }
-          };
-          
-          // Don't delay the UI by waiting for this
-          updateTabChangeNotifications();
-        }
-      }
-    } catch (error) {
-      console.error('Error in handleSegmentChange:', error);
-      // Safe recovery - just set the segment directly and reset flags
-      if (isMountedRef.current) {
-        setSelectedSegmentIndex(index);
-        lastSegmentRef.current = index;
-        isTabSwitchingRef.current = false;
-        // If we're in rapid switching mode, exit it safely
-        if (isRapidSwitching) {
-          exitRapidSwitchingMode();
-        }
-      }
+    if (isSafeMode || index === selectedSegmentIndex) {
+      return;
     }
-  }, [
-    hasPrecomputedCourses, 
-    selectedSegmentIndex, 
-    clearPendingOperations,
-    isRapidSwitching,
-    checkRapidSwitching,
-    debouncedTabChange,
-    exitRapidSwitchingMode,
-    safeScheduleNotifications
-  ]);
+    
+    // If we're currently switching, we'll allow the next switch only if it's not too quick
+    if (isTabSwitching) {
+      // Allow the change after a brief timeout to prevent ultra-rapid switches
+      setTimeout(() => {
+        setSelectedSegmentIndex(index);
+        // Mark this tab as viewed to disable animations on next view
+        setHasViewedTab(prev => ({...prev, [index]: true}));
+      }, 30);
+      return;
+    }
+    
+    // Mark tab switching in progress
+    setIsTabSwitching(true);
+    
+    // Mark this tab as viewed to disable animations on next view
+    setHasViewedTab(prev => ({...prev, [index]: true}));
+    
+    // Update the selected segment immediately for better responsiveness
+    setSelectedSegmentIndex(index);
+    
+    // Allow tab switching again after a very short cooldown
+    setTimeout(() => {
+      setIsTabSwitching(false);
+    }, 50); // Much shorter cooldown
+  }, [isSafeMode, isTabSwitching, selectedSegmentIndex]);
   
-  // Navigate to new assignment screen
+  // Handle add assignment
   const handleAddAssignment = useCallback(() => {
     router.push('/new-assignment');
   }, []);
   
-  // Render simplified but visually similar content during rapid switching
-  const renderSimplifiedContent = useCallback(() => {
-    if (selectedSegmentIndex === 1) {
-      return (
-        <View style={styles.simplifiedContainer}>
-          <Text style={styles.simplifiedText}>{t('assignments').segments.classes}</Text>
-          {/* Add minimal placeholder content to make it look less empty */}
-          {Object.keys(courseAssignmentGroups).length > 0 && (
-            <View style={styles.placeholderContent}>
-              <View style={styles.placeholderItem} />
-              <View style={styles.placeholderItem} />
-            </View>
-          )}
-        </View>
-      );
-    } else if (selectedSegmentIndex === 2) {
-      return (
-        <View style={styles.simplifiedContainer}>
-          <Text style={styles.simplifiedText}>{t('assignments').segments.priority}</Text>
-          {priorityAssignmentGroups.length > 0 && (
-            <View style={styles.placeholderContent}>
-              <View style={styles.placeholderItem} />
-              <View style={styles.placeholderItem} />
-            </View>
-          )}
-        </View>
-      );
-    } else {
-      return (
-        <View style={styles.simplifiedContainer}>
-          <Text style={styles.simplifiedText}>{t('assignments').segments.dueDate}</Text>
-          {dateAssignmentGroups.length > 0 && (
-            <View style={styles.placeholderContent}>
-              <View style={styles.placeholderItem} />
-              <View style={styles.placeholderItem} />
-            </View>
-          )}
-        </View>
-      );
-    }
-  }, [
-    selectedSegmentIndex, 
-    t, 
-    courseAssignmentGroups, 
-    priorityAssignmentGroups, 
-    dateAssignmentGroups
-  ]);
+  // Handle toggle assignment with optimized state update
+  const handleToggleAssignment = useCallback((id: string) => {
+    setAllAssignments(current => {
+      const updated = current.map(a => a.id === id ? {...a, isCompleted: !a.isCompleted} : a);
+      
+      // Update the memoized data
+      const priorityAssignments = updated.filter(a => a.isPriority);
+      memoizedDataRef.current = {
+        dateGroups: groupAssignmentsByDate(updated, t, formatDate),
+        priorityGroups: groupAssignmentsByDate(priorityAssignments, t, formatDate),
+        courseGroups: groupAssignmentsByCourse(updated)
+      };
+      
+      return updated;
+    });
+    
+    // Update database in background
+    toggleAssignmentCompletion(id).catch(() => {
+      // Silently handle error
+    });
+  }, [t, formatDate]);
   
-  // Render the appropriate content based on selected segment
-  const renderContent = useCallback(() => {
-    // During rapid switching, show a simplified version
-    if (isRapidSwitching) {
-      return renderSimplifiedContent();
+  // Handle delete assignment with optimized state update
+  const handleDeleteAssignment = useCallback((id: string) => {
+    setAllAssignments(current => {
+      const updated = current.filter(a => a.id !== id);
+      
+      // Update the memoized data
+      const priorityAssignments = updated.filter(a => a.isPriority);
+      memoizedDataRef.current = {
+        dateGroups: groupAssignmentsByDate(updated, t, formatDate),
+        priorityGroups: groupAssignmentsByDate(priorityAssignments, t, formatDate),
+        courseGroups: groupAssignmentsByCourse(updated)
+      };
+      
+      return updated;
+    });
+    
+    // Update database in background
+    deleteAssignment(id).catch(() => {
+      // Silently handle error
+    });
+  }, [t, formatDate]);
+  
+  // Custom DateGroupedView that uses memoized data and disables animations after first view
+  const CustomDateGroupedView = useCallback(({
+    groups,
+    onToggle,
+    onDelete,
+    disableAnimations
+  }: {
+    groups: AssignmentGroup[],
+    onToggle: (id: string) => void,
+    onDelete: (id: string) => void,
+    disableAnimations: boolean
+  }) => {
+    if (groups.length === 0) {
+      return <EmptyState t={t} />;
     }
+    
+    return (
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        removeClippedSubviews={true}
+      >
+        {groups.map((group, index) => (
+          <View key={`${group.date}-${index}`} style={{marginBottom: 8}}>
+            {disableAnimations ? (
+              <View>
+                <DaySection
+                  title={group.title}
+                  date={group.date}
+                  assignments={group.assignments}
+                  onToggleAssignment={onToggle}
+                  onDeleteAssignment={onDelete}
+                  defaultExpanded={index === 0} // Only first day will be expanded by default
+                />
+              </View>
+            ) : (
+              <Animated.View 
+                entering={FadeInDown.duration(150).delay(index * 20)}
+                layout={Layout.springify().mass(0.3)}
+              >
+                <DaySection
+                  title={group.title}
+                  date={group.date}
+                  assignments={group.assignments}
+                  onToggleAssignment={onToggle}
+                  onDeleteAssignment={onDelete}
+                  defaultExpanded={index === 0} // Only first day will be expanded by default
+                />
+              </Animated.View>
+            )}
+          </View>
+        ))}
+      </ScrollView>
+    );
+  }, [t]);
+  
+  // Simplified CoursesView with disabled animations after first view
+  const SimplifiedCoursesView = useCallback(({
+    courseGroups,
+    onToggle,
+    onDelete,
+    disableAnimations
+  }: {
+    courseGroups: {[key: string]: Assignment[]},
+    onToggle: (id: string) => void,
+    onDelete: (id: string) => void,
+    disableAnimations: boolean
+  }) => {
+    const courseKeys = Object.keys(courseGroups);
+    
+    if (courseKeys.length === 0) {
+      return <EmptyState t={t} />;
+    }
+    
+    return (
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        removeClippedSubviews={true}
+      >
+        {courseKeys.map((courseCode, index) => (
+          <View key={`course-${courseCode}`} style={{marginBottom: 8}}>
+            {disableAnimations ? (
+              <View>
+                <CourseSection
+                  courseCode={courseCode}
+                  courseName={courseGroups[courseCode][0]?.courseName || 'Uncategorized'}
+                  assignments={courseGroups[courseCode]}
+                  onToggleAssignment={onToggle}
+                  onDeleteAssignment={onDelete}
+                  showDueDate={true}
+                />
+              </View>
+            ) : (
+              <Animated.View
+                entering={FadeInDown.duration(150).delay(index * 20)}
+                layout={Layout.springify().mass(0.3)}
+              >
+                <CourseSection
+                  courseCode={courseCode}
+                  courseName={courseGroups[courseCode][0]?.courseName || 'Uncategorized'}
+                  assignments={courseGroups[courseCode]}
+                  onToggleAssignment={onToggle}
+                  onDeleteAssignment={onDelete}
+                  showDueDate={true}
+                />
+              </Animated.View>
+            )}
+          </View>
+        ))}
+      </ScrollView>
+    );
+  }, [t]);
+  
+  // Custom rendering based on selected segment
+  const renderContent = () => {
+    // Don't show animations if we've viewed this tab before
+    const disableAnimations = hasViewedTab[selectedSegmentIndex];
     
     if (isLoading) {
       return <LoadingState t={t} />;
     }
     
-    // Classes view
-    if (selectedSegmentIndex === 1) {
-      return (
-        <CoursesView 
-          courseGroups={courseAssignmentGroups} 
-          onToggle={handleToggleAssignment}
-          onDelete={handleDeleteAssignment}
-        />
-      );
+    if (isSafeMode) {
+      return <LoadingState t={t} />;
     }
     
-    // Priority view
-    if (selectedSegmentIndex === 2) {
-      return (
-        <DateGroupedView 
-          groups={priorityAssignmentGroups}
-          onToggle={handleToggleAssignment}
-          onDelete={handleDeleteAssignment}
-          isTransitioningFromClasses={isTransitioningFromClasses}
-        />
-      );
+    switch (selectedSegmentIndex) {
+      case 0: // Due Date
+        return (
+          <CustomDateGroupedView
+            groups={memoizedDataRef.current.dateGroups}
+            onToggle={handleToggleAssignment}
+            onDelete={handleDeleteAssignment}
+            disableAnimations={disableAnimations}
+          />
+        );
+      case 1: // Classes
+        return (
+          <SimplifiedCoursesView
+            courseGroups={memoizedDataRef.current.courseGroups}
+            onToggle={handleToggleAssignment}
+            onDelete={handleDeleteAssignment}
+            disableAnimations={disableAnimations}
+          />
+        );
+      case 2: // Priority
+        return (
+          <CustomDateGroupedView
+            groups={memoizedDataRef.current.priorityGroups}
+            onToggle={handleToggleAssignment}
+            onDelete={handleDeleteAssignment}
+            disableAnimations={disableAnimations}
+          />
+        );
+      default:
+        return null;
     }
-    
-    // Due date view (default)
-    return (
-      <DateGroupedView 
-        groups={dateAssignmentGroups}
-        onToggle={handleToggleAssignment}
-        onDelete={handleDeleteAssignment}
-        isTransitioningFromClasses={isTransitioningFromClasses}
-      />
-    );
-  }, [
-    isLoading, 
-    selectedSegmentIndex, 
-    courseAssignmentGroups,
-    dateAssignmentGroups,
-    priorityAssignmentGroups,
-    handleToggleAssignment,
-    handleDeleteAssignment,
-    isTransitioningFromClasses,
-    isRapidSwitching,
-    renderSimplifiedContent,
-    t
-  ]);
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -984,6 +717,10 @@ export default function Assignments() {
             selectedIndex={selectedSegmentIndex}
             onChange={handleSegmentChange}
           />
+          
+          {isSafeMode && (
+            <Text style={styles.safeModeIndicator}>Stability mode active</Text>
+          )}
         </View>
       </View>
       
@@ -993,7 +730,16 @@ export default function Assignments() {
       </View>
     </SafeAreaView>
   );
-}
+};
+
+// Wrap the main component with the error boundary
+const AssignmentsWithErrorBoundary = () => (
+  <AssignmentsErrorBoundary>
+    <Assignments />
+  </AssignmentsErrorBoundary>
+);
+
+export default AssignmentsWithErrorBoundary;
 
 const styles = StyleSheet.create({
   container: {
@@ -1091,5 +837,79 @@ const styles = StyleSheet.create({
     backgroundColor: '#1d1d1d',
     borderRadius: 8,
     marginVertical: 10,
+  },
+  safeModeBanner: {
+    backgroundColor: '#2C2C2E',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  safeModeText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginBottom: 8,
+  },
+  safeModeDescription: {
+    fontSize: 14,
+    color: '#AEAEB2',
+    textAlign: 'center',
+  },
+  safeModeIndicator: {
+    fontSize: 12,
+    color: '#FFC107',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  safeScrollContent: {
+    paddingTop: 20,
+  },
+  simplifiedSection: {
+    backgroundColor: '#1C1C1E',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  simplifiedTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginBottom: 12,
+  },
+  simplifiedItem: {
+    height: 40,
+    backgroundColor: '#2C2C2E',
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#0A0A0A',
+    padding: 20,
+  },
+  errorTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 12,
+  },
+  errorMessage: {
+    fontSize: 16,
+    color: '#8A8A8D',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  errorHint: {
+    fontSize: 14,
+    color: '#FF9500',
+    textAlign: 'center',
+    padding: 16,
+    backgroundColor: 'rgba(255, 149, 0, 0.1)',
+    borderRadius: 8,
+    overflow: 'hidden',
+    width: '100%',
   },
 });
