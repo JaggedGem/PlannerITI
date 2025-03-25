@@ -47,14 +47,23 @@ const getTimeRange = (schedule: Record<string, any[]>): { min: number, max: numb
   let min = 24;
   let max = 0;
 
-  Object.values(schedule).forEach(dayItems => {
-    dayItems.forEach(item => {
-      const startHour = parseInt(item.startTime.split(':')[0]);
-      const endHour = parseInt(item.endTime.split(':')[0]);
-      if (startHour < min) min = startHour;
-      if (endHour > max) max = endHour;
+  // Add null check for schedule and its values
+  if (schedule) {
+    Object.values(schedule).forEach(dayItems => {
+      // Add null check for dayItems before calling forEach
+      if (dayItems && Array.isArray(dayItems)) {
+        dayItems.forEach(item => {
+          // Add null check for item and its properties
+          if (item && item.startTime && item.endTime) {
+            const startHour = parseInt(item.startTime.split(':')[0]);
+            const endHour = parseInt(item.endTime.split(':')[0]);
+            if (startHour < min) min = startHour;
+            if (endHour > max) max = endHour;
+          }
+        });
+      }
     });
-  });
+  }
 
   // Add padding
   return { min: Math.max(7, min - 1), max: Math.min(22, max + 1) };
@@ -344,9 +353,28 @@ type Styles = {
   gridLine: ViewStyle;
 };
 
+// Define a type for schedule items
+type ScheduleItem = {
+  period: string;
+  startTime: string;
+  endTime: string;
+  className: string;
+  teacherName: string;
+  roomNumber: string;
+  isEvenWeek?: boolean;
+  group?: string;
+  _height?: number;
+  hasNextItem?: boolean;
+  isCustom?: boolean;
+  color?: string;
+  isRecoveryDay?: boolean;
+  recoveryReason?: string;
+  replacedDayName?: string;
+};
+
 export default function WeekView() {
   const [scheduleData, setScheduleData] = useState<ApiResponse | null>(null);
-  const [weekSchedule, setWeekSchedule] = useState<Record<string, any[]>>({
+  const [weekSchedule, setWeekSchedule] = useState<Record<string, ScheduleItem[]>>({
     monday: [],
     tuesday: [],
     wednesday: [],
@@ -428,20 +456,27 @@ export default function WeekView() {
                (rd.groupId === '' || rd.groupId === settings.selectedGroupId);
       });
 
-      // Build the schedule object synchronously
-      const newWeekSchedule = {
-        monday: scheduleService.getScheduleForDay(data, 'monday', getDateForDay(weekStart, 0)),
-        tuesday: scheduleService.getScheduleForDay(data, 'tuesday', getDateForDay(weekStart, 1)),
-        wednesday: scheduleService.getScheduleForDay(data, 'wednesday', getDateForDay(weekStart, 2)),
-        thursday: scheduleService.getScheduleForDay(data, 'thursday', getDateForDay(weekStart, 3)),
-        friday: scheduleService.getScheduleForDay(data, 'friday', getDateForDay(weekStart, 4)),
-        ...Object.fromEntries(
-          weekendRecoveryDays.map(rd => [
-            `weekend_${rd.date}`,
-            scheduleService.getScheduleForDay(data, rd.replacedDay.toLowerCase() as keyof ApiResponse['data'], new Date(rd.date))
-          ])
-        )
+      // Build the schedule object with async/await
+      const newWeekSchedule: Record<string, ScheduleItem[]> = {
+        monday: await scheduleService.getScheduleForDay(data, 'monday', getDateForDay(weekStart, 0)),
+        tuesday: await scheduleService.getScheduleForDay(data, 'tuesday', getDateForDay(weekStart, 1)),
+        wednesday: await scheduleService.getScheduleForDay(data, 'wednesday', getDateForDay(weekStart, 2)),
+        thursday: await scheduleService.getScheduleForDay(data, 'thursday', getDateForDay(weekStart, 3)),
+        friday: await scheduleService.getScheduleForDay(data, 'friday', getDateForDay(weekStart, 4))
       };
+      
+      // Add recovery days if any
+      if (weekendRecoveryDays.length > 0) {
+        // Process each weekend recovery day one by one
+        for (const rd of weekendRecoveryDays) {
+          const dayKey = `weekend_${rd.date}`;
+          newWeekSchedule[dayKey] = await scheduleService.getScheduleForDay(
+            data, 
+            rd.replacedDay.toLowerCase() as keyof ApiResponse['data'], 
+            new Date(rd.date)
+          );
+        }
+      }
       
       setWeekSchedule(newWeekSchedule);
       setIsLoading(false);
@@ -452,7 +487,7 @@ export default function WeekView() {
   }, [t, weekStart, settings.selectedGroupId]);
 
   // Schedule update function wrapped in useCallback
-  const updateWeekSchedule = useCallback(() => {
+  const updateWeekSchedule = useCallback(async () => {
     if (scheduleData) {
       const recoveryDays = scheduleData.recoveryDays || [];
       const weekendRecoveryDays = recoveryDays.filter(rd => {
@@ -468,24 +503,27 @@ export default function WeekView() {
                (rd.groupId === '' || rd.groupId === settings.selectedGroupId);
       });
 
-      // Build the schedule object synchronously
-      const newWeekSchedule = {
-        monday: scheduleService.getScheduleForDay(scheduleData, 'monday', getDateForDay(weekStart, 0)),
-        tuesday: scheduleService.getScheduleForDay(scheduleData, 'tuesday', getDateForDay(weekStart, 1)),
-        wednesday: scheduleService.getScheduleForDay(scheduleData, 'wednesday', getDateForDay(weekStart, 2)),
-        thursday: scheduleService.getScheduleForDay(scheduleData, 'thursday', getDateForDay(weekStart, 3)),
-        friday: scheduleService.getScheduleForDay(scheduleData, 'friday', getDateForDay(weekStart, 4)),
-        ...Object.fromEntries(
-          weekendRecoveryDays.map(rd => [
-            `weekend_${rd.date}`,
-            scheduleService.getScheduleForDay(
-              scheduleData,
-              rd.replacedDay.toLowerCase() as keyof ApiResponse['data'],
-              new Date(rd.date)
-            )
-          ])
-        )
+      // Build the schedule object with async/await
+      const newWeekSchedule: Record<string, ScheduleItem[]> = {
+        monday: await scheduleService.getScheduleForDay(scheduleData, 'monday', getDateForDay(weekStart, 0)),
+        tuesday: await scheduleService.getScheduleForDay(scheduleData, 'tuesday', getDateForDay(weekStart, 1)),
+        wednesday: await scheduleService.getScheduleForDay(scheduleData, 'wednesday', getDateForDay(weekStart, 2)),
+        thursday: await scheduleService.getScheduleForDay(scheduleData, 'thursday', getDateForDay(weekStart, 3)),
+        friday: await scheduleService.getScheduleForDay(scheduleData, 'friday', getDateForDay(weekStart, 4))
       };
+      
+      // Add recovery days if any
+      if (weekendRecoveryDays.length > 0) {
+        // Process each weekend recovery day one by one
+        for (const rd of weekendRecoveryDays) {
+          const dayKey = `weekend_${rd.date}`;
+          newWeekSchedule[dayKey] = await scheduleService.getScheduleForDay(
+            scheduleData,
+            rd.replacedDay.toLowerCase() as keyof ApiResponse['data'],
+            new Date(rd.date)
+          );
+        }
+      }
       
       setWeekSchedule(newWeekSchedule);
     }
@@ -493,7 +531,12 @@ export default function WeekView() {
 
   // Add useEffect for initial schedule load
   useEffect(() => {
-    fetchSchedule();
+    // Call the async fetchSchedule function
+    const initializeSchedule = async () => {
+      await fetchSchedule();
+    };
+    
+    initializeSchedule();
   }, []);
 
   // Settings subscription effect for updates when settings change
@@ -503,7 +546,7 @@ export default function WeekView() {
     const currFetchSchedule = fetchSchedule;
     const currScheduleData = scheduleData;
     
-    const updateHandler = () => {
+    const updateHandler = async () => {
       // Get latest settings
       const newSettings = scheduleService.getSettings();
       const prevSettings = settingsRef.current;
@@ -526,13 +569,13 @@ export default function WeekView() {
       const newCustomPeriods = JSON.stringify(newSettings.customPeriods);
       
       if (oldCustomPeriods !== newCustomPeriods) {
-        // Force update by calling updateWeekSchedule directly
-        currUpdateWeekSchedule();
+        // Force update by calling updateWeekSchedule directly - now with await
+        await currUpdateWeekSchedule();
         return;
       }
       
       // For all other changes, also update week schedule
-      currUpdateWeekSchedule();
+      await currUpdateWeekSchedule();
     };
     
     // Subscribe to settings changes
@@ -622,8 +665,37 @@ export default function WeekView() {
 
   // Function to navigate between weeks with animation
   const navigateWeek = (direction: number) => {
+    // Set slide direction for animation (original code)
     setSlideDirection(direction > 0 ? 'right' : 'left');
+    
+    // Update week offset
     setWeekOffset(prev => prev + direction);
+    
+    // Force an update of the week schedule
+    if (scheduleData) {
+      const updateScheduleForNewWeek = async () => {
+        await updateWeekSchedule();
+      };
+      
+      updateScheduleForNewWeek();
+    }
+  };
+
+  // Fix goToCurrentWeek to keep original animation while handling async updates
+  const goToCurrentWeek = () => {
+    // Set slide direction for animation (original code)
+    setSlideDirection(weekOffset > 0 ? 'left' : 'right');
+    
+    setWeekOffset(0);
+    
+    // Force an update of the week schedule
+    if (scheduleData) {
+      const updateCurrentWeek = async () => {
+        await updateWeekSchedule();
+      };
+      
+      updateCurrentWeek();
+    }
   };
 
   // Function to get color for a subject with improved color palette
@@ -660,12 +732,6 @@ export default function WeekView() {
     weekEndDate.setDate(weekStart.getDate() + 4);
     const weekEndFormatted = formatDate(weekEndDate, { day: 'numeric', month: 'short' });
     return `${weekStartFormatted} - ${weekEndFormatted}`;
-  };
-
-  // Reset week offset with animation
-  const goToCurrentWeek = () => {
-    setSlideDirection(weekOffset > 0 ? 'left' : 'right');
-    setWeekOffset(0);
   };
 
   // Show loading state
