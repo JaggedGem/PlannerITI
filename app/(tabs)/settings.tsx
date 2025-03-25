@@ -23,7 +23,7 @@ import {
   sendTestNotification 
 } from '@/utils/notificationUtils';
 import { getAssignments, AssignmentType } from '@/utils/assignmentStorage';
-import { StorageViewer } from './storage-viewer';
+import { StorageViewer } from '../../components/StorageViewer';
 
 const IDNP_KEY = '@planner_idnp';
 const IDNP_UPDATE_EVENT = 'idnp_updated';
