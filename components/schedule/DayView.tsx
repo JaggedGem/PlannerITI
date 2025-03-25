@@ -137,6 +137,7 @@ export default function DayView() {
   const [settings, setSettings] = useState(scheduleService.getSettings());
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [todaySchedule, setTodaySchedule] = useState<any[]>([]);
+  const [initialLoadAttempted, setInitialLoadAttempted] = useState(false);
   const currentDate = new Date();
   const isEvenWeek = scheduleService.isEvenWeek(selectedDate);
   const { t, formatDate } = useTranslation();
@@ -247,33 +248,72 @@ export default function DayView() {
     }
   }, [scrollToDate, weekDates]);
 
-  // Schedule update function using useCallback
-  const updateSchedule = useCallback(async () => {
-    if (scheduleData) {
-      const daySchedule = await scheduleService.getScheduleForDay(
-        scheduleData,
-        DAYS_MAP[selectedDate.getDay() as keyof typeof DAYS_MAP],
-        selectedDate // Pass the selected date to handle recovery days
-      );
-      setTodaySchedule(daySchedule);
-    }
-  }, [scheduleData, selectedDate]);
-
   // Schedule data fetching function using useCallback
   const fetchSchedule = useCallback(async (groupId?: string) => {
     try {
       setIsLoading(true);
       setError(null);
+      
+      // Check for internet connection before attempting to fetch
+      const hasInternet = await scheduleService.hasInternetConnection();
+      
+      // If no internet and this is the initial load (no cached data)
+      if (!hasInternet && !initialLoadAttempted) {
+        setError('No internet connection. Please connect to the internet for the initial load.');
+        setIsLoading(false);
+        setInitialLoadAttempted(true);
+        return;
+      }
+      
       const data = await scheduleService.getClassSchedule(groupId);
+      
+      // If we got here successfully, update state
       setScheduleData(data);
+      setInitialLoadAttempted(true);
+      
+      // Now that we have data, also update the day schedule
+      if (data) {
+        let dayKey;
+        const dateString = selectedDate.toISOString().split('T')[0];
+        const isRecDay = scheduleService.isRecoveryDay(selectedDate);
+        
+        if (isRecDay) {
+          dayKey = `weekend_${dateString}`;
+        } else {
+          dayKey = DAYS_MAP[selectedDate.getDay() as keyof typeof DAYS_MAP];
+        }
+        
+        const daySchedule = await scheduleService.getScheduleForDay(
+          data,
+          dayKey,
+          selectedDate
+        );
+        
+        setTodaySchedule(daySchedule);
+      }
     } catch (error) {
-      setError('Unable to load schedule. Please try again later.');
-      // Silent error handling
-      setIsLoading(false);
+      setError(t('schedule').error || 'Unable to load schedule. Please try again later.');
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [selectedDate, initialLoadAttempted, t]);
+
+  // Schedule update function using useCallback
+  const updateSchedule = useCallback(async () => {
+    if (!scheduleData) {
+      // If we don't have schedule data yet, try to fetch it
+      await fetchSchedule();
+      return;
+    }
+    
+    // If we have data, update the day schedule
+    const daySchedule = await scheduleService.getScheduleForDay(
+      scheduleData,
+      DAYS_MAP[selectedDate.getDay() as keyof typeof DAYS_MAP],
+      selectedDate // Pass the selected date to handle recovery days
+    );
+    setTodaySchedule(daySchedule);
+  }, [scheduleData, selectedDate, fetchSchedule]);
 
   // Settings subscription effect to check for any kind of settings changes
   useEffect(() => {
@@ -349,8 +389,19 @@ export default function DayView() {
 
   // Schedule data fetching effect
   useEffect(() => {
-    fetchSchedule();
-  }, []);
+    const loadData = async () => {
+      try {
+        // Check if we need to fetch data
+        await fetchSchedule();
+      } catch (err) {
+        console.error('Failed to load schedule:', err);
+        setError('Unable to load schedule. Please try again later.');
+        setIsLoading(false);
+      }
+    };
+    
+    loadData();
+  }, [fetchSchedule]);
 
   // Initial scroll to today, only once on mount
   useEffect(() => {
@@ -633,6 +684,23 @@ export default function DayView() {
             </View>
             <View style={styles.errorContainer}>
               <Text style={styles.errorText}>{error}</Text>
+              {/* Add retry button for initial load errors */}
+              {!initialLoadAttempted || error.includes('internet') ? (
+                <TouchableOpacity 
+                  style={{
+                    marginTop: 16,
+                    paddingVertical: 10,
+                    paddingHorizontal: 20,
+                    backgroundColor: '#2C3DCD',
+                    borderRadius: 8
+                  }}
+                  onPress={() => fetchSchedule()}
+                >
+                  <Text style={{ color: '#FFFFFF', fontWeight: '600' }}>
+                    Retry
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
             <ViewModeMenu
               isOpen={isMenuOpen}
