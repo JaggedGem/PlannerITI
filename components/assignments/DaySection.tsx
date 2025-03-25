@@ -24,6 +24,7 @@ type DaySectionProps = {
   assignments: Assignment[];
   onToggleAssignment: (id: string) => void;
   onDeleteAssignment?: (id: string) => void;
+  defaultExpanded?: boolean;
 };
 
 interface EnhancedAssignment extends Assignment {
@@ -57,9 +58,16 @@ const getDayColor = (title: string, t: any): [string, string] => {
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-export default function DaySection({ title, date, assignments, onToggleAssignment, onDeleteAssignment }: DaySectionProps) {
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const rotation = useSharedValue(0);
+export default function DaySection({ 
+  title, 
+  date, 
+  assignments, 
+  onToggleAssignment, 
+  onDeleteAssignment,
+  defaultExpanded = true
+}: DaySectionProps) {
+  const [isCollapsed, setIsCollapsed] = useState(!defaultExpanded);
+  const rotation = useSharedValue(defaultExpanded ? 0.5 : 0);
   const [enhancedAssignments, setEnhancedAssignments] = useState<EnhancedAssignment[]>([]);
   const { t } = useTranslation();
   
