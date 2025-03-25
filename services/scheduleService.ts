@@ -374,6 +374,8 @@ export const scheduleService = {
         this.fetchAndCacheSchedule(id).catch(() => {});
         // Also refresh recovery days in background if needed
         this.syncRecoveryDays().catch(() => {});
+        // Sync period times to ensure we have the latest data
+        this.syncPeriodTimes().catch(() => {});
       }
       
       // Return cached data as schedule response
@@ -383,6 +385,8 @@ export const scheduleService = {
 
       // If no cached data, try to fetch (this will only happen on first run)
       const freshData = await this.fetchAndCacheSchedule(id);
+      // Ensure period times are synced on first run
+      await this.syncPeriodTimes();
       return this.transformScheduleData(freshData);
     } catch (error) {
       // Silent error handling
@@ -610,7 +614,7 @@ export const scheduleService = {
     return recoveryDay || null;
   },
 
-  getScheduleForDay(data: ApiResponse, dayName: keyof ApiResponse['data'] | undefined, date?: Date) {
+  async getScheduleForDay(data: ApiResponse, dayName: keyof ApiResponse['data'] | undefined, date?: Date) {
     if (!dayName) return [];
 
     const result: Array<{
@@ -634,24 +638,62 @@ export const scheduleService = {
     const daySchedule = data.data[dayName];
     if (!daySchedule) return result;
 
+    // Get period times from the custom API first
+    const customPeriodTimes = await this.getPeriodTimes();
+    // Convert dayName to string and determine corresponding day for API
+    const dayOfWeekStr = typeof dayName === 'string' && dayName.includes('weekend') 
+      ? 'monday' 
+      : dayName as string; // Cast as string since we know it's a string key
+
     // Process each period synchronously since we already have all the data
     Object.entries(daySchedule).forEach(([periodNum, schedules]) => {
       const processScheduleItem = (item: ScheduleItem & { isRecoveryDay?: boolean; recoveryInfo?: any }, isEvenWeek?: boolean) => {
         const itemGroup = item.groupids.name;
-        const entireClass = itemGroup === 'Clasă intreagă' || itemGroup === 'Clas� intreag�';
-        const settingsGroup = this.settings.group === 'Subgroup 1' ? 'Grupa 1' : 'Grupa 2';
-        const compareItemGroup = itemGroup === 'Grupa 1' ? 'Subgroup 1' : itemGroup === 'Grupa 2' ? 'Subgroup 2' : itemGroup;
-
+        
+        // Fix encoding and ensure we catch all variants of "entire class"
+        const entireClassVariants = ['Clasă intreagă', 'Clas intreag', 'Clasa intreaga', 'Clasă întreagă', 'Clas întreag', 'Întreaga clasă', 'Class'];
+        const entireClass = entireClassVariants.some(variant => 
+          itemGroup.toLowerCase().includes(variant.toLowerCase()) || 
+          itemGroup.toLowerCase().includes('intreag')
+        );
+        
+        // Map API group naming to our app's naming convention
+        let compareItemGroup = itemGroup;
+        if (itemGroup.includes('Grupa 1') || itemGroup === 'Grupa 1') {
+          compareItemGroup = 'Subgroup 1';
+        } else if (itemGroup.includes('Grupa 2') || itemGroup === 'Grupa 2') {
+          compareItemGroup = 'Subgroup 2';
+        }
+        
+        // Only skip if not entireClass AND does not match selected subgroup
         if (!entireClass && compareItemGroup !== this.settings.group) {
           return;
         }
 
-        // Use period data directly from the API response
-        const periodIndex = parseInt(periodNum) - 1;
-        const periodData = data.periods[periodIndex];
+        // Try to get period times from custom API first, then fall back to original data
+        let startTime = '';
+        let endTime = '';
+        
+        if (customPeriodTimes && customPeriodTimes[dayOfWeekStr as keyof PeriodTimes]) {
+          // Find the matching period in the custom period times
+          const periodsForDay = customPeriodTimes[dayOfWeekStr as keyof PeriodTimes];
+          const customPeriod = periodsForDay.find((p: PeriodTime) => p.period === parseInt(periodNum) - 1);
+          if (customPeriod) {
+            startTime = customPeriod.starttime;
+            endTime = customPeriod.endtime;
+          }
+        }
+        
+        // Fall back to original period times if custom times not available
+        if (!startTime || !endTime) {
+          const periodIndex = parseInt(periodNum) - 1;
+          const periodData = data.periods[periodIndex];
+          startTime = periodData.starttime;
+          endTime = periodData.endtime;
+        }
 
         // If this is a recovery day item and it's the first period, add the info banner
-        if (item.isRecoveryDay && periodIndex === 0 && item.recoveryInfo) {
+        if (item.isRecoveryDay && periodNum === '1' && item.recoveryInfo) {
           result.push({
             period: 'recovery-info',
             startTime: '00:00',
@@ -669,8 +711,8 @@ export const scheduleService = {
 
         result.push({
           period: periodNum.toString(),
-          startTime: periodData.starttime,
-          endTime: periodData.endtime,
+          startTime: startTime,
+          endTime: endTime,
           className: item.subjectid.name,
           teacherName: item.teacherids.name,
           roomNumber: item.classroomids.name,
@@ -803,6 +845,9 @@ export const scheduleService = {
     scheduleService.cachedRecoveryDays = JSON.parse(cachedRecoveryDays);
   }
   
-  scheduleService.syncPeriodTimes(); // Initial sync
-  scheduleService.syncRecoveryDays(); // Initial sync of recovery days
+  // Sync period times immediately to ensure we have the latest data
+  await scheduleService.syncPeriodTimes();
+  
+  // Initial sync of recovery days
+  scheduleService.syncRecoveryDays();
 })();
