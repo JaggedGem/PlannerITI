@@ -910,92 +910,112 @@ export default function NewAssignmentScreen() {
           // Check if this is an even or odd week
           const isEvenWeek = scheduleService.isEvenWeek(today);
           
-          // Get today's schedule
-          const todaySchedule = scheduleService.getScheduleForDay(scheduleData, dayName, today);
-          
-          // Find current active period or the next period
-          const now = new Date();
-          const currentHour = now.getHours();
-          const currentMinute = now.getMinutes();
-          const currentTimeInMinutes = currentHour * 60 + currentMinute;
-          
-          // Filter periods by current week type
-          const relevantPeriods = todaySchedule.filter(
-            period => period.isEvenWeek === undefined || period.isEvenWeek === isEvenWeek
-          );
-          
-          // Find current or next period (within 10 minutes)
-          let targetPeriod = null;
-          
-          // First check for current period or one that just ended (within 10 mins)
-          for (const period of relevantPeriods) {
-            if (!period.startTime || !period.endTime) continue;
+          try {
+            // Get today's schedule with proper await
+            const todaySchedule = await scheduleService.getScheduleForDay(scheduleData, dayName as any, today);
             
-            const [startHour, startMinute] = period.startTime.split(':').map(Number);
-            const [endHour, endMinute] = period.endTime.split(':').map(Number);
-            
-            const startTimeInMinutes = startHour * 60 + startMinute;
-            const endTimeInMinutes = endHour * 60 + endMinute;
-            
-            // Check if this period is currently in progress
-            if (currentTimeInMinutes >= startTimeInMinutes && currentTimeInMinutes <= endTimeInMinutes) {
-              targetPeriod = period;
-              break;
+            // Verify we have a valid schedule array
+            if (!todaySchedule || !Array.isArray(todaySchedule)) {
+              console.error('Today schedule is not an array:', todaySchedule);
+              if (subjectsData.length > 0) {
+                setSelectedSubjectId(subjectsData[0].id);
+                setCourseName(subjectsData[0].name);
+                await updateNextPeriodInfo(subjectsData[0].id);
+              }
+              setLoadingSubjects(false);
+              return;
             }
             
-            // Check if period just ended (within 10 minutes)
-            if (currentTimeInMinutes > endTimeInMinutes && currentTimeInMinutes <= endTimeInMinutes + 10) {
-              targetPeriod = period;
-              break;
-            }
-          }
-          
-          // If no current period, get first period of the day
-          if (!targetPeriod && relevantPeriods.length > 0) {
-            // Sort periods by start time
-            const sortedPeriods = [...relevantPeriods].sort((a, b) => {
-              if (!a.startTime) return 1;
-              if (!b.startTime) return -1;
-              
-              const [aHours, aMinutes] = a.startTime.split(':').map(Number);
-              const [bHours, bMinutes] = b.startTime.split(':').map(Number);
-              
-              return (aHours * 60 + aMinutes) - (bHours * 60 + bMinutes);
-            });
+            const currentHour = today.getHours();
+            const currentMinute = today.getMinutes();
+            const currentTimeInMinutes = currentHour * 60 + currentMinute;
             
-            // Get the first period of the day
-            targetPeriod = sortedPeriods[0];
-          }
-          
-          // Set selected subject based on the target period
-          if (targetPeriod && targetPeriod.className) {
-            // Find corresponding subject in subjects list
-            const matchingSubject = subjectsData.find(
-              subject => subject.name === targetPeriod.className
+            // Filter periods by current week type
+            const relevantPeriods = todaySchedule.filter(
+              period => period.isEvenWeek === undefined || period.isEvenWeek === isEvenWeek
             );
             
-            if (matchingSubject) {
-              setSelectedSubjectId(matchingSubject.id);
-              setCourseName(matchingSubject.name);
-              updateNextPeriodInfo(matchingSubject.id).catch(err => 
-                console.error("Error updating next period info:", err)
+            // Find current or next period (within 10 minutes)
+            let targetPeriod = null;
+            
+            // First check for current period or one that just ended (within 10 mins)
+            for (const period of relevantPeriods) {
+              if (!period.startTime || !period.endTime) continue;
+              
+              const [startHour, startMinute] = period.startTime.split(':').map(Number);
+              const [endHour, endMinute] = period.endTime.split(':').map(Number);
+              
+              const startTimeInMinutes = startHour * 60 + startMinute;
+              const endTimeInMinutes = endHour * 60 + endMinute;
+              
+              // Check if this period is currently in progress
+              if (currentTimeInMinutes >= startTimeInMinutes && currentTimeInMinutes <= endTimeInMinutes) {
+                targetPeriod = period;
+                break;
+              }
+              
+              // Check if period just ended (within 10 minutes)
+              if (currentTimeInMinutes > endTimeInMinutes && currentTimeInMinutes <= endTimeInMinutes + 10) {
+                targetPeriod = period;
+                break;
+              }
+            }
+            
+            // If no current period, get first period of the day
+            if (!targetPeriod && relevantPeriods.length > 0) {
+              // Sort periods by start time
+              const sortedPeriods = [...relevantPeriods].sort((a, b) => {
+                if (!a.startTime) return 1;
+                if (!b.startTime) return -1;
+                
+                const [aHours, aMinutes] = a.startTime.split(':').map(Number);
+                const [bHours, bMinutes] = b.startTime.split(':').map(Number);
+                
+                return (aHours * 60 + aMinutes) - (bHours * 60 + bMinutes);
+              });
+              
+              // Get the first period of the day
+              targetPeriod = sortedPeriods[0];
+            }
+            
+            // Set selected subject based on the target period
+            if (targetPeriod && targetPeriod.className) {
+              // Find corresponding subject in subjects list
+              const matchingSubject = subjectsData.find(
+                subject => subject.name === targetPeriod.className
               );
+              
+              if (matchingSubject) {
+                setSelectedSubjectId(matchingSubject.id);
+                setCourseName(matchingSubject.name);
+                updateNextPeriodInfo(matchingSubject.id).catch(err => 
+                  console.error("Error updating next period info:", err)
+                );
+              } else if (subjectsData.length > 0) {
+                // Fallback to first subject if no matching subject found
+                setSelectedSubjectId(subjectsData[0].id);
+                setCourseName(subjectsData[0].name);
+                updateNextPeriodInfo(subjectsData[0].id).catch(err => 
+                  console.error("Error updating next period info:", err)
+                );
+              }
             } else if (subjectsData.length > 0) {
-              // Fallback to first subject if no matching subject found
+              // If no target period found, default to first subject
               setSelectedSubjectId(subjectsData[0].id);
               setCourseName(subjectsData[0].name);
               updateNextPeriodInfo(subjectsData[0].id).catch(err => 
                 console.error("Error updating next period info:", err)
               );
             }
-          } else if (subjectsData.length > 0) {
-            // If no target period found, default to first subject
-            setSelectedSubjectId(subjectsData[0].id);
-            setCourseName(subjectsData[0].name);
-            updateNextPeriodInfo(subjectsData[0].id).catch(err => 
-              console.error("Error updating next period info:", err)
-            );
+          } catch (error) {
+            console.error('Error processing today schedule:', error);
+            if (subjectsData.length > 0) {
+              setSelectedSubjectId(subjectsData[0].id);
+              setCourseName(subjectsData[0].name);
+              await updateNextPeriodInfo(subjectsData[0].id);
+            }
           }
+          
         } else {
           // Weekend case - get Friday's schedule
           const fridayName = 'friday';
@@ -1008,55 +1028,70 @@ export default function NewAssignmentScreen() {
           // Check if this is an even or odd week for Friday
           const isEvenWeek = scheduleService.isEvenWeek(fridayDate);
           
-          // Get Friday's schedule
-          const fridaySchedule = scheduleService.getScheduleForDay(scheduleData, fridayName, fridayDate);
-          
-          // Filter periods by week type for Friday
-          const relevantFridayPeriods = fridaySchedule.filter(
-            period => period.isEvenWeek === undefined || period.isEvenWeek === isEvenWeek
-          );
-          
-          // Sort Friday periods by start time
-          const sortedFridayPeriods = [...relevantFridayPeriods].sort((a, b) => {
-            if (!a.startTime) return 1;
-            if (!b.startTime) return -1;
+          try {
+            // Get Friday's schedule with proper await
+            const fridaySchedule = await scheduleService.getScheduleForDay(scheduleData, fridayName as any, fridayDate);
             
-            const [aHours, aMinutes] = a.startTime.split(':').map(Number);
-            const [bHours, bMinutes] = b.startTime.split(':').map(Number);
+            // Verify we have a valid schedule array
+            if (!fridaySchedule || !Array.isArray(fridaySchedule)) {
+              console.error('Friday schedule is not an array:', fridaySchedule);
+              if (subjectsData.length > 0) {
+                setSelectedSubjectId(subjectsData[0].id);
+                setCourseName(subjectsData[0].name);
+                await updateNextPeriodInfo(subjectsData[0].id);
+              }
+              setLoadingSubjects(false);
+              return;
+            }
             
-            return (aHours * 60 + aMinutes) - (bHours * 60 + bMinutes);
-          });
-          
-          // Get the first period of Friday if available
-          if (sortedFridayPeriods.length > 0) {
-            const fridayFirstPeriod = sortedFridayPeriods[0];
-            
-            // Find corresponding subject in subjects list
-            const matchingSubject = subjectsData.find(
-              subject => subject.name === fridayFirstPeriod.className
+            // Filter periods by week type for Friday
+            const relevantFridayPeriods = fridaySchedule.filter(
+              period => period.isEvenWeek === undefined || period.isEvenWeek === isEvenWeek
             );
             
-            if (matchingSubject) {
-              setSelectedSubjectId(matchingSubject.id);
-              setCourseName(matchingSubject.name);
-              updateNextPeriodInfo(matchingSubject.id).catch(err => 
-                console.error("Error updating next period info:", err)
+            // Sort Friday periods by start time
+            const sortedFridayPeriods = [...relevantFridayPeriods].sort((a, b) => {
+              if (!a.startTime) return 1;
+              if (!b.startTime) return -1;
+              
+              const [aHours, aMinutes] = a.startTime.split(':').map(Number);
+              const [bHours, bMinutes] = b.startTime.split(':').map(Number);
+              
+              return (aHours * 60 + aMinutes) - (bHours * 60 + bMinutes);
+            });
+            
+            // Get the first period of Friday if available
+            if (sortedFridayPeriods.length > 0) {
+              const fridayFirstPeriod = sortedFridayPeriods[0];
+              
+              // Find corresponding subject in subjects list
+              const matchingSubject = subjectsData.find(
+                subject => subject.name === fridayFirstPeriod.className
               );
+              
+              if (matchingSubject) {
+                setSelectedSubjectId(matchingSubject.id);
+                setCourseName(matchingSubject.name);
+                updateNextPeriodInfo(matchingSubject.id);
+              } else if (subjectsData.length > 0) {
+                // Fallback to first subject if no matching subject found
+                setSelectedSubjectId(subjectsData[0].id);
+                setCourseName(subjectsData[0].name);
+                updateNextPeriodInfo(subjectsData[0].id);
+              }
             } else if (subjectsData.length > 0) {
-              // Fallback to first subject if no matching subject found
+              // No Friday periods - use first subject
               setSelectedSubjectId(subjectsData[0].id);
               setCourseName(subjectsData[0].name);
-              updateNextPeriodInfo(subjectsData[0].id).catch(err => 
-                console.error("Error updating next period info:", err)
-              );
+              updateNextPeriodInfo(subjectsData[0].id);
             }
-          } else if (subjectsData.length > 0) {
-            // No Friday periods - use first subject
-            setSelectedSubjectId(subjectsData[0].id);
-            setCourseName(subjectsData[0].name);
-            updateNextPeriodInfo(subjectsData[0].id).catch(err => 
-              console.error("Error updating next period info:", err)
-            );
+          } catch (error) {
+            console.error('Error processing Friday schedule:', error);
+            if (subjectsData.length > 0) {
+              setSelectedSubjectId(subjectsData[0].id);
+              setCourseName(subjectsData[0].name);
+              await updateNextPeriodInfo(subjectsData[0].id);
+            }
           }
         }
       } catch (error) {
@@ -1065,9 +1100,7 @@ export default function NewAssignmentScreen() {
         if (subjects.length > 0) {
           setSelectedSubjectId(subjects[0].id);
           setCourseName(subjects[0].name);
-          updateNextPeriodInfo(subjects[0].id).catch(err => 
-            console.error("Error updating next period info:", err)
-          );
+          await updateNextPeriodInfo(subjects[0].id);
         }
       } finally {
         setLoadingSubjects(false);
@@ -1129,26 +1162,44 @@ export default function NewAssignmentScreen() {
           // Check if this is an even or odd week
           const isEvenWeek = scheduleService.isEvenWeek(today);
           
-          // Get today's schedule
-          const todaySchedule = scheduleService.getScheduleForDay(scheduleData, dayName, today);
+          // Get today's schedule with proper await
+          const todaySchedule = await scheduleService.getScheduleForDay(scheduleData, dayName as any, today);
           
-          // Extract unique subjects from today's schedule, considering week type
-          const todaySubjectNames = new Set<string>();
-          todaySchedule.forEach(period => {
+          // Check if todaySchedule exists and is an array
+          if (!todaySchedule || !Array.isArray(todaySchedule)) {
+            console.error('Today schedule is not an array:', todaySchedule);
+            setFilteredSubjects(allSubjects.slice(0, 5));
+            return;
+          }
+          
+          // Sort schedule by start time
+          const sortedSchedule = [...todaySchedule].sort((a, b) => {
+            const timeA = a.startTime.split(':').map(Number);
+            const timeB = b.startTime.split(':').map(Number);
+            return (timeA[0] * 60 + timeA[1]) - (timeB[0] * 60 + timeB[1]);
+          });
+          
+          // Extract unique subjects from today's schedule in order of appearance
+          const todaySubjectNames: string[] = [];
+          sortedSchedule.forEach(period => {
             // Only include periods that are for all weeks or match the current week type
-            if (period.className && (period.isEvenWeek === undefined || period.isEvenWeek === isEvenWeek)) {
-              todaySubjectNames.add(period.className);
+            if (
+              period.className && 
+              !todaySubjectNames.includes(period.className) &&
+              (period.isEvenWeek === undefined || period.isEvenWeek === isEvenWeek)
+            ) {
+              todaySubjectNames.push(period.className);
             }
           });
           
-          // Filter subjects that are in today's schedule
-          const todaySubjects = allSubjects.filter(subject => 
-            todaySubjectNames.has(subject.name)
-          );
+          // Filter and sort subjects that are in today's schedule based on their appearance time
+          const todaySubjects = todaySubjectNames
+            .map(name => allSubjects.find(subject => subject.name === name))
+            .filter(subject => subject !== undefined) as Subject[];
           
           // If no subjects found for today, show first 5
           if (todaySubjects.length === 0) {
-      setFilteredSubjects(allSubjects.slice(0, 5));
+            setFilteredSubjects(allSubjects.slice(0, 5));
           } else {
             setFilteredSubjects(todaySubjects);
           }
@@ -1219,62 +1270,73 @@ export default function NewAssignmentScreen() {
                         dayIndex === 4 ? 'thursday' :
                         dayIndex === 5 ? 'friday' : 'saturday';
         
-        // Get schedule for this day
-        const daySchedule = scheduleService.getScheduleForDay(scheduleData, dayName, searchDate);
-        
-        // Check if this is an even or odd week
-        const isEvenWeek = scheduleService.isEvenWeek(searchDate);
-        
-        // Find the first period for this subject that matches both:
-        // 1. The correct subject name
-        // 2. Either has no isEvenWeek property (applies to both weeks), 
-        //    or its isEvenWeek property matches the current week's type
-        const subjectPeriod = daySchedule.find(period => 
-          period.className === subject.name && 
-          (period.isEvenWeek === undefined || period.isEvenWeek === isEvenWeek) &&
-          // If we're looking at today, only include periods that haven't started yet
-          (i > 0 || (
-            period.startTime && 
-            isPeriodInFuture(period.startTime)
-          ))
-        );
-        
-        if (subjectPeriod) {
-          // Get readable day format
-          const dayString = searchDate.toLocaleDateString(currentLanguage, { weekday: 'long' });
+        try {
+          // Get schedule for this day - now with proper await
+          const daySchedule = await scheduleService.getScheduleForDay(scheduleData, dayName as any, searchDate);
           
-          // Format time
-          const formattedTime = formatPeriodTime(subjectPeriod.startTime);
-          
-          // Calculate which week this is relative to the current date
-          const currentWeek = Math.floor(today.getTime() / (7 * 24 * 60 * 60 * 1000));
-          const dueWeek = Math.floor(searchDate.getTime() / (7 * 24 * 60 * 60 * 1000));
-          const weekDifference = dueWeek - currentWeek;
-          
-          let weekText = '';
-          if (weekDifference === 0) {
-            weekText = t('assignments').days.thisWeek;
-          } else if (weekDifference === 1) {
-            weekText = t('assignments').days.nextWeek;
-          } else {
-            weekText = `${t('assignments').days.in} ${weekDifference} ${t('assignments').days.weeks}`;
+          // Check if daySchedule exists and is an array
+          if (!daySchedule || !Array.isArray(daySchedule)) {
+            console.error(`Day schedule for ${dayName} is not an array:`, daySchedule);
+            continue;
           }
           
-          // Set next period info
-          setNextPeriodInfo({
-            day: dayString,
-            time: formattedTime,
-            weekText: weekText
-          });
+          // Check if this is an even or odd week
+          const isEvenWeek = scheduleService.isEvenWeek(searchDate);
           
-          // Update due date to match next period
-          const newDueDate = new Date(searchDate);
-          const [hours, minutes] = subjectPeriod.startTime.split(':').map(Number);
-          newDueDate.setHours(hours, minutes, 0, 0);
-          setDueDate(newDueDate);
+          // Find the first period for this subject that matches both:
+          // 1. The correct subject name
+          // 2. Either has no isEvenWeek property (applies to both weeks), 
+          //    or its isEvenWeek property matches the current week's type
+          const subjectPeriod = daySchedule.find(period => 
+            period.className === subject.name && 
+            (period.isEvenWeek === undefined || period.isEvenWeek === isEvenWeek) &&
+            // If we're looking at today, only include periods that haven't started yet
+            (i > 0 || (
+              period.startTime && 
+              isPeriodInFuture(period.startTime)
+            ))
+          );
           
-          foundNextPeriod = true;
-          break;
+          if (subjectPeriod) {
+            // Get readable day format
+            const dayString = searchDate.toLocaleDateString(currentLanguage, { weekday: 'long' });
+            
+            // Format time
+            const formattedTime = formatPeriodTime(subjectPeriod.startTime);
+            
+            // Calculate which week this is relative to the current date
+            const currentWeek = Math.floor(today.getTime() / (7 * 24 * 60 * 60 * 1000));
+            const dueWeek = Math.floor(searchDate.getTime() / (7 * 24 * 60 * 60 * 1000));
+            const weekDifference = dueWeek - currentWeek;
+            
+            let weekText = '';
+            if (weekDifference === 0) {
+              weekText = t('assignments').days.thisWeek;
+            } else if (weekDifference === 1) {
+              weekText = t('assignments').days.nextWeek;
+            } else {
+              weekText = `${t('assignments').days.in} ${weekDifference} ${t('assignments').days.weeks}`;
+            }
+            
+            // Set next period info
+            setNextPeriodInfo({
+              day: dayString,
+              time: formattedTime,
+              weekText: weekText
+            });
+            
+            // Update due date to match next period
+            const newDueDate = new Date(searchDate);
+            const [hours, minutes] = subjectPeriod.startTime.split(':').map(Number);
+            newDueDate.setHours(hours, minutes, 0, 0);
+            setDueDate(newDueDate);
+            
+            foundNextPeriod = true;
+            break;
+          }
+        } catch (error) {
+          console.error(`Error getting schedule for day ${dayName}:`, error);
+          continue;
         }
       }
       
