@@ -861,7 +861,7 @@ export default function NewAssignmentScreen() {
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('');
   const [useNextPeriod, setUseNextPeriod] = useState(true);
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
-  const [nextPeriodInfo, setNextPeriodInfo] = useState<{day: string, time: string, weekText?: string} | null>(null);
+  const [nextPeriodInfo, setNextPeriodInfo] = useState<{day: string, time: string, weekText?: string, isCurrentWeek?: boolean, isTomorrow?: boolean} | null>(null);
   const [loadingNextPeriod, setLoadingNextPeriod] = useState(false);
   const [assignmentType, setAssignmentType] = useState<AssignmentType>(AssignmentType.HOMEWORK);
   const [autoDetectedType, setAutoDetectedType] = useState<boolean>(false);
@@ -1305,24 +1305,75 @@ export default function NewAssignmentScreen() {
             const formattedTime = formatPeriodTime(subjectPeriod.startTime);
             
             // Calculate which week this is relative to the current date
-            const currentWeek = Math.floor(today.getTime() / (7 * 24 * 60 * 60 * 1000));
-            const dueWeek = Math.floor(searchDate.getTime() / (7 * 24 * 60 * 60 * 1000));
-            const weekDifference = dueWeek - currentWeek;
+            const todayDate = new Date(today);
+            const currentYear = todayDate.getFullYear();
+            const currentMonth = todayDate.getMonth();
+            const currentDay = todayDate.getDate();
+            
+            // Get the current week's Monday (first day of week)
+            const currentWeekMonday = new Date(todayDate);
+            const dayOfWeek = todayDate.getDay(); // 0 is Sunday, 1 is Monday, etc.
+            // Adjust to get Monday (if today is Sunday (0), we go back 6 days)
+            const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+            currentWeekMonday.setDate(currentDay - daysFromMonday);
+            
+            // Get the next week's Monday
+            const nextWeekMonday = new Date(currentWeekMonday);
+            nextWeekMonday.setDate(currentWeekMonday.getDate() + 7);
+            
+            // Get the current week's Friday (last day of the week)
+            const currentWeekFriday = new Date(currentWeekMonday);
+            currentWeekFriday.setDate(currentWeekMonday.getDate() + 4); // +4 days from Monday is Friday
+            
+            // Get the next week's Friday
+            const nextWeekFriday = new Date(nextWeekMonday);
+            nextWeekFriday.setDate(nextWeekMonday.getDate() + 4);
+            
+            // Reset all time components to just compare dates
+            [currentWeekMonday, currentWeekFriday, nextWeekMonday, nextWeekFriday].forEach(date => {
+              date.setHours(0, 0, 0, 0);
+            });
+            
+            // Clone the search date to avoid modifying it
+            const searchDateCopy = new Date(searchDate);
+            searchDateCopy.setHours(0, 0, 0, 0);
+            
+            // Check if the date is tomorrow
+            const tomorrow = new Date(today);
+            tomorrow.setDate(today.getDate() + 1);
+            tomorrow.setHours(0, 0, 0, 0);
+            const isTomorrow = searchDateCopy.getTime() === tomorrow.getTime();
             
             let weekText = '';
-            if (weekDifference === 0) {
-              weekText = t('assignments').days.thisWeek;
-            } else if (weekDifference === 1) {
-              weekText = t('assignments').days.nextWeek;
-            } else {
+            // Check if the date is between Monday and Friday of the current week
+            if (searchDateCopy >= currentWeekMonday && searchDateCopy <= currentWeekFriday) {
+              weekText = ''; // Empty for current week
+            } 
+            // Check if the date is between Monday and Friday of next week
+            else if (searchDateCopy >= nextWeekMonday && searchDateCopy <= nextWeekFriday) {
+              weekText = t('assignments').days.nextWeek.toLowerCase(); // Lowercase "next week"
+            } 
+            // For dates beyond next week
+            else {
+              // Calculate weeks difference for dates beyond next week
+              const weekDifference = Math.ceil((searchDateCopy.getTime() - currentWeekMonday.getTime()) / (7 * 24 * 60 * 60 * 1000));
               weekText = `${t('assignments').days.in} ${weekDifference} ${t('assignments').days.weeks}`;
             }
             
+            // Determine if we need to prefix the day with "this" for current week
+            const isCurrentWeek = searchDateCopy >= currentWeekMonday && searchDateCopy <= currentWeekFriday;
+            // For current week, add "this" before the day, based on current language
+            const thisPrefix = currentLanguage.startsWith('en') ? 'this ' : 
+                              currentLanguage.startsWith('es') ? 'este ' : '';
+            const displayDay = isCurrentWeek ? `${thisPrefix}${dayString}` : dayString;
+            
             // Set next period info
             setNextPeriodInfo({
-              day: dayString,
+              day: displayDay,
               time: formattedTime,
-              weekText: weekText
+              weekText: weekText,
+              isCurrentWeek: searchDateCopy >= currentWeekMonday && searchDateCopy <= currentWeekFriday,
+              isTomorrow: isTomorrow
             });
             
             // Update due date to match next period
@@ -1386,9 +1437,16 @@ export default function NewAssignmentScreen() {
   // Helper function to format period time
   const formatPeriodTime = (timeString: string): string => {
     const [hours, minutes] = timeString.split(':').map(Number);
-    const period = hours >= 12 ? 'PM' : 'AM';
-    const displayHours = hours % 12 || 12;
-    return `${displayHours}:${minutes < 10 ? '0' + minutes : minutes} ${period}`;
+    
+    // Use 24-hour format for non-English languages
+    if (!currentLanguage.startsWith('en')) {
+      return `${hours < 10 ? '0' + hours : hours}:${minutes < 10 ? '0' + minutes : minutes}`;
+    } else {
+      // Use 12-hour format with AM/PM for English
+      const period = hours >= 12 ? 'PM' : 'AM';
+      const displayHours = hours % 12 || 12;
+      return `${displayHours}:${minutes < 10 ? '0' + minutes : minutes} ${period}`;
+    }
   };
   
   // Format date for display
@@ -1845,8 +1903,18 @@ export default function NewAssignmentScreen() {
                       </View>
                     ) : nextPeriodInfo ? (
                       <Text style={styles.nextPeriodText}>
-                        {t('assignments').assignmentDueText} {nextPeriodInfo.weekText ? `${nextPeriodInfo.weekText} ${t('assignments').on} ` : `${t('assignments').on} `}
-                        {nextPeriodInfo.day} {t('assignments').at} {nextPeriodInfo.time}
+                        {t('assignments').assignmentDueText}
+                        {nextPeriodInfo.weekText ? (
+                          <Text style={{ color: '#2C3DCD' }}> {nextPeriodInfo.weekText}</Text>
+                        ) : null}
+                        
+                        {nextPeriodInfo.weekText ? ` ${t('assignments').on} ` : ' '}
+                        
+                        {nextPeriodInfo.isTomorrow ? (
+                          <Text style={{ color: '#2C3DCD' }}>{t('assignments').days.tomorrow}</Text>
+                        ) : (
+                          <Text style={{ color: '#2C3DCD' }}>{nextPeriodInfo.day}</Text>
+                        )} {t('assignments').at} <Text style={{ color: '#2C3DCD' }}>{nextPeriodInfo.time}</Text>
                       </Text>
                     ) : (
                       <Text style={styles.nextPeriodText}>
