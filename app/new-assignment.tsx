@@ -1657,6 +1657,11 @@ export default function NewAssignmentScreen() {
     if (detectedType) {
       setAssignmentType(detectedType);
       setAutoDetectedType(true);
+      
+      // Automatically set priority for test, exam, or quiz
+      if (detectedType === AssignmentType.TEST || detectedType === AssignmentType.EXAM || detectedType === AssignmentType.QUIZ) {
+        setIsPriority(true);
+      }
     }
   };
   
@@ -1665,6 +1670,11 @@ export default function NewAssignmentScreen() {
     setAssignmentType(type);
     setIsTypeModalVisible(false);
     setAutoDetectedType(false); // User manually selected a type
+    
+    // Automatically set priority for test, exam, or quiz
+    if (type === AssignmentType.TEST || type === AssignmentType.EXAM || type === AssignmentType.QUIZ) {
+      setIsPriority(true);
+    }
   };
 
   // Render a type item for selection
