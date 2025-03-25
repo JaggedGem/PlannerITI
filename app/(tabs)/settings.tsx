@@ -23,6 +23,7 @@ import {
   sendTestNotification 
 } from '@/utils/notificationUtils';
 import { getAssignments, AssignmentType } from '@/utils/assignmentStorage';
+import { StorageViewer } from './storage-viewer';
 
 const IDNP_KEY = '@planner_idnp';
 const IDNP_UPDATE_EVENT = 'idnp_updated';
@@ -508,6 +509,8 @@ export default function Settings() {
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(DEFAULT_NOTIFICATION_SETTINGS);
   const [showNotificationTimeModal, setShowNotificationTimeModal] = useState(false);
   const [tempNotificationTime, setTempNotificationTime] = useState(new Date());
+  const [storageModalVisible, setStorageModalVisible] = useState(false);
+  const [storageItems, setStorageItems] = useState<[string, string | null][]>([]);
 
   // Add useEffect to load IDNP and listen for updates
   useEffect(() => {
@@ -1088,7 +1091,7 @@ export default function Settings() {
             onPress={async () => {
               try {
                 await sendTestNotification(AssignmentType.TEST);
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                 Alert.alert('Success', 'Test notification sent! Check your notifications.');
               } catch (error) {
                 console.error('Error sending test notification:', error);
@@ -1098,6 +1101,31 @@ export default function Settings() {
           >
             <MaterialIcons name="notifications-active" size={24} color="#4CAF50" />
             <Text style={styles.devToolText}>Send Test Notification</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.devToolButton}
+            onPress={async () => {
+              try {
+                // Get all keys
+                const keys = await AsyncStorage.getAllKeys();
+                
+                // Get all values for the keys
+                const results = await AsyncStorage.multiGet(keys);
+                
+                // Save storage items and show modal
+                setStorageItems([...results]);
+                setStorageModalVisible(true);
+                
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              } catch (error) {
+                console.error('Error viewing AsyncStorage:', error);
+                Alert.alert('Error', 'Failed to view AsyncStorage contents');
+              }
+            }}
+          >
+            <MaterialIcons name="storage" size={24} color="#42A5F5" />
+            <Text style={styles.devToolText}>View AsyncStorage</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -2198,6 +2226,13 @@ export default function Settings() {
           }}
         />
       )}
+
+      {/* Storage Content Modal */}
+      <StorageViewer 
+        visible={storageModalVisible}
+        onClose={() => setStorageModalVisible(false)}
+        items={storageItems}
+      />
     </SafeAreaView>
   );
 }
