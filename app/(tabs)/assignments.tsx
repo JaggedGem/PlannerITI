@@ -350,6 +350,9 @@ export default function Assignments() {
   const pendingTabIndexRef = useRef<number | null>(null);
   const pendingInteractionsRef = useRef<Array<{cancel: () => void}>>([]);
   
+  // Add a ref to track pending notification operations
+  const pendingNotificationOpRef = useRef<boolean>(false);
+  
   // Clear all pending operations
   const clearPendingOperations = useCallback(() => {
     if (pendingRAFRef.current) {
@@ -559,6 +562,34 @@ export default function Assignments() {
     fetchAssignments();
   }, [fetchAssignments]);
   
+  // Safer notification scheduling with concurrency and error checking
+  const safeScheduleNotifications = useCallback(async (assignments: Assignment[], isTabSwitch = false) => {
+    // Skip if we're in rapid switching mode
+    if (isRapidSwitching) {
+      console.log('Skipping notification scheduling during rapid switching');
+      return;
+    }
+    
+    // Skip if there's already a pending notification operation
+    if (pendingNotificationOpRef.current) {
+      console.log('Skipping notification scheduling - another operation in progress');
+      return;
+    }
+    
+    try {
+      // Set the flag to prevent concurrent operations
+      pendingNotificationOpRef.current = true;
+      
+      // Call the actual scheduling function
+      await scheduleAllNotifications(assignments, isTabSwitch);
+    } catch (error) {
+      console.error('Error in safeScheduleNotifications:', error);
+    } finally {
+      // Always clear the flag when done
+      pendingNotificationOpRef.current = false;
+    }
+  }, [isRapidSwitching]);
+  
   // Refresh when the screen comes into focus
   useFocusEffect(
     useCallback(() => {
@@ -577,14 +608,14 @@ export default function Assignments() {
           const assignments = await getAssignments();
           
           // This will only update if enough time has passed since the last update
-          await scheduleAllNotifications(assignments);
+          await safeScheduleNotifications(assignments, false);
         } catch (error) {
           console.error('Error updating notifications:', error);
         }
       };
       
       updateNotifications();
-    }, [fetchAssignments, selectedSegmentIndex])
+    }, [fetchAssignments, selectedSegmentIndex, safeScheduleNotifications])
   );
   
   // Toggle assignment completion with optimized state update
@@ -605,7 +636,7 @@ export default function Assignments() {
               await cancelNotificationsForAssignment(id);
             } else {
               // If uncompleted, reschedule all notifications to be safe
-              await scheduleAllNotifications(assignments);
+              await safeScheduleNotifications(assignments, false);
             }
           }
         } catch (error) {
@@ -623,7 +654,7 @@ export default function Assignments() {
     toggleAssignmentCompletion(id).catch(err => 
       console.error('Error toggling assignment:', err)
     );
-  }, []);
+  }, [safeScheduleNotifications]);
   
   // Delete assignment with optimized state update
   const handleDeleteAssignment = useCallback(async (id: string) => {
@@ -782,13 +813,29 @@ export default function Assignments() {
           
           pendingTimersRef.current.push(timer);
         });
-    } else {
+      } else {
         // For other transitions, just set the index - already precomputed
         if (isMountedRef.current) {
           setSelectedSegmentIndex(index);
           lastSegmentRef.current = index;
         }
         isTabSwitchingRef.current = false; // Reset flag
+        
+        // Only schedule notifications if not in rapid switching mode
+        if (!isRapidSwitching) {
+          // Schedule notifications with the tab switch flag to apply cooldown
+          const updateTabChangeNotifications = async () => {
+            try {
+              const assignments = await getAssignments();
+              await safeScheduleNotifications(assignments, true);
+            } catch (error) {
+              console.error('Error updating notifications on tab change:', error);
+            }
+          };
+          
+          // Don't delay the UI by waiting for this
+          updateTabChangeNotifications();
+        }
       }
     } catch (error) {
       console.error('Error in handleSegmentChange:', error);
@@ -810,7 +857,8 @@ export default function Assignments() {
     isRapidSwitching,
     checkRapidSwitching,
     debouncedTabChange,
-    exitRapidSwitchingMode
+    exitRapidSwitchingMode,
+    safeScheduleNotifications
   ]);
   
   // Navigate to new assignment screen
