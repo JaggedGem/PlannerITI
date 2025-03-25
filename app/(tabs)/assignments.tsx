@@ -246,6 +246,7 @@ const DateGroupedView = memo(({
   const [isFirstRender, setIsFirstRender] = useState(true);
   const isComponentMountedRef = useRef(true);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const { t } = useTranslation();
   
   // Reset first render flag when groups change
   useEffect(() => {
@@ -283,7 +284,7 @@ const DateGroupedView = memo(({
   }, []);
   
   if (groups.length === 0) {
-    return <EmptyState t={useTranslation().t} />;
+    return <EmptyState t={t} />;
   }
   
   // When transitioning from Classes tab, use a simplified render initially
