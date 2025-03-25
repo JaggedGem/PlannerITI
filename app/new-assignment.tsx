@@ -1251,9 +1251,176 @@ export default function NewAssignmentScreen() {
   // Update next period information when subject selection changes
   const updateNextPeriodInfo = async (subjectId: string) => {
     // Find the selected subject
-    const subject = subjects.find(s => s.id === subjectId);
+    const subject = subjects.find(s => s.id === subjectId) || 
+                   filteredSubjects.find(s => s.id === subjectId);
+    
     if (!subject) {
       setNextPeriodInfo(null);
+      return;
+    }
+    
+    // Handle custom periods differently
+    if (subject.isCustomPeriod) {
+      setLoadingNextPeriod(true);
+      try {
+        // Find the custom period
+        const customPeriod = customPeriods.find(p => p._id === subject.id);
+        if (!customPeriod) {
+          throw new Error('Custom period not found');
+        }
+        
+        // Get today's date
+        const today = new Date();
+        const todayDayIndex = today.getDay(); // 0 = Sunday, 6 = Saturday
+        
+        // Find the next occurrence of this period
+        let nextDate = new Date();
+        let dayIncrement = 1; // Default to tomorrow
+        
+        // If period has specific days scheduled
+        if (customPeriod.daysOfWeek && customPeriod.daysOfWeek.length > 0) {
+          // Convert day indexes to JS day indexes (0-6, where 0 is Sunday)
+          // Our daysOfWeek uses 1-5 for Monday-Friday
+          const periodDayIndexes = customPeriod.daysOfWeek.map(day => day === 5 ? 5 : day);
+          
+          // Find next available day
+          let foundNextDay = false;
+          
+          // Check up to 7 days forward to find the next occurrence
+          for (let i = 1; i <= 7; i++) {
+            const checkDate = new Date(today);
+            checkDate.setDate(today.getDate() + i);
+            const checkDayIndex = checkDate.getDay();
+            
+            // Skip weekends unless specifically included
+            if ((checkDayIndex === 0 || checkDayIndex === 6) && 
+                !periodDayIndexes.includes(checkDayIndex)) {
+              continue;
+            }
+            
+            // Convert Sunday (0) to 7 for easier comparison with our 1-5 indexes
+            const adjustedDayIndex = checkDayIndex === 0 ? 7 : checkDayIndex;
+            
+            // If this day is in the period's schedule or the period doesn't specify days
+            if (periodDayIndexes.includes(adjustedDayIndex) || periodDayIndexes.length === 0) {
+              dayIncrement = i;
+              foundNextDay = true;
+              break;
+            }
+          }
+          
+          // If no day found in next 7 days, default to tomorrow
+          if (!foundNextDay) {
+            dayIncrement = 1;
+          }
+        }
+        
+        // Set the next date
+        nextDate.setDate(today.getDate() + dayIncrement);
+        
+        // Set time from custom period
+        let hours = 9;
+        let minutes = 0;
+        
+        if (customPeriod.starttime) {
+          const [periodHours, periodMinutes] = customPeriod.starttime.split(':').map(Number);
+          hours = periodHours || hours;
+          minutes = periodMinutes || minutes;
+        }
+        
+        nextDate.setHours(hours, minutes, 0, 0);
+        
+        // Set due date
+        setDueDate(nextDate);
+        
+        // Check if it's tomorrow
+        const tomorrow = new Date(today);
+        tomorrow.setDate(today.getDate() + 1);
+        tomorrow.setHours(0, 0, 0, 0);
+        
+        const nextDateCopy = new Date(nextDate);
+        nextDateCopy.setHours(0, 0, 0, 0);
+        
+        const isTomorrow = nextDateCopy.getTime() === tomorrow.getTime();
+        
+        // Calculate which week this is relative to the current date
+        // Get the current week's Monday (first day of week)
+        const currentWeekMonday = new Date(today);
+        const dayOfWeek = today.getDay(); // 0 is Sunday, 1 is Monday, etc.
+        // Adjust to get Monday (if today is Sunday (0), we go back 6 days)
+        const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+        currentWeekMonday.setDate(today.getDate() - daysFromMonday);
+        
+        // Get the next week's Monday
+        const nextWeekMonday = new Date(currentWeekMonday);
+        nextWeekMonday.setDate(currentWeekMonday.getDate() + 7);
+        
+        // Get the current week's Friday (last day of the week)
+        const currentWeekFriday = new Date(currentWeekMonday);
+        currentWeekFriday.setDate(currentWeekMonday.getDate() + 4); // +4 days from Monday is Friday
+        
+        // Get the next week's Friday
+        const nextWeekFriday = new Date(nextWeekMonday);
+        nextWeekFriday.setDate(nextWeekMonday.getDate() + 4);
+        
+        // Reset all time components to just compare dates
+        [currentWeekMonday, currentWeekFriday, nextWeekMonday, nextWeekFriday].forEach(date => {
+          date.setHours(0, 0, 0, 0);
+        });
+        
+        // Determine which week the due date falls in
+        let weekText = '';
+        // Check if the date is between Monday and Friday of the current week
+        if (nextDateCopy >= currentWeekMonday && nextDateCopy <= currentWeekFriday) {
+          weekText = ''; // Empty for current week
+        } 
+        // Check if the date is between Monday and Friday of next week
+        else if (nextDateCopy >= nextWeekMonday && nextDateCopy <= nextWeekFriday) {
+          weekText = t('assignments').days.nextWeek.toLowerCase(); // Lowercase "next week"
+        } 
+        // For dates beyond next week
+        else if (nextDateCopy > nextWeekFriday) {
+          // Calculate weeks difference for dates beyond next week
+          const weekDifference = Math.ceil((nextDateCopy.getTime() - currentWeekMonday.getTime()) / (7 * 24 * 60 * 60 * 1000));
+          weekText = `${t('assignments').days.in} ${weekDifference} ${t('assignments').days.weeks}`;
+        }
+        
+        // Format day name with "this" prefix for current week in English
+        let dayDisplay = '';
+        if (isTomorrow) {
+          dayDisplay = t('assignments').days.tomorrow;
+        } else {
+          const dayName = nextDate.toLocaleDateString(currentLanguage, { weekday: 'long' });
+          // For current week, add "this" before the day in English language
+          const isCurrentWeek = nextDateCopy >= currentWeekMonday && nextDateCopy <= currentWeekFriday;
+          if (isCurrentWeek && currentLanguage.startsWith('en')) {
+            // Add "this" prefix for English
+            dayDisplay = `this ${dayName}`;
+          } else {
+            dayDisplay = dayName;
+          }
+        }
+        
+        // Create next period info with the proper day name
+        setNextPeriodInfo({
+          day: dayDisplay,
+          time: formatPeriodTime(`${hours}:${minutes}`),
+          isTomorrow: isTomorrow,
+          weekText: weekText,
+          isCurrentWeek: nextDateCopy >= currentWeekMonday && nextDateCopy <= currentWeekFriday
+        });
+        
+        // Enable next period
+        setUseNextPeriod(true);
+        
+      } catch (error) {
+        console.error('Error setting next period for custom period:', error);
+        setUseNextPeriod(false);
+        setShowAdvancedOptions(true);
+        setNextPeriodInfo(null);
+      } finally {
+        setLoadingNextPeriod(false);
+      }
       return;
     }
     
@@ -1733,8 +1900,9 @@ export default function NewAssignmentScreen() {
     }
   };
 
-  // Find the currently selected subject
-  const selectedSubject = subjects.find(s => s.id === selectedSubjectId);
+  // Find selected subject 
+  const selectedSubject = subjects.find(s => s.id === selectedSubjectId) || 
+                          filteredSubjects.find(s => s.id === selectedSubjectId);
 
   // Replace DAYS and QUICK_DATE_OPTIONS with dynamic translations
   const DAYS = t('weekdays').short;
