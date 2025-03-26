@@ -1,107 +1,106 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
-import { Assignment, AssignmentType, getAssignments } from './assignmentStorage';
-import { addDays, parseISO, format, isAfter } from 'date-fns';
+import type { Assignment } from './assignmentStorage';
+import { AssignmentType } from './assignmentStorage';
+import { formatDistanceToNow, addHours, addDays, parseISO, format } from 'date-fns';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Storage keys
-const NOTIFICATION_SETTINGS_KEY = 'notification_settings';
-const SCHEDULED_NOTIFICATIONS_KEY = 'scheduled_notifications';
-
-// Default notification time: 5:00 PM
-const DEFAULT_NOTIFICATION_TIME = new Date();
-DEFAULT_NOTIFICATION_TIME.setHours(17, 0, 0, 0);
-
-// Add a new constant for the last notification update timestamp
-const LAST_NOTIFICATION_UPDATE_KEY = 'last_notification_update';
-const MIN_RESCHEDULE_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds (increased from 4 hours)
-const TAB_SWITCH_KEY = 'notification_tab_switch_timestamp';
-const TAB_SWITCH_COOLDOWN = 10 * 60 * 1000; // 10 minutes cooldown for tab switches
-
-// Default notification settings
-export interface NotificationSettings {
-  enabled: boolean;
-  notificationTime: string; // ISO string of time (date part is ignored)
-  examReminderDays: number; // Days before exam to start notifications
-  testReminderDays: number; // Days before test to start notifications
-  quizReminderDays: number; // Days before quiz to start notifications
-  homeworkReminderDays: number; // Days before homework to notify
-  projectReminderDays: number; // Days before project to notify
-  otherReminderDays: number; // Days before other assignments to notify
-  dailyRemindersForExams: boolean; // Whether to send daily reminders for exams
-  dailyRemindersForTests: boolean; // Whether to send daily reminders for tests
-  dailyRemindersForQuizzes: boolean; // Whether to send daily reminders for quizzes
+// Import the required types
+export enum SchedulableTriggerInputTypes {
+  TIME_INTERVAL = 'timeInterval',
+  DATE = 'date',
+  DAILY = 'daily',
+  WEEKLY = 'weekly'
 }
 
-// Interface for tracking scheduled notifications
-export interface ScheduledNotification {
-  assignmentId: string;
-  notificationIds: string[]; // Array of notification identifiers
+// Storage key for notification settings
+const NOTIFICATION_SETTINGS_KEY = '@planner_notification_settings';
+
+// Define notification settings type
+export interface NotificationSettings {
+  enabled: boolean;
+  notificationTime: string; // ISO string
+  examReminderDays: number;
+  testReminderDays: number;
+  quizReminderDays: number;
+  projectReminderDays: number;
+  homeworkReminderDays: number;
+  otherReminderDays: number;
+  dailyRemindersForExams: boolean;
+  dailyRemindersForTests: boolean;
+  dailyRemindersForQuizzes: boolean;
 }
 
 // Default notification settings
 export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
   enabled: true,
-  notificationTime: DEFAULT_NOTIFICATION_TIME.toISOString(),
+  notificationTime: new Date(new Date().setHours(20, 0, 0, 0)).toISOString(), // 8:00 PM by default
   examReminderDays: 7,
   testReminderDays: 5,
   quizReminderDays: 3,
+  projectReminderDays: 5,
   homeworkReminderDays: 2,
-  projectReminderDays: 3,
   otherReminderDays: 1,
   dailyRemindersForExams: true,
   dailyRemindersForTests: true,
-  dailyRemindersForQuizzes: false
+  dailyRemindersForQuizzes: true
 };
 
-// Get notification settings
-export const getNotificationSettings = async (): Promise<NotificationSettings> => {
+// Save notification settings
+export async function saveNotificationSettings(settings: NotificationSettings): Promise<void> {
   try {
-    const settingsJson = await AsyncStorage.getItem(NOTIFICATION_SETTINGS_KEY);
-    if (settingsJson) {
-      return { ...DEFAULT_NOTIFICATION_SETTINGS, ...JSON.parse(settingsJson) };
+    await AsyncStorage.setItem(NOTIFICATION_SETTINGS_KEY, JSON.stringify(settings));
+    console.log('Notification settings saved');
+  } catch (error) {
+    console.error('Error saving notification settings:', error);
+    throw error;
+  }
+}
+
+// Get notification settings
+export async function getNotificationSettings(): Promise<NotificationSettings> {
+  try {
+    const settings = await AsyncStorage.getItem(NOTIFICATION_SETTINGS_KEY);
+    
+    if (settings) {
+      return { 
+        ...DEFAULT_NOTIFICATION_SETTINGS, 
+        ...JSON.parse(settings) 
+      };
     }
+    
+    // If no settings found, save and return defaults
+    await saveNotificationSettings(DEFAULT_NOTIFICATION_SETTINGS);
     return DEFAULT_NOTIFICATION_SETTINGS;
   } catch (error) {
     console.error('Error getting notification settings:', error);
     return DEFAULT_NOTIFICATION_SETTINGS;
   }
-};
+}
 
-// Save notification settings
-export const saveNotificationSettings = async (settings: NotificationSettings): Promise<void> => {
-  try {
-    await AsyncStorage.setItem(NOTIFICATION_SETTINGS_KEY, JSON.stringify(settings));
-  } catch (error) {
-    console.error('Error saving notification settings:', error);
-  }
-};
-
-// Get scheduled notifications
-export const getScheduledNotifications = async (): Promise<ScheduledNotification[]> => {
-  try {
-    const notificationsJson = await AsyncStorage.getItem(SCHEDULED_NOTIFICATIONS_KEY);
-    return notificationsJson ? JSON.parse(notificationsJson) : [];
-  } catch (error) {
-    console.error('Error getting scheduled notifications:', error);
-    return [];
-  }
-};
-
-// Save scheduled notifications
-export const saveScheduledNotifications = async (notifications: ScheduledNotification[]): Promise<void> => {
-  try {
-    await AsyncStorage.setItem(SCHEDULED_NOTIFICATIONS_KEY, JSON.stringify(notifications));
-  } catch (error) {
-    console.error('Error saving scheduled notifications:', error);
-  }
-};
-
-// Register for push notifications
-export const registerForPushNotificationsAsync = async (): Promise<string | undefined> => {
+// Request permissions for notifications
+export async function registerForPushNotificationsAsync() {
   let token;
-  
+
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync('default', {
+      name: 'default',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#FF231F7C',
+    });
+
+    // Create assignment-specific channel
+    await Notifications.setNotificationChannelAsync('assignments', {
+      name: 'Assignments',
+      description: 'Notifications for assignment due dates and reminders',
+      importance: Notifications.AndroidImportance.HIGH,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#3478F6',
+    });
+  }
+
   if (Device.isDevice) {
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
@@ -113,538 +112,22 @@ export const registerForPushNotificationsAsync = async (): Promise<string | unde
     
     if (finalStatus !== 'granted') {
       console.log('Failed to get push token for push notification!');
-      return undefined;
+      return;
     }
     
-    token = (await Notifications.getExpoPushTokenAsync()).data;
+    // Get push token
+    token = (await Notifications.getExpoPushTokenAsync({
+      projectId: process.env.EXPO_PROJECT_ID,
+    })).data;
   } else {
-    console.log('Must use physical device for push notifications');
-  }
-
-  if (Platform.OS === 'android') {
-    Notifications.setNotificationChannelAsync('assignments', {
-      name: 'Assignments',
-      importance: Notifications.AndroidImportance.HIGH,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#FF231F7C',
-    });
+    console.log('Must use physical device for Push Notifications');
   }
 
   return token;
-};
+}
 
-// Modify the scheduleNotificationForAssignment function to be smarter about daily notifications
-export const scheduleNotificationForAssignment = async (
-  assignment: Assignment,
-  settings: NotificationSettings = DEFAULT_NOTIFICATION_SETTINGS
-): Promise<string[]> => {
-  if (!settings.enabled) return [];
-  
-  const scheduledIds: string[] = [];
-  const dueDate = parseISO(assignment.dueDate);
-  const now = new Date();
-  
-  // Skip if due date is in the past
-  if (isAfter(now, dueDate)) return [];
-  
-  // Get notification time
-  const notificationTime = parseISO(settings.notificationTime);
-  
-  // Determine reminder days based on assignment type
-  let reminderDays = settings.otherReminderDays;
-  let sendDailyReminders = false;
-  
-  switch (assignment.assignmentType) {
-    case AssignmentType.EXAM:
-      reminderDays = settings.examReminderDays;
-      sendDailyReminders = settings.dailyRemindersForExams;
-      break;
-    case AssignmentType.TEST:
-      reminderDays = settings.testReminderDays;
-      sendDailyReminders = settings.dailyRemindersForTests;
-      break;
-    case AssignmentType.QUIZ:
-      reminderDays = settings.quizReminderDays;
-      sendDailyReminders = settings.dailyRemindersForQuizzes;
-      break;
-    case AssignmentType.HOMEWORK:
-      reminderDays = settings.homeworkReminderDays;
-      break;
-    case AssignmentType.PROJECT:
-      reminderDays = settings.projectReminderDays;
-      break;
-    default:
-      reminderDays = settings.otherReminderDays;
-  }
-  
-  // Calculate days until due date
-  const daysUntilDue = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-  
-  // Calculate first reminder date
-  const firstReminderDate = addDays(dueDate, -reminderDays);
-  firstReminderDate.setHours(
-    notificationTime.getHours(),
-    notificationTime.getMinutes(),
-    0,
-    0
-  );
-  
-  // Only schedule if the first reminder is in the future
-  if (isAfter(firstReminderDate, now)) {
-    // Schedule first reminder
-    const firstReminderId = await Notifications.scheduleNotificationAsync({
-      content: {
-        title: `${assignment.assignmentType}: ${assignment.title}`,
-        body: `Due on ${format(dueDate, 'MMM d')} for ${assignment.courseName}`,
-        data: { assignmentId: assignment.id }
-      },
-      trigger: {
-        date: firstReminderDate,
-        channelId: 'assignments'
-      },
-    });
-    scheduledIds.push(firstReminderId);
-    
-    // Schedule daily reminders if enabled, but with improved logic
-    if (sendDailyReminders) {
-      // Only schedule daily reminders if there are at least 2 days remaining
-      // and limit to a reasonable number of notifications
-      const maxDailyReminders = Math.min(reminderDays - 1, 3); // Maximum 3 daily reminders
-      const dailyReminderDays = [];
-      
-      // Distribute reminders more sensibly based on days until due
-      if (daysUntilDue > 5) {
-        // For assignments more than 5 days away, space out reminders
-        const interval = Math.max(1, Math.floor(daysUntilDue / 3));
-        for (let i = daysUntilDue - interval; i > 1; i -= interval) {
-          dailyReminderDays.push(i);
-          if (dailyReminderDays.length >= maxDailyReminders) break;
-        }
-      } else if (daysUntilDue > 1) {
-        // For closer assignments, just do a mid-point reminder
-        dailyReminderDays.push(Math.floor(daysUntilDue / 2));
-      }
-      
-      // Schedule the calculated daily reminders
-      for (const daysLeft of dailyReminderDays) {
-        const reminderDate = addDays(dueDate, -daysLeft);
-        reminderDate.setHours(
-          notificationTime.getHours(),
-          notificationTime.getMinutes(),
-          0,
-          0
-        );
-        
-        if (isAfter(reminderDate, now)) {
-          const reminderId = await Notifications.scheduleNotificationAsync({
-            content: {
-              title: `Reminder: ${assignment.assignmentType} in ${daysLeft} day${daysLeft > 1 ? 's' : ''}`,
-              body: `${assignment.title} for ${assignment.courseName} is due on ${format(dueDate, 'MMM d')}`,
-              data: { assignmentId: assignment.id }
-            },
-            trigger: {
-              date: reminderDate,
-              channelId: 'assignments'
-            },
-          });
-          scheduledIds.push(reminderId);
-        }
-      }
-      
-      // Schedule day-of reminder only if the due date is tomorrow or later
-      if (daysUntilDue >= 1) {
-        const dayOfReminder = new Date(dueDate);
-        dayOfReminder.setHours(9, 0, 0, 0); // Earlier in the day
-        
-        if (isAfter(dayOfReminder, now)) {
-          const dayOfId = await Notifications.scheduleNotificationAsync({
-            content: {
-              title: `${assignment.assignmentType} Today!`,
-              body: `${assignment.title} for ${assignment.courseName} is due today`,
-              data: { assignmentId: assignment.id }
-            },
-            trigger: {
-              date: dayOfReminder,
-              channelId: 'assignments'
-            },
-          });
-          scheduledIds.push(dayOfId);
-        }
-      }
-    }
-  }
-  
-  return scheduledIds;
-};
-
-// Cancel scheduled notifications for an assignment
-export const cancelNotificationsForAssignment = async (assignmentId: string): Promise<void> => {
-  const scheduledNotifications = await getScheduledNotifications();
-  const assignmentNotification = scheduledNotifications.find(n => n.assignmentId === assignmentId);
-  
-  if (assignmentNotification) {
-    // Cancel each notification
-    for (const notificationId of assignmentNotification.notificationIds) {
-      await Notifications.cancelScheduledNotificationAsync(notificationId);
-    }
-    
-    // Remove from tracking list
-    const updatedNotifications = scheduledNotifications.filter(n => n.assignmentId !== assignmentId);
-    await saveScheduledNotifications(updatedNotifications);
-  }
-};
-
-// Modify the scheduleAllNotifications function to group assignments by due date
-export const scheduleAllNotifications = async (assignments: Assignment[], isTabSwitch = false): Promise<void> => {
-  try {
-    const settings = await getNotificationSettings();
-    if (!settings.enabled) return;
-    
-    // Safety check - limit the number of assignments to process
-    const MAX_ASSIGNMENTS = 100;
-    if (assignments.length > MAX_ASSIGNMENTS) {
-      console.warn(`Too many assignments (${assignments.length}). Limiting to ${MAX_ASSIGNMENTS} to prevent potential crashes.`);
-      assignments = assignments.slice(0, MAX_ASSIGNMENTS);
-    }
-    
-    // Check when we last updated notifications
-    const lastUpdateStr = await AsyncStorage.getItem(LAST_NOTIFICATION_UPDATE_KEY);
-    const now = new Date().getTime();
-    
-    // If this is a tab switch, check and update the tab switch timestamp
-    if (isTabSwitch) {
-      const lastTabSwitchStr = await AsyncStorage.getItem(TAB_SWITCH_KEY);
-      if (lastTabSwitchStr) {
-        const lastTabSwitch = parseInt(lastTabSwitchStr, 10);
-        if (!isNaN(lastTabSwitch) && (now - lastTabSwitch < TAB_SWITCH_COOLDOWN)) {
-          console.log('Skipping notification reschedule - tab switch too recent');
-          return;
-        }
-      }
-      // Update tab switch timestamp
-      await AsyncStorage.setItem(TAB_SWITCH_KEY, now.toString());
-    }
-    
-    if (lastUpdateStr) {
-      const lastUpdate = parseInt(lastUpdateStr, 10);
-      
-      // Only reschedule if enough time has passed or if we can't parse the timestamp
-      if (!isNaN(lastUpdate) && (now - lastUpdate < MIN_RESCHEDULE_INTERVAL)) {
-        console.log('Skipping notification reschedule - last update was too recent');
-        return;
-      }
-    }
-    
-    // Proceed with rescheduling
-    console.log('Scheduling notifications - throttle condition passed');
-    
-    // Update the last update timestamp right away to prevent concurrent reschedules
-    await AsyncStorage.setItem(LAST_NOTIFICATION_UPDATE_KEY, now.toString());
-    
-    try {
-      // We'll attempt to cancel existing notifications but continue even if this fails
-      try {
-        await Notifications.cancelAllScheduledNotificationsAsync();
-      } catch (cancelError) {
-        console.error('Error canceling existing notifications, but continuing:', cancelError);
-        // Continue execution - don't let this abort the whole process
-      }
-      
-      // Group assignments by due date in YYYY-MM-DD format
-      const assignmentsByDueDate: Record<string, Assignment[]> = {};
-      const activeAssignments = assignments.filter(a => !a.isCompleted);
-      
-      // Safety check for maximum due date groups to process
-      const MAX_DATE_GROUPS = 20;
-      
-      for (const assignment of activeAssignments) {
-        try {
-          const dueDate = parseISO(assignment.dueDate);
-          const dateKey = format(dueDate, 'yyyy-MM-dd');
-          
-          if (!assignmentsByDueDate[dateKey]) {
-            // Only add new date groups up to the limit
-            if (Object.keys(assignmentsByDueDate).length >= MAX_DATE_GROUPS) {
-              console.warn(`Reached maximum date groups (${MAX_DATE_GROUPS}). Skipping remaining assignments.`);
-              break;
-            }
-            assignmentsByDueDate[dateKey] = [];
-          }
-          
-          assignmentsByDueDate[dateKey].push(assignment);
-        } catch (error) {
-          console.error('Error processing assignment for notifications, skipping:', error);
-          // Skip this assignment but continue with others
-          continue;
-        }
-      }
-      
-      // Schedule notifications for each due date group
-      const scheduledNotifications: ScheduledNotification[] = [];
-      let totalNotificationsScheduled = 0;
-      const MAX_NOTIFICATIONS = 50; // Maximum notifications to schedule
-      
-      for (const [dateKey, dateAssignments] of Object.entries(assignmentsByDueDate)) {
-        try {
-          // If we've reached our quota, stop scheduling more
-          if (totalNotificationsScheduled >= MAX_NOTIFICATIONS) {
-            console.warn(`Reached maximum notification limit (${MAX_NOTIFICATIONS}). Skipping remaining due dates.`);
-            break;
-          }
-          
-          // Sort assignments by type priority (Exam > Test > Quiz > Project > Homework > Other)
-          const sortedAssignments = dateAssignments.sort((a, b) => {
-            // Fixed typePriority object with string keys instead of enum values
-            const typePriority: Record<string, number> = {
-              [AssignmentType.EXAM]: 0,
-              [AssignmentType.TEST]: 1,
-              [AssignmentType.QUIZ]: 2,
-              [AssignmentType.PROJECT]: 3,
-              [AssignmentType.HOMEWORK]: 4,
-              [AssignmentType.OTHER]: 5,
-              [AssignmentType.LAB]: 6,
-              [AssignmentType.ESSAY]: 7,
-              [AssignmentType.PRESENTATION]: 8
-            };
-            
-            return (typePriority[a.assignmentType] ?? 999) - (typePriority[b.assignmentType] ?? 999);
-          });
-          
-          // Determine the earliest notification time based on assignment type
-          let earliestReminderDays = 0;
-          let needsDailyReminders = false;
-          
-          for (const assignment of sortedAssignments) {
-            let reminderDays = 0;
-            let dailyReminder = false;
-            
-            switch (assignment.assignmentType) {
-              case AssignmentType.EXAM:
-                reminderDays = settings.examReminderDays;
-                dailyReminder = settings.dailyRemindersForExams;
-                break;
-              case AssignmentType.TEST:
-                reminderDays = settings.testReminderDays;
-                dailyReminder = settings.dailyRemindersForTests;
-                break;
-              case AssignmentType.QUIZ:
-                reminderDays = settings.quizReminderDays;
-                dailyReminder = settings.dailyRemindersForQuizzes;
-                break;
-              case AssignmentType.HOMEWORK:
-                reminderDays = settings.homeworkReminderDays;
-                break;
-              case AssignmentType.PROJECT:
-                reminderDays = settings.projectReminderDays;
-                break;
-              default:
-                reminderDays = settings.otherReminderDays;
-            }
-            
-            earliestReminderDays = Math.max(earliestReminderDays, reminderDays);
-            if (dailyReminder) needsDailyReminders = true;
-          }
-          
-          // Get the due date for this group
-          const dueDate = parseISO(dateKey);
-          // Fix the date comparison by ensuring both are in milliseconds
-          const daysUntilDue = Math.ceil((dueDate.getTime() - now) / (1000 * 60 * 60 * 24));
-          
-          // Skip if due date is in the past
-          if (daysUntilDue <= 0) continue;
-          
-          // Calculate first reminder date
-          const notificationTime = parseISO(settings.notificationTime);
-          const firstReminderDate = addDays(dueDate, -earliestReminderDays);
-          firstReminderDate.setHours(
-            notificationTime.getHours(),
-            notificationTime.getMinutes(),
-            0,
-            0
-          );
-          
-          // Only schedule if the first reminder is in the future
-          if (isAfter(firstReminderDate, now)) {
-            // Build notification content with all assignments
-            const notificationIds: string[] = [];
-            
-            // Create initial notification title based on the highest priority assignment type
-            const mainAssignment = sortedAssignments[0];
-            const formattedDueDate = format(dueDate, 'MMM d');
-            
-            // Group assignments by type
-            const groupedByType: Record<string, Assignment[]> = {};
-            for (const assignment of sortedAssignments) {
-              if (!groupedByType[assignment.assignmentType]) {
-                groupedByType[assignment.assignmentType] = [];
-              }
-              groupedByType[assignment.assignmentType].push(assignment);
-            }
-            
-            // Create notification title
-            const title = `${mainAssignment.assignmentType} and more due on ${formattedDueDate}`;
-            
-            // Create notification body with all assignments by type
-            let body = '';
-            for (const [type, typeAssignments] of Object.entries(groupedByType)) {
-              body += `${type} (${typeAssignments.length}): `;
-              body += typeAssignments.map(a => `${a.title} for ${a.courseName}`).join(', ');
-              body += '\n';
-            }
-            
-            try {
-              // Schedule first reminder with error handling
-              const firstReminderId = await Notifications.scheduleNotificationAsync({
-                content: {
-                  title: title,
-                  body: body.trim(),
-                  data: { dateKey, assignmentIds: sortedAssignments.map(a => a.id) }
-                },
-                trigger: {
-                  date: firstReminderDate,
-                  channelId: 'assignments'
-                },
-              });
-              notificationIds.push(firstReminderId);
-              totalNotificationsScheduled++;
-              
-              // Check if we've hit our notification limit
-              if (totalNotificationsScheduled >= MAX_NOTIFICATIONS) {
-                console.warn(`Reached notification limit after scheduling primary notification for ${dateKey}`);
-                
-                // Save what we have so far
-                for (const assignment of sortedAssignments) {
-                  scheduledNotifications.push({
-                    assignmentId: assignment.id,
-                    notificationIds: [...notificationIds] // Clone array to avoid reference issues
-                  });
-                }
-                
-                continue; // Skip to next date group or exit the loop
-              }
-              
-              // Schedule daily reminders if needed, with rate limiting
-              if (needsDailyReminders && daysUntilDue > 1) {
-                // Calculate reminder intervals based on days until due
-                const reminderDays: number[] = [];
-                
-                if (daysUntilDue > 5) {
-                  // For assignments more than 5 days away, space out reminders
-                  const interval = Math.max(1, Math.floor(daysUntilDue / 3));
-                  for (let i = daysUntilDue - interval; i > 1; i -= interval) {
-                    if (i < earliestReminderDays) continue; // Skip if earlier than the earliest reminder day
-                    reminderDays.push(i);
-                    if (reminderDays.length >= 2) break; // Max 2 intermediate reminders
-                  }
-                } else {
-                  // For closer assignments, just do a mid-point reminder
-                  const midPoint = Math.floor(daysUntilDue / 2);
-                  if (midPoint >= 1) {
-                    reminderDays.push(midPoint);
-                  }
-                }
-                
-                // Schedule the calculated daily reminders
-                for (const daysLeft of reminderDays) {
-                  // Limit the number of daily reminders
-                  if (totalNotificationsScheduled >= MAX_NOTIFICATIONS) {
-                    console.warn('Reached notification limit, skipping additional reminders');
-                    break;
-                  }
-                  
-                  try {
-                    const reminderDate = addDays(dueDate, -daysLeft);
-                    reminderDate.setHours(
-                      notificationTime.getHours(),
-                      notificationTime.getMinutes(),
-                      0,
-                      0
-                    );
-                    
-                    if (isAfter(reminderDate, now)) {
-                      const reminderTitle = `Assignments due in ${daysLeft} day${daysLeft > 1 ? 's' : ''}`;
-                      
-                      const reminderId = await Notifications.scheduleNotificationAsync({
-                        content: {
-                          title: reminderTitle,
-                          body: body.trim(),
-                          data: { dateKey, assignmentIds: sortedAssignments.map(a => a.id) }
-                        },
-                        trigger: {
-                          date: reminderDate,
-                          channelId: 'assignments'
-                        },
-                      });
-                      notificationIds.push(reminderId);
-                      totalNotificationsScheduled++;
-                    }
-                  } catch (reminderError) {
-                    console.error('Error scheduling reminder notification, continuing:', reminderError);
-                    // Continue to the next reminder
-                  }
-                }
-                
-                // Schedule day-of reminder
-                if (totalNotificationsScheduled < MAX_NOTIFICATIONS) {
-                  try {
-                    const dayOfReminder = new Date(dueDate);
-                    dayOfReminder.setHours(9, 0, 0, 0); // Earlier in the day
-                    
-                    if (isAfter(dayOfReminder, now)) {
-                      const dayOfId = await Notifications.scheduleNotificationAsync({
-                        content: {
-                          title: `Assignments due today!`,
-                          body: body.trim(),
-                          data: { dateKey, assignmentIds: sortedAssignments.map(a => a.id) }
-                        },
-                        trigger: {
-                          date: dayOfReminder,
-                          channelId: 'assignments'
-                        },
-                      });
-                      notificationIds.push(dayOfId);
-                      totalNotificationsScheduled++;
-                    }
-                  } catch (dayOfError) {
-                    console.error('Error scheduling day-of notification, continuing:', dayOfError);
-                  }
-                }
-              }
-              
-              // Save notification IDs for all assignments in this group
-              for (const assignment of sortedAssignments) {
-                scheduledNotifications.push({
-                  assignmentId: assignment.id,
-                  notificationIds: [...notificationIds] // Clone array to avoid reference issues
-                });
-              }
-            } catch (schedulingError) {
-              console.error('Error scheduling notification for date group, skipping:', schedulingError);
-              // Continue to next date group
-            }
-          }
-        } catch (dateError) {
-          console.error('Error processing date group, skipping:', dateError);
-          // Continue to next date group
-        }
-      }
-      
-      console.log(`Successfully scheduled ${totalNotificationsScheduled} notifications for ${scheduledNotifications.length} assignments`);
-      
-      // Save the scheduled notifications for tracking
-      await saveScheduledNotifications(scheduledNotifications);
-    } catch (processingError) {
-      console.error('Error during notification processing phase:', processingError);
-      // Allow process to continue to complete LAST_NOTIFICATION_UPDATE_KEY update
-    }
-  } catch (error) {
-    console.error('Error scheduling notifications:', error);
-  }
-};
-
-// Initialize notifications
-export const initializeNotifications = async (): Promise<void> => {
-  // Set up notification handler
+// Configure notification handler
+export function configureNotifications() {
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
       shouldShowAlert: true,
@@ -652,279 +135,448 @@ export const initializeNotifications = async (): Promise<void> => {
       shouldSetBadge: true,
     }),
   });
-  
-  // Request permissions
-  await registerForPushNotificationsAsync();
-};
+}
 
-// Update the test notification function to include the configured notification time
-export const sendTestNotification = async (type: AssignmentType = AssignmentType.TEST): Promise<void> => {
+// Generate notification ID for an assignment
+function getNotificationId(assignmentId: string, type: 'due' | 'reminder' | 'early-reminder' | 'daily') {
+  return `assignment-${assignmentId}-${type}`;
+}
+
+// Get the channel ID based on assignment type
+function getChannelId(assignmentType: AssignmentType): string {
+  return Platform.OS === 'android' ? 'assignments' : 'default';
+}
+
+// Schedule a notification 
+async function scheduleNotification(
+  title: string,
+  body: string,
+  triggerDate: Date,
+  data: any,
+  identifier: string,
+  channelId: string = 'default'
+) {
   try {
-    // Get the notification settings
-    const settings = await getNotificationSettings();
-    
-    // Get existing assignments
-    const assignments = await getAssignments();
-    const activeAssignments = assignments.filter(a => !a.isCompleted);
-    
-    if (activeAssignments.length === 0) {
-      // If no real assignments exist, create some sample assignments with different due dates
-      const tomorrow = addDays(new Date(), 1);
-      const nextWeek = addDays(new Date(), 7);
-      const inTwoWeeks = addDays(new Date(), 14);
-      
-      // Create test assignments with different due dates
-      const testAssignments = [
-        // Tomorrow assignments
-        {
-          id: `test-test-${Date.now()}`,
-          title: 'Chapter Test',
-          description: 'Test on chapters 5-8',
-          courseName: 'English',
-          courseCode: 'ENG202',
-          dueDate: tomorrow.toISOString(),
-          isCompleted: false,
-          isPriority: true,
-          assignmentType: AssignmentType.TEST
-        },
-        {
-          id: `test-homework-${Date.now() + 1}`,
-          title: 'Essay Assignment',
-          description: 'Write a 5-page essay',
-          courseName: 'English',
-          courseCode: 'ENG202',
-          dueDate: tomorrow.toISOString(),
-          isCompleted: false,
-          isPriority: false,
-          assignmentType: AssignmentType.HOMEWORK
-        },
-        // Next week assignment
-        {
-          id: `test-exam-${Date.now() + 3}`,
-          title: 'Final Exam',
-          description: 'Comprehensive exam covering all topics',
-          courseName: 'Mathematics',
-          courseCode: 'MATH101',
-          dueDate: nextWeek.toISOString(),
-          isCompleted: false,
-          isPriority: true,
-          assignmentType: AssignmentType.EXAM
-        },
-        // In two weeks assignments
-        {
-          id: `test-project-${Date.now() + 4}`,
-          title: 'Term Project',
-          description: 'Final project for the semester',
-          courseName: 'Computer Science',
-          courseCode: 'CS101',
-          dueDate: inTwoWeeks.toISOString(),
-          isCompleted: false,
-          isPriority: true,
-          assignmentType: AssignmentType.PROJECT
-        },
-        {
-          id: `test-quiz-${Date.now() + 5}`,
-          title: 'Quiz 5',
-          description: 'Short quiz on recent materials',
-          courseName: 'Physics',
-          courseCode: 'PHYS201',
-          dueDate: inTwoWeeks.toISOString(),
-          isCompleted: false,
-          isPriority: false,
-          assignmentType: AssignmentType.QUIZ
-        }
-      ];
-      
-      // Use these test assignments instead
-      activeAssignments.push(...testAssignments);
-    }
-    
-    // Parse the notification time from settings
-    const notificationTime = parseISO(settings.notificationTime);
-    
-    // Format the notification time for display
-    const formattedTime = format(notificationTime, 'h:mm a');
-    
-    // Group assignments by due date in YYYY-MM-DD format
-    const assignmentsByDueDate: Record<string, Assignment[]> = {};
+    // Cancel any existing notification with the same identifier
+    await Notifications.cancelScheduledNotificationAsync(identifier);
+
+    // Only schedule if the time is in the future
     const now = new Date();
-    
-    // Track if we've sent any notifications
-    let notificationSent = false;
-    
-    // First, filter assignments that should actually trigger notifications based on settings
-    for (const assignment of activeAssignments) {
-      const dueDate = parseISO(assignment.dueDate);
-      const daysUntilDue = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    if (triggerDate > now) {
+      // Calculate seconds from now
+      const secondsFromNow = Math.floor((triggerDate.getTime() - now.getTime()) / 1000);
       
-      // Determine reminder days based on assignment type
-      let reminderDays = settings.otherReminderDays;
-      
-      switch (assignment.assignmentType) {
-        case AssignmentType.EXAM:
-          reminderDays = settings.examReminderDays;
-          break;
-        case AssignmentType.TEST:
-          reminderDays = settings.testReminderDays;
-          break;
-        case AssignmentType.QUIZ:
-          reminderDays = settings.quizReminderDays;
-          break;
-        case AssignmentType.HOMEWORK:
-          reminderDays = settings.homeworkReminderDays;
-          break;
-        case AssignmentType.PROJECT:
-          reminderDays = settings.projectReminderDays;
-          break;
-        default:
-          reminderDays = settings.otherReminderDays;
-      }
-      
-      // Only include assignments that would trigger a notification based on settings
-      // This simulates what would happen if today was the day the notification would be sent
-      if (daysUntilDue <= reminderDays) {
-        const dateKey = format(dueDate, 'yyyy-MM-dd');
-        
-        if (!assignmentsByDueDate[dateKey]) {
-          assignmentsByDueDate[dateKey] = [];
-        }
-        
-        assignmentsByDueDate[dateKey].push(assignment);
-      }
-    }
-    
-    // Send a test notification for each date that has assignments
-    // matching the notification criteria
-    for (const dateKey of Object.keys(assignmentsByDueDate)) {
-      const dateAssignments = assignmentsByDueDate[dateKey];
-      
-      // Sort assignments by type priority
-      const sortedAssignments = dateAssignments.sort((a, b) => {
-        const typePriority: Record<string, number> = {
-          [AssignmentType.EXAM]: 0,
-          [AssignmentType.TEST]: 1,
-          [AssignmentType.QUIZ]: 2,
-          [AssignmentType.PROJECT]: 3,
-          [AssignmentType.HOMEWORK]: 4,
-          [AssignmentType.OTHER]: 5,
-          [AssignmentType.LAB]: 6,
-          [AssignmentType.ESSAY]: 7,
-          [AssignmentType.PRESENTATION]: 8
-        };
-        
-        return (typePriority[a.assignmentType] ?? 999) - (typePriority[b.assignmentType] ?? 999);
-      });
-      
-      // Group assignments by type
-      const groupedByType: Record<string, Assignment[]> = {};
-      for (const assignment of sortedAssignments) {
-        if (!groupedByType[assignment.assignmentType]) {
-          groupedByType[assignment.assignmentType] = [];
-        }
-        groupedByType[assignment.assignmentType].push(assignment);
-      }
-      
-      const dueDate = parseISO(dateKey);
-      const formattedDueDate = format(dueDate, 'MMM d');
-      const daysUntilDue = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-      
-      // Create notification title
-      const mainAssignment = sortedAssignments[0];
-      let title = '';
-      
-      if (daysUntilDue === 0) {
-        title = `Assignments due today!`;
-      } else if (sortedAssignments.length > 1) {
-        title = `${mainAssignment.assignmentType} and more due on ${formattedDueDate} (in ${daysUntilDue} days)`;
+      if (secondsFromNow > 0) {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title,
+            body,
+            data,
+            sound: true,
+            ...(Platform.OS === 'android' ? { channelId } : {}),
+          },
+          trigger: {
+            type: SchedulableTriggerInputTypes.TIME_INTERVAL,
+            seconds: secondsFromNow,
+          },
+          identifier,
+        });
+        console.log(`Scheduled notification: ${identifier} for ${triggerDate.toISOString()} (${secondsFromNow} seconds from now)`);
       } else {
-        title = `${mainAssignment.assignmentType}: ${mainAssignment.title} due on ${formattedDueDate} (in ${daysUntilDue} days)`;
+        console.log(`Skipped immediate notification: ${identifier}`);
       }
-      
-      // Create notification body with all assignments by type
-      let body = '';
-      for (const [type, typeAssignments] of Object.entries(groupedByType)) {
-        body += `${type} (${typeAssignments.length}): `;
-        body += typeAssignments.map(a => `${a.title} for ${a.courseName}`).join(', ');
-        body += '\n';
-      }
-      
-      // Show notification time and reminder settings
-      body += `\n---\nThis notification would be sent at ${formattedTime}`;
-      if (daysUntilDue > 0) {
-        body += `, ${daysUntilDue} days before the due date.`;
-      } else {
-        body += ` on the due date.`;
-      }
-      
-      // Add daily reminder information based on the assignment types
-      let hasDailyReminders = false;
-      for (const assignment of sortedAssignments) {
-        switch (assignment.assignmentType) {
-          case AssignmentType.EXAM:
-            if (settings.dailyRemindersForExams) hasDailyReminders = true;
-            break;
-          case AssignmentType.TEST:
-            if (settings.dailyRemindersForTests) hasDailyReminders = true;
-            break;
-          case AssignmentType.QUIZ:
-            if (settings.dailyRemindersForQuizzes) hasDailyReminders = true;
-            break;
-        }
-      }
-      
-      if (hasDailyReminders && daysUntilDue > 1) {
-        body += `\nAdditional daily reminders would be sent as the due date approaches.`;
-      }
-      
-      // Add a delay between notifications
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      // Send the notification for this date
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: title,
-          body: body.trim(),
-          data: { 
-            dateKey: dateKey, 
-            assignmentIds: sortedAssignments.map(a => a.id), 
-            isTest: true,
-            daysUntilDue,
-            notificationTime: formattedTime
-          }
-        },
-        trigger: null, // Send immediately
-      });
-      
-      console.log(`Sent test notification for ${sortedAssignments.length} assignments due on ${formattedDueDate}`);
-      notificationSent = true;
-    }
-    
-    // If we didn't send any notifications, explain why
-    if (!notificationSent) {
-      // Create a summary of notification settings
-      const settingsSummary = `
-Current notification settings:
-- Notification time: ${formattedTime}
-- Exams: ${settings.examReminderDays} days before
-- Tests: ${settings.testReminderDays} days before
-- Quizzes: ${settings.quizReminderDays} days before
-- Homework: ${settings.homeworkReminderDays} days before
-- Projects: ${settings.projectReminderDays} days before
-- Other: ${settings.otherReminderDays} days before
-- Daily reminders: ${settings.dailyRemindersForExams ? 'Enabled for exams' : 'Disabled for exams'}, ${settings.dailyRemindersForTests ? 'Enabled for tests' : 'Disabled for tests'}, ${settings.dailyRemindersForQuizzes ? 'Enabled for quizzes' : 'Disabled for quizzes'}
-      `.trim();
-      
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: "No notifications to send right now",
-          body: `Based on your notification settings, none of your assignments would trigger a notification today.\n\n${settingsSummary}`,
-          data: { isTest: true }
-        },
-        trigger: null,
-      });
-      console.log("Sent test notification explaining no assignments match notification criteria");
+    } else {
+      console.log(`Skipped past notification: ${identifier} for ${triggerDate.toISOString()}`);
     }
   } catch (error) {
-    console.error('Error sending test notification:', error);
+    console.error('Error scheduling notification:', error);
   }
-}; 
+}
+
+// Get reminder days for an assignment type based on settings
+async function getReminderDaysForType(type: AssignmentType): Promise<number> {
+  const settings = await getNotificationSettings();
+  
+  switch (type) {
+    case AssignmentType.EXAM:
+      return settings.examReminderDays;
+    case AssignmentType.TEST:
+      return settings.testReminderDays;
+    case AssignmentType.QUIZ:
+      return settings.quizReminderDays;
+    case AssignmentType.PROJECT:
+      return settings.projectReminderDays;
+    case AssignmentType.HOMEWORK:
+      return settings.homeworkReminderDays;
+    default:
+      return settings.otherReminderDays;
+  }
+}
+
+// Check if daily reminders should be scheduled for an assignment type
+async function shouldSendDailyReminder(type: AssignmentType): Promise<boolean> {
+  const settings = await getNotificationSettings();
+  
+  switch (type) {
+    case AssignmentType.EXAM:
+      return settings.dailyRemindersForExams;
+    case AssignmentType.TEST:
+      return settings.dailyRemindersForTests;
+    case AssignmentType.QUIZ:
+      return settings.dailyRemindersForQuizzes;
+    default:
+      return false; // No daily reminders for other types by default
+  }
+}
+
+// Schedule notifications for a single assignment
+export async function scheduleNotificationForAssignment(assignment: Assignment): Promise<void> {
+  try {
+    // Get notification settings
+    const settings = await getNotificationSettings();
+    
+    // Don't schedule if notifications are disabled or assignment is completed
+    if (!settings.enabled || assignment.isCompleted) {
+      return;
+    }
+
+    const dueDate = parseISO(assignment.dueDate);
+    const now = new Date();
+    const courseInfo = assignment.courseCode ? `${assignment.courseCode} - ${assignment.courseName}` : assignment.courseName;
+    const channelId = getChannelId(assignment.assignmentType);
+    
+    // 1. Due date notification (30 minutes before)
+    const dueNotificationTime = new Date(dueDate.getTime() - 30 * 60 * 1000); // 30 minutes before
+    
+    if (dueNotificationTime > now) {
+      await scheduleNotification(
+        `${assignment.assignmentType} Due Soon`,
+        `${assignment.title} for ${courseInfo} is due in 30 minutes.`,
+        dueNotificationTime,
+        { assignmentId: assignment.id, type: 'due' },
+        getNotificationId(assignment.id, 'due'),
+        channelId
+      );
+    }
+
+    // 2. Day before reminder (24 hours before)
+    const reminderDate = addHours(dueDate, -24);
+    
+    if (reminderDate > now) {
+      await scheduleNotification(
+        `${assignment.assignmentType} Due Tomorrow`,
+        `${assignment.title} for ${courseInfo} is due tomorrow.`,
+        reminderDate,
+        { assignmentId: assignment.id, type: 'reminder' },
+        getNotificationId(assignment.id, 'reminder'),
+        channelId
+      );
+    }
+
+    // 3. Early reminder based on assignment type
+    const earlyReminderDays = await getReminderDaysForType(assignment.assignmentType);
+    if (earlyReminderDays > 1) { // Only do early reminder if it's more than 1 day
+      const earlyReminderDate = addDays(dueDate, -earlyReminderDays);
+      
+      if (earlyReminderDate > now) {
+        await scheduleNotification(
+          `${assignment.assignmentType} Coming Up`,
+          `${assignment.title} for ${courseInfo} is due in ${earlyReminderDays} days.`,
+          earlyReminderDate,
+          { assignmentId: assignment.id, type: 'early-reminder' },
+          getNotificationId(assignment.id, 'early-reminder'),
+          channelId
+        );
+      }
+    }
+
+    // 4. Priority assignments get an extra reminder 1 hour before
+    if (assignment.isPriority) {
+      const priorityReminderTime = new Date(dueDate.getTime() - 60 * 60 * 1000); // 1 hour before
+      
+      if (priorityReminderTime > now) {
+        await scheduleNotification(
+          `PRIORITY: ${assignment.assignmentType} Due Very Soon`,
+          `${assignment.title} for ${courseInfo} is due in 1 hour.`,
+          priorityReminderTime,
+          { assignmentId: assignment.id, type: 'priority-reminder' },
+          `assignment-${assignment.id}-priority-reminder`,
+          channelId
+        );
+      }
+    }
+    
+    // 5. Daily reminder at the configured notification time
+    const shouldSendDaily = await shouldSendDailyReminder(assignment.assignmentType);
+    if (shouldSendDaily) {
+      // Get the notification time from settings
+      const notificationTimeDate = new Date(settings.notificationTime);
+      
+      // Create a date object for today at the notification time
+      const todayAtNotificationTime = new Date();
+      todayAtNotificationTime.setHours(
+        notificationTimeDate.getHours(),
+        notificationTimeDate.getMinutes(),
+        0,
+        0
+      );
+      
+      // If the notification time has already passed for today, schedule for tomorrow
+      if (todayAtNotificationTime <= now) {
+        todayAtNotificationTime.setDate(todayAtNotificationTime.getDate() + 1);
+      }
+      
+      // Only schedule if the due date is after the notification time and not completed
+      if (todayAtNotificationTime < dueDate) {
+        // Calculate days until due
+        const daysUntilDue = Math.ceil((dueDate.getTime() - todayAtNotificationTime.getTime()) / (1000 * 60 * 60 * 24));
+        
+        await scheduleNotification(
+          `${assignment.assignmentType} Reminder`,
+          `${assignment.title} for ${courseInfo} is due in ${daysUntilDue} days.`,
+          todayAtNotificationTime,
+          { assignmentId: assignment.id, type: 'daily' },
+          getNotificationId(assignment.id, 'daily'),
+          channelId
+        );
+      }
+    }
+  } catch (error) {
+    console.error('Error scheduling notifications for assignment:', error);
+  }
+}
+
+// Schedule notifications for all assignments
+export async function scheduleAllNotifications(assignments: Assignment[]): Promise<void> {
+  try {
+    // Get notification settings
+    const settings = await getNotificationSettings();
+    
+    // If notifications are disabled, cancel all and return
+    if (!settings.enabled) {
+      await Notifications.cancelAllScheduledNotificationsAsync();
+      console.log('Notifications are disabled, canceled all scheduled notifications');
+      return;
+    }
+    
+    // First cancel all existing notifications to avoid duplicates
+    await Notifications.cancelAllScheduledNotificationsAsync();
+    
+    // Schedule notifications for each non-completed assignment
+    const incompleteAssignments = assignments.filter(a => !a.isCompleted);
+    for (const assignment of incompleteAssignments) {
+      await scheduleNotificationForAssignment(assignment);
+    }
+    
+    console.log(`Scheduled notifications for ${incompleteAssignments.length} assignments`);
+  } catch (error) {
+    console.error('Error scheduling all notifications:', error);
+  }
+}
+
+// Cancel notifications for a specific assignment
+export async function cancelNotificationsForAssignment(assignmentId: string): Promise<void> {
+  try {
+    // Cancel all notification types for this assignment
+    const notificationTypes = ['due', 'reminder', 'early-reminder', 'priority-reminder', 'daily'];
+    for (const type of notificationTypes) {
+      const identifier = type === 'priority-reminder' 
+        ? `assignment-${assignmentId}-priority-reminder` 
+        : getNotificationId(assignmentId, type as any);
+      
+      await Notifications.cancelScheduledNotificationAsync(identifier);
+    }
+    
+    console.log(`Cancelled notifications for assignment: ${assignmentId}`);
+  } catch (error) {
+    console.error('Error cancelling notifications:', error);
+  }
+}
+
+// Initialize the notification system
+export async function initializeNotifications(): Promise<void> {
+  try {
+    // Configure notification behavior
+    configureNotifications();
+    
+    // Request permission
+    await registerForPushNotificationsAsync();
+    
+    // Load settings but don't schedule anything yet
+    // This prevents sending all notifications at once on app startup
+    const settings = await getNotificationSettings();
+    console.log('Notification system initialized with settings:', settings.enabled ? 'enabled' : 'disabled');
+  } catch (error) {
+    console.error('Error initializing notifications:', error);
+  }
+}
+
+// Check and reschedule notifications (can be called on app start)
+export async function checkAndRescheduleNotifications(assignments: Assignment[]): Promise<void> {
+  try {
+    // Get notification settings
+    const settings = await getNotificationSettings();
+    
+    // If notifications are disabled, don't reschedule
+    if (!settings.enabled) {
+      return;
+    }
+    
+    // Get all scheduled notifications
+    const scheduledNotifications = await Notifications.getAllScheduledNotificationsAsync();
+    
+    // Extract assignment IDs from scheduled notifications
+    const scheduledAssignmentIds = new Set<string>();
+    scheduledNotifications.forEach(notification => {
+      const assignmentId = notification.content.data?.assignmentId;
+      if (assignmentId) {
+        scheduledAssignmentIds.add(assignmentId);
+      }
+    });
+    
+    // Find incomplete assignments that don't have scheduled notifications
+    const incompleteAssignments = assignments.filter(a => !a.isCompleted);
+    const unscheduledAssignments = incompleteAssignments.filter(
+      assignment => !scheduledAssignmentIds.has(assignment.id)
+    );
+    
+    // Only schedule notifications for assignments that don't have them
+    if (unscheduledAssignments.length > 0) {
+      console.log(`Scheduling notifications for ${unscheduledAssignments.length} assignments without notifications`);
+      
+      for (const assignment of unscheduledAssignments) {
+        await scheduleNotificationForAssignment(assignment);
+      }
+    } else {
+      console.log('All incomplete assignments already have notifications scheduled');
+    }
+  } catch (error) {
+    console.error('Error checking and rescheduling notifications:', error);
+  }
+}
+
+// Get remaining time text for an assignment
+export function getRemainingTimeText(dueDate: string): string {
+  try {
+    const date = parseISO(dueDate);
+    const now = new Date();
+    
+    if (date < now) {
+      return 'Overdue';
+    }
+    
+    return formatDistanceToNow(date, { addSuffix: true });
+  } catch (error) {
+    console.error('Error formatting remaining time:', error);
+    return 'Unknown';
+  }
+}
+
+// Send test notification (for debugging purposes)
+export async function sendTestNotification(type: AssignmentType = AssignmentType.TEST): Promise<void> {
+  try {
+    // Create test assignment data
+    const testAssignment: Assignment = {
+      id: 'test-' + Date.now(),
+      title: 'Test Assignment',
+      description: 'This is a test notification to verify your notification settings',
+      courseCode: 'TEST101',
+      courseName: 'Notification Testing',
+      dueDate: addHours(new Date(), 2).toISOString(), // Due in 2 hours
+      isCompleted: false,
+      isPriority: true,
+      assignmentType: type,
+    };
+    
+    // Send immediate test notification
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: `Test: ${type} Due Soon`,
+        body: `${testAssignment.title} for ${testAssignment.courseCode} - ${testAssignment.courseName} is due in 2 hours.`,
+        data: { isTest: true },
+        sound: true,
+      },
+      trigger: null, // Send immediately
+    });
+    
+    console.log('Test notification sent');
+  } catch (error) {
+    console.error('Error sending test notification:', error);
+    throw error;
+  }
+}
+
+// Test notification timing (for debugging purposes)
+export async function testNotificationTiming(): Promise<void> {
+  try {
+    const settings = await getNotificationSettings();
+    
+    // 1. Immediate notification
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'Immediate Test Notification',
+        body: 'This notification appears immediately.',
+        data: { isTest: true },
+        sound: true,
+      },
+      trigger: null, // Send immediately
+    });
+    
+    // 2. Notification in 30 seconds
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'Delayed Test Notification',
+        body: 'This notification appears 30 seconds after the test began.',
+        data: { isTest: true },
+        sound: true,
+      },
+      trigger: {
+        type: SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: 30,
+      },
+    });
+    
+    // 3. Notification at the user's configured time
+    const notificationTimeDate = new Date(settings.notificationTime);
+    const todayAtNotificationTime = new Date();
+    todayAtNotificationTime.setHours(
+      notificationTimeDate.getHours(),
+      notificationTimeDate.getMinutes(),
+      0,
+      0
+    );
+    
+    // If the notification time has already passed for today, schedule for tomorrow
+    if (todayAtNotificationTime <= new Date()) {
+      todayAtNotificationTime.setDate(todayAtNotificationTime.getDate() + 1);
+    }
+    
+    // Calculate seconds until the notification time
+    const secondsUntilNotificationTime = Math.floor(
+      (todayAtNotificationTime.getTime() - new Date().getTime()) / 1000
+    );
+    
+    const formattedTime = format(
+      todayAtNotificationTime, 
+      'h:mm a' // Format as "3:30 PM"
+    );
+    
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'Scheduled Test Notification',
+        body: `This notification appears at your configured time (${formattedTime}).`,
+        data: { isTest: true },
+        sound: true,
+      },
+      trigger: {
+        type: SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: secondsUntilNotificationTime,
+      },
+    });
+    
+    console.log('Notification timing test initiated');
+  } catch (error) {
+    console.error('Error testing notification timing:', error);
+    throw error;
+  }
+} 

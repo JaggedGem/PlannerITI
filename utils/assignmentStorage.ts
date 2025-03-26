@@ -1,11 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { scheduleService, Period, Subject, SubGroupType } from '../services/scheduleService';
 import { format, isSameDay, isToday, isTomorrow, addDays, parseISO } from 'date-fns';
-import { 
-  scheduleNotificationForAssignment, 
-  cancelNotificationsForAssignment,
-  scheduleAllNotifications
-} from './notificationUtils';
+import {
+  scheduleForNewAssignment,
+  handleCompletionStateChange,
+  cancelForDeletedAssignment,
+  updateNotificationsForUpdatedAssignment
+} from './notificationHelper';
 
 // Storage key
 const ASSIGNMENTS_STORAGE_KEY = 'assignments';
@@ -84,13 +85,8 @@ export const addAssignment = async (assignment: Omit<Assignment, 'id' | 'isCompl
   assignments.push(newAssignment);
   await saveAssignments(assignments);
   
-  // Schedule notifications for all assignments to ensure consistency
-  // This is more reliable than just scheduling for the new assignment
-  try {
-    await scheduleAllNotifications(assignments);
-  } catch (error) {
-    console.error('Error scheduling notifications after adding assignment:', error);
-  }
+  // Schedule notifications for the new assignment only
+  await scheduleForNewAssignment(newAssignment);
   
   return newAssignment;
 };
@@ -106,17 +102,7 @@ export const toggleAssignmentCompletion = async (id: string): Promise<void> => {
     await saveAssignments(assignments);
     
     // Handle notifications based on completion state
-    try {
-      if (!wasCompleted) {
-        // If assignment was just marked complete, cancel its notifications
-        await cancelNotificationsForAssignment(id);
-      } else {
-        // If assignment was marked incomplete, reschedule all notifications for consistency
-        await scheduleAllNotifications(assignments);
-      }
-    } catch (error) {
-      console.error('Error updating notifications after toggle:', error);
-    }
+    await handleCompletionStateChange(assignments[index], wasCompleted, id);
   }
 };
 
@@ -127,11 +113,7 @@ export const deleteAssignment = async (id: string): Promise<void> => {
   await saveAssignments(updatedAssignments);
   
   // Cancel notifications for deleted assignment
-  try {
-    await cancelNotificationsForAssignment(id);
-  } catch (error) {
-    console.error('Error canceling notifications for deleted assignment:', error);
-  }
+  await cancelForDeletedAssignment(id);
 };
 
 // Update an assignment
@@ -145,16 +127,7 @@ export const updateAssignment = async (id: string, updates: Partial<Assignment>)
     await saveAssignments(assignments);
     
     // Reschedule notifications for the updated assignment
-    try {
-      await cancelNotificationsForAssignment(id);
-      
-      // Only schedule if not completed
-      if (!updatedAssignment.isCompleted) {
-        await scheduleNotificationForAssignment(updatedAssignment);
-      }
-    } catch (error) {
-      console.error('Error updating notifications:', error);
-    }
+    await updateNotificationsForUpdatedAssignment(id, updatedAssignment);
   }
 };
 

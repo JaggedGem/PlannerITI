@@ -20,10 +20,13 @@ import {
   DEFAULT_NOTIFICATION_SETTINGS, 
   NotificationSettings, 
   scheduleAllNotifications,
-  sendTestNotification 
-} from '@/utils/notificationUtils';
-import { getAssignments, AssignmentType } from '@/utils/assignmentStorage';
+  sendTestNotification,
+  testNotificationTiming
+} from '../../utils/notificationUtils';
+import { getAssignments, AssignmentType } from '../../utils/assignmentStorage';
 import { StorageViewer } from '../../components/StorageViewer';
+import * as Notifications from 'expo-notifications';
+import { initializeNotifications } from '../../utils/notificationUtils';
 
 const IDNP_KEY = '@planner_idnp';
 const IDNP_UPDATE_EVENT = 'idnp_updated';
@@ -1101,6 +1104,58 @@ export default function Settings() {
           >
             <MaterialIcons name="notifications-active" size={24} color="#4CAF50" />
             <Text style={styles.devToolText}>Send Test Notification</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.devToolButton}
+            onPress={async () => {
+              try {
+                await testNotificationTiming();
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                Alert.alert('Success', 'Notification timing test initiated. You should receive an immediate notification, one in 30 seconds, and one at your configured notification time.');
+              } catch (error) {
+                console.error('Error testing notification timing:', error);
+                Alert.alert('Error', 'Failed to test notification timing');
+              }
+            }}
+          >
+            <MaterialIcons name="alarm" size={24} color="#FF5722" />
+            <Text style={styles.devToolText}>Test Notification Timing</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.devToolButton}
+            onPress={async () => {
+              try {
+                // Cancel all existing notifications
+                await Notifications.cancelAllScheduledNotificationsAsync();
+                
+                // Reset notification channels (Android only)
+                if (Platform.OS === 'android') {
+                  try {
+                    await Notifications.deleteNotificationChannelAsync('assignments');
+                  } catch (e) {
+                    // Channel may not exist, ignore error
+                  }
+                }
+                
+                // Re-initialize the notification system
+                await initializeNotifications();
+                
+                // Refresh all notifications
+                const assignments = await getAssignments();
+                await scheduleAllNotifications(assignments);
+                
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                Alert.alert('Success', 'Notification system reset. This can resolve issues with timing.');
+              } catch (error) {
+                console.error('Error resetting notification system:', error);
+                Alert.alert('Error', 'Failed to reset notification system');
+              }
+            }}
+          >
+            <MaterialIcons name="refresh" size={24} color="#9C27B0" />
+            <Text style={styles.devToolText}>Reset Notification System</Text>
           </TouchableOpacity>
 
           <TouchableOpacity

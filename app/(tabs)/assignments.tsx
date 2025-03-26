@@ -15,7 +15,7 @@ import {
   AssignmentGroup,
   getCourses
 } from '../../utils/assignmentStorage';
-import { scheduleAllNotifications, cancelNotificationsForAssignment } from '@/utils/notificationUtils';
+import { scheduleAllNotifications, cancelNotificationsForAssignment } from '../../utils/notificationHelper';
 import { useCallback } from 'react';
 import Animated, { FadeInDown, Layout, FadeOut } from 'react-native-reanimated';
 import CourseSection from '../../components/assignments/CourseSection';
