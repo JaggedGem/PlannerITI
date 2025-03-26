@@ -380,14 +380,14 @@ const TimePicker = ({
           </View>
 
           <View style={styles.timePickerActions}>
-            <TouchableOpacity
-              style={[styles.timePickerButton, styles.timePickerCancelButton]}
+            <TouchableOpacity 
+              style={[styles.timePickerButton, styles.timePickerCancelButton]} 
               onPress={onClose}
             >
               <Text style={styles.timePickerButtonText}>{translations.cancel}</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.timePickerButton, styles.timePickerConfirmButton]}
+            <TouchableOpacity 
+              style={[styles.timePickerButton, styles.timePickerConfirmButton]} 
               onPress={handleConfirm}
             >
               <Text style={[styles.timePickerButtonText, styles.timePickerConfirmText]}>{translations.confirm}</Text>
@@ -1532,12 +1532,12 @@ export default function Settings() {
     setShowNotificationTimeModal(false);
   }, []);
 
-  const handleConfirmTimePicker = useCallback(async () => {
+  const handleConfirmTimePicker = useCallback(async (date: Date) => {
     try {
       // Create a new date object with just the time component
       const updatedTime = new Date();
-      updatedTime.setHours(tempNotificationTime.getHours());
-      updatedTime.setMinutes(tempNotificationTime.getMinutes());
+      updatedTime.setHours(date.getHours());
+      updatedTime.setMinutes(date.getMinutes());
       updatedTime.setSeconds(0);
       updatedTime.setMilliseconds(0);
       
@@ -1553,11 +1553,16 @@ export default function Settings() {
       const assignments = await getAssignments();
       await scheduleAllNotifications(assignments);
       
+      // Close the modal
       setShowNotificationTimeModal(false);
+      
+      // Debugging
+      console.log('Notification time saved:', updatedTime.toISOString());
+      console.log('Hours:', date.getHours(), 'Minutes:', date.getMinutes());
     } catch (error) {
       console.error('Error saving notification time:', error);
     }
-  }, [notificationSettings, tempNotificationTime]);
+  }, [notificationSettings]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -2699,6 +2704,11 @@ const styles = StyleSheet.create({
   timePickerConfirmText: {
     color: 'white',
     fontWeight: '600',
+  },
+  periodSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
   },
   toggleContainer: {
     width: 50,
