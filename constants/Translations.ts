@@ -90,6 +90,11 @@ type TranslationType = {
       dailyQuizzes: string;
       testNotification: string;
       days: string;
+      sendDigestNow: string;
+      digestSentTitle: string;
+      digestSentMessage: string;
+      errorTitle: string;
+      digestErrorMessage: string;
     };
   };
   schedule: {
@@ -474,7 +479,12 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         dailyTests: 'For Tests',
         dailyQuizzes: 'For Quizzes',
         testNotification: 'Send Test Notification',
-        days: 'days'
+        days: 'days',
+        sendDigestNow: 'Send Daily Digest Now',
+        digestSentTitle: 'Daily Digest Sent',
+        digestSentMessage: 'Check your notifications to see your daily assignment summary',
+        errorTitle: 'Error',
+        digestErrorMessage: 'Failed to send daily digest'
       }
     },
     schedule: {
@@ -877,7 +887,12 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         dailyTests: 'Pentru Teste',
         dailyQuizzes: 'Pentru Quizuri',
         testNotification: 'Trimite Notificare de Test',
-        days: 'zile'
+        days: 'zile',
+        sendDigestNow: 'Trimite Digest Zilnic Acum',
+        digestSentTitle: 'Digest Zilnic Trimis',
+        digestSentMessage: 'Verificați notificările pentru a vedea rezumatul temelor viitoare',
+        errorTitle: 'Eroare',
+        digestErrorMessage: 'Nu s-a putut trimite digestul zilnic'
       }
     },
     schedule: {
@@ -1280,7 +1295,12 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         dailyTests: 'Для тестов',
         dailyQuizzes: 'Для контрольных',
         testNotification: 'Отправить тестовое уведомление',
-        days: 'дней'
+        days: 'дней',
+        sendDigestNow: 'Отправить ежедневный дайджест сейчас',
+        digestSentTitle: 'Ежедневный дайджест отправлен',
+        digestSentMessage: 'Проверьте уведомления для просмотра сводного отчета по заданиям',
+        errorTitle: 'Ошибка',
+        digestErrorMessage: 'Не удалось отправить ежедневный дайджест'
       }
     },
     schedule: {

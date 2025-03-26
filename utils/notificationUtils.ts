@@ -3,7 +3,7 @@ import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import type { Assignment } from './assignmentStorage';
 import { AssignmentType } from './assignmentStorage';
-import { formatDistanceToNow, addHours, addDays, parseISO, format } from 'date-fns';
+import { formatDistanceToNow, addHours, addDays, parseISO, format, startOfDay, isBefore, isAfter, differenceInDays } from 'date-fns';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Import the required types
@@ -14,8 +14,10 @@ export enum SchedulableTriggerInputTypes {
   WEEKLY = 'weekly'
 }
 
-// Storage key for notification settings
+// Storage keys
 const NOTIFICATION_SETTINGS_KEY = '@planner_notification_settings';
+const DAILY_DIGEST_KEY = '@planner_daily_digest';
+const ASSIGNMENTS_STORAGE_KEY = 'assignments'; // Match the key in assignmentStorage.ts
 
 // Define notification settings type
 export interface NotificationSettings {
@@ -30,6 +32,19 @@ export interface NotificationSettings {
   dailyRemindersForExams: boolean;
   dailyRemindersForTests: boolean;
   dailyRemindersForQuizzes: boolean;
+}
+
+// Interface for grouped notifications
+interface AssignmentDigest {
+  date: string; // ISO string for the day
+  assignments: {
+    id: string;
+    title: string;
+    courseInfo: string;
+    type: AssignmentType;
+    dueDate: string;
+  }[];
+  lastNotified: string; // ISO string of when we last sent a notification for this digest
 }
 
 // Default notification settings
@@ -79,6 +94,26 @@ export async function getNotificationSettings(): Promise<NotificationSettings> {
   }
 }
 
+// Save daily digest
+async function saveDailyDigest(digests: AssignmentDigest[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(DAILY_DIGEST_KEY, JSON.stringify(digests));
+  } catch (error) {
+    console.error('Error saving daily digest:', error);
+  }
+}
+
+// Get daily digest
+async function getDailyDigest(): Promise<AssignmentDigest[]> {
+  try {
+    const data = await AsyncStorage.getItem(DAILY_DIGEST_KEY);
+    return data ? JSON.parse(data) : [];
+  } catch (error) {
+    console.error('Error getting daily digest:', error);
+    return [];
+  }
+}
+
 // Request permissions for notifications
 export async function registerForPushNotificationsAsync() {
   let token;
@@ -98,6 +133,15 @@ export async function registerForPushNotificationsAsync() {
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: '#3478F6',
+    });
+    
+    // Create daily digest channel
+    await Notifications.setNotificationChannelAsync('daily-digest', {
+      name: 'Daily Assignment Digest',
+      description: 'Daily summary of upcoming assignments',
+      importance: Notifications.AndroidImportance.HIGH,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#4CAF50',
     });
   }
 
@@ -229,17 +273,9 @@ async function shouldSendDailyReminder(type: AssignmentType): Promise<boolean> {
   }
 }
 
-// Schedule notifications for a single assignment
-export async function scheduleNotificationForAssignment(assignment: Assignment): Promise<void> {
+// Schedule individual critical notifications for an assignment (due soon, day before)
+async function scheduleIndividualNotifications(assignment: Assignment): Promise<void> {
   try {
-    // Get notification settings
-    const settings = await getNotificationSettings();
-    
-    // Don't schedule if notifications are disabled or assignment is completed
-    if (!settings.enabled || assignment.isCompleted) {
-      return;
-    }
-
     const dueDate = parseISO(assignment.dueDate);
     const now = new Date();
     const courseInfo = assignment.courseCode ? `${assignment.courseCode} - ${assignment.courseName}` : assignment.courseName;
@@ -273,24 +309,7 @@ export async function scheduleNotificationForAssignment(assignment: Assignment):
       );
     }
 
-    // 3. Early reminder based on assignment type
-    const earlyReminderDays = await getReminderDaysForType(assignment.assignmentType);
-    if (earlyReminderDays > 1) { // Only do early reminder if it's more than 1 day
-      const earlyReminderDate = addDays(dueDate, -earlyReminderDays);
-      
-      if (earlyReminderDate > now) {
-        await scheduleNotification(
-          `${assignment.assignmentType} Coming Up`,
-          `${assignment.title} for ${courseInfo} is due in ${earlyReminderDays} days.`,
-          earlyReminderDate,
-          { assignmentId: assignment.id, type: 'early-reminder' },
-          getNotificationId(assignment.id, 'early-reminder'),
-          channelId
-        );
-      }
-    }
-
-    // 4. Priority assignments get an extra reminder 1 hour before
+    // 3. Priority assignments get an extra reminder 1 hour before
     if (assignment.isPriority) {
       const priorityReminderTime = new Date(dueDate.getTime() - 60 * 60 * 1000); // 1 hour before
       
@@ -305,42 +324,252 @@ export async function scheduleNotificationForAssignment(assignment: Assignment):
         );
       }
     }
+  } catch (error) {
+    console.error('Error scheduling individual notifications:', error);
+  }
+}
+
+// Get all assignments due on a specific day
+function getAssignmentsDueOnDay(assignments: Assignment[], day: Date): Assignment[] {
+  const startOfDueDate = startOfDay(day);
+  return assignments.filter(assignment => {
+    const assignmentDueDate = parseISO(assignment.dueDate);
+    return isSameDay(assignmentDueDate, startOfDueDate);
+  });
+}
+
+// Check if an assignment should be in the daily digest based on its due date and settings
+async function shouldIncludeInDigest(assignment: Assignment): Promise<boolean> {
+  const settings = await getNotificationSettings();
+  const dueDate = parseISO(assignment.dueDate);
+  const now = new Date();
+  const daysUntilDue = differenceInDays(dueDate, now);
+  
+  // Get reminder days for this assignment type
+  const reminderDays = await getReminderDaysForType(assignment.assignmentType);
+  
+  // Only include if the assignment is due within the reminder days window
+  return daysUntilDue <= reminderDays;
+}
+
+// Function to create a more visually structured digest message
+function createDigestMessage(assignments: AssignmentDigest['assignments']): string {
+  if (assignments.length === 0) return 'No assignments due soon.';
+  
+  // Group by type for better organization
+  const byType = assignments.reduce((acc, curr) => {
+    if (!acc[curr.type]) {
+      acc[curr.type] = [];
+    }
+    acc[curr.type].push({
+      title: curr.title,
+      courseInfo: curr.courseInfo,
+      dueDate: curr.dueDate
+    });
+    return acc;
+  }, {} as Record<AssignmentType, Array<{title: string, courseInfo: string, dueDate: string}>>);
+  
+  // Build a more structured message
+  let message = '';
+  
+  for (const [type, items] of Object.entries(byType)) {
+    message += `📌 ${type}${items.length > 1 ? 's' : ''}: \n`;
     
-    // 5. Daily reminder at the configured notification time
-    const shouldSendDaily = await shouldSendDailyReminder(assignment.assignmentType);
-    if (shouldSendDaily) {
-      // Get the notification time from settings
-      const notificationTimeDate = new Date(settings.notificationTime);
+    items.forEach(item => {
+      // Format the time part of the due date
+      const dueTime = format(parseISO(item.dueDate), 'h:mm a');
+      message += `  • ${item.title} (${item.courseInfo}) @ ${dueTime}\n`;
+    });
+    
+    message += '\n';
+  }
+  
+  return message.trim();
+}
+
+// Create and schedule a single daily notification at the specified time with all upcoming assignments
+export async function createAndScheduleDailyDigest(assignments: Assignment[], sendNow: boolean = false): Promise<void> {
+  try {
+    const settings = await getNotificationSettings();
+    if (!settings.enabled) return;
+    
+    const now = new Date();
+    const incompleteAssignments = assignments.filter(a => !a.isCompleted);
+    
+    // Get notification time from settings
+    const notificationTimeDate = new Date(settings.notificationTime);
+    
+    // Create notification time - either now or at the configured time
+    const notificationTime = sendNow 
+      ? new Date(now.getTime() + 5000) // Send 5 seconds from now
+      : (() => {
+          // Create today's notification time (at the configured time)
+          const todayNotificationTime = new Date();
+          todayNotificationTime.setHours(
+            notificationTimeDate.getHours(),
+            notificationTimeDate.getMinutes(),
+            0, 0
+          );
+          
+          // If today's notification time has already passed, schedule for tomorrow
+          if (todayNotificationTime <= now) {
+            todayNotificationTime.setDate(todayNotificationTime.getDate() + 1);
+          }
+          
+          return todayNotificationTime;
+        })();
+    
+    // Group assignments by day for the next 14 days
+    const assignmentsByDay: Record<string, Assignment[]> = {};
+    
+    for (let i = 0; i < 14; i++) {
+      const targetDate = addDays(now, i);
+      const dateKey = format(targetDate, 'yyyy-MM-dd');
       
-      // Create a date object for today at the notification time
-      const todayAtNotificationTime = new Date();
-      todayAtNotificationTime.setHours(
-        notificationTimeDate.getHours(),
-        notificationTimeDate.getMinutes(),
-        0,
-        0
+      // Get assignments due on this day
+      const dueOnDay = incompleteAssignments.filter(assignment => {
+        const dueDate = parseISO(assignment.dueDate);
+        return isSameDay(dueDate, targetDate);
+      });
+      
+      // Filter assignments based on reminder day settings
+      const validAssignments = await Promise.all(
+        dueOnDay.map(async assignment => {
+          const reminderDays = await getReminderDaysForType(assignment.assignmentType);
+          const dueDate = parseISO(assignment.dueDate);
+          const daysUntilDue = differenceInDays(dueDate, now);
+          
+          // Only include if it's within the reminder window
+          return (daysUntilDue <= reminderDays) ? assignment : null;
+        })
       );
       
-      // If the notification time has already passed for today, schedule for tomorrow
-      if (todayAtNotificationTime <= now) {
-        todayAtNotificationTime.setDate(todayAtNotificationTime.getDate() + 1);
-      }
-      
-      // Only schedule if the due date is after the notification time and not completed
-      if (todayAtNotificationTime < dueDate) {
-        // Calculate days until due
-        const daysUntilDue = Math.ceil((dueDate.getTime() - todayAtNotificationTime.getTime()) / (1000 * 60 * 60 * 24));
-        
-        await scheduleNotification(
-          `${assignment.assignmentType} Reminder`,
-          `${assignment.title} for ${courseInfo} is due in ${daysUntilDue} days.`,
-          todayAtNotificationTime,
-          { assignmentId: assignment.id, type: 'daily' },
-          getNotificationId(assignment.id, 'daily'),
-          channelId
-        );
+      // Filter out nulls and store the assignments for this day
+      const filteredAssignments = validAssignments.filter(a => a !== null) as Assignment[];
+      if (filteredAssignments.length > 0) {
+        assignmentsByDay[dateKey] = filteredAssignments;
       }
     }
+    
+    // If no upcoming assignments, don't schedule a notification
+    if (Object.keys(assignmentsByDay).length === 0) {
+      console.log('No upcoming assignments to notify about');
+      return;
+    }
+    
+    // Cancel any existing daily digest notification
+    await Notifications.cancelScheduledNotificationAsync('daily-digest-notification');
+    
+    // Prepare data for the notification
+    const digestData: {
+      dayTitle: string;
+      date: string;
+      assignments: {
+        id: string;
+        title: string;
+        courseInfo: string;
+        type: AssignmentType;
+        dueDate: string;
+      }[];
+    }[] = [];
+    
+    for (const [dateKey, dayAssignments] of Object.entries(assignmentsByDay)) {
+      const date = parseISO(dateKey);
+      let dayTitle;
+      
+      // Format the day title
+      if (isSameDay(date, now)) {
+        dayTitle = 'Today';
+      } else if (isSameDay(date, addDays(now, 1))) {
+        dayTitle = 'Tomorrow';
+      } else {
+        dayTitle = format(date, 'EEEE, MMM d'); // e.g., "Monday, Jan 15"
+      }
+      
+      digestData.push({
+        dayTitle,
+        date: dateKey,
+        assignments: dayAssignments.map(a => ({
+          id: a.id,
+          title: a.title,
+          courseInfo: a.courseCode ? `${a.courseCode} - ${a.courseName}` : a.courseName,
+          type: a.assignmentType,
+          dueDate: a.dueDate
+        }))
+      });
+    }
+    
+    // Sort by date
+    digestData.sort((a, b) => a.date.localeCompare(b.date));
+    
+    // Build the notification content
+    let title = '📚 Your Daily Assignment Summary';
+    let body = '';
+    
+    if (digestData.length === 1) {
+      // Single day format
+      const day = digestData[0];
+      title = `📚 Assignments for ${day.dayTitle}`;
+      body = createDigestMessage(day.assignments);
+    } else {
+      // Multiple days format
+      for (const day of digestData) {
+        body += `📅 ${day.dayTitle}:\n`;
+        body += createDigestMessage(day.assignments);
+        body += '\n\n';
+      }
+    }
+    
+    // Schedule the daily digest notification
+    await scheduleNotification(
+      title,
+      body,
+      notificationTime,
+      { type: 'digest', data: digestData },
+      'daily-digest-notification',
+      Platform.OS === 'android' ? 'daily-digest' : 'default'
+    );
+    
+    console.log(`Scheduled daily digest notification for ${notificationTime.toISOString()}`);
+  } catch (error) {
+    console.error('Error creating daily digest:', error);
+  }
+}
+
+// Schedule notifications for a single assignment
+export async function scheduleNotificationForAssignment(assignment: Assignment): Promise<void> {
+  try {
+    // Get notification settings
+    const settings = await getNotificationSettings();
+    
+    // Don't schedule if notifications are disabled or assignment is completed
+    if (!settings.enabled || assignment.isCompleted) {
+      return;
+    }
+
+    const dueDate = parseISO(assignment.dueDate);
+    const now = new Date();
+    
+    // Schedule critical individual notifications (due soon, day before)
+    await scheduleIndividualNotifications(assignment);
+    
+    // Update the daily digest to include this assignment
+    // Use getAssignments directly from AsyncStorage to avoid dynamic imports
+    try {
+      const assignmentsJson = await AsyncStorage.getItem(ASSIGNMENTS_STORAGE_KEY);
+      const allAssignments = assignmentsJson ? JSON.parse(assignmentsJson) : [];
+      
+      // Map to ensure all assignments have a type (for backward compatibility)
+      const processedAssignments = allAssignments.map((a: any) => ({
+        ...a,
+        assignmentType: a.assignmentType || AssignmentType.HOMEWORK
+      }));
+      
+      await createAndScheduleDailyDigest(processedAssignments);
+    } catch (storageError) {
+      console.error('Error reading assignments from storage:', storageError);
+    }
+    
   } catch (error) {
     console.error('Error scheduling notifications for assignment:', error);
   }
@@ -362,11 +591,16 @@ export async function scheduleAllNotifications(assignments: Assignment[]): Promi
     // First cancel all existing notifications to avoid duplicates
     await Notifications.cancelAllScheduledNotificationsAsync();
     
-    // Schedule notifications for each non-completed assignment
+    // Only work with incomplete assignments
     const incompleteAssignments = assignments.filter(a => !a.isCompleted);
+    
+    // Schedule individual critical notifications for each assignment
     for (const assignment of incompleteAssignments) {
-      await scheduleNotificationForAssignment(assignment);
+      await scheduleIndividualNotifications(assignment);
     }
+    
+    // Create and schedule the daily digest
+    await createAndScheduleDailyDigest(incompleteAssignments);
     
     console.log(`Scheduled notifications for ${incompleteAssignments.length} assignments`);
   } catch (error) {
@@ -385,6 +619,25 @@ export async function cancelNotificationsForAssignment(assignmentId: string): Pr
         : getNotificationId(assignmentId, type as any);
       
       await Notifications.cancelScheduledNotificationAsync(identifier);
+    }
+    
+    // Get all assignments to update the daily digest
+    try {
+      const assignmentsJson = await AsyncStorage.getItem(ASSIGNMENTS_STORAGE_KEY);
+      const allAssignments = assignmentsJson ? JSON.parse(assignmentsJson) : [];
+      
+      // Map to ensure all assignments have a type (for backward compatibility)
+      const processedAssignments = allAssignments
+        .map((a: any) => ({
+          ...a,
+          assignmentType: a.assignmentType || AssignmentType.HOMEWORK
+        }))
+        .filter((a: any) => a.id !== assignmentId); // Remove the deleted assignment
+      
+      // Reschedule the daily digest without this assignment
+      await createAndScheduleDailyDigest(processedAssignments);
+    } catch (storageError) {
+      console.error('Error reading assignments from storage:', storageError);
     }
     
     console.log(`Cancelled notifications for assignment: ${assignmentId}`);
@@ -409,6 +662,13 @@ export async function initializeNotifications(): Promise<void> {
   } catch (error) {
     console.error('Error initializing notifications:', error);
   }
+}
+
+// Helper function to check if two dates are on the same day
+function isSameDay(date1: Date, date2: Date): boolean {
+  return date1.getDate() === date2.getDate() &&
+    date1.getMonth() === date2.getMonth() &&
+    date1.getFullYear() === date2.getFullYear();
 }
 
 // Check and reschedule notifications (can be called on app start)
@@ -445,11 +705,15 @@ export async function checkAndRescheduleNotifications(assignments: Assignment[])
       console.log(`Scheduling notifications for ${unscheduledAssignments.length} assignments without notifications`);
       
       for (const assignment of unscheduledAssignments) {
-        await scheduleNotificationForAssignment(assignment);
+        await scheduleIndividualNotifications(assignment);
       }
     } else {
       console.log('All incomplete assignments already have notifications scheduled');
     }
+    
+    // Always update daily digest to ensure it's current
+    await createAndScheduleDailyDigest(incompleteAssignments);
+    
   } catch (error) {
     console.error('Error checking and rescheduling notifications:', error);
   }
