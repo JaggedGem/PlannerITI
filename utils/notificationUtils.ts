@@ -276,18 +276,19 @@ async function shouldSendDailyReminder(type: AssignmentType): Promise<boolean> {
 // Schedule individual critical notifications for an assignment (due soon, day before)
 async function scheduleIndividualNotifications(assignment: Assignment): Promise<void> {
   try {
+    const settings = await getNotificationSettings();
     const dueDate = parseISO(assignment.dueDate);
     const now = new Date();
     const courseInfo = assignment.courseCode ? `${assignment.courseCode} - ${assignment.courseName}` : assignment.courseName;
     const channelId = getChannelId(assignment.assignmentType);
     
-    // 1. Due date notification (30 minutes before)
-    const dueNotificationTime = new Date(dueDate.getTime() - 30 * 60 * 1000); // 30 minutes before
+    // 1. Due date notification (1 hour before)
+    const dueNotificationTime = new Date(dueDate.getTime() - 60 * 60 * 1000); // 1 hour before
     
     if (dueNotificationTime > now) {
       await scheduleNotification(
         `${assignment.assignmentType} Due Soon`,
-        `${assignment.title} for ${courseInfo} is due in 30 minutes.`,
+        `${assignment.title} for ${courseInfo} is due in 1 hour.`,
         dueNotificationTime,
         { assignmentId: assignment.id, type: 'due' },
         getNotificationId(assignment.id, 'due'),
@@ -309,7 +310,58 @@ async function scheduleIndividualNotifications(assignment: Assignment): Promise<
       );
     }
 
-    // 3. Priority assignments get an extra reminder 1 hour before
+    // 3. Initial reminder at X days before (based on settings)
+    const reminderDays = await getReminderDaysForType(assignment.assignmentType);
+    const initialReminderDate = addDays(dueDate, -reminderDays);
+    
+    // Only schedule if today is exactly reminderDays before due date (or we're exactly at that point)
+    const today = startOfDay(now);
+    const reminderDay = startOfDay(initialReminderDate);
+    
+    if (isSameDay(today, reminderDay) && initialReminderDate > now) {
+      await scheduleNotification(
+        `${assignment.assignmentType} Coming Up`,
+        `${assignment.title} for ${courseInfo} is due in ${reminderDays} days.`,
+        initialReminderDate,
+        { assignmentId: assignment.id, type: 'early-reminder' },
+        getNotificationId(assignment.id, 'early-reminder'),
+        channelId
+      );
+    }
+
+    // 4. Daily reminders if enabled for this assignment type
+    const shouldSendDaily = await shouldSendDailyReminder(assignment.assignmentType);
+    
+    if (shouldSendDaily) {
+      // Calculate days between now and due date
+      const daysUntilDue = differenceInDays(dueDate, now);
+      
+      // Only schedule daily reminders if within the reminder window
+      if (daysUntilDue <= reminderDays && daysUntilDue > 1) { // Don't send daily on the last day (we have a 24h notification)
+        // Schedule for today at notification time
+        const notificationTimeDate = new Date(settings.notificationTime);
+        const todayNotificationTime = new Date();
+        todayNotificationTime.setHours(
+          notificationTimeDate.getHours(),
+          notificationTimeDate.getMinutes(),
+          0, 0
+        );
+        
+        // Only schedule if it's still in the future
+        if (todayNotificationTime > now) {
+          await scheduleNotification(
+            `${assignment.assignmentType} Reminder`,
+            `${assignment.title} for ${courseInfo} is due in ${daysUntilDue} days.`,
+            todayNotificationTime,
+            { assignmentId: assignment.id, type: 'daily' },
+            getNotificationId(assignment.id, 'daily'),
+            channelId
+          );
+        }
+      }
+    }
+
+    // 5. Priority assignments get an extra reminder 1 hour before
     if (assignment.isPriority) {
       const priorityReminderTime = new Date(dueDate.getTime() - 60 * 60 * 1000); // 1 hour before
       
@@ -687,28 +739,98 @@ export async function checkAndRescheduleNotifications(assignments: Assignment[])
     
     // Extract assignment IDs from scheduled notifications
     const scheduledAssignmentIds = new Set<string>();
+    const scheduledTypes = new Map<string, Set<string>>();
+    
     scheduledNotifications.forEach(notification => {
       const assignmentId = notification.content.data?.assignmentId;
+      const type = notification.content.data?.type;
+      
       if (assignmentId) {
         scheduledAssignmentIds.add(assignmentId);
+        
+        // Track which notification types are already scheduled for each assignment
+        if (!scheduledTypes.has(assignmentId)) {
+          scheduledTypes.set(assignmentId, new Set());
+        }
+        
+        if (type) {
+          scheduledTypes.get(assignmentId)?.add(type);
+        }
       }
     });
     
-    // Find incomplete assignments that don't have scheduled notifications
+    // Find incomplete assignments
     const incompleteAssignments = assignments.filter(a => !a.isCompleted);
-    const unscheduledAssignments = incompleteAssignments.filter(
-      assignment => !scheduledAssignmentIds.has(assignment.id)
-    );
     
-    // Only schedule notifications for assignments that don't have them
-    if (unscheduledAssignments.length > 0) {
-      console.log(`Scheduling notifications for ${unscheduledAssignments.length} assignments without notifications`);
+    // Process each assignment individually to schedule only needed notifications
+    for (const assignment of incompleteAssignments) {
+      const dueDate = parseISO(assignment.dueDate);
+      const now = new Date();
       
-      for (const assignment of unscheduledAssignments) {
-        await scheduleIndividualNotifications(assignment);
+      // Skip if assignment due date is in the past
+      if (dueDate <= now) {
+        continue;
       }
-    } else {
-      console.log('All incomplete assignments already have notifications scheduled');
+      
+      const assignmentTypes = scheduledTypes.get(assignment.id) || new Set();
+      const daysUntilDue = differenceInDays(dueDate, now);
+      const reminderDays = await getReminderDaysForType(assignment.assignmentType);
+      
+      // Check if we need to schedule the initial reminder
+      if (!assignmentTypes.has('early-reminder') && daysUntilDue <= reminderDays && daysUntilDue >= reminderDays - 1) {
+        // If we're exactly at the reminder day threshold or just entered it
+        const today = startOfDay(now);
+        const reminderDay = startOfDay(addDays(dueDate, -reminderDays));
+        
+        if (isSameDay(today, reminderDay)) {
+          await scheduleIndividualNotifications(assignment);
+          continue; // Skip to next assignment, all notifications scheduled
+        }
+      }
+      
+      // Check if we need to schedule day-before notification
+      if (!assignmentTypes.has('reminder') && daysUntilDue <= 1 && daysUntilDue > 0) {
+        await scheduleIndividualNotifications(assignment);
+        continue;
+      }
+      
+      // Check if we need to schedule hour-before notification
+      if (!assignmentTypes.has('due') && daysUntilDue < 1) {
+        const hoursTilDue = (dueDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+        
+        if (hoursTilDue <= 1 && hoursTilDue > 0) {
+          await scheduleIndividualNotifications(assignment);
+          continue;
+        }
+      }
+      
+      // Check if daily reminders are enabled and we need today's reminder
+      const shouldSendDaily = await shouldSendDailyReminder(assignment.assignmentType);
+      if (shouldSendDaily && !assignmentTypes.has('daily') && daysUntilDue <= reminderDays && daysUntilDue > 1) {
+        // Schedule just today's reminder
+        const notificationTimeDate = new Date(settings.notificationTime);
+        const todayNotificationTime = new Date();
+        todayNotificationTime.setHours(
+          notificationTimeDate.getHours(),
+          notificationTimeDate.getMinutes(),
+          0, 0
+        );
+        
+        // Only schedule if the notification time is still in the future
+        if (todayNotificationTime > now) {
+          const courseInfo = assignment.courseCode ? `${assignment.courseCode} - ${assignment.courseName}` : assignment.courseName;
+          const channelId = getChannelId(assignment.assignmentType);
+          
+          await scheduleNotification(
+            `${assignment.assignmentType} Reminder`,
+            `${assignment.title} for ${courseInfo} is due in ${daysUntilDue} days.`,
+            todayNotificationTime,
+            { assignmentId: assignment.id, type: 'daily' },
+            getNotificationId(assignment.id, 'daily'),
+            channelId
+          );
+        }
+      }
     }
     
     // Always update daily digest to ensure it's current
