@@ -13,6 +13,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Period } from '../../services/scheduleService';
 import { useTranslation } from '@/hooks/useTranslation';
+import { getRemainingTimeText } from '../../utils/notificationUtils';
 
 interface AssignmentItemProps {
   assignment: Assignment;
@@ -107,6 +108,7 @@ export default function AssignmentItem({
 }: AssignmentItemProps) {
   // State for period information
   const [period, setPeriod] = useState<Period | null>(null);
+  const [remainingTime, setRemainingTime] = useState<string>('');
   const { t, currentLanguage } = useTranslation();
   
   // Animated values for interactive feedback
@@ -138,6 +140,19 @@ export default function AssignmentItem({
     
     loadPeriodInfo();
   }, [assignment.periodId]);
+
+  // Update remaining time text
+  useEffect(() => {
+    // Initial update
+    setRemainingTime(getRemainingTimeText(assignment.dueDate));
+    
+    // Update remaining time every minute
+    const interval = setInterval(() => {
+      setRemainingTime(getRemainingTimeText(assignment.dueDate));
+    }, 60000); // 1 minute
+    
+    return () => clearInterval(interval);
+  }, [assignment.dueDate]);
   
   // Format the due date/time for display with localization
   const formattedTime = (() => {
@@ -188,16 +203,22 @@ export default function AssignmentItem({
   // Display style for orphaned assignments
   const isOrphaned = assignment.isOrphaned;
   
+  // Determine if assignment is overdue
+  const isOverdue = remainingTime === 'Overdue' && !assignment.isCompleted;
+  
   return (
     <AnimatedPressable
       style={[
         styles.container, 
         containerStyle,
-        isOrphaned && styles.orphanedContainer
+        isOrphaned && styles.orphanedContainer,
+        isOverdue && styles.overdueContainer
       ]}
       onPress={onToggle}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
+      entering={FadeIn.duration(300)}
+      layout={Layout.springify()}
     >
       <View style={styles.leftSection}>
         <View style={styles.checkboxContainer}>
@@ -280,6 +301,16 @@ export default function AssignmentItem({
           </View>
         )}
         <Text style={styles.timeText}>{formattedTime}</Text>
+        
+        {/* Remaining time display */}
+        {!assignment.isCompleted && (
+          <Text style={[
+            styles.remainingTime,
+            isOverdue && styles.overdueText
+          ]}>
+            {remainingTime}
+          </Text>
+        )}
         
         {onDelete && (
           <Pressable 
@@ -449,5 +480,24 @@ const styles = StyleSheet.create({
   },
   orphanedDescription: {
     color: '#6E6E73',
+  },
+  overdueContainer: {
+    borderLeftColor: '#FF3B30',
+    borderLeftWidth: 3,
+  },
+  timeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  remainingTime: {
+    fontSize: 12,
+    color: '#8E8E93',
+    marginTop: 2,
+    textAlign: 'right',
+  },
+  overdueText: {
+    color: '#FF3B30',
+    fontWeight: '500',
   },
 }); 
