@@ -62,6 +62,24 @@ export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
   dailyRemindersForQuizzes: true
 };
 
+// Get emoji for assignment type
+function getAssignmentTypeEmoji(type: AssignmentType): string {
+  switch (type) {
+    case AssignmentType.EXAM:
+      return '📝'; // Exam
+    case AssignmentType.TEST:
+      return '✏️'; // Test
+    case AssignmentType.QUIZ:
+      return '❓'; // Quiz
+    case AssignmentType.PROJECT:
+      return '🏗️'; // Project
+    case AssignmentType.HOMEWORK:
+      return '📚'; // Homework
+    default:
+      return '📋'; // Other
+  }
+}
+
 // Save notification settings
 export async function saveNotificationSettings(settings: NotificationSettings): Promise<void> {
   try {
@@ -172,6 +190,7 @@ export async function registerForPushNotificationsAsync() {
 
 // Configure notification handler
 export function configureNotifications() {
+  // Set up the notification handler for how notifications should appear to users
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
       shouldShowAlert: true,
@@ -191,7 +210,24 @@ function getChannelId(assignmentType: AssignmentType): string {
   return Platform.OS === 'android' ? 'assignments' : 'default';
 }
 
-// Schedule a notification 
+// Helper to truncate text to prevent notification cutoff
+function truncateText(text: string, maxLength: number = 40): string {
+  if (!text) return '';
+  return text.length <= maxLength ? text : text.substring(0, maxLength - 3) + '...';
+}
+
+// Format course info for consistent, concise display
+function formatCourseInfo(courseCode?: string, courseName?: string): string {
+  if (!courseCode && !courseName) return '';
+  
+  // Use course code if available (preferred for brevity)
+  if (courseCode) return courseCode;
+  
+  // Fallback to course name, but truncate if too long
+  return truncateText(courseName || '', 15);
+}
+
+// Schedule a notification with navigation data
 async function scheduleNotification(
   title: string,
   body: string,
@@ -211,11 +247,22 @@ async function scheduleNotification(
       const secondsFromNow = Math.floor((triggerDate.getTime() - now.getTime()) / 1000);
       
       if (secondsFromNow > 0) {
+        // Add navigation data to route to assignments tab
+        const notificationData = {
+          ...data,
+          navigateTo: 'assignments', // Used to navigate when notification is tapped
+        };
+        
+        // Ensure title and body don't exceed safe limits
+        // Most platforms show ~50 chars for title, ~100 for body without truncation
+        const safeTitle = truncateText(title, 50);
+        const safeBody = truncateText(body, 100);
+        
         await Notifications.scheduleNotificationAsync({
           content: {
-            title,
-            body,
-            data,
+            title: safeTitle,
+            body: safeBody,
+            data: notificationData,
             sound: true,
             ...(Platform.OS === 'android' ? { channelId } : {}),
           },
@@ -279,16 +326,20 @@ async function scheduleIndividualNotifications(assignment: Assignment): Promise<
     const settings = await getNotificationSettings();
     const dueDate = parseISO(assignment.dueDate);
     const now = new Date();
-    const courseInfo = assignment.courseCode ? `${assignment.courseCode} - ${assignment.courseName}` : assignment.courseName;
+    const courseInfo = formatCourseInfo(assignment.courseCode, assignment.courseName);
     const channelId = getChannelId(assignment.assignmentType);
+    const typeEmoji = getAssignmentTypeEmoji(assignment.assignmentType);
+    
+    // Truncate assignment title to prevent notification cutoff
+    const title = truncateText(assignment.title, 30);
     
     // 1. Due date notification (1 hour before)
     const dueNotificationTime = new Date(dueDate.getTime() - 60 * 60 * 1000); // 1 hour before
     
     if (dueNotificationTime > now) {
       await scheduleNotification(
-        `${assignment.assignmentType} Due Soon`,
-        `${assignment.title} for ${courseInfo} is due in 1 hour.`,
+        `${typeEmoji} ${assignment.assignmentType}`,
+        `"${title}" (${courseInfo}) due in 1 hour.`,
         dueNotificationTime,
         { assignmentId: assignment.id, type: 'due' },
         getNotificationId(assignment.id, 'due'),
@@ -301,8 +352,8 @@ async function scheduleIndividualNotifications(assignment: Assignment): Promise<
     
     if (reminderDate > now) {
       await scheduleNotification(
-        `${assignment.assignmentType} Due Tomorrow`,
-        `${assignment.title} for ${courseInfo} is due tomorrow.`,
+        `⏰ ${assignment.assignmentType}`,
+        `"${title}" (${courseInfo}) due tomorrow at ${format(dueDate, 'h:mm a')}.`,
         reminderDate,
         { assignmentId: assignment.id, type: 'reminder' },
         getNotificationId(assignment.id, 'reminder'),
@@ -320,8 +371,8 @@ async function scheduleIndividualNotifications(assignment: Assignment): Promise<
     
     if (isSameDay(today, reminderDay) && initialReminderDate > now) {
       await scheduleNotification(
-        `${assignment.assignmentType} Coming Up`,
-        `${assignment.title} for ${courseInfo} is due in ${reminderDays} days.`,
+        `🔔 ${assignment.assignmentType}`,
+        `"${title}" (${courseInfo}) due in ${reminderDays} days.`,
         initialReminderDate,
         { assignmentId: assignment.id, type: 'early-reminder' },
         getNotificationId(assignment.id, 'early-reminder'),
@@ -350,8 +401,8 @@ async function scheduleIndividualNotifications(assignment: Assignment): Promise<
         // Only schedule if it's still in the future
         if (todayNotificationTime > now) {
           await scheduleNotification(
-            `${assignment.assignmentType} Reminder`,
-            `${assignment.title} for ${courseInfo} is due in ${daysUntilDue} days.`,
+            `📅 ${assignment.assignmentType}`,
+            `"${title}" (${courseInfo}) due in ${daysUntilDue} days.`,
             todayNotificationTime,
             { assignmentId: assignment.id, type: 'daily' },
             getNotificationId(assignment.id, 'daily'),
@@ -367,8 +418,8 @@ async function scheduleIndividualNotifications(assignment: Assignment): Promise<
       
       if (priorityReminderTime > now) {
         await scheduleNotification(
-          `PRIORITY: ${assignment.assignmentType} Due Very Soon`,
-          `${assignment.title} for ${courseInfo} is due in 1 hour.`,
+          `⚠️ PRIORITY: ${assignment.assignmentType}`,
+          `"${title}" (${courseInfo}) due in 1 hour!`,
           priorityReminderTime,
           { assignmentId: assignment.id, type: 'priority-reminder' },
           `assignment-${assignment.id}-priority-reminder`,
@@ -421,22 +472,41 @@ function createDigestMessage(assignments: AssignmentDigest['assignments']): stri
     return acc;
   }, {} as Record<AssignmentType, Array<{title: string, courseInfo: string, dueDate: string}>>);
   
-  // Build a more structured message
+  // Build a concise message with limited length
   let message = '';
   
   for (const [type, items] of Object.entries(byType)) {
-    message += `📌 ${type}${items.length > 1 ? 's' : ''}: \n`;
+    const typeEmoji = getAssignmentTypeEmoji(type as AssignmentType);
+    message += `${typeEmoji} ${type}${items.length > 1 ? 's' : ''}: \n`;
     
-    items.forEach(item => {
-      // Format the time part of the due date
+    // If there are many assignments, only show the first few
+    const maxItemsToShow = 5;
+    const displayItems = items.length > maxItemsToShow ? items.slice(0, maxItemsToShow) : items;
+    
+    displayItems.forEach(item => {
+      // Format just the time part of the due date
       const dueTime = format(parseISO(item.dueDate), 'h:mm a');
-      message += `  • ${item.title} (${item.courseInfo}) @ ${dueTime}\n`;
+      
+      // Extract just the course code for brevity
+      const courseCode = item.courseInfo.split(' - ')[0];
+      
+      // Truncate title if needed to avoid very long lines
+      const truncatedTitle = truncateText(item.title, 25);
+      
+      // Simplified format: "Assignment name" (CourseCode) at Time
+      message += `  • "${truncatedTitle}" (${courseCode}) at ${dueTime}\n`;
     });
+    
+    // If we truncated the list, add a note
+    if (items.length > maxItemsToShow) {
+      message += `  • + ${items.length - maxItemsToShow} more...\n`;
+    }
     
     message += '\n';
   }
   
-  return message.trim();
+  // Ensure the entire message doesn't get too long
+  return truncateText(message.trim(), 450);
 }
 
 // Create and schedule a single daily notification at the specified time with all upcoming assignments
@@ -543,8 +613,8 @@ export async function createAndScheduleDailyDigest(assignments: Assignment[], se
         date: dateKey,
         assignments: dayAssignments.map(a => ({
           id: a.id,
-          title: a.title,
-          courseInfo: a.courseCode ? `${a.courseCode} - ${a.courseName}` : a.courseName,
+          title: truncateText(a.title, 30),
+          courseInfo: formatCourseInfo(a.courseCode, a.courseName),
           type: a.assignmentType,
           dueDate: a.dueDate
         }))
@@ -555,21 +625,68 @@ export async function createAndScheduleDailyDigest(assignments: Assignment[], se
     digestData.sort((a, b) => a.date.localeCompare(b.date));
     
     // Build the notification content
-    let title = '📚 Your Daily Assignment Summary';
+    let title = '';
     let body = '';
+    
+    // Get total assignment count
+    const totalAssignments = digestData.reduce((count, day) => count + day.assignments.length, 0);
     
     if (digestData.length === 1) {
       // Single day format
       const day = digestData[0];
-      title = `📚 Assignments for ${day.dayTitle}`;
-      body = createDigestMessage(day.assignments);
-    } else {
-      // Multiple days format
-      for (const day of digestData) {
-        body += `📅 ${day.dayTitle}:\n`;
-        body += createDigestMessage(day.assignments);
-        body += '\n\n';
+      title = `📚 ${day.assignments.length} Assignment${day.assignments.length > 1 ? 's' : ''} for ${day.dayTitle}`;
+      
+      // If there are too many assignments, use a more compact format
+      if (day.assignments.length <= 5) {
+        body = createDigestMessage(day.assignments);
+      } else {
+        // For many assignments, show count by type
+        const countByType = day.assignments.reduce((acc, curr) => {
+          acc[curr.type] = (acc[curr.type] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+        
+        body = 'Assignment summary:\n';
+        
+        for (const [type, count] of Object.entries(countByType)) {
+          const typeEmoji = getAssignmentTypeEmoji(type as AssignmentType);
+          body += `${typeEmoji} ${count} ${type}${count > 1 ? 's' : ''}\n`;
+        }
+        
+        body += '\nTap to view details.';
       }
+    } else {
+      // Multiple days format - use a more summarized approach
+      title = `📚 ${totalAssignments} Assignment${totalAssignments > 1 ? 's' : ''} This Week`;
+      
+      // Summarize by day
+      for (const day of digestData) {
+        body += `📅 ${day.dayTitle}: ${day.assignments.length} assignment${day.assignments.length > 1 ? 's' : ''}\n`;
+        
+        // Only show details for the first 2 days to keep it concise
+        if (day === digestData[0] || day === digestData[1]) {
+          // Group by type for more efficient display
+          const typeGroups = day.assignments.reduce((acc, curr) => {
+            if (!acc[curr.type]) acc[curr.type] = [];
+            acc[curr.type].push(curr);
+            return acc;
+          }, {} as Record<string, any[]>);
+          
+          for (const [type, items] of Object.entries(typeGroups)) {
+            const typeEmoji = getAssignmentTypeEmoji(type as AssignmentType);
+            if (items.length === 1) {
+              const item = items[0];
+              body += `  ${typeEmoji} "${truncateText(item.title, 20)}" (${item.courseInfo})\n`;
+            } else {
+              body += `  ${typeEmoji} ${items.length} ${type}s\n`;
+            }
+          }
+        }
+        
+        body += '\n';
+      }
+      
+      body = truncateText(body.trim(), 450) + '\n\nTap to view all.';
     }
     
     // Schedule the daily digest notification
@@ -577,7 +694,7 @@ export async function createAndScheduleDailyDigest(assignments: Assignment[], se
       title,
       body,
       notificationTime,
-      { type: 'digest', data: digestData },
+      { type: 'digest', data: digestData, navigateTo: 'assignments' },
       'daily-digest-notification',
       Platform.OS === 'android' ? 'daily-digest' : 'default'
     );
@@ -818,12 +935,12 @@ export async function checkAndRescheduleNotifications(assignments: Assignment[])
         
         // Only schedule if the notification time is still in the future
         if (todayNotificationTime > now) {
-          const courseInfo = assignment.courseCode ? `${assignment.courseCode} - ${assignment.courseName}` : assignment.courseName;
+          const courseInfo = formatCourseInfo(assignment.courseCode, assignment.courseName);
           const channelId = getChannelId(assignment.assignmentType);
           
           await scheduleNotification(
-            `${assignment.assignmentType} Reminder`,
-            `${assignment.title} for ${courseInfo} is due in ${daysUntilDue} days.`,
+            `📅 ${assignment.assignmentType}`,
+            `"${truncateText(assignment.title, 30)}" (${courseInfo}) due in ${daysUntilDue} days.`,
             todayNotificationTime,
             { assignmentId: assignment.id, type: 'daily' },
             getNotificationId(assignment.id, 'daily'),
@@ -848,10 +965,11 @@ export function getRemainingTimeText(dueDate: string): string {
     const now = new Date();
     
     if (date < now) {
-      return 'Overdue';
+      return '⏰ Overdue';
     }
     
-    return formatDistanceToNow(date, { addSuffix: true });
+    const timeRemaining = formatDistanceToNow(date, { addSuffix: true });
+    return `⏳ ${timeRemaining}`;
   } catch (error) {
     console.error('Error formatting remaining time:', error);
     return 'Unknown';
@@ -874,12 +992,14 @@ export async function sendTestNotification(type: AssignmentType = AssignmentType
       assignmentType: type,
     };
     
+    const typeEmoji = getAssignmentTypeEmoji(type);
+    
     // Send immediate test notification
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: `Test: ${type} Due Soon`,
-        body: `${testAssignment.title} for ${testAssignment.courseCode} - ${testAssignment.courseName} is due in 2 hours.`,
-        data: { isTest: true },
+        title: `${typeEmoji} ${type}`,
+        body: `"${testAssignment.title}" (${testAssignment.courseCode}) due in 2 hours.`,
+        data: { isTest: true, navigateTo: 'assignments' },
         sound: true,
       },
       trigger: null, // Send immediately
@@ -900,9 +1020,9 @@ export async function testNotificationTiming(): Promise<void> {
     // 1. Immediate notification
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: 'Immediate Test Notification',
-        body: 'This notification appears immediately.',
-        data: { isTest: true },
+        title: '🔔 Test Notification',
+        body: 'This appears immediately.',
+        data: { isTest: true, navigateTo: 'assignments' },
         sound: true,
       },
       trigger: null, // Send immediately
@@ -911,9 +1031,9 @@ export async function testNotificationTiming(): Promise<void> {
     // 2. Notification in 30 seconds
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: 'Delayed Test Notification',
-        body: 'This notification appears 30 seconds after the test began.',
-        data: { isTest: true },
+        title: '⏱️ Delayed Notification',
+        body: 'This appears after 30 seconds.',
+        data: { isTest: true, navigateTo: 'assignments' },
         sound: true,
       },
       trigger: {
@@ -949,9 +1069,9 @@ export async function testNotificationTiming(): Promise<void> {
     
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: 'Scheduled Test Notification',
-        body: `This notification appears at your configured time (${formattedTime}).`,
-        data: { isTest: true },
+        title: '📅 Scheduled Notification',
+        body: `This will appear at ${formattedTime}.`,
+        data: { isTest: true, navigateTo: 'assignments' },
         sound: true,
       },
       trigger: {
