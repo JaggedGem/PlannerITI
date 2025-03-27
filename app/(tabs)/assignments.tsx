@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useMemo, memo, useRef, useLayoutEffect } from 'react';
-import { StyleSheet, ScrollView, SafeAreaView, StatusBar, View, Text, ActivityIndicator, Platform, InteractionManager, AppState } from 'react-native';
+import { StyleSheet, ScrollView, SafeAreaView, StatusBar, View, Text, ActivityIndicator, Platform, InteractionManager, AppState, TouchableOpacity, Modal } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { useColorScheme } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import SegmentedControl from '../../components/assignments/SegmentedControl';
 import DaySection from '../../components/assignments/DaySection';
 import FloatingActionButton from '../../components/assignments/FloatingActionButton';
 import { 
@@ -403,6 +402,7 @@ const Assignments = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [allAssignments, setAllAssignments] = useState<Assignment[]>([]);
   const [isSafeMode, setIsSafeMode] = useState(false);
+  const [isDropdownVisible, setIsDropdownVisible] = useState(false);
   
   // Track which tabs have been viewed already to disable animations after first view
   const [hasViewedTab, setHasViewedTab] = useState<{[key: number]: boolean}>({0: false, 1: false, 2: false});
@@ -461,37 +461,21 @@ const Assignments = () => {
     fetchAssignments();
   }, [fetchAssignments]);
   
-  // Handle segment change with debounce to prevent rapid switching
+  // Handle segment change with selection from dropdown
   const handleSegmentChange = useCallback((index: number) => {
     if (isSafeMode || index === selectedSegmentIndex) {
       return;
     }
     
-    // If we're currently switching, we'll allow the next switch only if it's not too quick
-    if (isTabSwitching) {
-      // Allow the change after a brief timeout to prevent ultra-rapid switches
-      setTimeout(() => {
-        setSelectedSegmentIndex(index);
-        // Mark this tab as viewed to disable animations on next view
-        setHasViewedTab(prev => ({...prev, [index]: true}));
-      }, 30);
-      return;
-    }
-    
-    // Mark tab switching in progress
-    setIsTabSwitching(true);
+    // Hide dropdown when selection is made
+    setIsDropdownVisible(false);
     
     // Mark this tab as viewed to disable animations on next view
     setHasViewedTab(prev => ({...prev, [index]: true}));
     
-    // Update the selected segment immediately for better responsiveness
+    // Update the selected segment
     setSelectedSegmentIndex(index);
-    
-    // Allow tab switching again after a very short cooldown
-    setTimeout(() => {
-      setIsTabSwitching(false);
-    }, 50); // Much shorter cooldown
-  }, [isSafeMode, isTabSwitching, selectedSegmentIndex]);
+  }, [isSafeMode, selectedSegmentIndex]);
   
   // Handle add assignment
   const handleAddAssignment = useCallback(() => {
@@ -712,11 +696,48 @@ const Assignments = () => {
         <View style={styles.header}>
           <Text style={styles.headerTitle}>{t('assignments').title}</Text>
           
-          <SegmentedControl
-            segments={segments}
-            selectedIndex={selectedSegmentIndex}
-            onChange={handleSegmentChange}
-          />
+          <TouchableOpacity 
+            style={styles.dropdownButton} 
+            onPress={() => setIsDropdownVisible(true)}
+          >
+            <Text style={styles.dropdownButtonText}>{segments[selectedSegmentIndex]}</Text>
+            <Text style={styles.dropdownArrow}>▼</Text>
+          </TouchableOpacity>
+          
+          <Modal
+            visible={isDropdownVisible}
+            transparent={true}
+            animationType="fade"
+            onRequestClose={() => setIsDropdownVisible(false)}
+          >
+            <TouchableOpacity 
+              style={styles.modalOverlay} 
+              activeOpacity={1} 
+              onPress={() => setIsDropdownVisible(false)}
+            >
+              <View style={styles.dropdownContainer}>
+                {segments.map((segment, index) => (
+                  <TouchableOpacity
+                    key={segment}
+                    style={[
+                      styles.dropdownItem,
+                      selectedSegmentIndex === index && styles.dropdownItemSelected
+                    ]}
+                    onPress={() => handleSegmentChange(index)}
+                  >
+                    <Text 
+                      style={[
+                        styles.dropdownItemText,
+                        selectedSegmentIndex === index && styles.dropdownItemTextSelected
+                      ]}
+                    >
+                      {segment}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </TouchableOpacity>
+          </Modal>
           
           {isSafeMode && (
             <Text style={styles.safeModeIndicator}>Stability mode active</Text>
@@ -911,5 +932,52 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     overflow: 'hidden',
     width: '100%',
+  },
+  dropdownButton: {
+    backgroundColor: '#232323',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  dropdownButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  dropdownArrow: {
+    fontSize: 12,
+    color: '#8A8A8D',
+    marginLeft: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dropdownContainer: {
+    backgroundColor: '#232323',
+    borderRadius: 12,
+    padding: 8,
+    width: '80%',
+    maxWidth: 300,
+  },
+  dropdownItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  dropdownItemSelected: {
+    backgroundColor: '#3478F6',
+  },
+  dropdownItemText: {
+    fontSize: 16,
+    color: '#FFFFFF',
+  },
+  dropdownItemTextSelected: {
+    fontWeight: '600',
   },
 });
