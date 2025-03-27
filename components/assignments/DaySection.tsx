@@ -67,7 +67,7 @@ export default function DaySection({
   defaultExpanded = true
 }: DaySectionProps) {
   const [isCollapsed, setIsCollapsed] = useState(!defaultExpanded);
-  const rotation = useSharedValue(defaultExpanded ? 0.5 : 0);
+  const rotation = useSharedValue(isCollapsed ? 0 : 0.5);
   const [enhancedAssignments, setEnhancedAssignments] = useState<EnhancedAssignment[]>([]);
   const { t } = useTranslation();
   
@@ -139,7 +139,7 @@ export default function DaySection({
     setIsCollapsed(!isCollapsed);
     rotation.value = withSequence(
       withTiming(rotation.value + 0.05, { duration: 50 }),
-      withTiming(isCollapsed ? 0 : 0.5, { 
+      withTiming(isCollapsed ? 0.5 : 0, { 
         duration: 150,
         easing: Easing.bezier(0.25, 0.1, 0.25, 1)
       })
