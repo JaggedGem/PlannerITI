@@ -5,6 +5,7 @@ import { useColorScheme } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import DaySection from '../../components/assignments/DaySection';
 import FloatingActionButton from '../../components/assignments/FloatingActionButton';
+import { Ionicons } from '@expo/vector-icons';
 import { 
   getAssignments, 
   toggleAssignmentCompletion, 
@@ -20,6 +21,7 @@ import Animated, { FadeInDown, Layout, FadeOut } from 'react-native-reanimated';
 import CourseSection from '../../components/assignments/CourseSection';
 import { useTranslation } from '@/hooks/useTranslation';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import ArchiveView from '../../components/assignments/ArchiveView';
 
 // Add circuit breaker constants
 const CRASH_DETECTION_KEY = 'assignment_tab_crash_detection';
@@ -324,6 +326,129 @@ const DateGroupedView = memo(({
   );
 });
 
+// Memoized Archive view with lazy loading
+const ArchivedAssignmentsView = memo(({ 
+  assignments, 
+  onToggle, 
+  onDelete 
+}: { 
+  assignments: Assignment[], 
+  onToggle: (id: string) => void,
+  onDelete: (id: string) => void
+}) => {
+  const { t } = useTranslation();
+  
+  // State for lazy loading
+  const [visibleItems, setVisibleItems] = useState(15);
+  const [hasMore, setHasMore] = useState(true);
+  const isLoadingMoreRef = useRef(false);
+  
+  // Sort assignments by due date, newest first
+  const sortedAssignments = useMemo(() => {
+    return [...assignments].sort((a, b) => 
+      new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime()
+    );
+  }, [assignments]);
+  
+  // Handle loading more items
+  const loadMoreItems = useCallback(() => {
+    if (isLoadingMoreRef.current || !hasMore) return;
+    
+    isLoadingMoreRef.current = true;
+    
+    // Simulate delay to avoid UI jank
+    setTimeout(() => {
+      setVisibleItems(prev => {
+        const newValue = prev + 10;
+        if (newValue >= sortedAssignments.length) {
+          setHasMore(false);
+        }
+        return newValue;
+      });
+      isLoadingMoreRef.current = false;
+    }, 100);
+  }, [hasMore, sortedAssignments.length]);
+  
+  // Handle scroll to detect when to load more
+  const handleScroll = useCallback(({ nativeEvent }: any) => {
+    const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+    const paddingToBottom = 200;
+    
+    if (layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom) {
+      loadMoreItems();
+    }
+  }, [loadMoreItems]);
+  
+  if (sortedAssignments.length === 0) {
+    return <EmptyState t={t} />;
+  }
+  
+  // Only show the visible items
+  const itemsToRender = sortedAssignments.slice(0, visibleItems);
+  
+  return (
+    <ScrollView
+      style={styles.scrollView}
+      contentContainerStyle={styles.scrollContent}
+      showsVerticalScrollIndicator={false}
+      onScroll={handleScroll}
+      scrollEventThrottle={400}
+    >
+      <Text style={styles.archivedHeaderText}>{'Past Due Assignments'}</Text>
+      {itemsToRender.map((assignment, index) => (
+        <Animated.View
+          key={assignment.id}
+          entering={FadeInDown.duration(150).delay(index % 10 * 30)}
+          layout={Layout.springify().mass(0.3)}
+          style={styles.archivedItemContainer}
+          exiting={FadeOut.duration(150)}
+        >
+          <View style={styles.archivedItem}>
+            <View style={styles.archivedItemLeft}>
+              <TouchableOpacity
+                onPress={() => onToggle(assignment.id)}
+                style={[
+                  styles.archivedCheckbox,
+                  assignment.isCompleted && styles.archivedCheckboxCompleted
+                ]}
+              >
+                {assignment.isCompleted && (
+                  <Text style={styles.archivedCheckmark}>✓</Text>
+                )}
+              </TouchableOpacity>
+              <View style={styles.archivedTextContainer}>
+                <Text 
+                  style={[
+                    styles.archivedTitle, 
+                    assignment.isCompleted && styles.archivedTitleCompleted
+                  ]} 
+                  numberOfLines={1}
+                >
+                  {assignment.title}
+                </Text>
+                <Text style={styles.archivedSubtitle}>
+                  {assignment.courseCode} • {new Date(assignment.dueDate).toLocaleDateString()}
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              onPress={() => onDelete(assignment.id)}
+              style={styles.archivedDeleteButton}
+            >
+              <Text style={styles.archivedDeleteText}>×</Text>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      ))}
+      {hasMore && (
+        <View style={styles.loadingMoreContainer}>
+          <ActivityIndicator size="small" color="#3478F6" />
+        </View>
+      )}
+    </ScrollView>
+  );
+});
+
 // Error boundary component
 interface ErrorBoundaryProps {
   children: React.ReactNode;
@@ -401,11 +526,13 @@ const Assignments = () => {
   const [selectedSegmentIndex, setSelectedSegmentIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [allAssignments, setAllAssignments] = useState<Assignment[]>([]);
+  const [archivedAssignments, setArchivedAssignments] = useState<Assignment[]>([]);
   const [isSafeMode, setIsSafeMode] = useState(false);
   const [isDropdownVisible, setIsDropdownVisible] = useState(false);
+  const [isArchiveModalVisible, setIsArchiveModalVisible] = useState(false);
   
   // Track which tabs have been viewed already to disable animations after first view
-  const [hasViewedTab, setHasViewedTab] = useState<{[key: number]: boolean}>({0: false, 1: false, 2: false});
+  const [hasViewedTab, setHasViewedTab] = useState<{[key: number]: boolean}>({0: false, 1: false, 2: false, 3: false});
   
   // Track if a tab switch is currently in progress
   const [isTabSwitching, setIsTabSwitching] = useState(false);
@@ -421,21 +548,46 @@ const Assignments = () => {
     courseGroups: {}
   });
   
-  const segments = [t('assignments').segments.dueDate, t('assignments').segments.classes, t('assignments').segments.priority];
+  const segments = [
+    t('assignments').segments.dueDate, 
+    t('assignments').segments.classes, 
+    t('assignments').segments.priority,
+    'Archive'
+  ];
+  
+  // Get current date for archive comparison
+  const currentDate = useMemo(() => new Date(), []);
   
   // Simple fetch assignments implementation with data caching
   const fetchAssignments = useCallback(async () => {
     try {
       setIsLoading(true);
       const assignments = await getAssignments();
-      setAllAssignments(assignments);
+      
+      // Separate current and archived assignments
+      const now = new Date();
+      const current: Assignment[] = [];
+      const archived: Assignment[] = [];
+      
+      assignments.forEach(assignment => {
+        const dueDate = new Date(assignment.dueDate);
+        // If due date is in the past and assignment is not completed, move to archive
+        if (dueDate < now && !assignment.isCompleted) {
+          archived.push(assignment);
+        } else {
+          current.push(assignment);
+        }
+      });
+      
+      setAllAssignments(current);
+      setArchivedAssignments(archived);
       
       // Precompute all data once to avoid jank during tab switches
-      const priorityAssignments = assignments.filter(a => a.isPriority);
+      const priorityAssignments = current.filter(a => a.isPriority);
       memoizedDataRef.current = {
-        dateGroups: groupAssignmentsByDate(assignments, t, formatDate),
+        dateGroups: groupAssignmentsByDate(current, t, formatDate),
         priorityGroups: groupAssignmentsByDate(priorityAssignments, t, formatDate),
-        courseGroups: groupAssignmentsByCourse(assignments)
+        courseGroups: groupAssignmentsByCourse(current)
       };
     } catch (error) {
       // Silently handle error
@@ -484,47 +636,113 @@ const Assignments = () => {
   
   // Handle toggle assignment with optimized state update
   const handleToggleAssignment = useCallback((id: string) => {
-    setAllAssignments(current => {
-      const updated = current.map(a => a.id === id ? {...a, isCompleted: !a.isCompleted} : a);
-      
-      // Update the memoized data
-      const priorityAssignments = updated.filter(a => a.isPriority);
-      memoizedDataRef.current = {
-        dateGroups: groupAssignmentsByDate(updated, t, formatDate),
-        priorityGroups: groupAssignmentsByDate(priorityAssignments, t, formatDate),
-        courseGroups: groupAssignmentsByCourse(updated)
-      };
-      
-      return updated;
-    });
+    // Check if the assignment is in the archived list
+    const isArchived = archivedAssignments.some(a => a.id === id);
+    
+    if (isArchived) {
+      setArchivedAssignments(current => {
+        return current.map(a => a.id === id ? {...a, isCompleted: !a.isCompleted} : a);
+      });
+    } else {
+      setAllAssignments(current => {
+        const updated = current.map(a => a.id === id ? {...a, isCompleted: !a.isCompleted} : a);
+        
+        // Update the memoized data
+        const priorityAssignments = updated.filter(a => a.isPriority);
+        memoizedDataRef.current = {
+          dateGroups: groupAssignmentsByDate(updated, t, formatDate),
+          priorityGroups: groupAssignmentsByDate(priorityAssignments, t, formatDate),
+          courseGroups: groupAssignmentsByCourse(updated)
+        };
+        
+        return updated;
+      });
+    }
     
     // Update database in background
     toggleAssignmentCompletion(id).catch(() => {
       // Silently handle error
     });
-  }, [t, formatDate]);
+  }, [t, formatDate, archivedAssignments]);
   
   // Handle delete assignment with optimized state update
   const handleDeleteAssignment = useCallback((id: string) => {
-    setAllAssignments(current => {
-      const updated = current.filter(a => a.id !== id);
-      
-      // Update the memoized data
-      const priorityAssignments = updated.filter(a => a.isPriority);
-      memoizedDataRef.current = {
-        dateGroups: groupAssignmentsByDate(updated, t, formatDate),
-        priorityGroups: groupAssignmentsByDate(priorityAssignments, t, formatDate),
-        courseGroups: groupAssignmentsByCourse(updated)
-      };
-      
-      return updated;
-    });
+    // Check if the assignment is in the archived list
+    const isArchived = archivedAssignments.some(a => a.id === id);
+    
+    if (isArchived) {
+      setArchivedAssignments(current => current.filter(a => a.id !== id));
+    } else {
+      setAllAssignments(current => {
+        const updated = current.filter(a => a.id !== id);
+        
+        // Update the memoized data
+        const priorityAssignments = updated.filter(a => a.isPriority);
+        memoizedDataRef.current = {
+          dateGroups: groupAssignmentsByDate(updated, t, formatDate),
+          priorityGroups: groupAssignmentsByDate(priorityAssignments, t, formatDate),
+          courseGroups: groupAssignmentsByCourse(updated)
+        };
+        
+        return updated;
+      });
+    }
     
     // Update database in background
     deleteAssignment(id).catch(() => {
       // Silently handle error
     });
+  }, [t, formatDate, archivedAssignments]);
+  
+  // Handle archive all past due assignments
+  const handleArchiveAll = useCallback(() => {
+    const now = new Date();
+    
+    setAllAssignments(current => {
+      const toKeep: Assignment[] = [];
+      const toArchive: Assignment[] = [];
+      
+      current.forEach(assignment => {
+        const dueDate = new Date(assignment.dueDate);
+        if (dueDate < now && !assignment.isCompleted) {
+          toArchive.push(assignment);
+        } else {
+          toKeep.push(assignment);
+        }
+      });
+      
+      // Update archived assignments
+      setArchivedAssignments(prev => [...prev, ...toArchive]);
+      
+      // Update the memoized data for remaining assignments
+      const priorityAssignments = toKeep.filter(a => a.isPriority);
+      memoizedDataRef.current = {
+        dateGroups: groupAssignmentsByDate(toKeep, t, formatDate),
+        priorityGroups: groupAssignmentsByDate(priorityAssignments, t, formatDate),
+        courseGroups: groupAssignmentsByCourse(toKeep)
+      };
+      
+      // Open archive modal if we archived items
+      if (toArchive.length > 0) {
+        setIsArchiveModalVisible(true);
+      }
+      
+      return toKeep;
+    });
   }, [t, formatDate]);
+  
+  // Toggle archive modal with direct state update
+  const toggleArchiveModal = useCallback(() => {
+    console.log('Archive button clicked');
+    // Force the state change in a setTimeout to avoid React Native modal issues
+    setTimeout(() => {
+      setIsArchiveModalVisible(prevState => {
+        const newState = !prevState;
+        console.log('Setting archive modal visible:', newState);
+        return newState;
+      });
+    }, 0);
+  }, []);
   
   // Custom DateGroupedView that uses memoized data and disables animations after first view
   const CustomDateGroupedView = useCallback(({
@@ -683,6 +901,14 @@ const Assignments = () => {
             disableAnimations={disableAnimations}
           />
         );
+      case 3: // Archive
+        return (
+          <ArchivedAssignmentsView
+            assignments={archivedAssignments}
+            onToggle={handleToggleAssignment}
+            onDelete={handleDeleteAssignment}
+          />
+        );
       default:
         return null;
     }
@@ -694,7 +920,17 @@ const Assignments = () => {
       
       <View style={styles.headerContainer}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>{t('assignments').title}</Text>
+          <View style={styles.headerTopRow}>
+            <Text style={styles.headerTitle}>{t('assignments').title}</Text>
+            
+            <TouchableOpacity
+              style={styles.archiveButton}
+              onPress={toggleArchiveModal}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="folder-open" size={18} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
           
           <TouchableOpacity 
             style={styles.dropdownButton} 
@@ -749,6 +985,16 @@ const Assignments = () => {
         {renderContent()}
         <FloatingActionButton onPress={handleAddAssignment} />
       </View>
+      
+      {/* Archive Modal - force visible state for troubleshooting */}
+      <ArchiveView 
+        isVisible={isArchiveModalVisible}
+        onClose={toggleArchiveModal}
+        assignments={archivedAssignments}
+        onToggleAssignment={handleToggleAssignment}
+        onDeleteAssignment={handleDeleteAssignment}
+        onArchiveAll={handleArchiveAll}
+      />
     </SafeAreaView>
   );
 };
@@ -782,12 +1028,34 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 8,
   },
+  headerTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
   headerTitle: {
     fontSize: 28,
     fontWeight: '700',
     color: '#FFFFFF',
-    marginBottom: 16,
     letterSpacing: 0.5,
+  },
+  archiveButton: {
+    backgroundColor: '#2C3DCD',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  archiveButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  archiveButtonIcon: {
+    fontSize: 18,
+    color: '#FFFFFF',
   },
   contentContainer: {
     flex: 1,
@@ -979,5 +1247,82 @@ const styles = StyleSheet.create({
   },
   dropdownItemTextSelected: {
     fontWeight: '600',
+  },
+  // Archive specific styles
+  archivedHeaderText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#8A8A8D',
+    marginBottom: 16,
+    marginTop: 8,
+  },
+  archivedItemContainer: {
+    marginBottom: 12,
+  },
+  archivedItem: {
+    backgroundColor: '#1C1C1E',
+    borderRadius: 12,
+    padding: 14,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  archivedItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  archivedCheckbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#3478F6',
+    marginRight: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  archivedCheckboxCompleted: {
+    backgroundColor: '#3478F6',
+    borderColor: '#3478F6',
+  },
+  archivedCheckmark: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  archivedTextContainer: {
+    flex: 1,
+  },
+  archivedTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  archivedTitleCompleted: {
+    textDecorationLine: 'line-through',
+    color: '#8A8A8D',
+  },
+  archivedSubtitle: {
+    fontSize: 14,
+    color: '#8A8A8D',
+  },
+  archivedDeleteButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(255, 59, 48, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  archivedDeleteText: {
+    fontSize: 20,
+    color: '#FF3B30',
+    fontWeight: 'bold',
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
 });
