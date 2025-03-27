@@ -21,6 +21,7 @@ interface AssignmentItemProps {
   onDelete?: () => void;
   showDueDate?: boolean;
   dueDateLabel?: string;
+  inOrphanedCourse?: boolean;
 }
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -104,7 +105,8 @@ export default function AssignmentItem({
   onToggle, 
   onDelete, 
   showDueDate = false,
-  dueDateLabel 
+  dueDateLabel,
+  inOrphanedCourse = false
 }: AssignmentItemProps) {
   // State for period information
   const [period, setPeriod] = useState<Period | null>(null);
@@ -212,7 +214,8 @@ export default function AssignmentItem({
         styles.container, 
         containerStyle,
         isOrphaned && styles.orphanedContainer,
-        isOverdue && styles.overdueContainer
+        isOverdue && styles.overdueContainer,
+        inOrphanedCourse && styles.inOrphanedCourseContainer
       ]}
       onPress={onToggle}
       onPressIn={handlePressIn}
@@ -238,7 +241,8 @@ export default function AssignmentItem({
               style={[
                 styles.title,
                 assignment.isCompleted && styles.completedTitle,
-                isOrphaned && styles.orphanedText
+                isOrphaned && styles.orphanedText,
+                inOrphanedCourse && styles.inOrphanedCourseText
               ]}
               numberOfLines={2}
             >
@@ -250,7 +254,8 @@ export default function AssignmentItem({
             <Text 
               style={[
                 styles.description,
-                isOrphaned && styles.orphanedDescription
+                isOrphaned && styles.orphanedDescription,
+                inOrphanedCourse && styles.inOrphanedCourseText
               ]}
               numberOfLines={1}
             >
@@ -267,7 +272,11 @@ export default function AssignmentItem({
               </View>
             ) : (
               <View style={styles.typeTextContainer}>
-                <Text style={[styles.typeText, { color: typeColor }]}>
+                <Text style={[
+                  styles.typeText, 
+                  { color: typeColor },
+                  inOrphanedCourse && styles.inOrphanedCourseMetadata
+                ]}>
                   {typeLabel}
                 </Text>
               </View>
@@ -275,8 +284,11 @@ export default function AssignmentItem({
             
             {period && !isOrphaned && (
               <View style={styles.periodContainer}>
-                <Ionicons name="time-outline" size={12} color="#8A8A8D" style={styles.periodIcon} />
-                <Text style={styles.periodText}>
+                <Ionicons name="time-outline" size={12} color={inOrphanedCourse ? '#6E6E73' : '#8A8A8D'} style={styles.periodIcon} />
+                <Text style={[
+                  styles.periodText,
+                  inOrphanedCourse && styles.inOrphanedCourseMetadata
+                ]}>
                   {t('assignments').common.period} {period._id}: {period.starttime} - {period.endtime}
                 </Text>
               </View>
@@ -284,8 +296,11 @@ export default function AssignmentItem({
             
             {showDueDate && dueDateLabel && (
               <View style={styles.dueDateContainer}>
-                <Ionicons name="calendar-outline" size={12} color="#8A8A8D" style={styles.periodIcon} />
-                <Text style={styles.dueDateText}>
+                <Ionicons name="calendar-outline" size={12} color={inOrphanedCourse ? '#6E6E73' : '#8A8A8D'} style={styles.periodIcon} />
+                <Text style={[
+                  styles.dueDateText,
+                  inOrphanedCourse && styles.inOrphanedCourseMetadata
+                ]}>
                   {t('assignments').common.due}: {dueDateLabel}
                 </Text>
               </View>
@@ -300,13 +315,19 @@ export default function AssignmentItem({
             <Ionicons name="star" size={14} color="#FFFFFF" />
           </View>
         )}
-        <Text style={styles.timeText}>{formattedTime}</Text>
+        <Text style={[
+          styles.timeText,
+          inOrphanedCourse && styles.inOrphanedCourseMetadata
+        ]}>
+          {formattedTime}
+        </Text>
         
         {/* Remaining time display */}
         {!assignment.isCompleted && (
           <Text style={[
             styles.remainingTime,
-            isOverdue && styles.overdueText
+            isOverdue && styles.overdueText,
+            inOrphanedCourse && styles.inOrphanedCourseMetadata
           ]}>
             {remainingTime}
           </Text>
@@ -331,14 +352,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#232323',
-    marginBottom: 8,
-    borderRadius: 12,
+    backgroundColor: '#292929',
+    marginBottom: 6,
+    borderRadius: 10,
     padding: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    shadowOpacity: 0.08,
+    shadowRadius: 1,
     elevation: 1,
   },
   leftSection: {
@@ -347,12 +368,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   checkboxContainer: {
-    marginRight: 12,
+    marginRight: 10,
   },
   checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     borderWidth: 2,
     borderColor: '#3478F6',
     alignItems: 'center',
@@ -378,15 +399,15 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   typeIndicator: {
-    width: 20,
-    height: 20,
+    width: 18,
+    height: 18,
     borderRadius: 4,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 6,
   },
   title: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '500',
     color: '#FFFFFF',
     flex: 1,
@@ -398,13 +419,13 @@ const styles = StyleSheet.create({
   description: {
     fontSize: 13,
     color: '#8A8A8D',
-    marginBottom: 4,
+    marginBottom: 3,
   },
   metadataContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
-    marginTop: 4,
+    marginTop: 3,
   },
   typeTextContainer: {
     marginRight: 8,
@@ -421,7 +442,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   periodIcon: {
-    marginRight: 4,
+    marginRight: 3,
   },
   periodText: {
     fontSize: 12,
@@ -442,12 +463,12 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   priorityIndicator: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 4,
+    marginBottom: 3,
     overflow: 'hidden',
   },
   starIcon: {
@@ -458,7 +479,7 @@ const styles = StyleSheet.create({
   timeText: {
     fontSize: 12,
     color: '#8A8A8D',
-    marginBottom: 4,
+    marginBottom: 3,
   },
   deleteButton: {
     padding: 4,
@@ -489,7 +510,7 @@ const styles = StyleSheet.create({
   },
   overdueContainer: {
     borderLeftColor: '#FF3B30',
-    borderLeftWidth: 3,
+    borderLeftWidth: 2,
   },
   timeRow: {
     flexDirection: 'row',
@@ -506,4 +527,14 @@ const styles = StyleSheet.create({
     color: '#FF3B30',
     fontWeight: '500',
   },
+  inOrphanedCourseContainer: {
+    opacity: 0.9,
+    backgroundColor: '#222222',
+  },
+  inOrphanedCourseText: {
+    color: '#AAAAAA',
+  },
+  inOrphanedCourseMetadata: {
+    color: '#6E6E73',
+  }
 }); 

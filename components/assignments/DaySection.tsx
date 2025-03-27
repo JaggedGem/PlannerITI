@@ -8,7 +8,6 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
   withSequence,
-  withDelay,
   FadeIn,
   FadeOut,
   Layout,
@@ -199,7 +198,10 @@ export default function DaySection({
               key={courseKey}
               entering={FadeIn.duration(150).delay(index * 50)}
               layout={Layout.springify().mass(0.5)}
-              style={styles.courseSection}
+              style={[
+                styles.courseSection,
+                index === Object.entries(groupedByCourse).length - 1 && styles.lastCourseSection
+              ]}
             >
               <CourseSection
                 courseCode={courseAssignments[0].courseCode || courseKey}
@@ -219,39 +221,41 @@ export default function DaySection({
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 16,
+    marginBottom: 14,
     borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: '#141414',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowRadius: 3,
+    elevation: 2,
   },
   headerContainer: {
-    borderRadius: 16,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
   },
   headerPressed: {
     opacity: 0.9,
   },
   headerGradient: {
-    borderRadius: 16,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
   },
   headerContent: {
-    padding: 16,
+    padding: 14,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   title: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
     color: '#FFFFFF',
     marginBottom: 2,
   },
   date: {
-    fontSize: 14,
+    fontSize: 13,
     color: 'rgba(255, 255, 255, 0.8)',
   },
   countContainer: {
@@ -271,9 +275,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   content: {
-    padding: 12,
+    paddingHorizontal: 10,
+    paddingTop: 8,
+    paddingBottom: 6,
   },
   courseSection: {
-    marginBottom: 8,
+    marginBottom: 6,
+  },
+  lastCourseSection: {
+    marginBottom: 0,
   }
 }); 
