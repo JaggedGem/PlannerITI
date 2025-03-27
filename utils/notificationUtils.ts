@@ -211,7 +211,7 @@ function getChannelId(assignmentType: AssignmentType): string {
 }
 
 // Helper to truncate text to prevent notification cutoff
-function truncateText(text: string, maxLength: number = 40): string {
+function truncateText(text: string, maxLength: number = 80): string {
   if (!text) return '';
   return text.length <= maxLength ? text : text.substring(0, maxLength - 3) + '...';
 }
@@ -224,7 +224,7 @@ function formatCourseInfo(courseCode?: string, courseName?: string): string {
   if (courseCode) return courseCode;
   
   // Fallback to course name, but truncate if too long
-  return truncateText(courseName || '', 15);
+  return truncateText(courseName || '', 30);
 }
 
 // Schedule a notification with navigation data
@@ -255,8 +255,8 @@ async function scheduleNotification(
         
         // Ensure title and body don't exceed safe limits
         // Most platforms show ~50 chars for title, ~100 for body without truncation
-        const safeTitle = truncateText(title, 50);
-        const safeBody = truncateText(body, 100);
+        const safeTitle = truncateText(title, 70);
+        const safeBody = truncateText(body, 240);
         
         await Notifications.scheduleNotificationAsync({
           content: {
@@ -326,12 +326,18 @@ async function scheduleIndividualNotifications(assignment: Assignment): Promise<
     const settings = await getNotificationSettings();
     const dueDate = parseISO(assignment.dueDate);
     const now = new Date();
+    
+    // Skip scheduling if the assignment is already overdue
+    if (dueDate <= now) {
+      return;
+    }
+    
     const courseInfo = formatCourseInfo(assignment.courseCode, assignment.courseName);
     const channelId = getChannelId(assignment.assignmentType);
     const typeEmoji = getAssignmentTypeEmoji(assignment.assignmentType);
     
     // Truncate assignment title to prevent notification cutoff
-    const title = truncateText(assignment.title, 30);
+    const title = truncateText(assignment.title, 60);
     
     // 1. Due date notification (1 hour before)
     const dueNotificationTime = new Date(dueDate.getTime() - 60 * 60 * 1000); // 1 hour before
@@ -446,6 +452,12 @@ async function shouldIncludeInDigest(assignment: Assignment): Promise<boolean> {
   const settings = await getNotificationSettings();
   const dueDate = parseISO(assignment.dueDate);
   const now = new Date();
+  
+  // First check if assignment is already overdue
+  if (dueDate <= now) {
+    return false;
+  }
+  
   const daysUntilDue = differenceInDays(dueDate, now);
   
   // Get reminder days for this assignment type
@@ -491,7 +503,7 @@ function createDigestMessage(assignments: AssignmentDigest['assignments']): stri
       const courseCode = item.courseInfo.split(' - ')[0];
       
       // Truncate title if needed to avoid very long lines
-      const truncatedTitle = truncateText(item.title, 25);
+      const truncatedTitle = truncateText(item.title, 60);
       
       // Simplified format: "Assignment name" (CourseCode) at Time
       message += `  • "${truncatedTitle}" (${courseCode}) at ${dueTime}\n`;
@@ -506,7 +518,7 @@ function createDigestMessage(assignments: AssignmentDigest['assignments']): stri
   }
   
   // Ensure the entire message doesn't get too long
-  return truncateText(message.trim(), 450);
+  return truncateText(message.trim(), 700);
 }
 
 // Create and schedule a single daily notification at the specified time with all upcoming assignments
@@ -516,7 +528,11 @@ export async function createAndScheduleDailyDigest(assignments: Assignment[], se
     if (!settings.enabled) return;
     
     const now = new Date();
-    const incompleteAssignments = assignments.filter(a => !a.isCompleted);
+    // Filter out completed assignments and assignments that are already overdue
+    const incompleteAssignments = assignments.filter(a => 
+      !a.isCompleted && 
+      parseISO(a.dueDate) > now // Exclude assignments past their due date
+    );
     
     // Get notification time from settings
     const notificationTimeDate = new Date(settings.notificationTime);
@@ -613,7 +629,7 @@ export async function createAndScheduleDailyDigest(assignments: Assignment[], se
         date: dateKey,
         assignments: dayAssignments.map(a => ({
           id: a.id,
-          title: truncateText(a.title, 30),
+          title: truncateText(a.title, 60),
           courseInfo: formatCourseInfo(a.courseCode, a.courseName),
           type: a.assignmentType,
           dueDate: a.dueDate
@@ -653,6 +669,7 @@ export async function createAndScheduleDailyDigest(assignments: Assignment[], se
           body += `${typeEmoji} ${count} ${type}${count > 1 ? 's' : ''}\n`;
         }
         
+        // Only add "tap to view details" if we're showing a summary rather than all assignments
         body += '\nTap to view details.';
       }
     } else {
@@ -676,7 +693,7 @@ export async function createAndScheduleDailyDigest(assignments: Assignment[], se
             const typeEmoji = getAssignmentTypeEmoji(type as AssignmentType);
             if (items.length === 1) {
               const item = items[0];
-              body += `  ${typeEmoji} "${truncateText(item.title, 20)}" (${item.courseInfo})\n`;
+              body += `  ${typeEmoji} "${truncateText(item.title, 50)}" (${item.courseInfo})\n`;
             } else {
               body += `  ${typeEmoji} ${items.length} ${type}s\n`;
             }
@@ -686,7 +703,23 @@ export async function createAndScheduleDailyDigest(assignments: Assignment[], se
         body += '\n';
       }
       
-      body = truncateText(body.trim(), 450) + '\n\nTap to view all.';
+      // Only add "tap to view all" if there are more than 2 days or we're summarizing the assignments
+      const hasMoreDays = digestData.length > 2;
+      const hasHiddenAssignments = digestData.slice(0, 2).some(day => {
+        const typeGroups = day.assignments.reduce((acc, curr) => {
+          if (!acc[curr.type]) acc[curr.type] = [];
+          acc[curr.type].push(curr);
+          return acc;
+        }, {} as Record<string, any[]>);
+        
+        return Object.values(typeGroups).some(items => items.length > 1);
+      });
+      
+      body = truncateText(body.trim(), 700);
+      
+      if (hasMoreDays || hasHiddenAssignments) {
+        body += '\n\nTap to view all.';
+      }
     }
     
     // Schedule the daily digest notification
@@ -877,14 +910,17 @@ export async function checkAndRescheduleNotifications(assignments: Assignment[])
     });
     
     // Find incomplete assignments
-    const incompleteAssignments = assignments.filter(a => !a.isCompleted);
+    const now = new Date();
+    const incompleteAssignments = assignments.filter(a => 
+      !a.isCompleted && 
+      parseISO(a.dueDate) > now // Exclude assignments past their due date
+    );
     
     // Process each assignment individually to schedule only needed notifications
     for (const assignment of incompleteAssignments) {
       const dueDate = parseISO(assignment.dueDate);
-      const now = new Date();
       
-      // Skip if assignment due date is in the past
+      // Skip if assignment due date is in the past (redundant check, but keeping for safety)
       if (dueDate <= now) {
         continue;
       }
