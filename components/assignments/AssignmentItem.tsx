@@ -297,7 +297,7 @@ export default function AssignmentItem({
       <View style={styles.rightSection}>
         {assignment.isPriority && (
           <View style={[styles.priorityIndicator, { backgroundColor: priorityColor }]}>
-            <Ionicons name="star" size={12} color="#FFFFFF" />
+            <Ionicons name="star" size={14} color="#FFFFFF" />
           </View>
         )}
         <Text style={styles.timeText}>{formattedTime}</Text>
@@ -448,6 +448,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,
+    overflow: 'hidden',
+  },
+  starIcon: {
+    alignSelf: 'center',
+    textAlign: 'center',
+    lineHeight: 14,
   },
   timeText: {
     fontSize: 12,

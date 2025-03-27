@@ -971,7 +971,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   dropdownItemSelected: {
-    backgroundColor: '#3478F6',
+    backgroundColor: '#2C3DCD',
   },
   dropdownItemText: {
     fontSize: 16,
