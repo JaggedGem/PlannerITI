@@ -1,75 +1,63 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Colors } from '../../constants/Colors';
-import { useColorScheme } from 'react-native';
-import { Feather, Ionicons } from '@expo/vector-icons';
-import AssignmentItem from './AssignmentItem';
+import React, { useMemo } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
 import { Assignment } from '../../utils/assignmentStorage';
-import Animated, { FadeIn, Layout } from 'react-native-reanimated';
-import { Period } from '../../services/scheduleService';
-import { format, isToday, isTomorrow } from 'date-fns';
+import AssignmentItem from './AssignmentItem';
+import { Ionicons } from '@expo/vector-icons';
+import Animated, { 
+  FadeIn,
+  Layout
+} from 'react-native-reanimated';
 import { useTranslation } from '@/hooks/useTranslation';
+import { format, isToday, isYesterday, isTomorrow, differenceInDays } from 'date-fns';
 
-// Interface for assignment with optional period info
-interface EnhancedAssignment extends Assignment {
-  periodInfo?: Period;
-}
-
-type CourseSectionProps = {
+interface CourseSectionProps {
   courseCode: string;
   courseName: string;
-  assignments: (Assignment | EnhancedAssignment)[];
+  assignments: Assignment[];
   onToggleAssignment: (id: string) => void;
   onDeleteAssignment?: (id: string) => void;
-  onEditCourse?: () => void;
   showDueDate?: boolean;
-};
+}
 
-// Function to get consistent color based on course code
-const getSubjectColor = (courseCode: string): string => {
-  const colors = [
-    '#4169E1', // Royal Blue
-    '#FF69B4', // Hot Pink
-    '#32CD32', // Lime Green
-    '#FF8C00', // Dark Orange
-    '#9370DB', // Medium Purple
-    '#20B2AA', // Light Sea Green
-    '#FF6347', // Tomato
-    '#4682B4', // Steel Blue
-    '#9ACD32', // Yellow Green
-    '#FF4500', // Orange Red
-    '#BA55D3', // Medium Orchid
-    '#2E8B57', // Sea Green
-  ];
+// Function to get a color for a course code
+const getCourseColor = (courseCode: string, isOrphaned: boolean): string => {
+  if (isOrphaned) {
+    return '#8E8E93'; // Gray for orphaned courses
+  }
 
-  // Generate a number from the course code
+  // Simple hash function to generate a consistent color for each course code
   let hash = 0;
   for (let i = 0; i < courseCode.length; i++) {
     hash = courseCode.charCodeAt(i) + ((hash << 5) - hash);
   }
-
-  // Use the hash to pick a color
-  const index = Math.abs(hash) % colors.length;
-  return colors[index];
+  
+  // Generate HSL color with good saturation and lightness for dark theme
+  const h = Math.abs(hash) % 360;
+  const s = 65 + (Math.abs(hash) % 15); // 65-80% saturation
+  const l = 45 + (Math.abs(hash) % 10); // 45-55% lightness
+  
+  return `hsl(${h}, ${s}%, ${l}%)`;
 };
 
-// Format the due date to a human-readable string
-const formatDueDay = (dateString: string, t: any, currentLanguage: string): string => {
-  const date = new Date(dateString);
+// Helper to format due date label
+const formatDueDate = (dueDate: string, t: any): string => {
+  const date = new Date(dueDate);
+  const now = new Date();
   
   if (isToday(date)) {
     return t('assignments').days.today;
   } else if (isTomorrow(date)) {
     return t('assignments').days.tomorrow;
+  } else if (isYesterday(date)) {
+    return t('assignments').days.yesterday;
+  }
+  
+  const daysDiff = differenceInDays(date, now);
+  
+  if (daysDiff > 0 && daysDiff < 7) {
+    return format(date, 'EEEE'); // Day name
   } else {
-    // Get the localized day of week
-    const dayOfWeek = t('weekdays').short[date.getDay()];
-    
-    // Get the localized month name
-    const month = t('months')[date.getMonth()];
-    
-    // Format as "Day, Month Day" in the current language
-    return `${dayOfWeek}, ${month} ${date.getDate()}`;
+    return format(date, 'MMM d'); // Month and day
   }
 };
 
@@ -79,148 +67,105 @@ export default function CourseSection({
   assignments,
   onToggleAssignment,
   onDeleteAssignment,
-  onEditCourse,
-  showDueDate = false,
+  showDueDate = false
 }: CourseSectionProps) {
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme];
-  const { t, currentLanguage } = useTranslation();
+  const { t } = useTranslation();
   
-  // Ensure we have a valid course code and name
-  const safeCode = courseCode || t('assignments').common.uncategorized;
-  const safeName = courseName || t('assignments').types.other;
-  
-  const subjectColor = getSubjectColor(safeCode);
-  
-  // Group assignments by period if they have periodInfo
-  const groupedByPeriod: { [key: string]: Assignment[] } = {
-    'noPeriod': [], // For assignments without a period
-    'orphaned': []  // Special group for orphaned assignments
-  };
-  
-  // Sort and group assignments
-  assignments.forEach((assignment) => {
-    const enhancedAssignment = assignment as EnhancedAssignment;
+  // Determine if the entire course is orphaned (all assignments are orphaned)
+  const isCourseOrphaned = useMemo(() => {
+    // If there are no assignments, course is not orphaned
+    if (!assignments.length) return false;
     
-    // Handle orphaned assignments separately
-    if (assignment.isOrphaned) {
-      groupedByPeriod['orphaned'].push(assignment);
-      return;
-    }
-    
-    if (enhancedAssignment.periodInfo) {
-      const periodId = enhancedAssignment.periodInfo._id;
-      if (!groupedByPeriod[periodId]) {
-        groupedByPeriod[periodId] = [];
-      }
-      groupedByPeriod[periodId].push(assignment);
-    } else {
-      groupedByPeriod['noPeriod'].push(assignment);
-    }
-  });
+    // Course is orphaned if ALL assignments are orphaned
+    return assignments.every(assignment => assignment.isOrphaned);
+  }, [assignments]);
   
-  // Sort period keys numerically
-  const sortedPeriodIds = Object.keys(groupedByPeriod)
-    .filter(id => id !== 'noPeriod' && id !== 'orphaned')
-    .sort((a, b) => parseInt(a) - parseInt(b));
+  // Calculate the color based on course code and orphaned status
+  const courseColor = useMemo(() => 
+    getCourseColor(courseCode, isCourseOrphaned), 
+  [courseCode, isCourseOrphaned]);
   
-  // Add 'noPeriod' at the end if it has assignments
-  if (groupedByPeriod['noPeriod'].length > 0) {
-    sortedPeriodIds.push('noPeriod');
-  }
-  
-  // Add 'orphaned' at the very end if it has assignments
-  if (groupedByPeriod['orphaned'].length > 0) {
-    sortedPeriodIds.push('orphaned');
-  }
-  
-  // Sort the assignments within each period by due date and then by assignment type
-  sortedPeriodIds.forEach(periodId => {
-    groupedByPeriod[periodId].sort((a, b) => {
-      // First compare by due date
-      const dateComparison = new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-      if (dateComparison !== 0) return dateComparison;
-      
-      // If same date, sort by assignment type
-      return a.assignmentType.localeCompare(b.assignmentType);
+  // Sort assignments by due date
+  const sortedAssignments = useMemo(() => {
+    return [...assignments].sort((a, b) => {
+      const dateA = new Date(a.dueDate);
+      const dateB = new Date(b.dueDate);
+      return dateA.getTime() - dateB.getTime();
     });
-  });
-
+  }, [assignments]);
+  
+  // Determine if courseName is different enough from courseCode to display separately
+  const shouldShowCourseName = courseName && 
+    courseCode !== courseName && 
+    !courseName.includes(courseCode) && 
+    !courseCode.includes(courseName);
+  
   return (
-    <Animated.View 
-      style={styles.container}
-      entering={FadeIn.duration(150)}
+    <Animated.View
+      style={[
+        styles.container,
+        isCourseOrphaned && styles.orphanedContainer
+      ]}
       layout={Layout.springify().mass(0.5)}
     >
-      <View style={[styles.headerBar, { backgroundColor: subjectColor }]} />
-      <View style={styles.contentContainer}>
-        <View style={styles.header}>
-          <View style={[styles.dot, { backgroundColor: subjectColor }]} />
-          <Text style={[styles.courseTitle, { color: subjectColor }]}>
-            {safeName}
-          </Text>
-          {onEditCourse && (
-            <TouchableOpacity style={styles.editButton} onPress={onEditCourse}>
-              <Feather name="edit-2" size={18} color={subjectColor} />
-            </TouchableOpacity>
-          )}
-          <View style={styles.countBadge}>
-            <Text style={styles.countText}>{assignments.length}</Text>
+      <View style={styles.header}>
+        <View style={[styles.courseAccent, { backgroundColor: courseColor }]} />
+        <View style={[
+          styles.headerContent,
+          isCourseOrphaned && styles.orphanedHeaderContent
+        ]}>
+          <View style={styles.courseInfo}>
+            <Text style={[
+              styles.courseCode,
+              isCourseOrphaned && styles.orphanedText
+            ]}>
+              {courseCode}
+              {isCourseOrphaned && ' (Orphaned)'}
+            </Text>
+            {shouldShowCourseName && (
+              <Text style={[
+                styles.courseName,
+                isCourseOrphaned && styles.orphanedText
+              ]} numberOfLines={1}>
+                {courseName}
+              </Text>
+            )}
+            {isCourseOrphaned && (
+              <Text style={styles.orphanedDescription}>
+                {t('assignments').common.orphanedReason || 'Course not found in your schedule'}
+              </Text>
+            )}
+          </View>
+          <View style={styles.headerRight}>
+            <Text style={[
+              styles.count,
+              isCourseOrphaned && styles.orphanedText
+            ]}>
+              {assignments.length}
+            </Text>
           </View>
         </View>
-        
-        <View style={styles.assignmentsContainer}>
-          {sortedPeriodIds.map((periodId, groupIndex) => (
-            <View key={periodId} style={styles.periodGroup}>
-              {/* Special header for orphaned assignments */}
-              {periodId === 'orphaned' && (
-                <View style={styles.orphanedHeader}>
-                  <View style={styles.periodHeaderContent}>
-                    <Ionicons name="alert-circle" size={14} color="#FF3B30" style={styles.periodIcon} />
-                    <Text style={styles.orphanedPeriodText}>
-                      {t('assignments').common.orphanedAssignments}
-                    </Text>
-                  </View>
-                </View>
-              )}
-              
-              {/* Regular period header */}
-              {periodId !== 'noPeriod' && periodId !== 'orphaned' && (
-                <View style={styles.periodHeader}>
-                  {/* Use the first assignment's periodInfo to show period details */}
-                  {(groupedByPeriod[periodId][0] as EnhancedAssignment).periodInfo && (
-                    <View style={styles.periodHeaderContent}>
-                      <Ionicons name="time-outline" size={14} color="#8A8A8D" style={styles.periodIcon} />
-                      <Text style={styles.periodText}>
-                        {t('assignments').common.period} {(groupedByPeriod[periodId][0] as EnhancedAssignment).periodInfo!._id}: {
-                          (groupedByPeriod[periodId][0] as EnhancedAssignment).periodInfo!.starttime
-                        } - {
-                          (groupedByPeriod[periodId][0] as EnhancedAssignment).periodInfo!.endtime
-                        }
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              )}
-              
-              {groupedByPeriod[periodId].map((assignment, index) => (
-                <Animated.View 
-                  key={assignment.id}
-                  entering={FadeIn.duration(150).delay(index * 25 + groupIndex * 50)}
-                  layout={Layout.springify().mass(0.5)}
-                >
-                  <AssignmentItem
-                    assignment={assignment}
-                    onToggle={() => onToggleAssignment(assignment.id)}
-                    onDelete={onDeleteAssignment ? () => onDeleteAssignment(assignment.id) : undefined}
-                    showDueDate={showDueDate}
-                    dueDateLabel={formatDueDay(assignment.dueDate, t, currentLanguage)}
-                  />
-                </Animated.View>
-              ))}
-            </View>
-          ))}
-        </View>
+      </View>
+      
+      <View style={styles.content}>
+        {sortedAssignments.map((assignment, index) => {
+          // Create a copy of the assignment with modified properties for orphaned courses
+          const assignmentToRender = isCourseOrphaned 
+            ? { ...assignment, isOrphaned: false, inOrphanedCourse: true }
+            : assignment;
+            
+          return (
+            <AssignmentItem
+              key={assignment.id}
+              assignment={assignmentToRender}
+              onToggle={() => onToggleAssignment(assignment.id)}
+              onDelete={onDeleteAssignment ? () => onDeleteAssignment(assignment.id) : undefined}
+              showDueDate={showDueDate}
+              dueDateLabel={showDueDate ? formatDueDate(assignment.dueDate, t) : undefined}
+              inOrphanedCourse={isCourseOrphaned}
+            />
+          );
+        })}
       </View>
     </Animated.View>
   );
@@ -228,95 +173,70 @@ export default function CourseSection({
 
 const styles = StyleSheet.create({
   container: {
-    marginHorizontal: 8,
-    marginVertical: 8,
     borderRadius: 12,
-    backgroundColor: '#232433',
     overflow: 'hidden',
-    flexDirection: 'row',
+    backgroundColor: '#1A1A1A',
   },
-  headerBar: {
-    width: 6,
-    borderTopLeftRadius: 12,
-    borderBottomLeftRadius: 12,
-  },
-  contentContainer: {
-    flex: 1,
+  orphanedContainer: {
+    backgroundColor: '#191919',
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
+    opacity: 0.9,
   },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+  },
+  courseAccent: {
+    width: 4,
+    borderTopLeftRadius: 12,
+    borderBottomLeftRadius: 12,
+  },
+  headerContent: {
+    flex: 1,
+    padding: 12,
+    flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+    alignItems: 'center',
+    backgroundColor: '#232323',
   },
-  dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginRight: 10,
+  orphanedHeaderContent: {
+    backgroundColor: '#1E1E1E',
   },
-  courseTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    letterSpacing: 0.3,
+  courseInfo: {
     flex: 1,
   },
-  editButton: {
-    padding: 4,
-  },
-  assignmentsContainer: {
-    paddingVertical: 4,
-  },
-  countBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  countText: {
-    fontSize: 12,
+  courseCode: {
+    fontSize: 15,
+    fontWeight: '600',
     color: '#FFFFFF',
-    fontWeight: '500',
+    marginBottom: 2,
   },
-  periodGroup: {
-    marginBottom: 8,
+  courseName: {
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.9)',
   },
-  periodHeader: {
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 6,
-    marginHorizontal: 8,
-    marginBottom: 6,
-    marginTop: 8,
+  orphanedText: {
+    color: '#8E8E93',
   },
-  periodHeaderContent: {
+  orphanedDescription: {
+    fontSize: 11,
+    color: '#E0383E',
+    marginTop: 2,
+  },
+  headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  periodIcon: {
-    marginRight: 6,
+  count: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
-  periodText: {
-    fontSize: 12,
-    color: '#AAAAAA',
-    fontWeight: '500',
-  },
-  orphanedHeader: {
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 6,
-    marginHorizontal: 8,
-    marginBottom: 6,
-    marginTop: 8,
-  },
-  orphanedPeriodText: {
-    fontSize: 12,
-    color: '#AAAAAA',
-    fontWeight: '500',
-  },
+  content: {
+    paddingTop: 8,
+    paddingHorizontal: 8,
+    paddingBottom: 6,
+  }
 }); 
