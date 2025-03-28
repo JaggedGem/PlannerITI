@@ -1659,10 +1659,14 @@ export default function NewAssignmentScreen() {
       return;
     }
     
+    // Get the selected subject
+    const selectedSubject = subjects.find(s => s.id === selectedSubjectId) || 
+                          filteredSubjects.find(s => s.id === selectedSubjectId);
+    
     await addAssignment({
       title,
       description,
-      courseCode: '',
+      courseCode: selectedSubject?.name || courseName, // Use subject name as course code
       courseName: courseName,
       dueDate: dueDate.toISOString(),
       isPriority,
