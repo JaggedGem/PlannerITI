@@ -531,6 +531,14 @@ const Assignments = () => {
   const [isDropdownVisible, setIsDropdownVisible] = useState(false);
   const [isArchiveModalVisible, setIsArchiveModalVisible] = useState(false);
   
+  // Add debugging for archived assignments
+  useEffect(() => {
+    console.log(`Archived assignments count: ${archivedAssignments.length}`);
+    if (archivedAssignments.length > 0) {
+      console.log('Sample archive item:', archivedAssignments[0].title);
+    }
+  }, [archivedAssignments]);
+  
   // Track which tabs have been viewed already to disable animations after first view
   const [hasViewedTab, setHasViewedTab] = useState<{[key: number]: boolean}>({0: false, 1: false, 2: false, 3: false});
   
@@ -551,8 +559,7 @@ const Assignments = () => {
   const segments = [
     t('assignments').segments.dueDate, 
     t('assignments').segments.classes, 
-    t('assignments').segments.priority,
-    'Archive'
+    t('assignments').segments.priority
   ];
   
   // Get current date for archive comparison
@@ -612,6 +619,20 @@ const Assignments = () => {
   useEffect(() => {
     fetchAssignments();
   }, [fetchAssignments]);
+  
+  // TEST CODE: Automatically show archive modal after loading - REMOVE AFTER TESTING
+  useEffect(() => {
+    if (!isLoading) {
+      // Open archive modal after 3 seconds for testing
+      console.log('Setting up auto-open timer for archive modal');
+      const timer = setTimeout(() => {
+        console.log('Auto-opening archive modal for testing');
+        setIsArchiveModalVisible(true);
+      }, 3000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isLoading]);
   
   // Handle segment change with selection from dropdown
   const handleSegmentChange = useCallback((index: number) => {
@@ -731,17 +752,10 @@ const Assignments = () => {
     });
   }, [t, formatDate]);
   
-  // Toggle archive modal with direct state update
-  const toggleArchiveModal = useCallback(() => {
+  // Replace the toggleArchiveModal function with this:
+  const handleArchivePress = useCallback(() => {
     console.log('Archive button clicked');
-    // Force the state change in a setTimeout to avoid React Native modal issues
-    setTimeout(() => {
-      setIsArchiveModalVisible(prevState => {
-        const newState = !prevState;
-        console.log('Setting archive modal visible:', newState);
-        return newState;
-      });
-    }, 0);
+    router.push('/archive');
   }, []);
   
   // Custom DateGroupedView that uses memoized data and disables animations after first view
@@ -901,14 +915,6 @@ const Assignments = () => {
             disableAnimations={disableAnimations}
           />
         );
-      case 3: // Archive
-        return (
-          <ArchivedAssignmentsView
-            assignments={archivedAssignments}
-            onToggle={handleToggleAssignment}
-            onDelete={handleDeleteAssignment}
-          />
-        );
       default:
         return null;
     }
@@ -925,7 +931,7 @@ const Assignments = () => {
             
             <TouchableOpacity
               style={styles.archiveButton}
-              onPress={toggleArchiveModal}
+              onPress={handleArchivePress}
               activeOpacity={0.7}
             >
               <Ionicons name="folder-open" size={18} color="#FFFFFF" />
@@ -985,16 +991,6 @@ const Assignments = () => {
         {renderContent()}
         <FloatingActionButton onPress={handleAddAssignment} />
       </View>
-      
-      {/* Archive Modal - force visible state for troubleshooting */}
-      <ArchiveView 
-        isVisible={isArchiveModalVisible}
-        onClose={toggleArchiveModal}
-        assignments={archivedAssignments}
-        onToggleAssignment={handleToggleAssignment}
-        onDeleteAssignment={handleDeleteAssignment}
-        onArchiveAll={handleArchiveAll}
-      />
     </SafeAreaView>
   );
 };
