@@ -84,7 +84,6 @@ function getAssignmentTypeEmoji(type: AssignmentType): string {
 export async function saveNotificationSettings(settings: NotificationSettings): Promise<void> {
   try {
     await AsyncStorage.setItem(NOTIFICATION_SETTINGS_KEY, JSON.stringify(settings));
-    console.log('Notification settings saved');
   } catch (error) {
     console.error('Error saving notification settings:', error);
     throw error;
@@ -173,7 +172,6 @@ export async function registerForPushNotificationsAsync() {
     }
     
     if (finalStatus !== 'granted') {
-      console.log('Failed to get push token for push notification!');
       return;
     }
     
@@ -181,8 +179,6 @@ export async function registerForPushNotificationsAsync() {
     token = (await Notifications.getExpoPushTokenAsync({
       projectId: process.env.EXPO_PROJECT_ID,
     })).data;
-  } else {
-    console.log('Must use physical device for Push Notifications');
   }
 
   return token;
@@ -272,12 +268,7 @@ async function scheduleNotification(
           },
           identifier,
         });
-        console.log(`Scheduled notification: ${identifier} for ${triggerDate.toISOString()} (${secondsFromNow} seconds from now)`);
-      } else {
-        console.log(`Skipped immediate notification: ${identifier}`);
       }
-    } else {
-      console.log(`Skipped past notification: ${identifier} for ${triggerDate.toISOString()}`);
     }
   } catch (error) {
     console.error('Error scheduling notification:', error);
@@ -591,7 +582,6 @@ export async function createAndScheduleDailyDigest(assignments: Assignment[], se
     
     // If no upcoming assignments, don't schedule a notification
     if (Object.keys(assignmentsByDay).length === 0) {
-      console.log('No upcoming assignments to notify about');
       return;
     }
     
@@ -731,8 +721,6 @@ export async function createAndScheduleDailyDigest(assignments: Assignment[], se
       'daily-digest-notification',
       Platform.OS === 'android' ? 'daily-digest' : 'default'
     );
-    
-    console.log(`Scheduled daily digest notification for ${notificationTime.toISOString()}`);
   } catch (error) {
     console.error('Error creating daily digest:', error);
   }
@@ -786,7 +774,6 @@ export async function scheduleAllNotifications(assignments: Assignment[]): Promi
     // If notifications are disabled, cancel all and return
     if (!settings.enabled) {
       await Notifications.cancelAllScheduledNotificationsAsync();
-      console.log('Notifications are disabled, canceled all scheduled notifications');
       return;
     }
     
@@ -803,8 +790,6 @@ export async function scheduleAllNotifications(assignments: Assignment[]): Promi
     
     // Create and schedule the daily digest
     await createAndScheduleDailyDigest(incompleteAssignments);
-    
-    console.log(`Scheduled notifications for ${incompleteAssignments.length} assignments`);
   } catch (error) {
     console.error('Error scheduling all notifications:', error);
   }
@@ -841,8 +826,6 @@ export async function cancelNotificationsForAssignment(assignmentId: string): Pr
     } catch (storageError) {
       console.error('Error reading assignments from storage:', storageError);
     }
-    
-    console.log(`Cancelled notifications for assignment: ${assignmentId}`);
   } catch (error) {
     console.error('Error cancelling notifications:', error);
   }
@@ -859,8 +842,7 @@ export async function initializeNotifications(): Promise<void> {
     
     // Load settings but don't schedule anything yet
     // This prevents sending all notifications at once on app startup
-    const settings = await getNotificationSettings();
-    console.log('Notification system initialized with settings:', settings.enabled ? 'enabled' : 'disabled');
+    await getNotificationSettings();
   } catch (error) {
     console.error('Error initializing notifications:', error);
   }
@@ -1009,116 +991,5 @@ export function getRemainingTimeText(dueDate: string): string {
   } catch (error) {
     console.error('Error formatting remaining time:', error);
     return 'Unknown';
-  }
-}
-
-// Send test notification (for debugging purposes)
-export async function sendTestNotification(type: AssignmentType = AssignmentType.TEST): Promise<void> {
-  try {
-    // Create test assignment data
-    const testAssignment: Assignment = {
-      id: 'test-' + Date.now(),
-      title: 'Test Assignment',
-      description: 'This is a test notification to verify your notification settings',
-      courseCode: 'TEST101',
-      courseName: 'Notification Testing',
-      dueDate: addHours(new Date(), 2).toISOString(), // Due in 2 hours
-      isCompleted: false,
-      isPriority: true,
-      assignmentType: type,
-    };
-    
-    const typeEmoji = getAssignmentTypeEmoji(type);
-    
-    // Send immediate test notification
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: `${typeEmoji} ${type}`,
-        body: `"${testAssignment.title}" (${testAssignment.courseCode}) due in 2 hours.`,
-        data: { isTest: true, navigateTo: 'assignments' },
-        sound: true,
-      },
-      trigger: null, // Send immediately
-    });
-    
-    console.log('Test notification sent');
-  } catch (error) {
-    console.error('Error sending test notification:', error);
-    throw error;
-  }
-}
-
-// Test notification timing (for debugging purposes)
-export async function testNotificationTiming(): Promise<void> {
-  try {
-    const settings = await getNotificationSettings();
-    
-    // 1. Immediate notification
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: '🔔 Test Notification',
-        body: 'This appears immediately.',
-        data: { isTest: true, navigateTo: 'assignments' },
-        sound: true,
-      },
-      trigger: null, // Send immediately
-    });
-    
-    // 2. Notification in 30 seconds
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: '⏱️ Delayed Notification',
-        body: 'This appears after 30 seconds.',
-        data: { isTest: true, navigateTo: 'assignments' },
-        sound: true,
-      },
-      trigger: {
-        type: SchedulableTriggerInputTypes.TIME_INTERVAL,
-        seconds: 30,
-      },
-    });
-    
-    // 3. Notification at the user's configured time
-    const notificationTimeDate = new Date(settings.notificationTime);
-    const todayAtNotificationTime = new Date();
-    todayAtNotificationTime.setHours(
-      notificationTimeDate.getHours(),
-      notificationTimeDate.getMinutes(),
-      0,
-      0
-    );
-    
-    // If the notification time has already passed for today, schedule for tomorrow
-    if (todayAtNotificationTime <= new Date()) {
-      todayAtNotificationTime.setDate(todayAtNotificationTime.getDate() + 1);
-    }
-    
-    // Calculate seconds until the notification time
-    const secondsUntilNotificationTime = Math.floor(
-      (todayAtNotificationTime.getTime() - new Date().getTime()) / 1000
-    );
-    
-    const formattedTime = format(
-      todayAtNotificationTime, 
-      'h:mm a' // Format as "3:30 PM"
-    );
-    
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: '📅 Scheduled Notification',
-        body: `This will appear at ${formattedTime}.`,
-        data: { isTest: true, navigateTo: 'assignments' },
-        sound: true,
-      },
-      trigger: {
-        type: SchedulableTriggerInputTypes.TIME_INTERVAL,
-        seconds: secondsUntilNotificationTime,
-      },
-    });
-    
-    console.log('Notification timing test initiated');
-  } catch (error) {
-    console.error('Error testing notification timing:', error);
-    throw error;
   }
 } 

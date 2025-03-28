@@ -11,7 +11,6 @@ export async function scheduleForNewAssignment(assignment: Assignment): Promise<
   try {
     await scheduleNotificationForAssignment(assignment);
   } catch (error) {
-    console.error('Error scheduling notification for new assignment:', error);
   }
 }
 
@@ -30,7 +29,6 @@ export async function handleCompletionStateChange(
       await scheduleNotificationForAssignment(assignment);
     }
   } catch (error) {
-    console.error('Error updating notifications after toggle:', error);
   }
 }
 
@@ -39,7 +37,6 @@ export async function cancelForDeletedAssignment(id: string): Promise<void> {
   try {
     await cancelNotifications(id);
   } catch (error) {
-    console.error('Error canceling notifications for deleted assignment:', error);
   }
 }
 
@@ -56,7 +53,6 @@ export async function updateNotificationsForUpdatedAssignment(
       await scheduleNotificationForAssignment(assignment);
     }
   } catch (error) {
-    console.error('Error updating notifications:', error);
   }
 }
 

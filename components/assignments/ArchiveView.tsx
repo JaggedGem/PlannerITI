@@ -38,12 +38,6 @@ export default function ArchiveView({
   const [hasMore, setHasMore] = useState(true);
   const isLoadingMoreRef = useRef(false);
 
-  // Enhanced debugging
-  useEffect(() => {
-    console.log('Assignments count:', assignments.length);
-    console.log('Screen dimensions:', width, height);
-  }, [assignments.length]);
-  
   // Group assignments by month
   const groupedAssignments = useMemo(() => {
     if (!assignments.length) {
@@ -72,7 +66,6 @@ export default function ArchiveView({
       grouped[monthYear].push(assignment);
     });
     
-    console.log('Grouped assignments:', Object.keys(grouped).length);
     return grouped;
   }, [assignments, visibleItems]);
   

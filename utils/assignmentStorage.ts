@@ -268,47 +268,26 @@ export const getPeriodById = async (periodId: string): Promise<Period | undefine
 // Handle orphaned assignments when a group changes
 export const handleGroupChange = async (groupId?: string | SubGroupType): Promise<boolean> => {
   try {
-    console.log("Processing assignments for group change", { groupId });
     const assignments = await getAssignments();
     let hasChanges = false;
     
     // FORCE REFRESH the subjects for the new group
-    console.log("Forcing subject refresh for the new group");
     const currentSubjects = await scheduleService.refreshSubjects();
-    
-    console.log(`Found ${currentSubjects.length} subjects in the current group:`, 
-      currentSubjects.map(s => ({ id: s.id, name: s.name })));
     
     // Create subject ID and name sets for faster lookups
     const subjectIds = new Set(currentSubjects.map(s => s.id));
     const subjectNames = new Set(currentSubjects.map(s => s.name.toLowerCase()));
     
-    console.log(`Subject IDs: ${Array.from(subjectIds).join(', ')}`);
-    console.log(`Subject names: ${Array.from(subjectNames).join(', ')}`);
-    
-    // Diagnostic: Log all orphaned assignments
-    const orphanedAssignments = assignments.filter(a => a.isOrphaned);
-    console.log(`Found ${orphanedAssignments.length} orphaned assignments:`, 
-      orphanedAssignments.map(a => ({ 
-        title: a.title, 
-        subject: a.courseName, 
-        subjectId: a.subjectId 
-      })));
-    
     // Process each assignment
     const updatedAssignments = await Promise.all(assignments.map(async (assignment) => {
       // First check if this is an orphaned assignment that should be restored
       if (assignment.isOrphaned) {
-        console.log(`Checking orphaned assignment: "${assignment.title}" (${assignment.courseName}, ID: ${assignment.subjectId || 'none'})`);
-        
         // Check if subject ID exists in current group
         const idExists = assignment.subjectId && subjectIds.has(assignment.subjectId);
-        console.log(`  - Subject ID match: ${idExists ? 'FOUND' : 'NOT FOUND'}`);
         
         // Check if subject name exists in current group
         const nameExists = assignment.courseName && 
           subjectNames.has(assignment.courseName.toLowerCase());
-        console.log(`  - Subject name match: ${nameExists ? 'FOUND' : 'NOT FOUND'} for "${assignment.courseName?.toLowerCase()}"`);
         
         // If either ID or name match, restore the assignment
         if (idExists || nameExists) {
@@ -320,7 +299,6 @@ export const handleGroupChange = async (groupId?: string | SubGroupType): Promis
             );
             
             if (matchedSubject) {
-              console.log(`Restoring orphaned assignment with updated subject ID: "${assignment.title}" → ${matchedSubject.name}`);
               hasChanges = true;
               return {
                 ...assignment,
@@ -330,7 +308,6 @@ export const handleGroupChange = async (groupId?: string | SubGroupType): Promis
             }
           } else {
             // Direct ID match - just restore
-            console.log(`Restoring orphaned assignment: "${assignment.title}"`);
             hasChanges = true;
             return {
               ...assignment,
@@ -339,13 +316,9 @@ export const handleGroupChange = async (groupId?: string | SubGroupType): Promis
           }
         }
         
-        // If we get here, the assignment is still orphaned
-        console.log(`Assignment remains orphaned: "${assignment.title}"`);
         return assignment;
       } else {
         // For non-orphaned assignments, check if they should become orphaned
-        console.log(`Checking if assignment should be orphaned: "${assignment.title}" (${assignment.courseName}, ID: ${assignment.subjectId || 'none'})`);
-        
         // Check if subject ID exists in current group
         const idExists = assignment.subjectId && subjectIds.has(assignment.subjectId);
         
@@ -353,12 +326,8 @@ export const handleGroupChange = async (groupId?: string | SubGroupType): Promis
         const nameExists = assignment.courseName && 
           subjectNames.has(assignment.courseName.toLowerCase());
         
-        console.log(`  - Subject ID exists: ${idExists ? 'YES' : 'NO'}`);
-        console.log(`  - Subject name exists: ${nameExists ? 'YES' : 'NO'}`);
-        
         // If neither ID nor name match, mark as orphaned
         if (!idExists && !nameExists) {
-          console.log(`Marking assignment as orphaned: "${assignment.title}" (${assignment.courseName})`);
           hasChanges = true;
           return {
             ...assignment,
@@ -371,7 +340,6 @@ export const handleGroupChange = async (groupId?: string | SubGroupType): Promis
           );
           
           if (matchedSubject) {
-            console.log(`Updating subject ID for assignment: "${assignment.title}" → ${matchedSubject.name}`);
             hasChanges = true;
             return {
               ...assignment,
@@ -388,16 +356,11 @@ export const handleGroupChange = async (groupId?: string | SubGroupType): Promis
     
     // Save changes if any assignments were updated
     if (hasChanges) {
-      console.log(`Saving ${updatedAssignments.length} assignments with updated orphaned status`);
       await saveAssignments(updatedAssignments);
-    } else {
-      console.log("No assignments needed updates");
     }
     
     return hasChanges;
   } catch (error) {
-    console.error('Error handling group change for assignments:', error);
-    // Don't rethrow the error - just return false instead to avoid UI breaks
     return false;
   }
 };

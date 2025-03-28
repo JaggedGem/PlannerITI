@@ -607,14 +607,6 @@ const Assignments = () => {
   const [isDropdownVisible, setIsDropdownVisible] = useState(false);
   const [isArchiveModalVisible, setIsArchiveModalVisible] = useState(false);
   
-  // Add debugging for archived assignments
-  useEffect(() => {
-    console.log(`Archived assignments count: ${archivedAssignments.length}`);
-    if (archivedAssignments.length > 0) {
-      console.log('Sample archive item:', archivedAssignments[0].title);
-    }
-  }, [archivedAssignments]);
-  
   // Track which tabs have been viewed already to disable animations after first view
   const [hasViewedTab, setHasViewedTab] = useState<{[key: number]: boolean}>({0: false, 1: false, 2: false, 3: false});
   
@@ -695,20 +687,6 @@ const Assignments = () => {
   useEffect(() => {
     fetchAssignments();
   }, [fetchAssignments]);
-  
-  // TEST CODE: Automatically show archive modal after loading - REMOVE AFTER TESTING
-  useEffect(() => {
-    if (!isLoading) {
-      // Open archive modal after 3 seconds for testing
-      console.log('Setting up auto-open timer for archive modal');
-      const timer = setTimeout(() => {
-        console.log('Auto-opening archive modal for testing');
-        setIsArchiveModalVisible(true);
-      }, 3000);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [isLoading]);
   
   // Handle segment change with selection from dropdown
   const handleSegmentChange = useCallback((index: number) => {
