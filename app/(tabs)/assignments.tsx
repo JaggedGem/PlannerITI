@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, memo, useRef, useLayoutEffect } from 'react';
-import { StyleSheet, ScrollView, SafeAreaView, StatusBar, View, Text, ActivityIndicator, Platform, InteractionManager, AppState, TouchableOpacity, Modal } from 'react-native';
+import { StyleSheet, ScrollView, SafeAreaView, StatusBar, View, Text, ActivityIndicator, Platform, InteractionManager, AppState, TouchableOpacity, Modal, Pressable } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { useColorScheme } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
@@ -22,6 +22,7 @@ import CourseSection from '../../components/assignments/CourseSection';
 import { useTranslation } from '@/hooks/useTranslation';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ArchiveView from '../../components/assignments/ArchiveView';
+import * as Haptics from 'expo-haptics';
 
 // Add circuit breaker constants
 const CRASH_DETECTION_KEY = 'assignment_tab_crash_detection';
@@ -518,6 +519,81 @@ class AssignmentsErrorBoundary extends React.Component<ErrorBoundaryProps, Error
   }
 }
 
+// Add this new component before the Assignments component
+const ModernDropdown = memo(({ 
+  isVisible, 
+  onClose, 
+  segments, 
+  selectedIndex, 
+  onSelect,
+  styles 
+}: { 
+  isVisible: boolean;
+  onClose: () => void;
+  segments: string[];
+  selectedIndex: number;
+  onSelect: (index: number) => void;
+  styles: any;
+}) => {
+  const { t } = useTranslation();
+
+  const handleSelect = (index: number) => {
+    // Trigger haptic feedback
+    Haptics.selectionAsync();
+    onSelect(index);
+    onClose();
+  };
+
+  return (
+    <Modal
+      visible={isVisible}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <Pressable 
+        style={styles.modalOverlay} 
+        onPress={onClose}
+      >
+        <View style={styles.dropdownContainer}>
+          <View style={styles.dropdownHeader}>
+            <Text style={styles.dropdownTitle}>{t('assignments').title}</Text>
+            <Pressable onPress={onClose} style={styles.closeButton}>
+              <Ionicons name="close" size={24} color="#8A8A8D" />
+            </Pressable>
+          </View>
+          
+          {segments.map((segment, index) => (
+            <Pressable
+              key={segment}
+              style={({ pressed }) => [
+                styles.dropdownItem,
+                selectedIndex === index && styles.dropdownItemSelected,
+                pressed && styles.dropdownItemPressed
+              ]}
+              onPress={() => handleSelect(index)}
+            >
+              <View style={styles.dropdownItemContent}>
+                <Text 
+                  style={[
+                    styles.dropdownItemText,
+                    selectedIndex === index && styles.dropdownItemTextSelected
+                  ]}
+                >
+                  {segment}
+                </Text>
+                {selectedIndex === index && (
+                  <Ionicons name="checkmark" size={20} color="#3478F6" />
+                )}
+              </View>
+            </Pressable>
+          ))}
+        </View>
+      </Pressable>
+    </Modal>
+  );
+});
+
 // Define the main Assignments component - this needs to be before AssignmentsWithErrorBoundary
 const Assignments = () => {
   const colorScheme = useColorScheme() ?? 'light';
@@ -938,48 +1014,38 @@ const Assignments = () => {
             </TouchableOpacity>
           </View>
           
-          <TouchableOpacity 
-            style={styles.dropdownButton} 
-            onPress={() => setIsDropdownVisible(true)}
+          <Pressable 
+            style={({ pressed }) => [
+              styles.dropdownButton,
+              pressed && styles.dropdownButtonPressed
+            ]} 
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setIsDropdownVisible(true);
+            }}
           >
-            <Text style={styles.dropdownButtonText}>{segments[selectedSegmentIndex]}</Text>
-            <Text style={styles.dropdownArrow}>▼</Text>
-          </TouchableOpacity>
+            <View style={styles.dropdownButtonContent}>
+              <Text style={styles.dropdownButtonText}>{segments[selectedSegmentIndex]}</Text>
+              <Ionicons 
+                name="chevron-down" 
+                size={16} 
+                color="#8A8A8D" 
+                style={[
+                  styles.dropdownArrow,
+                  isDropdownVisible && styles.dropdownArrowRotated
+                ]} 
+              />
+            </View>
+          </Pressable>
           
-          <Modal
-            visible={isDropdownVisible}
-            transparent={true}
-            animationType="fade"
-            onRequestClose={() => setIsDropdownVisible(false)}
-          >
-            <TouchableOpacity 
-              style={styles.modalOverlay} 
-              activeOpacity={1} 
-              onPress={() => setIsDropdownVisible(false)}
-            >
-              <View style={styles.dropdownContainer}>
-                {segments.map((segment, index) => (
-                  <TouchableOpacity
-                    key={segment}
-                    style={[
-                      styles.dropdownItem,
-                      selectedSegmentIndex === index && styles.dropdownItemSelected
-                    ]}
-                    onPress={() => handleSegmentChange(index)}
-                  >
-                    <Text 
-                      style={[
-                        styles.dropdownItemText,
-                        selectedSegmentIndex === index && styles.dropdownItemTextSelected
-                      ]}
-                    >
-                      {segment}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </TouchableOpacity>
-          </Modal>
+          <ModernDropdown
+            isVisible={isDropdownVisible}
+            onClose={() => setIsDropdownVisible(false)}
+            segments={segments}
+            selectedIndex={selectedSegmentIndex}
+            onSelect={handleSegmentChange}
+            styles={styles}
+          />
           
           {isSafeMode && (
             <Text style={styles.safeModeIndicator}>Stability mode active</Text>
@@ -1202,6 +1268,12 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 12,
+    marginTop: 8,
+  },
+  dropdownButtonPressed: {
+    backgroundColor: '#2A2A2A',
+  },
+  dropdownButtonContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -1212,36 +1284,66 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   dropdownArrow: {
-    fontSize: 12,
-    color: '#8A8A8D',
-    marginLeft: 8,
+    transform: [{ rotate: '0deg' }],
+  },
+  dropdownArrowRotated: {
+    transform: [{ rotate: '180deg' }],
   },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'flex-end',
   },
   dropdownContainer: {
-    backgroundColor: '#232323',
-    borderRadius: 12,
-    padding: 8,
-    width: '80%',
-    maxWidth: 300,
+    backgroundColor: '#1C1C1E',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 16,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  dropdownHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2C2C2E',
+  },
+  dropdownTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#8A8A8D',
+  },
+  closeButton: {
+    padding: 4,
   },
   dropdownItem: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+  },
+  dropdownItemPressed: {
+    backgroundColor: '#2C2C2E',
   },
   dropdownItemSelected: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: '#2C3DCD20',
+  },
+  dropdownItemContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   dropdownItemText: {
-    fontSize: 16,
+    fontSize: 17,
     color: '#FFFFFF',
   },
   dropdownItemTextSelected: {
+    color: '#3478F6',
     fontWeight: '600',
   },
   // Archive specific styles
