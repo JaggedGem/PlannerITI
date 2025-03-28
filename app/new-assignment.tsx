@@ -1460,7 +1460,6 @@ export default function NewAssignmentScreen() {
           
           // Check if daySchedule exists and is an array
           if (!daySchedule || !Array.isArray(daySchedule)) {
-            console.error(`Day schedule for ${dayName} is not an array:`, daySchedule);
             continue;
           }
           

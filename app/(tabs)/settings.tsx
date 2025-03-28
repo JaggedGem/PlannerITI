@@ -20,8 +20,6 @@ import {
   DEFAULT_NOTIFICATION_SETTINGS, 
   NotificationSettings, 
   scheduleAllNotifications,
-  sendTestNotification,
-  testNotificationTiming,
   createAndScheduleDailyDigest
 } from '../../utils/notificationUtils';
 import { getAssignments, AssignmentType } from '../../utils/assignmentStorage';
@@ -1094,40 +1092,6 @@ export default function Settings() {
             style={styles.devToolButton}
             onPress={async () => {
               try {
-                await sendTestNotification(AssignmentType.TEST);
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                Alert.alert('Success', 'Test notification sent! Check your notifications.');
-              } catch (error) {
-                console.error('Error sending test notification:', error);
-                Alert.alert('Error', 'Failed to send test notification');
-              }
-            }}
-          >
-            <MaterialIcons name="notifications-active" size={24} color="#4CAF50" />
-            <Text style={styles.devToolText}>Send Test Notification</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.devToolButton}
-            onPress={async () => {
-              try {
-                await testNotificationTiming();
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                Alert.alert('Success', 'Notification timing test initiated. You should receive an immediate notification, one in 30 seconds, and one at your configured notification time.');
-              } catch (error) {
-                console.error('Error testing notification timing:', error);
-                Alert.alert('Error', 'Failed to test notification timing');
-              }
-            }}
-          >
-            <MaterialIcons name="alarm" size={24} color="#FF5722" />
-            <Text style={styles.devToolText}>Test Notification Timing</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.devToolButton}
-            onPress={async () => {
-              try {
                 // Cancel all existing notifications
                 await Notifications.cancelAllScheduledNotificationsAsync();
                 
@@ -1498,55 +1462,37 @@ export default function Settings() {
                 />
               </View>
             </View>
-            
-            {/* Test notification button */}
-            <TouchableOpacity
-              style={styles.testNotificationButton}
-              onPress={() => {
-                sendTestNotification(AssignmentType.TEST)
-                  .then(() => {
-                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                    Alert.alert('Test notification sent', 'Check your notifications to see how they will appear');
-                  })
-                  .catch(error => {
-                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-                    Alert.alert('Error', 'Failed to send test notification');
-                    console.error('Test notification error:', error);
-                  });
-              }}
-            >
-              <MaterialIcons name="send" size={20} color="#FFFFFF" style={styles.testNotificationIcon} />
-              <Text style={styles.testNotificationText}>{t('settings').notifications.testNotification}</Text>
-            </TouchableOpacity>
 
             {/* Send daily digest now button */}
-            <TouchableOpacity
-              style={[styles.testNotificationButton, { backgroundColor: '#4CAF50', marginTop: 8 }]}
-              onPress={async () => {
-                try {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  const assignments = await getAssignments();
-                  await createAndScheduleDailyDigest(assignments, true);
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                  Alert.alert(
-                    t('settings').notifications.digestSentTitle,
-                    t('settings').notifications.digestSentMessage
-                  );
-                } catch (error) {
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-                  Alert.alert(
-                    t('settings').notifications.errorTitle,
-                    t('settings').notifications.digestErrorMessage
-                  );
-                  console.error('Daily digest error:', error);
-                }
-              }}
-            >
-              <MaterialIcons name="calendar-today" size={20} color="#FFFFFF" style={styles.testNotificationIcon} />
-              <Text style={styles.testNotificationText}>
-                {t('settings').notifications.sendDigestNow}
-              </Text>
-            </TouchableOpacity>
+            {IS_DEV && (
+              <TouchableOpacity
+                style={[styles.testNotificationButton, { backgroundColor: '#4CAF50', marginTop: 8 }]}
+                onPress={async () => {
+                  try {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    const assignments = await getAssignments();
+                    await createAndScheduleDailyDigest(assignments, true);
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                    Alert.alert(
+                      t('settings').notifications.digestSentTitle,
+                      t('settings').notifications.digestSentMessage
+                    );
+                  } catch (error) {
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                    Alert.alert(
+                      t('settings').notifications.errorTitle,
+                      t('settings').notifications.digestErrorMessage
+                    );
+                    console.error('Daily digest error:', error);
+                  }
+                }}
+              >
+                <MaterialIcons name="calendar-today" size={20} color="#FFFFFF" style={styles.testNotificationIcon} />
+                <Text style={styles.testNotificationText}>
+                  {t('settings').notifications.sendDigestNow}
+                </Text>
+              </TouchableOpacity>
+            )}
           </>
         )}
       </View>

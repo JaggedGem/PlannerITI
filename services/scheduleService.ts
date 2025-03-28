@@ -969,8 +969,6 @@ export const scheduleService = {
         return [];
       }
       
-      console.log(`Forcing subject refresh for group: ${targetGroupId}`);
-      
       // Clear the cached subjects
       this.cachedSubjects = [];
       
@@ -980,10 +978,8 @@ export const scheduleService = {
       // Extract and store subjects
       await this.extractAndStoreSubjects(scheduleData);
       
-      console.log(`Refreshed subjects: ${this.cachedSubjects.length}`);
       return this.cachedSubjects;
     } catch (error) {
-      console.error('Error refreshing subjects:', error);
       return [];
     }
   },
