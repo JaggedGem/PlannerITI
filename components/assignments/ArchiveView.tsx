@@ -150,18 +150,18 @@ export default function ArchiveView({
                     layout={Layout.springify().mass(0.3)}
                     style={styles.assignmentCard}
                   >
-                    <View style={styles.assignmentContent}>
-                      <TouchableOpacity
-                        style={[
-                          styles.checkbox,
-                          assignment.isCompleted && styles.checkboxCompleted
-                        ]}
-                        onPress={() => onToggleAssignment(assignment.id)}
-                      >
+                    <TouchableOpacity
+                      style={styles.assignmentContent}
+                      onPress={() => onToggleAssignment(assignment.id)}
+                    >
+                      <View style={[
+                        styles.checkbox,
+                        assignment.isCompleted && styles.checkboxCompleted
+                      ]}>
                         {assignment.isCompleted && (
                           <Ionicons name="checkmark" size={16} color="#FFFFFF" />
                         )}
-                      </TouchableOpacity>
+                      </View>
                       
                       <View style={styles.assignmentInfo}>
                         <Text style={[
@@ -181,7 +181,7 @@ export default function ArchiveView({
                       >
                         <Ionicons name="trash-outline" size={20} color="#FF3B30" />
                       </TouchableOpacity>
-                    </View>
+                    </TouchableOpacity>
                   </Animated.View>
                 ))}
               </View>
