@@ -128,7 +128,6 @@ interface TimetableItemProps {
   color: string;
   isActive: boolean;
   timeFormat: string;
-  assignmentCount?: number;
 }
 
 const TimetableItem = ({ 
@@ -137,13 +136,15 @@ const TimetableItem = ({
   height, 
   color, 
   isActive, 
-  timeFormat,
-  assignmentCount = 0 
+  timeFormat
 }: TimetableItemProps) => {
   // Create time display with just hours (no minutes)
   const startHour = parseInt(item.startTime.split(':')[0]);
   const endHour = parseInt(item.endTime.split(':')[0]);
   const timeDisplay = `${startHour}–${endHour}`;
+  
+  // Safely handle assignment count
+  const assignmentCount = item.assignmentCount || 0;
   
   return (
     <Animated.View 
@@ -169,14 +170,18 @@ const TimetableItem = ({
         end={{ x: 1, y: 1 }}
         style={styles.itemGradient}
       >
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <Animated.View entering={FadeIn.duration(250)} style={{ flex: 1 }}>
-            <Text style={styles.className} numberOfLines={1}>
-              {item.className}
-            </Text>
-          </Animated.View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.className} numberOfLines={1}>
+            {item.className}
+          </Text>
+        </View>
+        
+        <View style={styles.itemFooter}>
+          <Text style={styles.roomNumber} numberOfLines={1}>
+            {item.roomNumber}
+          </Text>
           
-          {/* Assignment count badge */}
+          {/* Assignment count badge moved to footer */}
           {assignmentCount > 0 && (
             <View style={styles.assignmentBadge}>
               <Text style={styles.assignmentBadgeText}>
@@ -184,14 +189,6 @@ const TimetableItem = ({
               </Text>
             </View>
           )}
-        </View>
-        
-        <View style={styles.itemFooter}>
-          <Animated.View entering={FadeIn.duration(250).delay(50)}>
-            <Text style={styles.roomNumber} numberOfLines={1}>
-              {item.roomNumber}
-            </Text>
-          </Animated.View>
         </View>
       </LinearGradient>
     </Animated.View>
@@ -438,6 +435,7 @@ export default function WeekView() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [slideDirection, setSlideDirection] = useState<'left' | 'right' | null>(null);
   const fadeAnim = useSharedValue(1);
+  const slideAnim = useSharedValue(0);
   
   // Initialize settings ref at the top level
   const settingsRef = useRef(scheduleService.getSettings());
@@ -690,27 +688,102 @@ export default function WeekView() {
   // Get current hour for highlighting
   const nowHour = new Date().getHours();
 
-  // Function to navigate between weeks with animation
+  // Create animated styles
+  const containerStyle = useAnimatedStyle(() => {
+    return {
+      opacity: fadeAnim.value,
+      transform: [
+        { translateX: slideAnim.value }
+      ]
+    };
+  });
+
+  // Function to navigate between weeks with smooth transitions
   const navigateWeek = (direction: number) => {
-    // Set slide direction for animation (original code)
+    // Immediately clear current week's data and start transition
+    fadeAnim.value = withTiming(0, { duration: 150 });
+    slideAnim.value = withTiming(direction * 50, { duration: 150 });
+    
+    // Set slide direction for animation
     setSlideDirection(direction > 0 ? 'right' : 'left');
     
     // Update week offset
     setWeekOffset(prev => prev + direction);
     
-    // Force an update of the week schedule
+    // Force an update of the week schedule with the new date
     if (scheduleData) {
+      const newWeekStart = new Date(weekStart);
+      newWeekStart.setDate(weekStart.getDate() + (direction * 7));
+      
       const updateScheduleForNewWeek = async () => {
-        await updateWeekSchedule();
+        try {
+          // Fetch fresh data for the new week
+          const data = await scheduleService.getClassSchedule(settings.selectedGroupId);
+          
+          // Process recovery days for the new week
+          const recoveryDays = data.recoveryDays || [];
+          const weekendRecoveryDays = recoveryDays.filter(rd => {
+            const rdDate = new Date(rd.date);
+            const startOfWeek = new Date(newWeekStart);
+            const endOfWeek = new Date(newWeekStart);
+            endOfWeek.setDate(newWeekStart.getDate() + 6);
+            
+            return rdDate >= startOfWeek && 
+                   rdDate <= endOfWeek && 
+                   (rdDate.getDay() === 0 || rdDate.getDay() === 6) &&
+                   rd.isActive && 
+                   (rd.groupId === '' || rd.groupId === settings.selectedGroupId);
+          });
+
+          // Build the schedule object for the new week with fresh data
+          const newWeekSchedule: Record<string, ScheduleItem[]> = {
+            monday: await scheduleService.getScheduleForDay(data, 'monday', getDateForDay(newWeekStart, 0)),
+            tuesday: await scheduleService.getScheduleForDay(data, 'tuesday', getDateForDay(newWeekStart, 1)),
+            wednesday: await scheduleService.getScheduleForDay(data, 'wednesday', getDateForDay(newWeekStart, 2)),
+            thursday: await scheduleService.getScheduleForDay(data, 'thursday', getDateForDay(newWeekStart, 3)),
+            friday: await scheduleService.getScheduleForDay(data, 'friday', getDateForDay(newWeekStart, 4))
+          };
+          
+          // Add recovery days if any
+          if (weekendRecoveryDays.length > 0) {
+            for (const rd of weekendRecoveryDays) {
+              const dayKey = `weekend_${rd.date}`;
+              newWeekSchedule[dayKey] = await scheduleService.getScheduleForDay(
+                data, 
+                rd.replacedDay.toLowerCase() as keyof ApiResponse['data'], 
+                new Date(rd.date)
+              );
+            }
+          }
+          
+          // Update the data
+          setScheduleData(data);
+          setWeekSchedule(newWeekSchedule);
+          
+          // Animate in the new content
+          slideAnim.value = withTiming(0, { duration: 150 });
+          fadeAnim.value = withTiming(1, { duration: 150 });
+        } catch (error) {
+          setError(t('schedule').error || 'Failed to load schedule');
+          // Reset animations on error
+          slideAnim.value = withTiming(0, { duration: 150 });
+          fadeAnim.value = withTiming(1, { duration: 150 });
+        }
       };
       
       updateScheduleForNewWeek();
     }
   };
 
-  // Fix goToCurrentWeek to keep original animation while handling async updates
+  // Fix goToCurrentWeek to use the same smooth transitions
   const goToCurrentWeek = () => {
-    // Set slide direction for animation (original code)
+    if (weekOffset === 0) return; // Don't do anything if already on current week
+    
+    // Immediately clear current week's data and start transition
+    fadeAnim.value = withTiming(0, { duration: 150 });
+    slideAnim.value = withTiming(weekOffset > 0 ? -50 : 50, { duration: 150 });
+    
+    // Set slide direction for animation
     setSlideDirection(weekOffset > 0 ? 'left' : 'right');
     
     setWeekOffset(0);
@@ -718,7 +791,62 @@ export default function WeekView() {
     // Force an update of the week schedule
     if (scheduleData) {
       const updateCurrentWeek = async () => {
-        await updateWeekSchedule();
+        try {
+          // Fetch fresh data for the current week
+          const data = await scheduleService.getClassSchedule(settings.selectedGroupId);
+          
+          const now = new Date();
+          const currentWeekStart = getWeekStart(now);
+          
+          // Process recovery days for current week
+          const recoveryDays = data.recoveryDays || [];
+          const weekendRecoveryDays = recoveryDays.filter(rd => {
+            const rdDate = new Date(rd.date);
+            const startOfWeek = new Date(currentWeekStart);
+            const endOfWeek = new Date(currentWeekStart);
+            endOfWeek.setDate(currentWeekStart.getDate() + 6);
+            
+            return rdDate >= startOfWeek && 
+                   rdDate <= endOfWeek && 
+                   (rdDate.getDay() === 0 || rdDate.getDay() === 6) &&
+                   rd.isActive && 
+                   (rd.groupId === '' || rd.groupId === settings.selectedGroupId);
+          });
+
+          // Build the schedule object for current week with fresh data
+          const newWeekSchedule: Record<string, ScheduleItem[]> = {
+            monday: await scheduleService.getScheduleForDay(data, 'monday', getDateForDay(currentWeekStart, 0)),
+            tuesday: await scheduleService.getScheduleForDay(data, 'tuesday', getDateForDay(currentWeekStart, 1)),
+            wednesday: await scheduleService.getScheduleForDay(data, 'wednesday', getDateForDay(currentWeekStart, 2)),
+            thursday: await scheduleService.getScheduleForDay(data, 'thursday', getDateForDay(currentWeekStart, 3)),
+            friday: await scheduleService.getScheduleForDay(data, 'friday', getDateForDay(currentWeekStart, 4))
+          };
+          
+          // Add recovery days if any
+          if (weekendRecoveryDays.length > 0) {
+            for (const rd of weekendRecoveryDays) {
+              const dayKey = `weekend_${rd.date}`;
+              newWeekSchedule[dayKey] = await scheduleService.getScheduleForDay(
+                data, 
+                rd.replacedDay.toLowerCase() as keyof ApiResponse['data'], 
+                new Date(rd.date)
+              );
+            }
+          }
+          
+          // Update the data
+          setScheduleData(data);
+          setWeekSchedule(newWeekSchedule);
+          
+          // Animate in the new content
+          slideAnim.value = withTiming(0, { duration: 150 });
+          fadeAnim.value = withTiming(1, { duration: 150 });
+        } catch (error) {
+          setError(t('schedule').error || 'Failed to load schedule');
+          // Reset animations on error
+          slideAnim.value = withTiming(0, { duration: 150 });
+          fadeAnim.value = withTiming(1, { duration: 150 });
+        }
       };
       
       updateCurrentWeek();
@@ -865,7 +993,7 @@ export default function WeekView() {
           contentContainerStyle={{ minHeight: timetableHeight + 20 }}
         >
           <Animated.View 
-            style={styles.timetableContainer}
+            style={[styles.timetableContainer, containerStyle]}
             entering={FadeIn.duration(200)}
             layout={Layout.springify()}
           >
@@ -963,19 +1091,10 @@ export default function WeekView() {
                       const color = item.isCustom && item.color ? item.color : getSubjectColor(item.className);
                       const isActive = isToday && isCurrentTimeSlot(item.startTime, item.endTime);
 
-                      // Create simplified item with only necessary props, including assignment count
-                      const simplifiedItem = {
-                        startTime: item.startTime,
-                        endTime: item.endTime,
-                        className: item.className,
-                        roomNumber: item.roomNumber,
-                        assignmentCount: item.assignmentCount || 0
-                      };
-
                       return (
                         <TimetableItem 
                           key={itemIndex}
-                          item={simplifiedItem}
+                          item={item}
                           top={top}
                           height={height}
                           color={color}
@@ -1262,6 +1381,7 @@ const styles = StyleSheet.create<Styles>({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: 2,
   },
   roomNumber: {
     color: '#FFFFFF',
@@ -1271,6 +1391,8 @@ const styles = StyleSheet.create<Styles>({
     textShadowColor: 'rgba(0, 0, 0, 0.5)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
+    flex: 1,
+    marginRight: 4,
   },
   currentTimeIndicator: {
 		position: 'absolute',
@@ -1335,18 +1457,17 @@ const styles = StyleSheet.create<Styles>({
 	},
   assignmentBadge: {
     backgroundColor: '#FF3B30',
-    borderRadius: 12,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    marginLeft: 4,
+    borderRadius: 10,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    minWidth: 20,
-    height: 20,
+    minWidth: 16,
+    height: 16,
   },
   assignmentBadgeText: {
     color: 'white',
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: 'bold',
     textAlign: 'center',
   },
