@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, memo } from 'react';
 import { 
   View, 
   Text, 
@@ -12,7 +12,8 @@ import {
   Alert,
   ActivityIndicator,
   StatusBar,
-  Animated as RNAnimated
+  Animated as RNAnimated,
+  Pressable
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -33,6 +34,7 @@ import { format, isToday, isTomorrow, isSameDay } from 'date-fns';
 import { addAssignment, AssignmentType } from '../utils/assignmentStorage';
 import { scheduleService, DAYS_MAP, Subject, CustomPeriod } from '../services/scheduleService';
 import { useTranslation } from '@/hooks/useTranslation';
+import { ModernDropdown } from '@/components/modernDropdown';
 
 // Extend Subject type to include custom period properties
 interface ExtendedSubject extends Subject {
@@ -1927,6 +1929,29 @@ export default function NewAssignmentScreen() {
     { label: t('assignments').periods.fifth, hour: 14, minute: 20 },
   ];
 
+  const getIconForType = (type: AssignmentType): string => {
+    switch (type) {
+      case AssignmentType.HOMEWORK:
+        return 'book-outline';
+      case AssignmentType.TEST:
+        return 'document-text-outline';
+      case AssignmentType.EXAM:
+        return 'school-outline';
+      case AssignmentType.PROJECT:
+        return 'build-outline';
+      case AssignmentType.QUIZ:
+        return 'help-circle-outline';
+      case AssignmentType.LAB:
+        return 'flask-outline';
+      case AssignmentType.ESSAY:
+        return 'create-outline';
+      case AssignmentType.PRESENTATION:
+        return 'easel-outline';
+      default:
+        return 'ellipsis-horizontal-circle-outline';
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" />
@@ -2271,30 +2296,48 @@ export default function NewAssignmentScreen() {
       </Modal>
       
       {/* Assignment Type Selection Modal */}
-      <Modal
-        visible={isTypeModalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setIsTypeModalVisible(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{t('assignments').type}</Text>
-              <TouchableOpacity 
-                onPress={() => setIsTypeModalVisible(false)}
-                hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
-              >
-                <Ionicons name="close" size={24} color="#FFFFFF" />
-              </TouchableOpacity>
-            </View>
-            
-            <ScrollView style={styles.typesList}>
-              {Object.values(AssignmentType).map(type => renderTypeItem(type))}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+      <ModernDropdown
+        title={t('assignments').type}
+        isVisible={isTypeModalVisible}
+        onClose={() => setIsTypeModalVisible(false)}
+        segments={Object.values(AssignmentType).map(type => {
+          // Get appropriate icon for this type
+          const getTypeSpecificIcon = () => {
+            switch (type) {
+              case AssignmentType.HOMEWORK:
+                return 'book-outline';
+              case AssignmentType.TEST:
+                return 'document-text-outline';
+              case AssignmentType.EXAM:
+                return 'school-outline';
+              case AssignmentType.PROJECT:
+                return 'construct-outline';
+              case AssignmentType.QUIZ:
+                return 'clipboard-outline';
+              case AssignmentType.LAB:
+                return 'flask-outline';
+              case AssignmentType.ESSAY:
+                return 'create-outline';
+              case AssignmentType.PRESENTATION:
+                return 'easel-outline';
+              default:
+                return 'ellipsis-horizontal-outline';
+            }
+          };
+          
+          return {
+            label: t('assignments').types[type.toLowerCase() as 'homework' | 'test' | 'exam' | 'project' | 'quiz' | 'lab' | 'essay' | 'presentation' | 'other'],
+            icon: <Ionicons 
+              name={getTypeSpecificIcon()} 
+              size={24}
+              color="#FFFFFF"
+            />
+          };
+        })}
+        selectedIndex={Object.values(AssignmentType).findIndex(type => type === assignmentType)}
+        onSelect={(index) => handleTypeSelection(Object.values(AssignmentType)[index])}
+        maxOptions={7}
+      />
     </SafeAreaView>
   );
 }
