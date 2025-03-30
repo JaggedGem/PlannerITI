@@ -865,7 +865,7 @@ export default function DayView() {
                 >
                   {date.totalAssignments > 0 && (
                     <View style={[
-                      styles.dateAssignmentBadge,
+                      index === weekDatesWithAssignments.length - 1 ? styles.lastDateAssignmentBadge : styles.dateAssignmentBadge,
                       date.date.getDate() === selectedDate.getDate() && styles.selectedDateAssignmentBadge
                     ]}>
                       <Text style={[
@@ -1206,6 +1206,7 @@ type Styles = {
   selectedDateAssignmentBadge: ViewStyle;
   dateAssignmentBadgeText: TextStyle;
   selectedDateAssignmentBadgeText: TextStyle;
+  lastDateAssignmentBadge: ViewStyle;
 };
 
 const styles = StyleSheet.create<Styles>({
@@ -1782,5 +1783,18 @@ const styles = StyleSheet.create<Styles>({
   },
   selectedDateAssignmentBadgeText: {
     color: '#FFFFFF',
+  },
+  lastDateAssignmentBadge: {
+    position: 'absolute',
+    bottom: 6,
+    left: 6,
+    backgroundColor: '#FF3B30',
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    zIndex: 1,
   },
 });
