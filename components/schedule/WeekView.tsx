@@ -116,19 +116,30 @@ const isCurrentTimeSlot = (startTime: string, endTime: string): boolean => {
 
 interface TimetableItemProps {
   item: {
+    period?: string;
     startTime: string;
     endTime: string;
     className: string;
     roomNumber: string;
+    assignmentCount?: number;
   };
   top: number;
   height: number;
   color: string;
   isActive: boolean;
   timeFormat: string;
+  assignmentCount?: number;
 }
 
-const TimetableItem = ({ item, top, height, color, isActive, timeFormat }: TimetableItemProps) => {
+const TimetableItem = ({ 
+  item, 
+  top, 
+  height, 
+  color, 
+  isActive, 
+  timeFormat,
+  assignmentCount = 0 
+}: TimetableItemProps) => {
   // Create time display with just hours (no minutes)
   const startHour = parseInt(item.startTime.split(':')[0]);
   const endHour = parseInt(item.endTime.split(':')[0]);
@@ -158,11 +169,23 @@ const TimetableItem = ({ item, top, height, color, isActive, timeFormat }: Timet
         end={{ x: 1, y: 1 }}
         style={styles.itemGradient}
       >
-        <Animated.View entering={FadeIn.duration(250)}>
-          <Text style={styles.className} numberOfLines={1}>
-            {item.className}
-          </Text>
-        </Animated.View>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <Animated.View entering={FadeIn.duration(250)} style={{ flex: 1 }}>
+            <Text style={styles.className} numberOfLines={1}>
+              {item.className}
+            </Text>
+          </Animated.View>
+          
+          {/* Assignment count badge */}
+          {assignmentCount > 0 && (
+            <View style={styles.assignmentBadge}>
+              <Text style={styles.assignmentBadgeText}>
+                {assignmentCount}
+              </Text>
+            </View>
+          )}
+        </View>
+        
         <View style={styles.itemFooter}>
           <Animated.View entering={FadeIn.duration(250).delay(50)}>
             <Text style={styles.roomNumber} numberOfLines={1}>
@@ -351,11 +374,13 @@ type Styles = {
   recoveryDayTooltipReason: TextStyle;
   weekendColumn: ViewStyle;
   gridLine: ViewStyle;
+  assignmentBadge: ViewStyle;
+  assignmentBadgeText: TextStyle;
 };
 
 // Define a type for schedule items
 type ScheduleItem = {
-  period: string;
+  period?: string;
   startTime: string;
   endTime: string;
   className: string;
@@ -370,6 +395,7 @@ type ScheduleItem = {
   isRecoveryDay?: boolean;
   recoveryReason?: string;
   replacedDayName?: string;
+  assignmentCount?: number;
 };
 
 export default function WeekView() {
@@ -517,17 +543,18 @@ export default function WeekView() {
         // Process each weekend recovery day one by one
         for (const rd of weekendRecoveryDays) {
           const dayKey = `weekend_${rd.date}`;
+          const recoveryDate = new Date(rd.date);
           newWeekSchedule[dayKey] = await scheduleService.getScheduleForDay(
-            scheduleData,
-            rd.replacedDay.toLowerCase() as keyof ApiResponse['data'],
-            new Date(rd.date)
+            scheduleData, 
+            rd.replacedDay.toLowerCase() as keyof ApiResponse['data'], 
+            recoveryDate
           );
         }
       }
       
       setWeekSchedule(newWeekSchedule);
     }
-  }, [scheduleData, weekStart, settings.selectedGroupId]);
+  }, [scheduleData, weekStart, settings.selectedGroupId, getDateForDay]);
 
   // Add useEffect for initial schedule load
   useEffect(() => {
@@ -936,12 +963,13 @@ export default function WeekView() {
                       const color = item.isCustom && item.color ? item.color : getSubjectColor(item.className);
                       const isActive = isToday && isCurrentTimeSlot(item.startTime, item.endTime);
 
-                      // Create simplified item with only necessary props
+                      // Create simplified item with only necessary props, including assignment count
                       const simplifiedItem = {
                         startTime: item.startTime,
                         endTime: item.endTime,
                         className: item.className,
-                        roomNumber: item.roomNumber
+                        roomNumber: item.roomNumber,
+                        assignmentCount: item.assignmentCount || 0
                       };
 
                       return (
@@ -1305,4 +1333,21 @@ const styles = StyleSheet.create<Styles>({
 	currentHourHighlight: {
 		backgroundColor: 'rgba(52, 120, 246, 0.08)', // Light blue background for current hour
 	},
+  assignmentBadge: {
+    backgroundColor: '#FF3B30',
+    borderRadius: 12,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginLeft: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minWidth: 20,
+    height: 20,
+  },
+  assignmentBadgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
 });

@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { scheduleService, Period, Subject, SubGroupType } from '../services/scheduleService';
+import { scheduleService, Period, Subject, SubGroupType, PeriodAssignmentCount } from '../services/scheduleService';
 import { format, isSameDay, isToday, isTomorrow, addDays, parseISO } from 'date-fns';
 import {
   scheduleForNewAssignment,
@@ -73,6 +73,79 @@ export const saveAssignments = async (assignments: Assignment[]): Promise<void> 
   }
 };
 
+// Helper function to update assignment counts in schedule service
+const updateAssignmentCountsInSchedule = async () => {
+  try {
+    const assignments = await getAssignments();
+    
+    // Only include non-completed assignments in the counts
+    const activeAssignments = assignments.filter(a => !a.isCompleted);
+    
+    // Group assignments by date
+    const assignmentsByDate = new Map<string, Assignment[]>();
+    
+    // First group assignments by due date
+    activeAssignments.forEach(assignment => {
+      const dueDate = new Date(assignment.dueDate);
+      const dateKey = format(dueDate, 'yyyy-MM-dd');
+      
+      if (!assignmentsByDate.has(dateKey)) {
+        assignmentsByDate.set(dateKey, []);
+      }
+      
+      assignmentsByDate.get(dateKey)?.push(assignment);
+    });
+    
+    // Create the final counts array with date information
+    const counts: PeriodAssignmentCount[] = [];
+    
+    // Process each date's assignments
+    assignmentsByDate.forEach((dateAssignments, dateKey) => {
+      // Create maps for period and course counts for this date
+      const periodCounts = new Map<string, number>();
+      const courseCounts = new Map<string, number>();
+      
+      // Count assignments by period and course for this date
+      dateAssignments.forEach(assignment => {
+        // Count by period if available
+        if (assignment.periodId) {
+          const current = periodCounts.get(assignment.periodId) || 0;
+          periodCounts.set(assignment.periodId, current + 1);
+        }
+        
+        // Count by course code
+        const current = courseCounts.get(assignment.courseCode) || 0;
+        courseCounts.set(assignment.courseCode, current + 1);
+      });
+      
+      // Add period-based counts with date information
+      periodCounts.forEach((count, periodId) => {
+        counts.push({
+          periodId,
+          courseCode: '',
+          count,
+          dateKey  // Add date information
+        });
+      });
+      
+      // Add course-based counts with date information
+      courseCounts.forEach((count, courseCode) => {
+        counts.push({
+          periodId: '',
+          courseCode,
+          count,
+          dateKey  // Add date information
+        });
+      });
+    });
+    
+    // Update counts in schedule service
+    await scheduleService.updateAssignmentCounts(counts);
+  } catch (error) {
+    console.error('Error updating assignment counts:', error);
+  }
+};
+
 // Add a new assignment
 export const addAssignment = async (assignment: Omit<Assignment, 'id' | 'isCompleted'>): Promise<Assignment> => {
   const newAssignment: Assignment = {
@@ -87,6 +160,9 @@ export const addAssignment = async (assignment: Omit<Assignment, 'id' | 'isCompl
   
   // Schedule notifications for the new assignment only
   await scheduleForNewAssignment(newAssignment);
+  
+  // Update assignment counts
+  await updateAssignmentCountsInSchedule();
   
   return newAssignment;
 };
@@ -103,6 +179,9 @@ export const toggleAssignmentCompletion = async (id: string): Promise<void> => {
     
     // Handle notifications based on completion state
     await handleCompletionStateChange(assignments[index], wasCompleted, id);
+    
+    // Update assignment counts
+    await updateAssignmentCountsInSchedule();
   }
 };
 
@@ -114,6 +193,9 @@ export const deleteAssignment = async (id: string): Promise<void> => {
   
   // Cancel notifications for deleted assignment
   await cancelForDeletedAssignment(id);
+  
+  // Update assignment counts
+  await updateAssignmentCountsInSchedule();
 };
 
 // Update an assignment
@@ -128,8 +210,16 @@ export const updateAssignment = async (id: string, updates: Partial<Assignment>)
     
     // Reschedule notifications for the updated assignment
     await updateNotificationsForUpdatedAssignment(id, updatedAssignment);
+    
+    // Update assignment counts
+    await updateAssignmentCountsInSchedule();
   }
 };
+
+// Initialize the assignment counts when module is loaded
+(async () => {
+  await updateAssignmentCountsInSchedule();
+})();
 
 // Group assignments by date
 export const groupAssignmentsByDate = (
@@ -265,6 +355,40 @@ export const getPeriodById = async (periodId: string): Promise<Period | undefine
   return periods.find(period => period._id === periodId);
 };
 
+// Get assignments for a specific period
+export const getAssignmentsForPeriod = async (periodId: string): Promise<Assignment[]> => {
+  try {
+    const assignments = await getAssignments();
+    return assignments.filter(assignment => 
+      assignment.periodId === periodId && 
+      !assignment.isCompleted
+    );
+  } catch (error) {
+    console.error('Error getting assignments for period:', error);
+    return [];
+  }
+};
+
+// Get assignments for a specific course on a specific date
+export const getAssignmentsForCourseAndDate = async (
+  courseCode: string, 
+  date: Date
+): Promise<Assignment[]> => {
+  try {
+    const assignments = await getAssignments();
+    const dateString = format(date, 'yyyy-MM-dd');
+    
+    return assignments.filter(assignment => 
+      assignment.courseCode === courseCode && 
+      format(new Date(assignment.dueDate), 'yyyy-MM-dd') === dateString &&
+      !assignment.isCompleted
+    );
+  } catch (error) {
+    console.error('Error getting assignments for course and date:', error);
+    return [];
+  }
+};
+
 // Handle orphaned assignments when a group changes
 export const handleGroupChange = async (groupId?: string | SubGroupType): Promise<boolean> => {
   try {
@@ -363,4 +487,9 @@ export const handleGroupChange = async (groupId?: string | SubGroupType): Promis
   } catch (error) {
     return false;
   }
+};
+
+// Export the update function so it can be called from assignments.tsx
+export const refreshAssignmentCounts = async (): Promise<void> => {
+  await updateAssignmentCountsInSchedule();
 };

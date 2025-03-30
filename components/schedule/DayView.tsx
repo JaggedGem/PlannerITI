@@ -50,6 +50,8 @@ type ScheduleItem = {
   roomNumber: string;
   _height?: number;
   hasNextItem?: boolean;
+  period?: string;
+  assignmentCount: number;
 };
 
 interface RecoveryDayInfoProps {
@@ -899,50 +901,65 @@ export default function DayView() {
 
                       <View style={styles.classContent}>
                         <View style={styles.classHeaderRow}>
-                          <Text style={styles.className}>{item.className}</Text>
-                          <Text style={[styles.statusText, showTimeIndicator && styles.activeStatusText]}>
-                            {showTimeIndicator ? 'Now' :
-                              (() => {
-                                const currentTimeMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
-                                const [startHours, startMinutes] = item.startTime.split(':').map(Number);
-                                const startTimeMinutes = startHours * 60 + startMinutes;
-
-                                if (currentTimeMinutes < startTimeMinutes) {
-                                  const previousItem = index > 0 ? todaySchedule[index - 1] : null;
-                                  if (previousItem && isCurrentTimeInSchedule(previousItem)) {
-                                    // Calculate minutes until start and round up (so 59 seconds = 1 minute)
-                                    const now = new Date();
-                                    const target = new Date(
-                                      now.getFullYear(),
-                                      now.getMonth(),
-                                      now.getDate(),
-                                      startHours,
-                                      startMinutes
-                                    );
-                                    const diffInMs = target.getTime() - now.getTime();
-                                    const minutesUntilStart = Math.ceil(diffInMs / (1000 * 60));
-                                    // Only show if less than 60 minutes
-                                    return minutesUntilStart <= 60 ? `In ${minutesUntilStart}m` : '';
-                                  } else if (!previousItem && currentTimeMinutes < startTimeMinutes) {
-                                    // If this is the first class and it hasn't started yet
-                                    const now = new Date();
-                                    const target = new Date(
-                                      now.getFullYear(),
-                                      now.getMonth(),
-                                      now.getDate(),
-                                      startHours,
-                                      startMinutes
-                                    );
-                                    const diffInMs = target.getTime() - now.getTime();
-                                    const minutesUntilStart = Math.ceil(diffInMs / (1000 * 60));
-                                    // Only show if less than 60 minutes
-                                    return minutesUntilStart <= 60 ? `${t('schedule').in} ${minutesUntilStart}m` : '';
-                                  }
-                                }
-                                return '';
-                              })()
-                            }
+                          <Text style={styles.className} numberOfLines={1}>
+                            {item.className}
                           </Text>
+                          
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            {/* Assignment count badge */}
+                            {item.assignmentCount > 0 && (
+                              <View style={styles.assignmentBadge}>
+                                <Text style={styles.assignmentBadgeText}>
+                                  {item.assignmentCount}
+                                </Text>
+                              </View>
+                            )}
+                            
+                            {/* Status text */}
+                            <Text style={[styles.statusText, showTimeIndicator && styles.activeStatusText]}>
+                              {showTimeIndicator ? 'Now' :
+                                (() => {
+                                  const currentTimeMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
+                                  const [startHours, startMinutes] = item.startTime.split(':').map(Number);
+                                  const startTimeMinutes = startHours * 60 + startMinutes;
+
+                                  if (currentTimeMinutes < startTimeMinutes) {
+                                    const previousItem = index > 0 ? todaySchedule[index - 1] : null;
+                                    if (previousItem && isCurrentTimeInSchedule(previousItem)) {
+                                      // Calculate minutes until start and round up (so 59 seconds = 1 minute)
+                                      const now = new Date();
+                                      const target = new Date(
+                                        now.getFullYear(),
+                                        now.getMonth(),
+                                        now.getDate(),
+                                        startHours,
+                                        startMinutes
+                                      );
+                                      const diffInMs = target.getTime() - now.getTime();
+                                      const minutesUntilStart = Math.ceil(diffInMs / (1000 * 60));
+                                      // Only show if less than 60 minutes
+                                      return minutesUntilStart <= 60 ? `In ${minutesUntilStart}m` : '';
+                                    } else if (!previousItem && currentTimeMinutes < startTimeMinutes) {
+                                      // If this is the first class and it hasn't started yet
+                                      const now = new Date();
+                                      const target = new Date(
+                                        now.getFullYear(),
+                                        now.getMonth(),
+                                        now.getDate(),
+                                        startHours,
+                                        startMinutes
+                                      );
+                                      const diffInMs = target.getTime() - now.getTime();
+                                      const minutesUntilStart = Math.ceil(diffInMs / (1000 * 60));
+                                      // Only show if less than 60 minutes
+                                      return minutesUntilStart <= 60 ? `${t('schedule').in} ${minutesUntilStart}m` : '';
+                                    }
+                                  }
+                                  return '';
+                                })()
+                              }
+                            </Text>
+                          </View>
                         </View>
                         <View style={styles.detailsContainer}>
                           <View style={styles.teacherContainer}>
@@ -1105,6 +1122,8 @@ type Styles = {
   firstTimeIndicator: ViewStyle;
   firstTimeIndicatorText: TextStyle;
   firstTimeIndicatorArrow: TextStyle;
+  assignmentBadge: ViewStyle;
+  assignmentBadgeText: TextStyle;
 };
 
 const styles = StyleSheet.create<Styles>({
@@ -1642,6 +1661,20 @@ const styles = StyleSheet.create<Styles>({
   firstTimeIndicatorArrow: {
     color: '#3478F6',
     fontSize: 24,
+    fontWeight: 'bold',
+  },
+  assignmentBadge: {
+    backgroundColor: '#FF3B30',
+    borderRadius: 12,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginLeft: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  assignmentBadgeText: {
+    color: 'white',
+    fontSize: 12,
     fontWeight: 'bold',
   },
 });

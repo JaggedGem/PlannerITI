@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform, NativeModules } from 'react-native';
+import { format } from 'date-fns';
 
 export interface Period {
   _id: string;
@@ -53,6 +54,13 @@ interface DaySchedule {
   both: ScheduleItem[];
 }
 
+export interface PeriodAssignmentCount {
+  periodId: string;
+  courseCode: string;
+  count: number;
+  dateKey?: string; // Format: "yyyy-MM-dd"
+}
+
 export interface ApiResponse {
   data: {
     monday: { [key: string]: DaySchedule };
@@ -64,6 +72,7 @@ export interface ApiResponse {
   };
   periods: Period[];
   recoveryDays?: RecoveryDay[]; // Add recovery days to the API response
+  assignmentCounts?: PeriodAssignmentCount[]; // Add assignment counts
 }
 
 export interface Group {
@@ -124,7 +133,8 @@ export const CACHE_KEYS = {
   GROUPS: 'groups_cache',
   RECOVERY_DAYS: 'recovery_days_cache',
   LAST_RECOVERY_SYNC: 'last_recovery_days_sync',
-  SUBJECTS: 'subjects_cache' // New cache key for subjects
+  SUBJECTS: 'subjects_cache', // New cache key for subjects
+  ASSIGNMENT_COUNTS: 'assignment_counts_cache', // New cache key for assignment counts
 };
 
 const CACHE_EXPIRY = 3 * 24 * 60 * 60 * 1000; // 3 days in milliseconds
@@ -187,6 +197,7 @@ export const scheduleService = {
   cachedGroups: [] as Group[],
   cachedRecoveryDays: [] as RecoveryDay[],
   cachedSubjects: [] as Subject[],
+  cachedAssignmentCounts: [] as PeriodAssignmentCount[],
 
   subscribe(listener: SettingsListener) {
     this.listeners.add(listener);
@@ -237,9 +248,10 @@ export const scheduleService = {
   async getCachedSchedule(groupId: string): Promise<ApiResponse | null> {
     try {
       // Get both schedule and recovery days from cache at once
-      const [cachedData, cachedRecoveryDays] = await Promise.all([
+      const [cachedData, cachedRecoveryDays, cachedAssignmentCounts] = await Promise.all([
         AsyncStorage.getItem(CACHE_KEYS.SCHEDULE_PREFIX + groupId),
-        AsyncStorage.getItem(CACHE_KEYS.RECOVERY_DAYS)
+        AsyncStorage.getItem(CACHE_KEYS.RECOVERY_DAYS),
+        AsyncStorage.getItem(CACHE_KEYS.ASSIGNMENT_COUNTS)
       ]);
 
       if (cachedData) {
@@ -250,8 +262,14 @@ export const scheduleService = {
           this.cachedRecoveryDays = JSON.parse(cachedRecoveryDays);
         }
         
-        // Include recovery days in the response
+        // Update cached assignment counts in memory if available
+        if (cachedAssignmentCounts) {
+          this.cachedAssignmentCounts = JSON.parse(cachedAssignmentCounts);
+        }
+        
+        // Include recovery days and assignment counts in the response
         data.recoveryDays = this.cachedRecoveryDays;
+        data.assignmentCounts = this.cachedAssignmentCounts;
         
         return data;
       }
@@ -335,6 +353,10 @@ export const scheduleService = {
     try {
       const groups = await this.getGroups();
       const targetGroup = groups.find(group => group.name === targetName);
+      
+      // Clear cached assignment counts when changing groups
+      this.cachedAssignmentCounts = [];
+      AsyncStorage.removeItem(CACHE_KEYS.ASSIGNMENT_COUNTS);
       
       if (targetGroup) {
         this.updateSettings({
@@ -758,10 +780,14 @@ export const scheduleService = {
       isRecoveryDay?: boolean;
       recoveryReason?: string;
       replacedDayName?: string;
+      assignmentCount: number;
     }> = [];
 
     const daySchedule = data.data[dayName];
     if (!daySchedule) return result;
+
+    // Convert the date to a dateKey for assignment filtering
+    const dateKey = date ? format(date, 'yyyy-MM-dd') : '';
 
     // Get period times from the custom API first
     const customPeriodTimes = await this.getPeriodTimes();
@@ -830,8 +856,36 @@ export const scheduleService = {
             color: '#FF5733',
             isRecoveryDay: true,
             recoveryReason: item.recoveryInfo.reason,
-            replacedDayName: item.recoveryInfo.replacedDay
+            replacedDayName: item.recoveryInfo.replacedDay,
+            assignmentCount: 0 // Recovery info never has assignments
           });
+        }
+
+        // Get assignment count for this period from cached assignment counts, filtering by date
+        const periodId = periodNum.toString();
+        const className = item.subjectid.name;
+        let assignmentCount = 0;
+        
+        if (data.assignmentCounts && dateKey) {
+          // First try to find by period ID and date
+          const countByPeriod = data.assignmentCounts.find(ac => 
+            ac.periodId === periodId && 
+            ac.dateKey === dateKey
+          );
+          
+          if (countByPeriod) {
+            assignmentCount = countByPeriod.count;
+          } else {
+            // Then try by course name and date
+            const countByCourse = data.assignmentCounts.find(ac => 
+              ac.courseCode === className &&
+              ac.dateKey === dateKey
+            );
+            
+            if (countByCourse) {
+              assignmentCount = countByCourse.count;
+            }
+          }
         }
 
         result.push({
@@ -845,7 +899,8 @@ export const scheduleService = {
           group: compareItemGroup,
           isRecoveryDay: item.isRecoveryDay,
           recoveryReason: item.recoveryInfo?.reason,
-          replacedDayName: item.recoveryInfo?.replacedDay
+          replacedDayName: item.recoveryInfo?.replacedDay,
+          assignmentCount
         });
       };
 
@@ -867,6 +922,19 @@ export const scheduleService = {
             (!customPeriod.daysOfWeek || 
              customPeriod.daysOfWeek.includes(mappedDayOfWeek))) {
           
+          // Get assignment count for this custom period, filtering by date
+          let assignmentCount = 0;
+          if (data.assignmentCounts && dateKey) {
+            const periodCount = data.assignmentCounts.find(ac => 
+              ac.periodId === customPeriod._id &&
+              ac.dateKey === dateKey
+            );
+            
+            if (periodCount) {
+              assignmentCount = periodCount.count;
+            }
+          }
+          
           result.push({
             period: customPeriod._id,
             startTime: customPeriod.starttime,
@@ -875,7 +943,8 @@ export const scheduleService = {
             teacherName: '',
             roomNumber: '',
             isCustom: true,
-            color: customPeriod.color || '#4CC9F0'
+            color: customPeriod.color || '#4CC9F0',
+            assignmentCount
           });
         }
       });
@@ -955,6 +1024,11 @@ export const scheduleService = {
       scheduleView: 'day',
       customPeriods: []
     };
+    
+    // Also clear assignment counts when resetting
+    this.cachedAssignmentCounts = [];
+    AsyncStorage.removeItem(CACHE_KEYS.ASSIGNMENT_COUNTS);
+    
     this.saveSettings();
     this.notifyListeners();
   },
@@ -983,9 +1057,33 @@ export const scheduleService = {
       return [];
     }
   },
+
+  async updateAssignmentCounts(counts: PeriodAssignmentCount[]): Promise<void> {
+    try {
+      // Update the cached counts
+      this.cachedAssignmentCounts = counts;
+      
+      // Store in AsyncStorage
+      await AsyncStorage.setItem(CACHE_KEYS.ASSIGNMENT_COUNTS, JSON.stringify(counts));
+      
+      // Update the schedule data with new counts
+      if (this.settings.selectedGroupId) {
+        const cachedData = await this.getCachedSchedule(this.settings.selectedGroupId);
+        if (cachedData) {
+          cachedData.assignmentCounts = counts;
+          await this.cacheSchedule(this.settings.selectedGroupId, cachedData);
+          
+          // Notify listeners to update UI
+          this.notifyListeners();
+        }
+      }
+    } catch (error) {
+      console.error('Error updating assignment counts:', error);
+    }
+  },
 };
 
-// Initialize settings and data from storage
+// Initialize settings and data from storage - add assignment counts initialization
 (async () => {
   await scheduleService.loadSettings();
   
@@ -999,6 +1097,12 @@ export const scheduleService = {
   const cachedSubjects = await AsyncStorage.getItem(CACHE_KEYS.SUBJECTS);
   if (cachedSubjects) {
     scheduleService.cachedSubjects = JSON.parse(cachedSubjects);
+  }
+  
+  // Load assignment counts into memory immediately
+  const cachedAssignmentCounts = await AsyncStorage.getItem(CACHE_KEYS.ASSIGNMENT_COUNTS);
+  if (cachedAssignmentCounts) {
+    scheduleService.cachedAssignmentCounts = JSON.parse(cachedAssignmentCounts);
   }
   
   // Sync period times immediately to ensure we have the latest data
