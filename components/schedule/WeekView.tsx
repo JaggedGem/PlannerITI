@@ -332,6 +332,9 @@ type Styles = {
   dayColumn: ViewStyle;
   dayName: TextStyle;
   dateText: TextStyle;
+  dateContainer: ViewStyle;
+  dayAssignmentBadge: ViewStyle;
+  dayAssignmentBadgeText: TextStyle;
   timetableContainer: ViewStyle;
   timeColumn: ViewStyle;
   timeSlot: ViewStyle;
@@ -367,7 +370,7 @@ type Styles = {
   recoveryDayTooltipHeader: ViewStyle;
   recoveryDayTooltipTitle: TextStyle;
   closeTooltipButton: ViewStyle;
-  closeTooltipText: TextStyle; // Changed from ViewStyle to TextStyle
+  closeTooltipText: TextStyle;
   recoveryDayTooltipReason: TextStyle;
   weekendColumn: ViewStyle;
   gridLine: ViewStyle;
@@ -967,22 +970,37 @@ export default function WeekView() {
           {/* Empty space for time column alignment */}
           <View style={{ width: timeColumnWidth }} />
           
-          {dayDates.map((day, index) => (
-            <Animated.View 
-              key={index} 
-              style={[
-                styles.dayColumn,
-                { width: dayColumnWidth }, 
-                day.isToday && styles.todayColumn,
-                day.isWeekend && styles.weekendColumn
-              ]}
-              entering={FadeIn.duration(200).delay(index * 50)}
-              layout={Layout.springify()}
-            >
-              <Text style={styles.dayName}>{day.dayName}</Text>
-              <Text style={styles.dateText}>{day.dayNumber}</Text>
-            </Animated.View>
-          ))}
+          {dayDates.map((day, index) => {
+            const dayKey = day.dayKey;
+            const dayItems = weekSchedule[dayKey as keyof typeof weekSchedule] || [];
+            
+            // Calculate total assignments for the day
+            const totalAssignments = dayItems.reduce((total, item) => total + (item.assignmentCount || 0), 0);
+            
+            return (
+              <Animated.View 
+                key={index} 
+                style={[
+                  styles.dayColumn,
+                  { width: dayColumnWidth }, 
+                  day.isToday && styles.todayColumn,
+                  day.isWeekend && styles.weekendColumn
+                ]}
+                entering={FadeIn.duration(200).delay(index * 50)}
+                layout={Layout.springify()}
+              >
+                {totalAssignments > 0 && (
+                  <View style={styles.dayAssignmentBadge}>
+                    <Text style={styles.dayAssignmentBadgeText}>
+                      {totalAssignments}
+                    </Text>
+                  </View>
+                )}
+                <Text style={styles.dayName}>{day.dayName}</Text>
+                <Text style={styles.dateText}>{day.dayNumber}</Text>
+              </Animated.View>
+            );
+          })}
         </Animated.View>
       </View>
 
@@ -1309,11 +1327,36 @@ const styles = StyleSheet.create<Styles>({
     fontWeight: '600',
     letterSpacing: 0.5,
   },
+  dateContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
   dateText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
     marginTop: 2,
+  },
+  dayAssignmentBadge: {
+    backgroundColor: '#FF3B30',
+    borderRadius: 8,
+    paddingHorizontal: 3,
+    paddingVertical: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minWidth: 14,
+    height: 14,
+    position: 'absolute',
+    top: 2,
+    right: 2,
+  },
+  dayAssignmentBadgeText: {
+    color: 'white',
+    fontSize: 8,
+    fontWeight: 'bold',
+    textAlign: 'center',
   },
   timetableContainer: {
     flexDirection: 'row',

@@ -135,6 +135,16 @@ const RecoveryDayInfo = ({ reason }: RecoveryDayInfoProps) => {
   );
 };
 
+// Add this interface near the top of the file with other interfaces
+interface WeekDateInfo {
+  date: Date;
+  day: string;
+  dateNum: number;
+  isToday: boolean;
+  isRecoveryDay: boolean;
+  totalAssignments: number;
+}
+
 export default function DayView() {
   const [scheduleData, setScheduleData] = useState<ApiResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -216,12 +226,23 @@ export default function DayView() {
     const dates = Array.from({ length: 5 }, (_, i) => {
       const date = new Date(monday);
       date.setDate(monday.getDate() + i);
+      
+      // Calculate total assignments for this day
+      let totalAssignments = 0;
+      if (scheduleData) {
+        const dayKey = DAYS_MAP[date.getDay() as keyof typeof DAYS_MAP];
+        const daySchedule = scheduleService.getScheduleForDay(scheduleData, dayKey, date);
+        // Since we're in a useMemo, we can't use await, so we'll default to 0 and update later
+        totalAssignments = 0;
+      }
+      
       return {
         date,
         day: t('weekdays').short[date.getDay()],
         dateNum: date.getDate(),
         isToday: date.toDateString() === currentDate.toDateString(),
-        isRecoveryDay: scheduleService.isRecoveryDay(date) !== null
+        isRecoveryDay: scheduleService.isRecoveryDay(date) !== null,
+        totalAssignments
       };
     });
 
@@ -232,17 +253,61 @@ export default function DayView() {
     const saturdayIsRecovery = scheduleService.isRecoveryDay(saturday) !== null;
 
     if (saturdayIsRecovery) {
+      // Calculate Saturday's assignments if it's a recovery day
+      let totalAssignments = 0;
+      if (scheduleData) {
+        const dateString = saturday.toISOString().split('T')[0];
+        const dayKey = `weekend_${dateString}`;
+        // Since we're in a useMemo, we can't use await, so we'll default to 0 and update later
+        totalAssignments = 0;
+      }
+      
       dates.push({
         date: saturday,
         day: t('weekdays').short[saturday.getDay()],
         dateNum: saturday.getDate(),
         isToday: saturday.toDateString() === currentDate.toDateString(),
-        isRecoveryDay: true
+        isRecoveryDay: true,
+        totalAssignments
       });
     }
 
     return dates;
-  }, [currentDate, t]);
+  }, [currentDate, t, scheduleData]);
+
+  // Update the useEffect for assignment counts
+  useEffect(() => {
+    const updateAssignmentCounts = async () => {
+      if (!scheduleData) return;
+
+      const updatedDates = await Promise.all(weekDates.map(async (dateInfo) => {
+        let totalAssignments = 0;
+        if (dateInfo.isRecoveryDay) {
+          const dateString = dateInfo.date.toISOString().split('T')[0];
+          const dayKey = `weekend_${dateString}`;
+          const daySchedule = await scheduleService.getScheduleForDay(scheduleData, dayKey, dateInfo.date);
+          if (Array.isArray(daySchedule)) { // Check if daySchedule is an array
+            totalAssignments = daySchedule.reduce((sum: number, item: ScheduleItem) => sum + (item.assignmentCount || 0), 0);
+          }
+        } else {
+          const dayKey = DAYS_MAP[dateInfo.date.getDay() as keyof typeof DAYS_MAP];
+          const daySchedule = await scheduleService.getScheduleForDay(scheduleData, dayKey, dateInfo.date);
+          if (Array.isArray(daySchedule)) { // Check if daySchedule is an array
+            totalAssignments = daySchedule.reduce((sum: number, item: ScheduleItem) => sum + (item.assignmentCount || 0), 0);
+          }
+        }
+        return { ...dateInfo, totalAssignments };
+      }));
+
+      // Force a re-render with updated assignment counts
+      setWeekDates(updatedDates);
+    };
+
+    updateAssignmentCounts();
+  }, [scheduleData, weekDates]);
+
+  // Update the state declaration with proper typing
+  const [weekDatesWithAssignments, setWeekDates] = useState<WeekDateInfo[]>(weekDates);
 
   // Add these functions after the main hook declarations, before updateSchedule
   const scrollToDate = useCallback((date: Date) => {
@@ -786,7 +851,7 @@ export default function DayView() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.dateListScrollContent}
             >
-              {weekDates.map((date, index) => (
+              {weekDatesWithAssignments.map((date, index) => (
                 <TouchableOpacity
                   key={index}
                   onPress={() => handleDatePress(date.date)}
@@ -798,6 +863,19 @@ export default function DayView() {
                     date.isRecoveryDay && date.date.getDate() !== selectedDate.getDate() && styles.recoveryDayItem
                   ]}
                 >
+                  {date.totalAssignments > 0 && (
+                    <View style={[
+                      styles.dateAssignmentBadge,
+                      date.date.getDate() === selectedDate.getDate() && styles.selectedDateAssignmentBadge
+                    ]}>
+                      <Text style={[
+                        styles.dateAssignmentBadgeText,
+                        date.date.getDate() === selectedDate.getDate() && styles.selectedDateAssignmentBadgeText
+                      ]}>
+                        {date.totalAssignments}
+                      </Text>
+                    </View>
+                  )}
                   <Text style={[
                     styles.dateDay,
                     date.date.getDate() === selectedDate.getDate() && !date.isRecoveryDay && styles.selectedDayText,
@@ -1124,6 +1202,10 @@ type Styles = {
   firstTimeIndicatorArrow: TextStyle;
   assignmentBadge: ViewStyle;
   assignmentBadgeText: TextStyle;
+  dateAssignmentBadge: ViewStyle;
+  selectedDateAssignmentBadge: ViewStyle;
+  dateAssignmentBadgeText: TextStyle;
+  selectedDateAssignmentBadgeText: TextStyle;
 };
 
 const styles = StyleSheet.create<Styles>({
@@ -1676,5 +1758,29 @@ const styles = StyleSheet.create<Styles>({
     color: 'white',
     fontSize: 12,
     fontWeight: 'bold',
+  },
+  dateAssignmentBadge: {
+    position: 'absolute',
+    bottom: 6,
+    right: 6,
+    backgroundColor: '#FF3B30',
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    zIndex: 1,
+  },
+  selectedDateAssignmentBadge: {
+    backgroundColor: '#FF3B30',
+  },
+  dateAssignmentBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  selectedDateAssignmentBadgeText: {
+    color: '#FFFFFF',
   },
 });
