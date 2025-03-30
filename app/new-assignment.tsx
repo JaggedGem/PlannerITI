@@ -13,7 +13,8 @@ import {
   ActivityIndicator,
   StatusBar,
   Animated as RNAnimated,
-  Pressable
+  Pressable,
+  Dimensions
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -1952,6 +1953,12 @@ export default function NewAssignmentScreen() {
     }
   };
 
+  // Add this handler function to handle tab changes with proper type conversion
+  const handleSubjectTabChange = (tabId: string) => {
+    // Convert string to the expected type
+    setSubjectSelectionMode(tabId as 'recent' | 'all' | 'custom');
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" />
@@ -2152,155 +2159,93 @@ export default function NewAssignmentScreen() {
       />
       
       {/* Subject Selection Modal */}
-      <Modal
-        visible={isSubjectsModalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setIsSubjectsModalVisible(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{t('assignments').selectSubject}</Text>
-              <TouchableOpacity 
-                onPress={() => setIsSubjectsModalVisible(false)}
-                hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
-              >
-                <Ionicons name="close" size={24} color="#FFFFFF" />
-              </TouchableOpacity>
-            </View>
-            
-            <View style={styles.tabsContainer}>
-            <View style={styles.segmentedControl}>
-              <TouchableOpacity 
-                style={[
-                  styles.segmentButton, 
-                  subjectSelectionMode === 'recent' && styles.segmentButtonActive
-                ]}
-                onPress={() => setSubjectSelectionMode('recent')}
-              >
-                <Text style={[
-                  styles.segmentButtonText,
-                  subjectSelectionMode === 'recent' && styles.segmentButtonTextActive
-                ]}>{t('assignments').recent}</Text>
-              </TouchableOpacity>
-                
-                <View style={styles.segmentSeparator} />
-                
-              <TouchableOpacity 
-                style={[
-                  styles.segmentButton, 
-                  subjectSelectionMode === 'all' && styles.segmentButtonActive
-                ]}
-                onPress={() => setSubjectSelectionMode('all')}
-              >
-                <Text style={[
-                  styles.segmentButtonText,
-                  subjectSelectionMode === 'all' && styles.segmentButtonTextActive
-                ]}>{t('assignments').all}</Text>
-              </TouchableOpacity>
-                
-                <View style={styles.segmentSeparator} />
-                
-              <TouchableOpacity 
-                style={[
-                  styles.segmentButton, 
-                  subjectSelectionMode === 'custom' && styles.segmentButtonActive
-                ]}
-                onPress={() => setSubjectSelectionMode('custom')}
-              >
-                <Text style={[
-                  styles.segmentButtonText,
-                  subjectSelectionMode === 'custom' && styles.segmentButtonTextActive
-                ]}>{t('assignments').custom}</Text>
-              </TouchableOpacity>
+      <ModernDropdown
+        title={t('assignments').selectSubject}
+        isVisible={isSubjectsModalVisible}
+        onClose={() => setIsSubjectsModalVisible(false)}
+        tabs={[
+          {
+            id: 'recent',
+            label: t('assignments').recent,
+            items: filteredSubjects.map(subject => ({
+              id: subject.id,
+              label: subject.name,
+              isSelected: subject.id === selectedSubjectId,
+              isCustom: subject.isCustom,
+              isCustomPeriod: subject.isCustomPeriod,
+              color: subject.color
+            })),
+            emptyMessage: t('assignments').noSubjects,
+          },
+          {
+            id: 'all',
+            label: t('assignments').all,
+            items: subjects.map(subject => ({
+              id: subject.id,
+              label: subject.name,
+              isSelected: subject.id === selectedSubjectId,
+              isCustom: subject.isCustom,
+              isCustomPeriod: subject.isCustomPeriod,
+              color: subject.color
+            })),
+            emptyMessage: t('assignments').noSubjects
+          },
+          {
+            id: 'custom',
+            label: t('assignments').custom,
+            items: customPeriods
+              .filter(period => period.isEnabled)
+              .map(period => ({
+                id: period._id,
+                label: period.name || 'Custom Period',
+                isCustomPeriod: true,
+                color: period.color,
+                isSelected: period._id === selectedSubjectId
+              })),
+            emptyMessage: t('assignments').noCustomSubjects,
+            renderCustomContent: customPeriods.length === 0 ? () => (
+              <View style={styles.emptyListContainer}>
+                <Text style={styles.emptyListText}>{t('settings').customPeriods.noPeriodsYet}</Text>
+                <TouchableOpacity
+                  style={styles.settingsLinkButton}
+                  onPress={() => {
+                    setIsSubjectsModalVisible(false);
+                    router.push('/(tabs)/settings');
+                  }}
+                >
+                  <Text style={styles.settingsLinkButtonText}>{'Go to Settings'}</Text>
+                </TouchableOpacity>
               </View>
-            </View>
-            
-            <TextInput
-              style={styles.searchInput}
-              placeholder={t('settings').group.search}
-              placeholderTextColor="#8A8A8D"
-              value={searchText}
-              onChangeText={setSearchText}
-            />
-            
-            {loadingSubjects ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="small" color="#2C3DCD" />
-                <Text style={styles.loadingText}>{t('assignments').loadingSubjects}</Text>
-              </View>
-            ) : filteredSubjects.length > 0 ? (
-              <View style={{ flex: 1 }}>
-                <Animated.FlatList
-                  data={filteredSubjects}
-                  renderItem={renderSubjectItem}
-                  keyExtractor={item => item.id}
-                  style={styles.subjectsList}
-                  contentContainerStyle={{ paddingBottom: 20 }}
-                  showsVerticalScrollIndicator={true}
-                  entering={FadeIn.duration(300)}
-                  key={`subjects-list-${subjectSelectionMode}`}
-                />
-              </View>
-            ) : (
-              <View style={styles.noSubjectsContainer}>
-                <Text style={styles.noSubjectsText}>
-                  {subjectSelectionMode === 'custom' 
-                    ? t('assignments').noCustomSubjects
-                    : t('assignments').noSubjects}
-                </Text>
-              </View>
-            )}
-            
-            {subjectSelectionMode === 'custom' && (
-              <View style={styles.customInputContainer}>
-                <Text style={styles.modalSubtitle}>{'Select a custom period'}</Text>
-                {customPeriods.length === 0 ? (
-                  <View style={styles.emptyListContainer}>
-                    <Text style={styles.emptyListText}>{t('settings').customPeriods.noPeriodsYet}</Text>
-                    <TouchableOpacity
-                      style={styles.settingsLinkButton}
-                      onPress={() => {
-                        setIsSubjectsModalVisible(false);
-                        router.push('/(tabs)/settings');
-                      }}
-                    >
-                      <Text style={styles.settingsLinkButtonText}>{'Go to Settings'}</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : filteredSubjects.length > 0 ? (
-                  <View style={{ flex: 1 }}>
-                    <Animated.FlatList
-                      data={filteredSubjects}
-                      renderItem={renderSubjectItem}
-                      keyExtractor={item => item.id}
-                      style={styles.subjectsList}
-                      contentContainerStyle={{ paddingBottom: 20 }}
-                      showsVerticalScrollIndicator={true}
-                    />
-                  </View>
-                ) : (
-                  <View style={styles.emptyListContainer}>
-                    <Text style={styles.emptyListText}>
-                      {searchText
-                        ? `${t('settings').group.notFound || 'No periods found matching'} "${searchText}"`
-                        : 'No enabled custom periods found'}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            )}
-          </View>
-        </View>
-      </Modal>
+            ) : undefined
+          }
+        ]}
+        selectedTabId={subjectSelectionMode}
+        onTabChange={handleSubjectTabChange}
+        showSearch={true}
+        searchPerTab={false}
+        searchPlaceholder={t('assignments').enterSubjectName}
+        searchBarPosition="top"
+        onSearch={setSearchText}
+        onSelectItem={(item) => handleSubjectSelect({
+          id: item.id,
+          name: item.label,
+          isCustom: item.isCustom || false,
+          isCustomPeriod: item.isCustomPeriod || false,
+          color: item.color
+        } as ExtendedSubject)}
+        isLoading={loadingSubjects}
+        loadingText={t('assignments').loadingSubjects}
+        emptyResultsMessage={t('assignments').noSubjects}
+        animationType="fade" // always use animation type fade
+        maxHeight={Dimensions.get('window').height * 0.7} // Fixed 70% height
+      />
       
       {/* Assignment Type Selection Modal */}
       <ModernDropdown
         title={t('assignments').type}
         isVisible={isTypeModalVisible}
         onClose={() => setIsTypeModalVisible(false)}
-        segments={Object.values(AssignmentType).map(type => {
+        items={Object.values(AssignmentType).map(type => {
           // Get appropriate icon for this type
           const getTypeSpecificIcon = () => {
             switch (type) {
@@ -2326,16 +2271,18 @@ export default function NewAssignmentScreen() {
           };
           
           return {
+            id: type,
             label: t('assignments').types[type.toLowerCase() as 'homework' | 'test' | 'exam' | 'project' | 'quiz' | 'lab' | 'essay' | 'presentation' | 'other'],
             icon: <Ionicons 
               name={getTypeSpecificIcon()} 
               size={24}
               color="#FFFFFF"
-            />
+            />,
+            isSelected: type === assignmentType
           };
         })}
-        selectedIndex={Object.values(AssignmentType).findIndex(type => type === assignmentType)}
-        onSelect={(index) => handleTypeSelection(Object.values(AssignmentType)[index])}
+        selectedItemId={assignmentType}
+        onSelectItem={(item) => handleTypeSelection(item.id as AssignmentType)}
         maxOptions={7}
       />
     </SafeAreaView>
