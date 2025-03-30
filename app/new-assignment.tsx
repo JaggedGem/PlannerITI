@@ -2092,11 +2092,14 @@ export default function NewAssignmentScreen() {
                     ) : nextPeriodInfo ? (
                       <Text style={styles.nextPeriodText}>
                         {t('assignments').assignmentDueText}
-                        {nextPeriodInfo.weekText ? (
+                        {nextPeriodInfo.isTomorrow ? (
+                          // Don't show weekText for tomorrow
+                          <Text> </Text>
+                        ) : nextPeriodInfo.weekText ? (
                           <Text style={{ color: '#2C3DCD' }}> {nextPeriodInfo.weekText}</Text>
                         ) : null}
                         
-                        {nextPeriodInfo.weekText ? ` ${t('assignments').on} ` : ' '}
+                        {nextPeriodInfo.isTomorrow ? '' : (nextPeriodInfo.weekText ? ` ${t('assignments').on} ` : ' ')}
                         
                         {nextPeriodInfo.isTomorrow ? (
                           <Text style={{ color: '#2C3DCD' }}>{t('assignments').days.tomorrow}</Text>
