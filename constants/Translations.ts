@@ -203,6 +203,13 @@ type TranslationType = {
     noCustomSubjects: string;
     enterSubjectName: string;
     add: string;
+    subtasks: {
+      title: string;
+      add: string;
+      addFirst: string;
+      placeholder: string;
+      progress: string;
+    };
   };
   grades: {
     title: string;
@@ -593,6 +600,13 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       noCustomSubjects: 'No custom subjects found',
       enterSubjectName: 'Enter subject name',
       add: 'Add',
+      subtasks: {
+        title: 'Subtasks',
+        add: 'Add subtask',
+        addFirst: 'Add subtasks',
+        placeholder: 'Enter subtask...',
+        progress: 'Subtask progress',
+      },
     },
     grades: {
       title: 'Grades',
@@ -1001,6 +1015,13 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       noCustomSubjects: 'Nu s-au găsit materii personalizate',
       enterSubjectName: 'Introduceți numele materiei',
       add: 'Adaugă',
+      subtasks: {
+        title: 'Subtask-uri',
+        add: 'Adaugă subtask',
+        addFirst: 'Adaugă subtask-uri',
+        placeholder: 'Introduceți subtask...',
+        progress: 'Progresul subtask-ului',
+      },
     },
     grades: {
       title: 'Note',
@@ -1409,6 +1430,13 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       noCustomSubjects: 'Пользовательские предметы не найдены',
       enterSubjectName: 'Введите название предмета',
       add: 'Добавить',
+      subtasks: {
+        title: 'Подзадачи',
+        add: 'Добавить подзадачу',
+        addFirst: 'Добавить подзадачи',
+        placeholder: 'Введите подзадачу...',
+        progress: 'Прогресс подзадачи',
+      },
     },
     grades: {
       title: 'Оценки',

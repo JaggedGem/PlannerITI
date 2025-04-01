@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
-import { Assignment, getPeriodById, AssignmentType } from '../../utils/assignmentStorage';
+import { View, Text, StyleSheet, Pressable, TouchableOpacity, TextInput } from 'react-native';
+import { Assignment, getPeriodById, AssignmentType, Subtask, toggleSubtaskCompletion, addSubtask, deleteSubtask, updateAllSubtaskCompletion } from '../../utils/assignmentStorage';
 import { format } from 'date-fns';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { 
@@ -9,11 +9,14 @@ import Animated, {
   withTiming, 
   withSpring,
   FadeIn,
-  Layout 
+  Layout,
+  FadeOut,
+  Easing
 } from 'react-native-reanimated';
 import { Period } from '../../services/scheduleService';
 import { useTranslation } from '@/hooks/useTranslation';
 import { getRemainingTimeText } from '../../utils/notificationUtils';
+import * as Haptics from 'expo-haptics';
 
 interface AssignmentItemProps {
   assignment: Assignment;
@@ -113,10 +116,22 @@ export default function AssignmentItem({
   const [remainingTime, setRemainingTime] = useState<string>('');
   const { t, currentLanguage } = useTranslation();
   
+  // Add state for subtasks
+  const [expanded, setExpanded] = useState(false);
+  const [showAddSubtask, setShowAddSubtask] = useState(false);
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
+  const [localSubtasks, setLocalSubtasks] = useState<Subtask[]>(assignment.subtasks || []);
+  
   // Animated values for interactive feedback
   const scale = useSharedValue(1);
   const opacity = useSharedValue(1);
   const checkScale = useSharedValue(assignment.isCompleted ? 1 : 0);
+  const expandHeight = useSharedValue(0);
+  
+  // Sync local subtasks with assignment subtasks
+  useEffect(() => {
+    setLocalSubtasks(assignment.subtasks || []);
+  }, [assignment.subtasks]);
   
   // Update check animation when completion status changes
   React.useEffect(() => {
@@ -208,159 +223,407 @@ export default function AssignmentItem({
   // Determine if assignment is overdue
   const isOverdue = remainingTime === 'Overdue' && !assignment.isCompleted;
   
+  // Toggle the expanded state
+  const toggleExpanded = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setExpanded(!expanded);
+  };
+  
+  // Custom handler for toggling assignment completion
+  const handleToggleAssignment = async () => {
+    // Determine the new completion state (opposite of current)
+    const newCompletionState = !assignment.isCompleted;
+    
+    // Update subtasks locally for immediate UI response
+    const updatedSubtasks = localSubtasks.map(subtask => ({
+      ...subtask,
+      isCompleted: newCompletionState // Set all subtasks to the same completion state
+    }));
+    
+    // Update local state immediately
+    setLocalSubtasks(updatedSubtasks);
+    
+    // Call the parent's onToggle to handle the assignment toggle
+    onToggle();
+    
+    // Update all subtasks in storage (done asynchronously)
+    if (localSubtasks.length > 0) {
+      updateAllSubtaskCompletion(assignment.id, newCompletionState);
+    }
+  };
+  
+  // Handle adding new subtask
+  const handleAddSubtask = async () => {
+    if (newSubtaskTitle.trim() === '') return;
+    
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const subtask = await addSubtask(assignment.id, newSubtaskTitle.trim());
+    if (subtask) {
+      setLocalSubtasks([...localSubtasks, subtask]);
+      setNewSubtaskTitle('');
+      setShowAddSubtask(false);
+    }
+  };
+  
+  // Handle toggling subtask completion
+  const handleToggleSubtask = async (subtaskId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    
+    // Find the subtask
+    const subtaskIndex = localSubtasks.findIndex(st => st.id === subtaskId);
+    if (subtaskIndex === -1) return;
+    
+    // Determine new completion state (opposite of current)
+    const newCompletionState = !localSubtasks[subtaskIndex].isCompleted;
+    
+    // Update local state first for immediate UI response
+    const updatedSubtasks = localSubtasks.map(st => 
+      st.id === subtaskId 
+        ? { ...st, isCompleted: newCompletionState } 
+        : st
+    );
+    setLocalSubtasks(updatedSubtasks);
+    
+    // Check if all subtasks are now completed or uncompleted
+    const allCompleted = updatedSubtasks.every(st => st.isCompleted);
+    const allUncompleted = updatedSubtasks.every(st => !st.isCompleted);
+    
+    // If completion state should affect the parent assignment
+    if ((allCompleted && !assignment.isCompleted) || 
+        (allUncompleted && assignment.isCompleted)) {
+      // Call parent toggle to update assignment
+      onToggle();
+    }
+    
+    // Then update in storage (asynchronous)
+    await toggleSubtaskCompletion(assignment.id, subtaskId);
+  };
+  
+  // Handle deleting a subtask
+  const handleDeleteSubtask = async (subtaskId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    
+    // Optimistically update UI first
+    setLocalSubtasks(localSubtasks.filter(st => st.id !== subtaskId));
+    
+    // Then update in storage
+    await deleteSubtask(assignment.id, subtaskId);
+  };
+  
+  // Calculate subtask progress
+  const completedSubtasks = localSubtasks.filter(st => st.isCompleted).length;
+  const hasSubtasks = localSubtasks.length > 0;
+  const subtaskProgress = hasSubtasks ? 
+    Math.round((completedSubtasks / localSubtasks.length) * 100) : 0;
+  
   return (
-    <AnimatedPressable
-      style={[
-        styles.container, 
-        containerStyle,
-        isOrphaned && styles.orphanedContainer,
-        isOverdue && styles.overdueContainer,
-        inOrphanedCourse && styles.inOrphanedCourseContainer
-      ]}
-      onPress={onToggle}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      entering={FadeIn.duration(300)}
-      layout={Layout.springify()}
-    >
-      <View style={styles.leftSection}>
-        <View style={styles.checkboxContainer}>
-          <View style={[styles.checkbox, assignment.isCompleted && styles.checkboxChecked]}>
-            <Animated.View style={[styles.checkIcon, checkboxStyle]}>
-              <Ionicons name="checkmark" size={14} color="#FFFFFF" />
-            </Animated.View>
-          </View>
-        </View>
-        
-        <View style={styles.contentContainer}>
-          <View style={styles.titleRow}>
-            <View style={[styles.typeIndicator, { backgroundColor: isOrphaned ? '#8E8E93' : typeColor }]}>
-              <Ionicons name={isOrphaned ? 'alert-circle' : typeIcon} size={12} color="#FFFFFF" />
+    <View style={styles.outerContainer}>
+      <AnimatedPressable
+        style={[
+          styles.container, 
+          containerStyle,
+          isOrphaned && styles.orphanedContainer,
+          isOverdue && styles.overdueContainer,
+          inOrphanedCourse && styles.inOrphanedCourseContainer
+        ]}
+        onPress={handleToggleAssignment}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        entering={FadeIn.duration(300)}
+        layout={Layout.springify()}
+      >
+        <View style={styles.leftSection}>
+          <View style={styles.checkboxContainer}>
+            <View style={[styles.checkbox, assignment.isCompleted && styles.checkboxChecked]}>
+              <Animated.View style={[styles.checkIcon, checkboxStyle]}>
+                <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+              </Animated.View>
             </View>
-            <Text 
-              style={[
-                styles.title,
-                assignment.isCompleted && styles.completedTitle,
-                isOrphaned && styles.orphanedText,
-                inOrphanedCourse && styles.inOrphanedCourseText
-              ]}
-              numberOfLines={2}
-            >
-              {assignment.title}
-            </Text>
           </View>
           
-          {assignment.description ? (
-            <Text 
-              style={[
-                styles.description,
-                isOrphaned && styles.orphanedDescription,
-                inOrphanedCourse && styles.inOrphanedCourseText
-              ]}
-              numberOfLines={1}
-            >
-              {assignment.description}
-            </Text>
-          ) : null}
-          
-          <View style={styles.metadataContainer}>
-            {isOrphaned ? (
-              <View style={styles.orphanedBadge}>
-                <Text style={styles.orphanedBadgeText}>
-                  {t('assignments').common.orphanedReason}
-                </Text>
+          <View style={styles.contentContainer}>
+            <View style={styles.titleRow}>
+              <View style={[styles.typeIndicator, { backgroundColor: isOrphaned ? '#8E8E93' : typeColor }]}>
+                <Ionicons name={isOrphaned ? 'alert-circle' : typeIcon} size={12} color="#FFFFFF" />
               </View>
-            ) : (
-              <View style={styles.typeTextContainer}>
-                <Text style={[
-                  styles.typeText, 
-                  { color: typeColor },
-                  inOrphanedCourse && styles.inOrphanedCourseMetadata
-                ]}>
-                  {typeLabel}
+              <Text 
+                style={[
+                  styles.title,
+                  assignment.isCompleted && styles.completedTitle,
+                  isOrphaned && styles.orphanedText,
+                  inOrphanedCourse && styles.inOrphanedCourseText
+                ]}
+                numberOfLines={2}
+              >
+                {assignment.title}
+              </Text>
+              
+              {/* Subtask expand button */}
+              {hasSubtasks && (
+                <TouchableOpacity 
+                  style={styles.expandButton}
+                  onPress={toggleExpanded}
+                  hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
+                >
+                  <Ionicons 
+                    name={expanded ? "chevron-up" : "chevron-down"} 
+                    size={16} 
+                    color="#8A8A8D" 
+                  />
+                </TouchableOpacity>
+              )}
+            </View>
+            
+            {/* Subtask progress indicator */}
+            {hasSubtasks && !expanded && (
+              <View style={styles.subtaskProgressContainer}>
+                <View style={styles.subtaskProgressBar}>
+                  <View 
+                    style={[
+                      styles.subtaskProgressFill, 
+                      { width: `${subtaskProgress}%` }
+                    ]} 
+                  />
+                </View>
+                <Text style={styles.subtaskProgressText}>
+                  {completedSubtasks}/{localSubtasks.length}
                 </Text>
               </View>
             )}
             
-            {period && !isOrphaned && (
-              <View style={styles.periodContainer}>
-                <Ionicons name="time-outline" size={12} color={inOrphanedCourse ? '#6E6E73' : '#8A8A8D'} style={styles.periodIcon} />
-                <Text style={[
-                  styles.periodText,
-                  inOrphanedCourse && styles.inOrphanedCourseMetadata
-                ]}>
-                  {t('assignments').common.period} {period._id}: {period.starttime} - {period.endtime}
-                </Text>
-              </View>
-            )}
-            
-            {showDueDate && dueDateLabel && (
-              <View style={styles.dueDateContainer}>
-                <Ionicons name="calendar-outline" size={12} color={inOrphanedCourse ? '#6E6E73' : '#8A8A8D'} style={styles.periodIcon} />
-                <Text style={[
-                  styles.dueDateText,
-                  inOrphanedCourse && styles.inOrphanedCourseMetadata
-                ]}>
-                  {t('assignments').common.due}: {dueDateLabel}
-                </Text>
-              </View>
-            )}
+            {/* Show description if available and no subtasks or not expanded */}
+            {assignment.description && (!hasSubtasks || !expanded) ? (
+              <Text 
+                style={[
+                  styles.description,
+                  isOrphaned && styles.orphanedDescription,
+                  inOrphanedCourse && styles.inOrphanedCourseText
+                ]}
+                numberOfLines={1}
+              >
+                {assignment.description}
+              </Text>
+            ) : null}
           </View>
         </View>
-      </View>
-      
-      <View style={styles.rightSection}>
-        {assignment.isPriority && (
-          <View style={[styles.priorityIndicator, { backgroundColor: priorityColor }]}>
-            <Ionicons name="star" size={14} color="#FFFFFF" />
-          </View>
-        )}
-        <Text style={[
-          styles.timeText,
-          inOrphanedCourse && styles.inOrphanedCourseMetadata
-        ]}>
-          {formattedTime}
-        </Text>
         
-        {/* Remaining time display */}
-        {!assignment.isCompleted && (
+        <View style={styles.rightSection}>
+          {assignment.isPriority && (
+            <View style={[styles.priorityIndicator, { backgroundColor: priorityColor }]}>
+              <Ionicons name="star" size={14} color="#FFFFFF" />
+            </View>
+          )}
           <Text style={[
-            styles.remainingTime,
-            isOverdue && styles.overdueText,
+            styles.timeText,
             inOrphanedCourse && styles.inOrphanedCourseMetadata
           ]}>
-            {remainingTime}
+            {formattedTime}
           </Text>
-        )}
-        
-        {onDelete && (
-          <Pressable 
-            style={styles.deleteButton}
-            onPress={onDelete}
-            hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
+          
+          {/* Remaining time display */}
+          {!assignment.isCompleted && (
+            <Text style={[
+              styles.remainingTime,
+              isOverdue && styles.overdueText,
+              inOrphanedCourse && styles.inOrphanedCourseMetadata
+            ]}>
+              {remainingTime}
+            </Text>
+          )}
+          
+          {onDelete && (
+            <Pressable 
+              style={styles.deleteButton}
+              onPress={onDelete}
+              hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
+            >
+              <Ionicons name="trash-outline" size={16} color="#FF3B30" />
+            </Pressable>
+          )}
+        </View>
+      </AnimatedPressable>
+      
+      {/* Subtasks dropdown section */}
+      {expanded && hasSubtasks && (
+        <Animated.View 
+          style={styles.subtasksContainer}
+          entering={FadeIn.duration(200)}
+          exiting={FadeOut.duration(150)}
+          layout={Layout.springify().mass(0.3)}
+        >
+          {localSubtasks.map((subtask) => (
+            <Animated.View 
+              key={subtask.id}
+              style={styles.subtaskItem}
+              entering={FadeIn.duration(200)}
+              layout={Layout.springify()}
+            >
+              <Pressable
+                style={styles.subtaskLeftSection}
+                onPress={() => handleToggleSubtask(subtask.id)}
+              >
+                <View
+                  style={[
+                    styles.subtaskCheckbox,
+                    subtask.isCompleted && styles.subtaskCheckboxChecked
+                  ]}
+                >
+                  {subtask.isCompleted && (
+                    <Ionicons name="checkmark" size={12} color="#FFFFFF" />
+                  )}
+                </View>
+                <Text 
+                  style={[
+                    styles.subtaskTitle,
+                    subtask.isCompleted && styles.subtaskTitleCompleted
+                  ]}
+                >
+                  {subtask.title}
+                </Text>
+              </Pressable>
+              
+              <TouchableOpacity
+                style={styles.subtaskDeleteButton}
+                onPress={() => handleDeleteSubtask(subtask.id)}
+                hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
+              >
+                <Ionicons name="close-circle" size={16} color="#8A8A8D" />
+              </TouchableOpacity>
+            </Animated.View>
+          ))}
+          
+          {/* Add new subtask button */}
+          {showAddSubtask ? (
+            <Animated.View 
+              style={styles.addSubtaskInputContainer}
+              entering={FadeIn.duration(200)}
+              layout={Layout.springify()}
+            >
+              <TouchableOpacity
+                style={styles.subtaskCheckbox}
+                onPress={() => setShowAddSubtask(false)}
+              >
+                <Ionicons name="add" size={16} color="#3478F6" />
+              </TouchableOpacity>
+              <TextInput
+                style={styles.subtaskInput}
+                placeholder="Add subtask..."
+                placeholderTextColor="#8A8A8D"
+                value={newSubtaskTitle}
+                onChangeText={setNewSubtaskTitle}
+                onSubmitEditing={handleAddSubtask}
+                autoFocus
+                onBlur={() => {
+                  setTimeout(() => {
+                    if (newSubtaskTitle.trim() === '') {
+                      setShowAddSubtask(false);
+                    }
+                  }, 200);
+                }}
+              />
+              <TouchableOpacity
+                style={[
+                  styles.subtaskAddButton,
+                  newSubtaskTitle.trim() === '' && styles.subtaskAddButtonDisabled
+                ]}
+                onPress={handleAddSubtask}
+                disabled={newSubtaskTitle.trim() === ''}
+              >
+                <Ionicons 
+                  name="checkmark" 
+                  size={16} 
+                  color={newSubtaskTitle.trim() === '' ? "#8A8A8D" : "#FFFFFF"} 
+                />
+              </TouchableOpacity>
+            </Animated.View>
+          ) : (
+            <TouchableOpacity
+              style={styles.addSubtaskButton}
+              onPress={() => setShowAddSubtask(true)}
+            >
+              <Ionicons name="add-circle-outline" size={16} color="#3478F6" />
+              <Text style={styles.addSubtaskText}>Add subtask</Text>
+            </TouchableOpacity>
+          )}
+        </Animated.View>
+      )}
+      
+      {/* Add subtask button when no subtasks exist yet */}
+      {!hasSubtasks && !showAddSubtask && (
+        <TouchableOpacity
+          style={styles.addFirstSubtaskButton}
+          onPress={() => setShowAddSubtask(true)}
+        >
+          <Ionicons name="add-circle-outline" size={16} color="#3478F6" />
+          <Text style={styles.addSubtaskText}>Add subtask</Text>
+        </TouchableOpacity>
+      )}
+      
+      {/* Input for first subtask */}
+      {!hasSubtasks && showAddSubtask && (
+        <Animated.View 
+          style={styles.addFirstSubtaskInputContainer}
+          entering={FadeIn.duration(200)}
+          layout={Layout.springify()}
+        >
+          <TouchableOpacity
+            style={styles.subtaskCheckbox}
+            onPress={() => setShowAddSubtask(false)}
           >
-            <Ionicons name="trash-outline" size={16} color="#FF3B30" />
-          </Pressable>
-        )}
-      </View>
-    </AnimatedPressable>
+            <Ionicons name="add" size={16} color="#3478F6" />
+          </TouchableOpacity>
+          <TextInput
+            style={styles.subtaskInput}
+            placeholder="Add subtask..."
+            placeholderTextColor="#8A8A8D"
+            value={newSubtaskTitle}
+            onChangeText={setNewSubtaskTitle}
+            onSubmitEditing={handleAddSubtask}
+            autoFocus
+            onBlur={() => {
+              setTimeout(() => {
+                if (newSubtaskTitle.trim() === '') {
+                  setShowAddSubtask(false);
+                }
+              }, 200);
+            }}
+          />
+          <TouchableOpacity
+            style={[
+              styles.subtaskAddButton,
+              newSubtaskTitle.trim() === '' && styles.subtaskAddButtonDisabled
+            ]}
+            onPress={handleAddSubtask}
+            disabled={newSubtaskTitle.trim() === ''}
+          >
+            <Ionicons 
+              name="checkmark" 
+              size={16} 
+              color={newSubtaskTitle.trim() === '' ? "#8A8A8D" : "#FFFFFF"} 
+            />
+          </TouchableOpacity>
+        </Animated.View>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  outerContainer: {
+    marginBottom: 8,
+  },
   container: {
+    backgroundColor: '#1C1C1E',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#292929',
-    marginBottom: 6,
-    borderRadius: 10,
-    padding: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 1,
-    elevation: 1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   leftSection: {
     flexDirection: 'row',
@@ -536,5 +799,171 @@ const styles = StyleSheet.create({
   },
   inOrphanedCourseMetadata: {
     color: '#6E6E73',
-  }
+  },
+  expandButton: {
+    marginLeft: 8,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(142, 142, 142, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  subtasksContainer: {
+    backgroundColor: '#242426',
+    marginTop: 1,
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+    paddingTop: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#3478F6',
+    borderRightWidth: 1,
+    borderBottomWidth: 1,
+    borderRightColor: '#2C2C2E',
+    borderBottomColor: '#2C2C2E',
+    marginLeft: 8,
+    marginRight: 8,
+  },
+  subtaskProgressContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  subtaskProgressBar: {
+    flex: 1,
+    height: 4,
+    backgroundColor: 'rgba(142, 142, 142, 0.2)',
+    borderRadius: 2,
+    marginRight: 8,
+    overflow: 'hidden',
+  },
+  subtaskProgressFill: {
+    height: '100%',
+    backgroundColor: '#3478F6',
+    borderRadius: 2,
+  },
+  subtaskProgressText: {
+    fontSize: 12,
+    color: '#8A8A8D',
+    marginLeft: 8,
+  },
+  subtaskItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(142, 142, 142, 0.15)',
+    backgroundColor: 'rgba(28, 28, 30, 0.5)',
+    borderRadius: 8,
+    marginBottom: 4,
+    paddingHorizontal: 8,
+  },
+  subtaskLeftSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    paddingVertical: 4,
+  },
+  subtaskCheckbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#3478F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  subtaskCheckboxChecked: {
+    backgroundColor: '#3478F6',
+  },
+  subtaskTitle: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    flex: 1,
+  },
+  subtaskTitleCompleted: {
+    textDecorationLine: 'line-through',
+    color: '#8A8A8D',
+  },
+  subtaskDeleteButton: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addSubtaskButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    marginTop: 8,
+  },
+  addFirstSubtaskButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: '#242426',
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
+    marginTop: 1,
+    marginLeft: 8,
+    marginRight: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#3478F6',
+    borderRightWidth: 1,
+    borderBottomWidth: 1,
+    borderRightColor: '#2C2C2E',
+    borderBottomColor: '#2C2C2E',
+  },
+  addSubtaskText: {
+    fontSize: 14,
+    color: '#3478F6',
+    marginLeft: 8,
+  },
+  addSubtaskInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    marginTop: 4,
+  },
+  addFirstSubtaskInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#242426',
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
+    marginTop: 1,
+    marginLeft: 8,
+    marginRight: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#3478F6',
+    borderRightWidth: 1,
+    borderBottomWidth: 1,
+    borderRightColor: '#2C2C2E',
+    borderBottomColor: '#2C2C2E',
+  },
+  subtaskInput: {
+    flex: 1,
+    fontSize: 14,
+    color: '#FFFFFF',
+    paddingVertical: 4,
+  },
+  subtaskAddButton: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#3478F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  subtaskAddButtonDisabled: {
+    backgroundColor: 'rgba(142, 142, 142, 0.2)',
+  },
 }); 
