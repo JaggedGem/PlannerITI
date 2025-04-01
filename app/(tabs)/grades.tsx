@@ -1135,7 +1135,7 @@ export default function Grades() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1b26',
+    backgroundColor: '#141414',
   },
   header: {
     flexDirection: 'row',
@@ -1157,7 +1157,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   averageCard: {
-    backgroundColor: '#232433',
+    backgroundColor: '#1A1A1A',
     margin: 20,
     marginTop: 0,
     borderRadius: 16,
@@ -1265,7 +1265,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#1a1b26',
+    backgroundColor: '#1A1A1A',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
@@ -1310,7 +1310,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   categoryButton: {
-    backgroundColor: '#232433',
+    backgroundColor: '#1A1A1A',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 12,
@@ -1351,13 +1351,13 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#1a1b26',
+    backgroundColor: '#141414',
     padding: 20,
   },
   idnpContent: {
     width: '100%',
     maxWidth: 400,
-    backgroundColor: '#232433',
+    backgroundColor: '#1A1A1A',
     borderRadius: 16,
     padding: 20,
     alignItems: 'center',
@@ -1375,7 +1375,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   idnpInput: {
-    backgroundColor: '#1a1b26',
+    backgroundColor: '#1A1A1A',
     borderRadius: 12,
     padding: 16,
     color: 'white',
@@ -1414,7 +1414,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#1a1b26',
+    backgroundColor: '#141414',
   },
   loadingText: {
     color: 'white',
@@ -1436,7 +1436,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#1a1b26',
+    backgroundColor: '#141414',
     padding: 20,
   },
   errorTitle: {
@@ -1475,7 +1475,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#232433',
+    backgroundColor: '#1A1A1A',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 12,
@@ -1486,7 +1486,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   semesterDropdownMenu: {
-    backgroundColor: '#232433',
+    backgroundColor: '#1A1A1A',
     borderRadius: 12,
     marginTop: 8,
     padding: 8,
@@ -1507,7 +1507,7 @@ const styles = StyleSheet.create({
   },
   // New styles for subject cards
   subjectCard: {
-    backgroundColor: '#232433',
+    backgroundColor: '#1A1A1A',
     borderRadius: 16,
     marginBottom: 12,
     overflow: 'hidden',
@@ -1575,7 +1575,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   examCard: {
-    backgroundColor: '#232433',
+    backgroundColor: '#1A1A1A',
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
@@ -1606,7 +1606,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginHorizontal: 20,
     marginVertical: 12,
-    backgroundColor: '#232433',
+    backgroundColor: '#1A1A1A',
     borderRadius: 12,
     padding: 4,
   },
@@ -1684,7 +1684,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#232433',
+    backgroundColor: '#1A1A1A',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 12,
@@ -1709,7 +1709,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
   },
   semesterAverageCard: {
-    backgroundColor: '#232433',
+    backgroundColor: '#1A1A1A',
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
@@ -1830,7 +1830,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#1a1b26',
+    backgroundColor: '#141414',
     padding: 20,
   },
 });
