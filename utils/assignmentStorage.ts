@@ -38,6 +38,14 @@ export interface Assignment {
   periodId?: string; // Optional period ID from scheduleService
   subjectId?: string; // Optional subject ID from scheduleService
   isOrphaned?: boolean; // Flag to mark if the assignment's subject no longer exists in current group
+  subtasks?: Subtask[]; // Optional array of subtasks
+}
+
+// Subtask interface
+export interface Subtask {
+  id: string;
+  title: string;
+  isCompleted: boolean;
 }
 
 // Assignment group interface for grouping by date
@@ -152,6 +160,7 @@ export const addAssignment = async (assignment: Omit<Assignment, 'id' | 'isCompl
     ...assignment,
     id: Date.now().toString(),
     isCompleted: false,
+    subtasks: assignment.subtasks || []
   };
   
   const assignments = await getAssignments();
@@ -175,6 +184,15 @@ export const toggleAssignmentCompletion = async (id: string): Promise<void> => {
   if (index !== -1) {
     const wasCompleted = assignments[index].isCompleted;
     assignments[index].isCompleted = !wasCompleted;
+    
+    // If marking as completed, also mark all subtasks as completed
+    if (!wasCompleted && assignments[index].subtasks && assignments[index].subtasks.length > 0) {
+      assignments[index].subtasks = assignments[index].subtasks.map(subtask => ({
+        ...subtask,
+        isCompleted: true
+      }));
+    }
+    
     await saveAssignments(assignments);
     
     // Handle notifications based on completion state
@@ -492,4 +510,134 @@ export const handleGroupChange = async (groupId?: string | SubGroupType): Promis
 // Export the update function so it can be called from assignments.tsx
 export const refreshAssignmentCounts = async (): Promise<void> => {
   await updateAssignmentCountsInSchedule();
+};
+
+// Add a new subtask to an assignment
+export const addSubtask = async (assignmentId: string, subtaskTitle: string): Promise<Subtask | null> => {
+  const assignments = await getAssignments();
+  const index = assignments.findIndex(a => a.id === assignmentId);
+  
+  if (index !== -1) {
+    const newSubtask: Subtask = {
+      id: Date.now().toString(),
+      title: subtaskTitle,
+      isCompleted: false
+    };
+    
+    // Initialize subtasks array if it doesn't exist
+    if (!assignments[index].subtasks) {
+      assignments[index].subtasks = [];
+    }
+    
+    assignments[index].subtasks!.push(newSubtask);
+    await saveAssignments(assignments);
+    
+    return newSubtask;
+  }
+  
+  return null;
+};
+
+// Toggle subtask completion status
+export const toggleSubtaskCompletion = async (assignmentId: string, subtaskId: string): Promise<void> => {
+  const assignments = await getAssignments();
+  const assignmentIndex = assignments.findIndex(a => a.id === assignmentId);
+  
+  if (assignmentIndex !== -1 && assignments[assignmentIndex].subtasks) {
+    const subtaskIndex = assignments[assignmentIndex].subtasks!.findIndex(s => s.id === subtaskId);
+    
+    if (subtaskIndex !== -1) {
+      // Toggle completion status
+      assignments[assignmentIndex].subtasks![subtaskIndex].isCompleted = 
+        !assignments[assignmentIndex].subtasks![subtaskIndex].isCompleted;
+      
+      // Check if all subtasks are completed
+      const allSubtasksCompleted = assignments[assignmentIndex].subtasks!.every(s => s.isCompleted);
+      
+      // Update assignment completion status based on subtasks
+      if (allSubtasksCompleted && !assignments[assignmentIndex].isCompleted) {
+        assignments[assignmentIndex].isCompleted = true;
+        
+        // Handle notifications for completed assignment
+        await handleCompletionStateChange(
+          assignments[assignmentIndex], 
+          false, // wasCompleted
+          assignmentId
+        );
+      } else if (!allSubtasksCompleted && assignments[assignmentIndex].isCompleted) {
+        assignments[assignmentIndex].isCompleted = false;
+        
+        // Handle notifications for uncompleted assignment
+        await handleCompletionStateChange(
+          assignments[assignmentIndex], 
+          true, // wasCompleted
+          assignmentId
+        );
+      }
+      
+      await saveAssignments(assignments);
+      
+      // Update assignment counts
+      await updateAssignmentCountsInSchedule();
+    }
+  }
+};
+
+// Delete a subtask
+export const deleteSubtask = async (assignmentId: string, subtaskId: string): Promise<void> => {
+  const assignments = await getAssignments();
+  const assignmentIndex = assignments.findIndex(a => a.id === assignmentId);
+  
+  if (assignmentIndex !== -1 && assignments[assignmentIndex].subtasks) {
+    assignments[assignmentIndex].subtasks = assignments[assignmentIndex].subtasks!.filter(
+      subtask => subtask.id !== subtaskId
+    );
+    
+    // Update assignment completion status based on remaining subtasks
+    if (assignments[assignmentIndex].subtasks.length > 0) {
+      const allSubtasksCompleted = assignments[assignmentIndex].subtasks.every(s => s.isCompleted);
+      assignments[assignmentIndex].isCompleted = allSubtasksCompleted;
+    }
+    
+    await saveAssignments(assignments);
+  }
+};
+
+// Edit a subtask
+export const updateSubtask = async (
+  assignmentId: string, 
+  subtaskId: string, 
+  updates: Partial<Subtask>
+): Promise<void> => {
+  const assignments = await getAssignments();
+  const assignmentIndex = assignments.findIndex(a => a.id === assignmentId);
+  
+  if (assignmentIndex !== -1 && assignments[assignmentIndex].subtasks) {
+    const subtaskIndex = assignments[assignmentIndex].subtasks!.findIndex(s => s.id === subtaskId);
+    
+    if (subtaskIndex !== -1) {
+      assignments[assignmentIndex].subtasks![subtaskIndex] = {
+        ...assignments[assignmentIndex].subtasks![subtaskIndex],
+        ...updates
+      };
+      
+      await saveAssignments(assignments);
+    }
+  }
+};
+
+// Update all subtasks completion status for an assignment
+export const updateAllSubtaskCompletion = async (assignmentId: string, isCompleted: boolean): Promise<void> => {
+  const assignments = await getAssignments();
+  const assignmentIndex = assignments.findIndex(a => a.id === assignmentId);
+  
+  if (assignmentIndex !== -1 && assignments[assignmentIndex].subtasks && assignments[assignmentIndex].subtasks.length > 0) {
+    // Update all subtasks with the specified completion status
+    assignments[assignmentIndex].subtasks = assignments[assignmentIndex].subtasks.map(subtask => ({
+      ...subtask,
+      isCompleted
+    }));
+    
+    await saveAssignments(assignments);
+  }
 };
