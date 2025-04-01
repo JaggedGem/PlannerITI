@@ -8,9 +8,59 @@ import Animated, { useAnimatedStyle, withTiming, withSpring, FadeIn, FadeOut, us
 import { LinearGradient } from 'expo-linear-gradient';
 import ViewModeMenu from './ViewModeMenu';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
+import { getAssignmentsForPeriod, Assignment, AssignmentType } from '@/utils/assignmentStorage';
 
 // Key for storing whether the tutorial has been shown
 const TUTORIAL_SHOWN_KEY = 'schedule_tutorial_shown';
+
+// Function to get assignment type icon name
+const getAssignmentTypeIcon = (type: AssignmentType): React.ComponentProps<typeof Ionicons>['name'] => {
+  switch (type) {
+    case AssignmentType.HOMEWORK:
+      return 'book-outline';
+    case AssignmentType.TEST:
+      return 'document-text-outline';
+    case AssignmentType.EXAM:
+      return 'school-outline';
+    case AssignmentType.PROJECT:
+      return 'construct-outline';
+    case AssignmentType.QUIZ:
+      return 'clipboard-outline';
+    case AssignmentType.LAB:
+      return 'flask-outline';
+    case AssignmentType.ESSAY:
+      return 'create-outline';
+    case AssignmentType.PRESENTATION:
+      return 'easel-outline';
+    default:
+      return 'ellipsis-horizontal-outline';
+  }
+};
+
+// Function to get assignment type color
+const getAssignmentTypeColor = (type: AssignmentType): string => {
+  switch (type) {
+    case AssignmentType.HOMEWORK:
+      return '#3478F6'; // iOS Blue
+    case AssignmentType.TEST:
+      return '#FF9500'; // iOS Orange
+    case AssignmentType.EXAM:
+      return '#FF3B30'; // iOS Red
+    case AssignmentType.PROJECT:
+      return '#5E5CE6'; // iOS Purple
+    case AssignmentType.QUIZ:
+      return '#FF375F'; // iOS Pink
+    case AssignmentType.LAB:
+      return '#64D2FF'; // iOS Light Blue
+    case AssignmentType.ESSAY:
+      return '#30D158'; // iOS Green
+    case AssignmentType.PRESENTATION:
+      return '#FFD60A'; // iOS Yellow
+    default:
+      return '#8E8E93'; // iOS Gray
+  }
+};
 
 const formatTimeByLocale = (time: string, isEnglish: boolean) => {
   if (!isEnglish) return time;
@@ -167,6 +217,9 @@ export default function DayView() {
   const firstTimeAnimValue = useSharedValue(0);
   const hasShownFirstTimeIndicator = useRef(false);
   const [tutorialShown, setTutorialShown] = useState(true); // Assume shown by default, will be updated
+  const [expandedPeriods, setExpandedPeriods] = useState<{[key: string]: boolean}>({});
+  const [periodAssignments, setPeriodAssignments] = useState<{[key: string]: Assignment[]}>({});
+  const [loadingAssignments, setLoadingAssignments] = useState<{[key: string]: boolean}>({});
 
   // Check if tutorial has been shown before
   useEffect(() => {
@@ -719,6 +772,44 @@ export default function DayView() {
     };
   }, []);
 
+  // Function to toggle period expansion
+  const togglePeriodExpansion = async (periodId: string) => {
+    // If not already expanded, fetch the assignments
+    if (!expandedPeriods[periodId]) {
+      // Set loading state for this period
+      setLoadingAssignments(prev => ({
+        ...prev,
+        [periodId]: true
+      }));
+      
+      try {
+        const assignments = await getAssignmentsForPeriod(periodId);
+        setPeriodAssignments(prev => ({
+          ...prev,
+          [periodId]: assignments
+        }));
+      } catch (error) {
+        console.error('Error loading assignments:', error);
+        // In case of error, set empty array
+        setPeriodAssignments(prev => ({
+          ...prev,
+          [periodId]: []
+        }));
+      } finally {
+        // Clear loading state
+        setLoadingAssignments(prev => ({
+          ...prev,
+          [periodId]: false
+        }));
+      }
+    }
+    
+    setExpandedPeriods(prev => ({
+      ...prev,
+      [periodId]: !prev[periodId]
+    }));
+  };
+
   if (isLoading && !scheduleData) {
     return (
       <SafeAreaView style={styles.container}>
@@ -931,7 +1022,7 @@ export default function DayView() {
             </View>
           ) : (
               todaySchedule.map((item, index) => {
-                // Keep the recovery-info item but just use it to display the banner
+                // Skip the recovery-info item but just use it to display the banner
                 if (item.period === 'recovery-info') {
                   // We're already showing the recovery day banner separately
                   return null;
@@ -943,6 +1034,9 @@ export default function DayView() {
 
                 const nextItem = todaySchedule[index + 1];
                 const showTimeIndicator = isCurrentTimeInSchedule(item);
+                const hasAssignments = item.assignmentCount > 0;
+                const isPeriodExpanded = item.period ? expandedPeriods[item.period] : false;
+                const periodAssignmentsList = item.period ? periodAssignments[item.period] || [] : [];
 
                 return (
                   <View
@@ -967,10 +1061,27 @@ export default function DayView() {
                           {formatTimeByLocale(item.startTime, settings.language === 'en')}
                         </Text>
 
-                        {/* Dot positioned in the middle */}
-                        <View style={styles.timeDotContainer}>
-                          <View style={[styles.timeDot, { backgroundColor: getSubjectColor(item.className) }]} />
-                        </View>
+                        {/* Time separator - show chevron if has assignments, otherwise show dot */}
+                        <TouchableOpacity 
+                          style={styles.timeDotContainer}
+                          disabled={!hasAssignments}
+                          onPress={() => item.period && hasAssignments ? togglePeriodExpansion(item.period) : null}
+                        >
+                          {hasAssignments ? (
+                            <Animated.View style={[
+                              styles.timeChevronContainer,
+                              { transform: [{ rotate: isPeriodExpanded ? '180deg' : '0deg' }] }
+                            ]}>
+                              <Ionicons 
+                                name="chevron-down" 
+                                size={14} 
+                                color={getSubjectColor(item.className)} 
+                              />
+                            </Animated.View>
+                          ) : (
+                            <View style={[styles.timeDot, { backgroundColor: getSubjectColor(item.className) }]} />
+                          )}
+                        </TouchableOpacity>
 
                         <Text style={[styles.time, { marginTop: 'auto' }]}>
                           {formatTimeByLocale(item.endTime, settings.language === 'en')}
@@ -986,11 +1097,14 @@ export default function DayView() {
                           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                             {/* Assignment count badge */}
                             {item.assignmentCount > 0 && (
-                              <View style={styles.assignmentBadge}>
+                              <TouchableOpacity
+                                style={styles.assignmentBadge}
+                                onPress={() => item.period ? togglePeriodExpansion(item.period) : null}
+                              >
                                 <Text style={styles.assignmentBadgeText}>
                                   {item.assignmentCount}
                                 </Text>
-                              </View>
+                              </TouchableOpacity>
                             )}
                             
                             {/* Status text */}
@@ -1052,6 +1166,58 @@ export default function DayView() {
                             <Text style={styles.roomNumber}>{t('schedule').room} {item.roomNumber}</Text>
                           </View>
                         </View>
+                        
+                        {/* Assignments expandable section */}
+                        {hasAssignments && isPeriodExpanded && (
+                          <Animated.View 
+                            style={styles.assignmentsContainer}
+                            entering={FadeIn.duration(200)}
+                            exiting={FadeOut.duration(150)}
+                          >
+                            <View style={styles.assignmentsSeparator} />
+                            <Text style={styles.assignmentsSectionTitle}>
+                              {'Assignments'}
+                            </Text>
+                            
+                            {loadingAssignments[item.period || ''] ? (
+                              <View style={styles.loadingAssignments}>
+                                <ActivityIndicator size="small" color="#3478F6" />
+                                <Text style={styles.loadingAssignmentsText}>
+                                  {'Loading assignments...'}
+                                </Text>
+                              </View>
+                            ) : periodAssignmentsList.length > 0 ? (
+                              periodAssignmentsList.map((assignment, idx) => (
+                                <View key={assignment.id} style={styles.assignmentItem}>
+                                  <View style={[
+                                    styles.assignmentTypeIndicator, 
+                                    { backgroundColor: getAssignmentTypeColor(assignment.assignmentType) }
+                                  ]}>
+                                    <Ionicons 
+                                      name={getAssignmentTypeIcon(assignment.assignmentType)} 
+                                      size={12} 
+                                      color="#FFFFFF" 
+                                    />
+                                  </View>
+                                  <View style={styles.assignmentDetails}>
+                                    <Text style={styles.assignmentTitle}>{assignment.title}</Text>
+                                    {assignment.description ? (
+                                      <Text style={styles.assignmentDescription} numberOfLines={2}>
+                                        {assignment.description}
+                                      </Text>
+                                    ) : null}
+                                  </View>
+                                </View>
+                              ))
+                            ) : (
+                              <View style={styles.noAssignments}>
+                                <Text style={styles.noAssignmentsText}>
+                                  {'No assignments for this period'}
+                                </Text>
+                              </View>
+                            )}
+                          </Animated.View>
+                        )}
                       </View>
                       {showTimeIndicator && (
                         <TimeIndicator
@@ -1207,6 +1373,19 @@ type Styles = {
   dateAssignmentBadgeText: TextStyle;
   selectedDateAssignmentBadgeText: TextStyle;
   lastDateAssignmentBadge: ViewStyle;
+  timeChevronContainer: ViewStyle;
+  assignmentsContainer: ViewStyle;
+  assignmentsSeparator: ViewStyle;
+  assignmentsSectionTitle: TextStyle;
+  assignmentItem: ViewStyle;
+  assignmentTypeIndicator: ViewStyle;
+  assignmentDetails: ViewStyle;
+  assignmentTitle: TextStyle;
+  assignmentDescription: TextStyle;
+  loadingAssignments: ViewStyle;
+  loadingAssignmentsText: TextStyle;
+  noAssignments: ViewStyle;
+  noAssignmentsText: TextStyle;
 };
 
 const styles = StyleSheet.create<Styles>({
@@ -1503,6 +1682,7 @@ const styles = StyleSheet.create<Styles>({
   timeDotContainer: {
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 8, // Add padding to make it more tappable
   },
   classHeaderRow: {
     flexDirection: 'row',
@@ -1796,5 +1976,76 @@ const styles = StyleSheet.create<Styles>({
     alignItems: 'center',
     paddingHorizontal: 4,
     zIndex: 1,
+  },
+  timeChevronContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 20,
+    height: 20,
+  },
+  assignmentsContainer: {
+    marginTop: 8, 
+    paddingTop: 8,
+  },
+  assignmentsSeparator: {
+    height: 1,
+    backgroundColor: 'rgba(138, 138, 141, 0.2)',
+    marginBottom: 8,
+  },
+  assignmentsSectionTitle: {
+    color: '#8A8A8D',
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  assignmentItem: {
+    flexDirection: 'row',
+    marginBottom: 8,
+    alignItems: 'flex-start',
+    backgroundColor: 'rgba(60, 60, 60, 0.3)',
+    borderRadius: 8,
+    padding: 8,
+  },
+  assignmentTypeIndicator: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  assignmentDetails: {
+    flex: 1,
+  },
+  assignmentTitle: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  assignmentDescription: {
+    color: '#8A8A8D',
+    fontSize: 12,
+  },
+  loadingAssignments: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+  },
+  loadingAssignmentsText: {
+    color: '#8A8A8D',
+    fontSize: 14,
+    marginLeft: 8,
+  },
+  noAssignments: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+  },
+  noAssignmentsText: {
+    color: '#8A8A8D',
+    fontSize: 14,
+    fontStyle: 'italic',
   },
 });
