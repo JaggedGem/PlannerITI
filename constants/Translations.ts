@@ -111,6 +111,8 @@ type TranslationType = {
     in: string;
     dayView: string;
     weekView: string;
+    assignments: string;
+    loadingAssignments: string;
   };
   subgroup: {
     group1: string;
@@ -508,6 +510,8 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       in: 'in',
       dayView: 'Day View',
       weekView: 'Week View',
+      assignments: 'Assignments',
+      loadingAssignments: 'Loading assignments...',
     },
     subgroup: {
       group1: 'Subgroup 1',
@@ -923,6 +927,8 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       in: 'în',
       dayView: 'Vizualizare pe zi',
       weekView: 'Vizualizare pe săptămână',
+      assignments: 'Teme',
+      loadingAssignments: 'Se încarcă temele...',
     },
     subgroup: {
       group1: 'Subgrupa 1',
@@ -1338,6 +1344,8 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       in: 'в',
       dayView: 'По дням',
       weekView: 'По неделям',
+      assignments: 'Задания',
+      loadingAssignments: 'Загрузка заданий...',
     },
     subgroup: {
       group1: 'Подгруппа 1',
