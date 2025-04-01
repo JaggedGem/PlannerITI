@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, TouchableOpacity, TextInput } from 'react-native';
-import { Assignment, getPeriodById, AssignmentType, Subtask, toggleSubtaskCompletion, addSubtask, deleteSubtask, updateAllSubtaskCompletion } from '../../utils/assignmentStorage';
+import { Assignment, getPeriodById, AssignmentType, Subtask, toggleSubtaskCompletion, addSubtask, deleteSubtask, updateAllSubtaskCompletion, getSubtasksForAssignment } from '../../utils/assignmentStorage';
 import { format } from 'date-fns';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { 
@@ -120,7 +120,8 @@ export default function AssignmentItem({
   const [expanded, setExpanded] = useState(false);
   const [showAddSubtask, setShowAddSubtask] = useState(false);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
-  const [localSubtasks, setLocalSubtasks] = useState<Subtask[]>(assignment.subtasks || []);
+  const [subtasks, setSubtasks] = useState<Subtask[]>([]);
+  const [isLoadingSubtasks, setIsLoadingSubtasks] = useState(false);
   
   // Animated values for interactive feedback
   const scale = useSharedValue(1);
@@ -128,10 +129,23 @@ export default function AssignmentItem({
   const checkScale = useSharedValue(assignment.isCompleted ? 1 : 0);
   const expandHeight = useSharedValue(0);
   
-  // Sync local subtasks with assignment subtasks
+  // Load subtasks from storage when needed
+  const loadSubtasks = async () => {
+    setIsLoadingSubtasks(true);
+    try {
+      const storedSubtasks = await getSubtasksForAssignment(assignment.id);
+      setSubtasks(storedSubtasks);
+    } catch (error) {
+      console.error('Error loading subtasks:', error);
+    } finally {
+      setIsLoadingSubtasks(false);
+    }
+  };
+  
+  // Load subtasks when assignment changes or when expanded
   useEffect(() => {
-    setLocalSubtasks(assignment.subtasks || []);
-  }, [assignment.subtasks]);
+    loadSubtasks();
+  }, [assignment.id, expanded]);
   
   // Update check animation when completion status changes
   React.useEffect(() => {
@@ -209,6 +223,123 @@ export default function AssignmentItem({
     opacity.value = withTiming(1, { duration: 100 });
   };
   
+  // Toggle the expanded state
+  const toggleExpanded = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setExpanded(!expanded);
+  };
+  
+  // Custom handler for toggling assignment completion
+  const handleToggleAssignment = async () => {
+    // If the assignment has subtasks, we need special handling
+    if (subtasks.length > 0) {
+      // If trying to mark as complete, first check that all subtasks are completed
+      if (!assignment.isCompleted) {
+        // Mark all subtasks as completed when we complete the assignment
+        await updateAllSubtaskCompletion(assignment.id, true);
+        // Then toggle the assignment
+        onToggle();
+        // Reload subtasks to reflect the changes
+        await loadSubtasks();
+      } else {
+        // If uncompleting the assignment, also uncomplete all subtasks
+        onToggle(); // First toggle the assignment
+        await updateAllSubtaskCompletion(assignment.id, false);
+        await loadSubtasks(); // Reload subtasks to reflect changes
+      }
+    } else {
+      // If no subtasks, just toggle normally
+      onToggle();
+    }
+  };
+  
+  // Handle adding new subtask
+  const handleAddSubtask = async () => {
+    if (newSubtaskTitle.trim() === '') return;
+    
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setNewSubtaskTitle('');
+    setShowAddSubtask(false);
+    
+    // Add subtask to storage
+    await addSubtask(assignment.id, newSubtaskTitle.trim());
+    
+    // Reload subtasks from storage
+    await loadSubtasks();
+  };
+  
+  // Handle toggling subtask completion
+  const handleToggleSubtask = async (subtaskId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    
+    // Get the current subtask and its state before toggling
+    const subtask = subtasks.find(st => st.id === subtaskId);
+    if (!subtask) return;
+    const willBeCompleted = !subtask.isCompleted;
+    
+    // Get current subtasks to work with
+    let updatedSubtasks = [...subtasks];
+    
+    // Update the specific subtask in our local copy
+    updatedSubtasks = updatedSubtasks.map(st => 
+      st.id === subtaskId ? {...st, isCompleted: willBeCompleted} : st
+    );
+    
+    // Check if all subtasks are now completed
+    const allCompleted = updatedSubtasks.every(st => st.isCompleted);
+    
+    // Toggle in storage first - this changes the subtask's completion state
+    await toggleSubtaskCompletion(assignment.id, subtaskId);
+    
+    // Manual handling of assignment completion state
+    if (!willBeCompleted && assignment.isCompleted) {
+      // We're uncompleting a subtask and the assignment is completed,
+      // so we need to uncomplete the assignment
+      onToggle();
+    } else if (allCompleted && !assignment.isCompleted) {
+      // All subtasks are now completed but the assignment isn't,
+      // so complete the assignment
+      onToggle();
+    }
+    
+    // Reload subtasks from storage to update UI
+    await loadSubtasks();
+  };
+  
+  // Handle deleting a subtask
+  const handleDeleteSubtask = async (subtaskId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    
+    // Get current subtask to know if it was completed
+    const subtask = subtasks.find(st => st.id === subtaskId);
+    if (!subtask) return;
+    
+    // Get a copy of subtasks without the one being deleted
+    const remainingSubtasks = subtasks.filter(st => st.id !== subtaskId);
+    
+    // Delete from storage
+    await deleteSubtask(assignment.id, subtaskId);
+    
+    // After deleting, determine if all remaining subtasks are completed
+    if (remainingSubtasks.length > 0) {
+      const allRemainSubtasksCompleted = remainingSubtasks.every(st => st.isCompleted);
+      
+      // If assignment completion state doesn't match remaining subtasks state, update it
+      if (allRemainSubtasksCompleted !== assignment.isCompleted) {
+        onToggle();
+      }
+    }
+    
+    // Reload subtasks
+    await loadSubtasks();
+  };
+  
+  // Calculate subtask progress
+  const completedSubtasks = subtasks.filter(st => st.isCompleted).length;
+  const hasSubtasks = subtasks.length > 0;
+  const subtaskProgress = hasSubtasks ? 
+    Math.round((completedSubtasks / subtasks.length) * 100) : 0;
+  
   // Determine priority styles
   const priorityColor = assignment.isPriority ? '#FF3B30' : 'transparent';
   
@@ -222,99 +353,6 @@ export default function AssignmentItem({
   
   // Determine if assignment is overdue
   const isOverdue = remainingTime === 'Overdue' && !assignment.isCompleted;
-  
-  // Toggle the expanded state
-  const toggleExpanded = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setExpanded(!expanded);
-  };
-  
-  // Custom handler for toggling assignment completion
-  const handleToggleAssignment = async () => {
-    // Determine the new completion state (opposite of current)
-    const newCompletionState = !assignment.isCompleted;
-    
-    // Update subtasks locally for immediate UI response
-    const updatedSubtasks = localSubtasks.map(subtask => ({
-      ...subtask,
-      isCompleted: newCompletionState // Set all subtasks to the same completion state
-    }));
-    
-    // Update local state immediately
-    setLocalSubtasks(updatedSubtasks);
-    
-    // Call the parent's onToggle to handle the assignment toggle
-    onToggle();
-    
-    // Update all subtasks in storage (done asynchronously)
-    if (localSubtasks.length > 0) {
-      updateAllSubtaskCompletion(assignment.id, newCompletionState);
-    }
-  };
-  
-  // Handle adding new subtask
-  const handleAddSubtask = async () => {
-    if (newSubtaskTitle.trim() === '') return;
-    
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const subtask = await addSubtask(assignment.id, newSubtaskTitle.trim());
-    if (subtask) {
-      setLocalSubtasks([...localSubtasks, subtask]);
-      setNewSubtaskTitle('');
-      setShowAddSubtask(false);
-    }
-  };
-  
-  // Handle toggling subtask completion
-  const handleToggleSubtask = async (subtaskId: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    
-    // Find the subtask
-    const subtaskIndex = localSubtasks.findIndex(st => st.id === subtaskId);
-    if (subtaskIndex === -1) return;
-    
-    // Determine new completion state (opposite of current)
-    const newCompletionState = !localSubtasks[subtaskIndex].isCompleted;
-    
-    // Update local state first for immediate UI response
-    const updatedSubtasks = localSubtasks.map(st => 
-      st.id === subtaskId 
-        ? { ...st, isCompleted: newCompletionState } 
-        : st
-    );
-    setLocalSubtasks(updatedSubtasks);
-    
-    // Check if all subtasks are now completed or uncompleted
-    const allCompleted = updatedSubtasks.every(st => st.isCompleted);
-    const allUncompleted = updatedSubtasks.every(st => !st.isCompleted);
-    
-    // If completion state should affect the parent assignment
-    if ((allCompleted && !assignment.isCompleted) || 
-        (allUncompleted && assignment.isCompleted)) {
-      // Call parent toggle to update assignment
-      onToggle();
-    }
-    
-    // Then update in storage (asynchronous)
-    await toggleSubtaskCompletion(assignment.id, subtaskId);
-  };
-  
-  // Handle deleting a subtask
-  const handleDeleteSubtask = async (subtaskId: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    
-    // Optimistically update UI first
-    setLocalSubtasks(localSubtasks.filter(st => st.id !== subtaskId));
-    
-    // Then update in storage
-    await deleteSubtask(assignment.id, subtaskId);
-  };
-  
-  // Calculate subtask progress
-  const completedSubtasks = localSubtasks.filter(st => st.isCompleted).length;
-  const hasSubtasks = localSubtasks.length > 0;
-  const subtaskProgress = hasSubtasks ? 
-    Math.round((completedSubtasks / localSubtasks.length) * 100) : 0;
   
   return (
     <View style={styles.outerContainer}>
@@ -386,7 +424,7 @@ export default function AssignmentItem({
                   />
                 </View>
                 <Text style={styles.subtaskProgressText}>
-                  {completedSubtasks}/{localSubtasks.length}
+                  {completedSubtasks}/{subtasks.length}
                 </Text>
               </View>
             )}
@@ -451,46 +489,50 @@ export default function AssignmentItem({
           exiting={FadeOut.duration(150)}
           layout={Layout.springify().mass(0.3)}
         >
-          {localSubtasks.map((subtask) => (
-            <Animated.View 
-              key={subtask.id}
-              style={styles.subtaskItem}
-              entering={FadeIn.duration(200)}
-              layout={Layout.springify()}
-            >
-              <Pressable
-                style={styles.subtaskLeftSection}
-                onPress={() => handleToggleSubtask(subtask.id)}
+          {isLoadingSubtasks ? (
+            <Text style={styles.loadingText}>Loading subtasks...</Text>
+          ) : (
+            subtasks.map((subtask) => (
+              <Animated.View 
+                key={subtask.id}
+                style={styles.subtaskItem}
+                entering={FadeIn.duration(200)}
+                layout={Layout.springify()}
               >
-                <View
-                  style={[
-                    styles.subtaskCheckbox,
-                    subtask.isCompleted && styles.subtaskCheckboxChecked
-                  ]}
+                <Pressable
+                  style={styles.subtaskLeftSection}
+                  onPress={() => handleToggleSubtask(subtask.id)}
                 >
-                  {subtask.isCompleted && (
-                    <Ionicons name="checkmark" size={12} color="#FFFFFF" />
-                  )}
-                </View>
-                <Text 
-                  style={[
-                    styles.subtaskTitle,
-                    subtask.isCompleted && styles.subtaskTitleCompleted
-                  ]}
+                  <View
+                    style={[
+                      styles.subtaskCheckbox,
+                      subtask.isCompleted && styles.subtaskCheckboxChecked
+                    ]}
+                  >
+                    {subtask.isCompleted && (
+                      <Ionicons name="checkmark" size={12} color="#FFFFFF" />
+                    )}
+                  </View>
+                  <Text 
+                    style={[
+                      styles.subtaskTitle,
+                      subtask.isCompleted && styles.subtaskTitleCompleted
+                    ]}
+                  >
+                    {subtask.title}
+                  </Text>
+                </Pressable>
+                
+                <TouchableOpacity
+                  style={styles.subtaskDeleteButton}
+                  onPress={() => handleDeleteSubtask(subtask.id)}
+                  hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
                 >
-                  {subtask.title}
-                </Text>
-              </Pressable>
-              
-              <TouchableOpacity
-                style={styles.subtaskDeleteButton}
-                onPress={() => handleDeleteSubtask(subtask.id)}
-                hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
-              >
-                <Ionicons name="close-circle" size={16} color="#8A8A8D" />
-              </TouchableOpacity>
-            </Animated.View>
-          ))}
+                  <Ionicons name="close-circle" size={16} color="#8A8A8D" />
+                </TouchableOpacity>
+              </Animated.View>
+            ))
+          )}
           
           {/* Add new subtask button */}
           {showAddSubtask ? (
@@ -965,5 +1007,12 @@ const styles = StyleSheet.create({
   },
   subtaskAddButtonDisabled: {
     backgroundColor: 'rgba(142, 142, 142, 0.2)',
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#8A8A8D',
+    textAlign: 'center',
+    marginTop: 10,
+    marginBottom: 10,
   },
 }); 

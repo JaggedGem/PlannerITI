@@ -551,29 +551,8 @@ export const toggleSubtaskCompletion = async (assignmentId: string, subtaskId: s
       assignments[assignmentIndex].subtasks![subtaskIndex].isCompleted = 
         !assignments[assignmentIndex].subtasks![subtaskIndex].isCompleted;
       
-      // Check if all subtasks are completed
-      const allSubtasksCompleted = assignments[assignmentIndex].subtasks!.every(s => s.isCompleted);
-      
-      // Update assignment completion status based on subtasks
-      if (allSubtasksCompleted && !assignments[assignmentIndex].isCompleted) {
-        assignments[assignmentIndex].isCompleted = true;
-        
-        // Handle notifications for completed assignment
-        await handleCompletionStateChange(
-          assignments[assignmentIndex], 
-          false, // wasCompleted
-          assignmentId
-        );
-      } else if (!allSubtasksCompleted && assignments[assignmentIndex].isCompleted) {
-        assignments[assignmentIndex].isCompleted = false;
-        
-        // Handle notifications for uncompleted assignment
-        await handleCompletionStateChange(
-          assignments[assignmentIndex], 
-          true, // wasCompleted
-          assignmentId
-        );
-      }
+      // NOTE: We're not automatically updating the assignment completion status here anymore,
+      // as this is now handled in the UI component
       
       await saveAssignments(assignments);
       
@@ -593,11 +572,8 @@ export const deleteSubtask = async (assignmentId: string, subtaskId: string): Pr
       subtask => subtask.id !== subtaskId
     );
     
-    // Update assignment completion status based on remaining subtasks
-    if (assignments[assignmentIndex].subtasks.length > 0) {
-      const allSubtasksCompleted = assignments[assignmentIndex].subtasks.every(s => s.isCompleted);
-      assignments[assignmentIndex].isCompleted = allSubtasksCompleted;
-    }
+    // We're not updating assignment completion status automatically anymore
+    // This will be handled by the UI component
     
     await saveAssignments(assignments);
   }
@@ -640,4 +616,16 @@ export const updateAllSubtaskCompletion = async (assignmentId: string, isComplet
     
     await saveAssignments(assignments);
   }
+};
+
+// Get all subtasks for a specific assignment directly from storage
+export const getSubtasksForAssignment = async (assignmentId: string): Promise<Subtask[]> => {
+  const assignments = await getAssignments();
+  const assignment = assignments.find(a => a.id === assignmentId);
+  
+  if (assignment && assignment.subtasks) {
+    return assignment.subtasks;
+  }
+  
+  return [];
 };
