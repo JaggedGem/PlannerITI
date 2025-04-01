@@ -1732,7 +1732,7 @@ export default function Settings() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1b26',
+    backgroundColor: '#141414',
     padding: 20,
   },
   section: {
@@ -1750,7 +1750,7 @@ const styles = StyleSheet.create({
   },
   optionButton: {
     flex: 1,
-    backgroundColor: '#232433',
+    backgroundColor: '#1A1A1A',
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
@@ -1767,7 +1767,7 @@ const styles = StyleSheet.create({
     color: 'white',
   },
   classSelector: {
-    backgroundColor: '#232433',
+    backgroundColor: '#1A1A1A',
     padding: 16,
     borderRadius: 12,
   },
@@ -1787,7 +1787,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#1a1b26',
+    backgroundColor: '#141414',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
@@ -1809,7 +1809,7 @@ const styles = StyleSheet.create({
   },
   searchContainer: {
     flexDirection: 'row',
-    backgroundColor: '#232433',
+    backgroundColor: '#1A1A1A',
     borderRadius: 12,
     marginBottom: 16,
     paddingVertical: 10,
@@ -1835,7 +1835,7 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   groupItem: {
-    backgroundColor: '#232433',
+    backgroundColor: '#1A1A1A',
     padding: 16,
     borderRadius: 12,
     marginBottom: 10,
@@ -1887,7 +1887,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   periodItem: {
-    backgroundColor: '#232433',
+    backgroundColor: '#1A1A1A',
     borderRadius: 12,
     padding: 16,
   },
@@ -1945,7 +1945,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   formInput: {
-    backgroundColor: '#232433',
+    backgroundColor: '#1A1A1A',
     borderRadius: 12,
     padding: 16,
     color: 'white',
@@ -1958,7 +1958,7 @@ const styles = StyleSheet.create({
   },
   timeButton: {
     flex: 1,
-    backgroundColor: '#232433',
+    backgroundColor: '#1A1A1A',
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
@@ -1977,7 +1977,7 @@ const styles = StyleSheet.create({
   },
   dayButton: {
     flex: 1,
-    backgroundColor: '#232433',
+    backgroundColor: '#1A1A1A',
     borderRadius: 12,
     padding: 12,
     alignItems: 'center',
@@ -1998,7 +1998,7 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     borderWidth: 2,
-    borderColor: '#232433',
+    borderColor: '#1A1A1A',
   },
   switchContainer: {
     flexDirection: 'row',
@@ -2020,7 +2020,7 @@ const styles = StyleSheet.create({
   clearIdnpButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#232433',
+    backgroundColor: '#1A1A1A',
     padding: 16,
     borderRadius: 12,
   },
@@ -2037,7 +2037,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   confirmDialog: {
-    backgroundColor: '#1a1b26',
+    backgroundColor: '#141414',
     borderRadius: 20,
     padding: 20,
     width: '80%',
@@ -2065,7 +2065,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cancelButton: {
-    backgroundColor: '#232433',
+    backgroundColor: '#1A1A1A',
     marginRight: 10,
   },
   clearButton: {
@@ -2088,7 +2088,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   timePickerContainer: {
-    backgroundColor: '#1a1b26',
+    backgroundColor: '#141414',
     borderRadius: 20,
     padding: 24,
     width: '90%',
@@ -2123,7 +2123,7 @@ const styles = StyleSheet.create({
   timePickerColumn: {
     flex: 1,
     alignItems: 'center',
-    backgroundColor: '#232433',
+    backgroundColor: '#1A1A1A',
     borderRadius: 12,
     overflow: 'hidden',
     minWidth: 100,
@@ -2154,7 +2154,7 @@ const styles = StyleSheet.create({
   },
   timePickerPeriodButton: {
     marginLeft: 20,
-    backgroundColor: '#232433',
+    backgroundColor: '#1A1A1A',
     borderRadius: 12,
     padding: 12,
     width: 60,
@@ -2178,7 +2178,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   timePickerCancelButton: {
-    backgroundColor: '#232433',
+    backgroundColor: '#1A1A1A',
   },
   timePickerConfirmButton: {
     backgroundColor: '#2C3DCD',
@@ -2213,7 +2213,7 @@ const styles = StyleSheet.create({
     left: 6,
   },
   languageSelector: {
-    backgroundColor: '#232433',
+    backgroundColor: '#1A1A1A',
     padding: 16,
     borderRadius: 12,
   },
@@ -2237,7 +2237,7 @@ const styles = StyleSheet.create({
   languageOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#232433',
+    backgroundColor: '#1A1A1A',
     padding: 16,
     borderRadius: 12,
   },
@@ -2261,7 +2261,7 @@ const styles = StyleSheet.create({
   accountInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#232433',
+    backgroundColor: '#1A1A1A',
     padding: 16,
     borderRadius: 12,
   },
@@ -2313,7 +2313,7 @@ const styles = StyleSheet.create({
   accountAction: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#232433',
+    backgroundColor: '#141414',
     padding: 12,
     borderRadius: 12,
     flex: 1,
@@ -2342,7 +2342,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   actionSheet: {
-    backgroundColor: '#1a1b26',
+    backgroundColor: '#141414',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
@@ -2367,7 +2367,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     marginBottom: 12,
-    backgroundColor: '#232433',
+    backgroundColor: '#1A1A1A',
   },
   actionSheetButtonText: {
     fontSize: 16,
@@ -2384,7 +2384,7 @@ const styles = StyleSheet.create({
   },
   passwordInputContainer: {
     width: '100%',
-    backgroundColor: '#232433',
+    backgroundColor: '#1A1A1A',
     borderRadius: 10,
     marginTop: 10,
     marginBottom: 8,
@@ -2439,7 +2439,7 @@ const styles = StyleSheet.create({
   },
   
   doneButton: {
-    backgroundColor: '#232433',
+    backgroundColor: '#1A1A1A',
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
@@ -2452,13 +2452,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  
-  // ... existing styles ...
-  devToolsList: {
+    devToolsList: {
     gap: 12,
   },
   devToolButton: {
-    backgroundColor: '#232433',
+    backgroundColor: '#1A1A1A',
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
