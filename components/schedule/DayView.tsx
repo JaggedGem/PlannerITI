@@ -954,7 +954,7 @@ export default function DayView() {
                   >
                     <View style={[styles.classCard, {
                       borderLeftColor: getSubjectColor(item.className),
-                      backgroundColor: '#232433',
+                      backgroundColor: '#1A1A1A',
                       shadowOpacity: 0.1,
                       minHeight: 100,
                     }]}
@@ -1329,14 +1329,15 @@ const styles = StyleSheet.create<Styles>({
   scheduleContainer: {
     flex: 1,
     paddingHorizontal: 20,
+    paddingTop: 16,
     backgroundColor: '#0A0A0A',
   },
   scheduleItem: {
-    marginBottom: 8,
+    marginBottom: 16,
     zIndex: 1,
   },
   classCard: {
-    backgroundColor: '#232433',
+    backgroundColor: '#1A1A1A',
     borderRadius: 20,
     borderLeftWidth: 4,
     shadowColor: '#000',
@@ -1347,7 +1348,6 @@ const styles = StyleSheet.create<Styles>({
     flexDirection: 'row',
     overflow: 'hidden',
     minHeight: 100,
-    marginVertical: 4, // Add spacing to prevent shadow clipping
   },
   timeContainer: {
     width: 90,
