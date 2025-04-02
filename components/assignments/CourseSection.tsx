@@ -17,6 +17,7 @@ interface CourseSectionProps {
   onToggleAssignment: (id: string) => void;
   onDeleteAssignment?: (id: string) => void;
   showDueDate?: boolean;
+  assignmentToHighlight?: string | null;
 }
 
 // Function to get a color for a course code
@@ -67,7 +68,8 @@ export default function CourseSection({
   assignments,
   onToggleAssignment,
   onDeleteAssignment,
-  showDueDate = false
+  showDueDate = false,
+  assignmentToHighlight = null
 }: CourseSectionProps) {
   const { t } = useTranslation();
   
@@ -154,6 +156,9 @@ export default function CourseSection({
             ? { ...assignment, isOrphaned: false, inOrphanedCourse: true }
             : assignment;
             
+          // Check if this assignment should be highlighted
+          const isHighlighted = assignmentToHighlight === assignment.id;
+          
           return (
             <AssignmentItem
               key={assignment.id}
@@ -163,6 +168,7 @@ export default function CourseSection({
               showDueDate={showDueDate}
               dueDateLabel={showDueDate ? formatDueDate(assignment.dueDate, t) : undefined}
               inOrphanedCourse={isCourseOrphaned}
+              isHighlighted={isHighlighted}
             />
           );
         })}

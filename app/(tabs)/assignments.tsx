@@ -607,6 +607,10 @@ const Assignments = () => {
   const [isDropdownVisible, setIsDropdownVisible] = useState(false);
   const [isArchiveModalVisible, setIsArchiveModalVisible] = useState(false);
   
+  // For auto-expanding a specific assignment when navigating from the DayView
+  const [assignmentToExpand, setAssignmentToExpand] = useState<string | null>(null);
+  const [dateToExpand, setDateToExpand] = useState<string | null>(null);
+  
   // Track which tabs have been viewed already to disable animations after first view
   const [hasViewedTab, setHasViewedTab] = useState<{[key: number]: boolean}>({0: false, 1: false, 2: false, 3: false});
   
@@ -632,6 +636,43 @@ const Assignments = () => {
   
   // Get current date for archive comparison
   const currentDate = useMemo(() => new Date(), []);
+  
+  // Check for navigation data when screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      const checkNavigationData = async () => {
+        try {
+          const navigationDataJson = await AsyncStorage.getItem('assignment_navigation_data');
+          
+          if (navigationDataJson) {
+            const navigationData = JSON.parse(navigationDataJson);
+            
+            if (navigationData.autoExpand && navigationData.assignmentId) {
+              // Set the assignment ID to expand
+              setAssignmentToExpand(navigationData.assignmentId);
+              
+              // If we have a date, set it too
+              if (navigationData.date) {
+                setDateToExpand(navigationData.date);
+              }
+              
+              // Switch to the due date view (index 0) if not already there
+              if (selectedSegmentIndex !== 0) {
+                setSelectedSegmentIndex(0);
+              }
+            }
+            
+            // Clear the navigation data after using it
+            await AsyncStorage.removeItem('assignment_navigation_data');
+          }
+        } catch (error) {
+          console.error('Error reading navigation data:', error);
+        }
+      };
+      
+      checkNavigationData();
+    }, [selectedSegmentIndex])
+  );
   
   // Simple fetch assignments implementation with data caching
   const fetchAssignments = useCallback(async () => {
@@ -835,39 +876,70 @@ const Assignments = () => {
         showsVerticalScrollIndicator={false}
         removeClippedSubviews={true}
       >
-        {groups.map((group, index) => (
-          <View key={`${group.date}-${index}`} style={{marginBottom: 8}}>
-            {disableAnimations ? (
-              <View>
-                <DaySection
-                  title={group.title}
-                  date={group.date}
-                  assignments={group.assignments}
-                  onToggleAssignment={onToggle}
-                  onDeleteAssignment={onDelete}
-                  defaultExpanded={index === 0} // Only first day will be expanded by default
-                />
-              </View>
-            ) : (
-              <Animated.View 
-                entering={FadeInDown.duration(150).delay(index * 20)}
-                layout={Layout.springify().mass(0.3)}
-              >
-                <DaySection
-                  title={group.title}
-                  date={group.date}
-                  assignments={group.assignments}
-                  onToggleAssignment={onToggle}
-                  onDeleteAssignment={onDelete}
-                  defaultExpanded={index === 0} // Only first day will be expanded by default
-                />
-              </Animated.View>
-            )}
-          </View>
-        ))}
+        {groups.map((group, index) => {
+          // Determine if this day should be expanded
+          let shouldExpandDay = index === 0; // Default: expand first day
+          
+          // If we have an assignment to expand and a date to expand
+          if (assignmentToExpand && dateToExpand) {
+            // Check if this group contains the target date
+            const groupDate = new Date(group.date);
+            const targetDate = new Date(dateToExpand);
+            
+            // If the dates match (same day), this group should be expanded
+            if (groupDate.getFullYear() === targetDate.getFullYear() &&
+                groupDate.getMonth() === targetDate.getMonth() &&
+                groupDate.getDate() === targetDate.getDate()) {
+              shouldExpandDay = true;
+              
+              // If this is not the first iteration, scroll to this section
+              if (index > 0) {
+                // Use setTimeout to ensure the section is rendered before scrolling
+                setTimeout(() => {
+                  // We don't have a direct ref to the ScrollView from here,
+                  // but we can use scrollTo in the next frame
+                  // This is a simple approach - a more robust approach would use a ref
+                }, 300);
+              }
+            }
+          }
+          
+          return (
+            <View key={`${group.date}-${index}`} style={{marginBottom: 8}}>
+              {disableAnimations ? (
+                <View>
+                  <DaySection
+                    title={group.title}
+                    date={group.date}
+                    assignments={group.assignments}
+                    onToggleAssignment={onToggle}
+                    onDeleteAssignment={onDelete}
+                    defaultExpanded={shouldExpandDay}
+                    assignmentToHighlight={assignmentToExpand}
+                  />
+                </View>
+              ) : (
+                <Animated.View 
+                  entering={FadeInDown.duration(150).delay(index * 20)}
+                  layout={Layout.springify().mass(0.3)}
+                >
+                  <DaySection
+                    title={group.title}
+                    date={group.date}
+                    assignments={group.assignments}
+                    onToggleAssignment={onToggle}
+                    onDeleteAssignment={onDelete}
+                    defaultExpanded={shouldExpandDay}
+                    assignmentToHighlight={assignmentToExpand}
+                  />
+                </Animated.View>
+              )}
+            </View>
+          );
+        })}
       </ScrollView>
     );
-  }, [t]);
+  }, [t, assignmentToExpand, dateToExpand]);
   
   // Simplified CoursesView with disabled animations after first view
   const SimplifiedCoursesView = useCallback(({

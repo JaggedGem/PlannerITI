@@ -25,6 +25,7 @@ interface AssignmentItemProps {
   showDueDate?: boolean;
   dueDateLabel?: string;
   inOrphanedCourse?: boolean;
+  isHighlighted?: boolean;
 }
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -109,7 +110,8 @@ export default function AssignmentItem({
   onDelete, 
   showDueDate = false,
   dueDateLabel,
-  inOrphanedCourse = false
+  inOrphanedCourse = false,
+  isHighlighted = false
 }: AssignmentItemProps) {
   // State for period information
   const [period, setPeriod] = useState<Period | null>(null);
@@ -117,17 +119,19 @@ export default function AssignmentItem({
   const { t, currentLanguage } = useTranslation();
   
   // Add state for subtasks
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(isHighlighted);
   const [showAddSubtask, setShowAddSubtask] = useState(false);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [isLoadingSubtasks, setIsLoadingSubtasks] = useState(false);
+  const [highlight, setHighlight] = useState(isHighlighted);
   
   // Animated values for interactive feedback
   const scale = useSharedValue(1);
   const opacity = useSharedValue(1);
   const checkScale = useSharedValue(assignment.isCompleted ? 1 : 0);
   const expandHeight = useSharedValue(0);
+  const highlightOpacity = useSharedValue(isHighlighted ? 1 : 0);
   
   // Load subtasks from storage when needed
   const loadSubtasks = async () => {
@@ -209,6 +213,19 @@ export default function AssignmentItem({
     return {
       transform: [{ scale: checkScale.value }],
       opacity: checkScale.value,
+    };
+  });
+  
+  const highlightStyle = useAnimatedStyle(() => {
+    return {
+      opacity: highlightOpacity.value,
+      backgroundColor: '#3478F640',
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      borderRadius: 8,
     };
   });
   
@@ -354,6 +371,28 @@ export default function AssignmentItem({
   // Determine if assignment is overdue
   const isOverdue = remainingTime === 'Overdue' && !assignment.isCompleted;
   
+  // Effect to handle highlighting animation
+  useEffect(() => {
+    if (isHighlighted) {
+      // Show highlight effect
+      highlightOpacity.value = 1;
+      
+      // Auto-expand highlighted items
+      setExpanded(true);
+      
+      // Add a highlight effect that fades out
+      highlightOpacity.value = withTiming(0, { 
+        duration: 2000,
+        easing: Easing.out(Easing.cubic)
+      });
+      
+      // Clear highlight after animation
+      setTimeout(() => {
+        setHighlight(false);
+      }, 2000);
+    }
+  }, [isHighlighted, highlightOpacity]);
+  
   return (
     <View style={styles.outerContainer}>
       <AnimatedPressable
@@ -362,7 +401,8 @@ export default function AssignmentItem({
           containerStyle,
           isOrphaned && styles.orphanedContainer,
           isOverdue && styles.overdueContainer,
-          inOrphanedCourse && styles.inOrphanedCourseContainer
+          inOrphanedCourse && styles.inOrphanedCourseContainer,
+          highlight && styles.highlightedContainer
         ]}
         onPress={handleToggleAssignment}
         onPressIn={handlePressIn}
@@ -370,6 +410,9 @@ export default function AssignmentItem({
         entering={FadeIn.duration(300)}
         layout={Layout.springify()}
       >
+        {/* Highlight overlay for animation */}
+        {highlight && <Animated.View style={highlightStyle} />}
+        
         <View style={styles.leftSection}>
           <View style={styles.checkboxContainer}>
             <View style={[styles.checkbox, assignment.isCompleted && styles.checkboxChecked]}>
@@ -1014,5 +1057,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 10,
     marginBottom: 10,
+  },
+  highlightedContainer: {
+    backgroundColor: '#3478F640',
+    borderRadius: 8,
   },
 }); 
