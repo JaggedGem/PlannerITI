@@ -10,6 +10,7 @@ import ViewModeMenu from './ViewModeMenu';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { getAssignmentsForPeriod, Assignment, AssignmentType, getAssignmentsForTimeRange, getAssignmentsForClass } from '@/utils/assignmentStorage';
+import { router } from 'expo-router';
 
 // Key for storing whether the tutorial has been shown
 const TUTORIAL_SHOWN_KEY = 'schedule_tutorial_shown';
@@ -1114,203 +1115,224 @@ export default function DayView() {
                       item._height = event.nativeEvent.layout.height;
                     }}
                   >
-                    <View style={[styles.classCard, {
-                      borderLeftColor: getSubjectColor(item.className),
-                      backgroundColor: '#1A1A1A',
-                      shadowOpacity: 0.1,
-                      minHeight: 100,
-                    }]}
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      disabled={!hasAssignments}
+                      onPress={() => item.period && hasAssignments ? 
+                        togglePeriodExpansion(
+                          item.period, 
+                          item.startTime, 
+                          item.endTime,
+                          item.subjectId,
+                          item.className
+                        ) : null}
                     >
-                      <View style={[styles.timeContainer, {
-                        borderRightColor: 'rgba(138, 138, 141, 0.2)'
+                      <View style={[styles.classCard, {
+                        borderLeftColor: getSubjectColor(item.className),
+                        backgroundColor: '#1A1A1A',
+                        shadowOpacity: 0.1,
+                        minHeight: 100,
                       }]}
                       >
-                        <Text style={[styles.time, { marginBottom: 'auto' }]}>
-                          {formatTimeByLocale(item.startTime, settings.language === 'en')}
-                        </Text>
-
-                        {/* Time separator - show chevron if has assignments, otherwise show dot */}
-                        <TouchableOpacity 
-                          style={styles.timeDotContainer}
-                          disabled={!hasAssignments}
-                          onPress={() => item.period && hasAssignments ? 
-                            togglePeriodExpansion(
-                              item.period, 
-                              item.startTime, 
-                              item.endTime,
-                              item.subjectId,
-                              item.className
-                            ) : null}
+                        <View style={[styles.timeContainer, {
+                          borderRightColor: 'rgba(138, 138, 141, 0.2)'
+                        }]}
                         >
-                          {hasAssignments ? (
-                            <Animated.View style={[
-                              styles.timeChevronContainer,
-                              { transform: [{ rotate: isPeriodExpanded ? '180deg' : '0deg' }] }
-                            ]}>
-                              <Ionicons 
-                                name="chevron-down" 
-                                size={14} 
-                                color={getSubjectColor(item.className)} 
-                              />
-                            </Animated.View>
-                          ) : (
-                            <View style={[styles.timeDot, { backgroundColor: getSubjectColor(item.className) }]} />
-                          )}
-                        </TouchableOpacity>
-
-                        <Text style={[styles.time, { marginTop: 'auto' }]}>
-                          {formatTimeByLocale(item.endTime, settings.language === 'en')}
-                        </Text>
-                      </View>
-
-                      <View style={styles.classContent}>
-                        <View style={styles.classHeaderRow}>
-                          <Text style={styles.className} numberOfLines={1}>
-                            {item.className}
+                          <Text style={[styles.time, { marginBottom: 'auto' }]}>
+                            {formatTimeByLocale(item.startTime, settings.language === 'en')}
                           </Text>
-                          
-                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            {/* Assignment count badge */}
-                            {periodAssignmentCounts[item.period || ''] > 0 && (
-                              <TouchableOpacity
-                                style={styles.assignmentBadge}
-                                onPress={() => item.period ? 
-                                  togglePeriodExpansion(
-                                    item.period,
-                                    item.startTime,
-                                    item.endTime,
-                                    item.subjectId,
-                                    item.className
-                                  ) : null}
-                              >
-                                <Text style={styles.assignmentBadgeText}>
-                                  {periodAssignmentCounts[item.period || '']}
-                                </Text>
-                              </TouchableOpacity>
-                            )}
-                            
-                            {/* Status text */}
-                            <Text style={[styles.statusText, showTimeIndicator && styles.activeStatusText]}>
-                              {showTimeIndicator ? 'Now' :
-                                (() => {
-                                  const currentTimeMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
-                                  const [startHours, startMinutes] = item.startTime.split(':').map(Number);
-                                  const startTimeMinutes = startHours * 60 + startMinutes;
 
-                                  if (currentTimeMinutes < startTimeMinutes) {
-                                    const previousItem = index > 0 ? todaySchedule[index - 1] : null;
-                                    if (previousItem && isCurrentTimeInSchedule(previousItem)) {
-                                      // Calculate minutes until start and round up (so 59 seconds = 1 minute)
-                                      const now = new Date();
-                                      const target = new Date(
-                                        now.getFullYear(),
-                                        now.getMonth(),
-                                        now.getDate(),
-                                        startHours,
-                                        startMinutes
-                                      );
-                                      const diffInMs = target.getTime() - now.getTime();
-                                      const minutesUntilStart = Math.ceil(diffInMs / (1000 * 60));
-                                      // Only show if less than 60 minutes
-                                      return minutesUntilStart <= 60 ? `In ${minutesUntilStart}m` : '';
-                                    } else if (!previousItem && currentTimeMinutes < startTimeMinutes) {
-                                      // If this is the first class and it hasn't started yet
-                                      const now = new Date();
-                                      const target = new Date(
-                                        now.getFullYear(),
-                                        now.getMonth(),
-                                        now.getDate(),
-                                        startHours,
-                                        startMinutes
-                                      );
-                                      const diffInMs = target.getTime() - now.getTime();
-                                      const minutesUntilStart = Math.ceil(diffInMs / (1000 * 60));
-                                      // Only show if less than 60 minutes
-                                      return minutesUntilStart <= 60 ? `${t('schedule').in} ${minutesUntilStart}m` : '';
-                                    }
-                                  }
-                                  return '';
-                                })()
-                              }
-                            </Text>
-                          </View>
-                        </View>
-                        <View style={styles.detailsContainer}>
-                          <View style={styles.teacherContainer}>
-                            <Text style={styles.teacherName}>{item.teacherName}</Text>
-                            {item.group && (item.group === 'Subgroup 1' || item.group === 'Subgroup 2') && (
-                              <Text style={styles.groupName}>
-                                {item.group === 'Subgroup 1' ? t('subgroup').group1 : t('subgroup').group2}
-                              </Text>
+                          {/* Time separator - show chevron if has assignments, otherwise show dot */}
+                          <View style={styles.timeDotContainer}>
+                            {hasAssignments ? (
+                              <Animated.View style={[
+                                styles.timeChevronContainer,
+                                { transform: [{ rotate: isPeriodExpanded ? '180deg' : '0deg' }] }
+                              ]}>
+                                <Ionicons 
+                                  name="chevron-down" 
+                                  size={14} 
+                                  color={getSubjectColor(item.className)} 
+                                />
+                              </Animated.View>
+                            ) : (
+                              <View style={[styles.timeDot, { backgroundColor: getSubjectColor(item.className) }]} />
                             )}
                           </View>
-                          <View style={styles.roomContainer}>
-                            <Text style={styles.roomNumber}>{t('schedule').room} {item.roomNumber}</Text>
-                          </View>
+
+                          <Text style={[styles.time, { marginTop: 'auto' }]}>
+                            {formatTimeByLocale(item.endTime, settings.language === 'en')}
+                          </Text>
                         </View>
-                        
-                        {/* Assignments expandable section */}
-                        {hasAssignments && isPeriodExpanded && (
-                          <Animated.View 
-                            style={styles.assignmentsContainer}
-                            entering={FadeIn.duration(200)}
-                            exiting={FadeOut.duration(150)}
-                          >
-                            <View style={styles.assignmentsSeparator} />
-                            <Text style={styles.assignmentsSectionTitle}>
-                              {'Assignments'}
+
+                        <View style={styles.classContent}>
+                          <View style={styles.classHeaderRow}>
+                            <Text style={styles.className} numberOfLines={1}>
+                              {item.className}
                             </Text>
                             
-                            {loadingAssignments[item.period || ''] ? (
-                              <View style={styles.loadingAssignments}>
-                                <ActivityIndicator size="small" color="#3478F6" />
-                                <Text style={styles.loadingAssignmentsText}>
-                                  {'Loading assignments...'}
-                                </Text>
-                              </View>
-                            ) : periodAssignmentsList.length > 0 ? (
-                              periodAssignmentsList.map((assignment, idx) => (
-                                <View key={assignment.id} style={styles.assignmentItem}>
-                                  <View style={[
-                                    styles.assignmentTypeIndicator, 
-                                    { backgroundColor: getAssignmentTypeColor(assignment.assignmentType) }
-                                  ]}>
-                                    <Ionicons 
-                                      name={getAssignmentTypeIcon(assignment.assignmentType)} 
-                                      size={12} 
-                                      color="#FFFFFF" 
-                                    />
-                                  </View>
-                                  <View style={styles.assignmentDetails}>
-                                    <Text style={styles.assignmentTitle}>{assignment.title}</Text>
-                                    {assignment.description ? (
-                                      <Text style={styles.assignmentDescription} numberOfLines={2}>
-                                        {assignment.description}
-                                      </Text>
-                                    ) : null}
-                                  </View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                              {/* Assignment count badge */}
+                              {periodAssignmentCounts[item.period || ''] > 0 && (
+                                <View style={styles.assignmentBadge}>
+                                  <Text style={styles.assignmentBadgeText}>
+                                    {periodAssignmentCounts[item.period || '']}
+                                  </Text>
                                 </View>
-                              ))
-                            ) : (
-                              <View style={styles.noAssignments}>
-                                <Text style={styles.noAssignmentsText}>
-                                  {'No assignments for this period'}
+                              )}
+                              
+                              {/* Status text */}
+                              <Text style={[styles.statusText, showTimeIndicator && styles.activeStatusText]}>
+                                {showTimeIndicator ? 'Now' :
+                                  (() => {
+                                    const currentTimeMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
+                                    const [startHours, startMinutes] = item.startTime.split(':').map(Number);
+                                    const startTimeMinutes = startHours * 60 + startMinutes;
+
+                                    if (currentTimeMinutes < startTimeMinutes) {
+                                      const previousItem = index > 0 ? todaySchedule[index - 1] : null;
+                                      if (previousItem && isCurrentTimeInSchedule(previousItem)) {
+                                        // Calculate minutes until start and round up (so 59 seconds = 1 minute)
+                                        const now = new Date();
+                                        const target = new Date(
+                                          now.getFullYear(),
+                                          now.getMonth(),
+                                          now.getDate(),
+                                          startHours,
+                                          startMinutes
+                                        );
+                                        const diffInMs = target.getTime() - now.getTime();
+                                        const minutesUntilStart = Math.ceil(diffInMs / (1000 * 60));
+                                        // Only show if less than 60 minutes
+                                        return minutesUntilStart <= 60 ? `In ${minutesUntilStart}m` : '';
+                                      } else if (!previousItem && currentTimeMinutes < startTimeMinutes) {
+                                        // If this is the first class and it hasn't started yet
+                                        const now = new Date();
+                                        const target = new Date(
+                                          now.getFullYear(),
+                                          now.getMonth(),
+                                          now.getDate(),
+                                          startHours,
+                                          startMinutes
+                                        );
+                                        const diffInMs = target.getTime() - now.getTime();
+                                        const minutesUntilStart = Math.ceil(diffInMs / (1000 * 60));
+                                        // Only show if less than 60 minutes
+                                        return minutesUntilStart <= 60 ? `${t('schedule').in} ${minutesUntilStart}m` : '';
+                                      }
+                                    }
+                                    return '';
+                                  })()
+                                }
+                              </Text>
+                            </View>
+                          </View>
+                          <View style={styles.detailsContainer}>
+                            <View style={styles.teacherContainer}>
+                              <Text style={styles.teacherName}>{item.teacherName}</Text>
+                              {item.group && (item.group === 'Subgroup 1' || item.group === 'Subgroup 2') && (
+                                <Text style={styles.groupName}>
+                                  {item.group === 'Subgroup 1' ? t('subgroup').group1 : t('subgroup').group2}
                                 </Text>
-                              </View>
-                            )}
-                          </Animated.View>
+                              )}
+                            </View>
+                            <View style={styles.roomContainer}>
+                              <Text style={styles.roomNumber}>{t('schedule').room} {item.roomNumber}</Text>
+                            </View>
+                          </View>
+                          
+                          {/* Assignments expandable section */}
+                          {hasAssignments && isPeriodExpanded && (
+                            <Animated.View 
+                              style={styles.assignmentsContainer}
+                              entering={FadeIn.duration(200)}
+                              exiting={FadeOut.duration(150)}
+                            >
+                              <View style={styles.assignmentsSeparator} />
+                              <Text style={styles.assignmentsSectionTitle}>
+                                {'Assignments'}
+                              </Text>
+                              
+                              {loadingAssignments[item.period || ''] ? (
+                                <View style={styles.loadingAssignments}>
+                                  <ActivityIndicator size="small" color="#3478F6" />
+                                  <Text style={styles.loadingAssignmentsText}>
+                                    {'Loading assignments...'}
+                                  </Text>
+                                </View>
+                              ) : periodAssignmentsList.length > 0 ? (
+                                periodAssignmentsList.map((assignment, idx) => (
+                                  <TouchableOpacity 
+                                    key={assignment.id} 
+                                    style={styles.assignmentItem}
+                                    activeOpacity={0.7}
+                                    onPress={() => {
+                                      // Save selected date and assignment ID to AsyncStorage
+                                      // for the assignments page to know which day to expand
+                                      const assignmentDate = new Date(assignment.dueDate);
+                                      
+                                      // Store the info needed to auto-expand the day
+                                      const navigationData = {
+                                        assignmentId: assignment.id,
+                                        date: assignmentDate.toISOString(),
+                                        autoExpand: true
+                                      };
+                                      
+                                      // Store in AsyncStorage for the assignments tab to read
+                                      AsyncStorage.setItem('assignment_navigation_data', 
+                                        JSON.stringify(navigationData))
+                                        .then(() => {
+                                          // Navigate to assignments tab
+                                          router.navigate('/(tabs)/assignments');
+                                        })
+                                        .catch(error => {
+                                          console.error('Error saving navigation data:', error);
+                                          // Navigate anyway even if saving fails
+                                          router.navigate('/(tabs)/assignments');
+                                        });
+                                    }}
+                                  >
+                                    <View style={[
+                                      styles.assignmentTypeIndicator, 
+                                      { backgroundColor: getAssignmentTypeColor(assignment.assignmentType) }
+                                    ]}>
+                                      <Ionicons 
+                                        name={getAssignmentTypeIcon(assignment.assignmentType)} 
+                                        size={12} 
+                                        color="#FFFFFF" 
+                                      />
+                                    </View>
+                                    <View style={styles.assignmentDetails}>
+                                      <Text style={styles.assignmentTitle}>{assignment.title}</Text>
+                                      {assignment.description ? (
+                                        <Text style={styles.assignmentDescription} numberOfLines={2}>
+                                          {assignment.description}
+                                        </Text>
+                                      ) : null}
+                                    </View>
+                                  </TouchableOpacity>
+                                ))
+                              ) : (
+                                <View style={styles.noAssignments}>
+                                  <Text style={styles.noAssignmentsText}>
+                                    {'No assignments for this period'}
+                                  </Text>
+                                </View>
+                              )}
+                            </Animated.View>
+                          )}
+                        </View>
+                        {showTimeIndicator && (
+                          <TimeIndicator
+                            startTime={item.startTime}
+                            endTime={item.endTime} // Use item's end time for the period indicator
+                            containerHeight={item._height || 100}
+                            hasNextItem={item.hasNextItem}
+                            timestamp={currentTimestamp}
+                          />
                         )}
                       </View>
-                      {showTimeIndicator && (
-                        <TimeIndicator
-                          startTime={item.startTime}
-                          endTime={item.endTime} // Use item's end time for the period indicator
-                          containerHeight={item._height || 100}
-                          hasNextItem={item.hasNextItem}
-                          timestamp={currentTimestamp}
-                        />
-                      )}
-                    </View>
+                    </TouchableOpacity>
                   </View>
                 );
               })

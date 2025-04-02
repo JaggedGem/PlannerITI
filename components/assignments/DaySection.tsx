@@ -24,6 +24,7 @@ type DaySectionProps = {
   onToggleAssignment: (id: string) => void;
   onDeleteAssignment?: (id: string) => void;
   defaultExpanded?: boolean;
+  assignmentToHighlight?: string | null;
 };
 
 interface EnhancedAssignment extends Assignment {
@@ -63,7 +64,8 @@ export default function DaySection({
   assignments, 
   onToggleAssignment, 
   onDeleteAssignment,
-  defaultExpanded = true
+  defaultExpanded = true,
+  assignmentToHighlight = null
 }: DaySectionProps) {
   const [isCollapsed, setIsCollapsed] = useState(!defaultExpanded);
   const rotation = useSharedValue(isCollapsed ? 0 : 0.5);
@@ -95,6 +97,20 @@ export default function DaySection({
     
     loadPeriodInfo();
   }, [assignments]);
+  
+  // Auto-expand if we have a highlighted assignment in this day
+  useEffect(() => {
+    if (assignmentToHighlight && assignments.some(a => a.id === assignmentToHighlight)) {
+      // Make sure this section is expanded
+      if (isCollapsed) {
+        setIsCollapsed(false);
+        rotation.value = withTiming(0.5, { 
+          duration: 150,
+          easing: Easing.bezier(0.25, 0.1, 0.25, 1)
+        });
+      }
+    }
+  }, [assignmentToHighlight, assignments, isCollapsed, rotation]);
   
   // Group assignments by course and sort by period if available
   const groupedByCourse: { [key: string]: EnhancedAssignment[] } = {};
@@ -210,6 +226,7 @@ export default function DaySection({
                 onToggleAssignment={onToggleAssignment}
                 onDeleteAssignment={onDeleteAssignment}
                 showDueDate={false}
+                assignmentToHighlight={assignmentToHighlight}
               />
             </Animated.View>
           ))}
