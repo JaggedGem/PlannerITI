@@ -9,7 +9,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import ViewModeMenu from './ViewModeMenu';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { getAssignmentsForPeriod, Assignment, AssignmentType } from '@/utils/assignmentStorage';
+import { getAssignmentsForPeriod, Assignment, AssignmentType, getAssignmentsForTimeRange, getAssignmentsForClass } from '@/utils/assignmentStorage';
 
 // Key for storing whether the tutorial has been shown
 const TUTORIAL_SHOWN_KEY = 'schedule_tutorial_shown';
@@ -102,6 +102,7 @@ type ScheduleItem = {
   hasNextItem?: boolean;
   period?: string;
   assignmentCount: number;
+  subjectId?: string;
 };
 
 interface RecoveryDayInfoProps {
@@ -220,6 +221,7 @@ export default function DayView() {
   const [expandedPeriods, setExpandedPeriods] = useState<{[key: string]: boolean}>({});
   const [periodAssignments, setPeriodAssignments] = useState<{[key: string]: Assignment[]}>({});
   const [loadingAssignments, setLoadingAssignments] = useState<{[key: string]: boolean}>({});
+  const [periodAssignmentCounts, setPeriodAssignmentCounts] = useState<{[key: string]: number}>({});
 
   // Check if tutorial has been shown before
   useEffect(() => {
@@ -340,13 +342,17 @@ export default function DayView() {
           const dayKey = `weekend_${dateString}`;
           const daySchedule = await scheduleService.getScheduleForDay(scheduleData, dayKey, dateInfo.date);
           if (Array.isArray(daySchedule)) { // Check if daySchedule is an array
-            totalAssignments = daySchedule.reduce((sum: number, item: ScheduleItem) => sum + (item.assignmentCount || 0), 0);
+            // Instead of using periodIds from schedule, get actual assignments for the day
+            const dayAssignments = await getAssignmentsForTimeRange(dateInfo.date);
+            totalAssignments = dayAssignments.length;
           }
         } else {
           const dayKey = DAYS_MAP[dateInfo.date.getDay() as keyof typeof DAYS_MAP];
           const daySchedule = await scheduleService.getScheduleForDay(scheduleData, dayKey, dateInfo.date);
           if (Array.isArray(daySchedule)) { // Check if daySchedule is an array
-            totalAssignments = daySchedule.reduce((sum: number, item: ScheduleItem) => sum + (item.assignmentCount || 0), 0);
+            // Get all assignments for this day
+            const dayAssignments = await getAssignmentsForTimeRange(dateInfo.date);
+            totalAssignments = dayAssignments.length;
           }
         }
         return { ...dateInfo, totalAssignments };
@@ -773,7 +779,7 @@ export default function DayView() {
   }, []);
 
   // Function to toggle period expansion
-  const togglePeriodExpansion = async (periodId: string) => {
+  const togglePeriodExpansion = async (periodId: string, startTime?: string, endTime?: string, subjectId?: string, className?: string) => {
     // If not already expanded, fetch the assignments
     if (!expandedPeriods[periodId]) {
       // Set loading state for this period
@@ -783,11 +789,36 @@ export default function DayView() {
       }));
       
       try {
-        const assignments = await getAssignmentsForPeriod(periodId);
-        setPeriodAssignments(prev => ({
-          ...prev,
-          [periodId]: assignments
-        }));
+        // Use the dedicated class/subject filtering function
+        if (className && (subjectId || startTime)) {
+          const assignments = await getAssignmentsForClass(
+            selectedDate,
+            subjectId || '',
+            className,
+            startTime,
+            endTime
+          );
+          setPeriodAssignments(prev => ({
+            ...prev,
+            [periodId]: assignments
+          }));
+        } 
+        // Fall back to time range filtering if we don't have class name
+        else if (startTime && endTime) {
+          const assignments = await getAssignmentsForTimeRange(selectedDate, startTime, endTime, subjectId);
+          setPeriodAssignments(prev => ({
+            ...prev,
+            [periodId]: assignments
+          }));
+        } 
+        // Fall back to the standard period-based filtering if we don't have any filtering info
+        else {
+          const assignments = await getAssignmentsForPeriod(periodId, selectedDate);
+          setPeriodAssignments(prev => ({
+            ...prev,
+            [periodId]: assignments
+          }));
+        }
       } catch (error) {
         console.error('Error loading assignments:', error);
         // In case of error, set empty array
@@ -809,6 +840,43 @@ export default function DayView() {
       [periodId]: !prev[periodId]
     }));
   };
+
+  // Add a useEffect to update period assignment counts
+  useEffect(() => {
+    // Skip if no schedule data
+    if (!scheduleData || !todaySchedule || todaySchedule.length === 0) return;
+
+    const updatePeriodAssignmentCounts = async () => {
+      const newCounts: {[key: string]: number} = {};
+      
+      // Process each period in today's schedule
+      for (const period of todaySchedule) {
+        if (!period.period) continue;
+        
+        try {
+          // Use the dedicated class/subject filtering function
+          const assignments = await getAssignmentsForClass(
+            selectedDate,
+            period.subjectId || '',
+            period.className,
+            period.startTime,
+            period.endTime
+          );
+          
+          // Store the count for this period
+          newCounts[period.period] = assignments.length;
+        } catch (error) {
+          console.error('Error counting assignments for period:', error);
+          newCounts[period.period] = 0;
+        }
+      }
+      
+      // Update the state with all counts at once to minimize renders
+      setPeriodAssignmentCounts(newCounts);
+    };
+    
+    updatePeriodAssignmentCounts();
+  }, [scheduleData, todaySchedule, selectedDate]);
 
   if (isLoading && !scheduleData) {
     return (
@@ -1034,7 +1102,7 @@ export default function DayView() {
 
                 const nextItem = todaySchedule[index + 1];
                 const showTimeIndicator = isCurrentTimeInSchedule(item);
-                const hasAssignments = item.assignmentCount > 0;
+                const hasAssignments = item.period ? periodAssignmentCounts[item.period] > 0 : false;
                 const isPeriodExpanded = item.period ? expandedPeriods[item.period] : false;
                 const periodAssignmentsList = item.period ? periodAssignments[item.period] || [] : [];
 
@@ -1065,7 +1133,14 @@ export default function DayView() {
                         <TouchableOpacity 
                           style={styles.timeDotContainer}
                           disabled={!hasAssignments}
-                          onPress={() => item.period && hasAssignments ? togglePeriodExpansion(item.period) : null}
+                          onPress={() => item.period && hasAssignments ? 
+                            togglePeriodExpansion(
+                              item.period, 
+                              item.startTime, 
+                              item.endTime,
+                              item.subjectId,
+                              item.className
+                            ) : null}
                         >
                           {hasAssignments ? (
                             <Animated.View style={[
@@ -1096,13 +1171,20 @@ export default function DayView() {
                           
                           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                             {/* Assignment count badge */}
-                            {item.assignmentCount > 0 && (
+                            {periodAssignmentCounts[item.period || ''] > 0 && (
                               <TouchableOpacity
                                 style={styles.assignmentBadge}
-                                onPress={() => item.period ? togglePeriodExpansion(item.period) : null}
+                                onPress={() => item.period ? 
+                                  togglePeriodExpansion(
+                                    item.period,
+                                    item.startTime,
+                                    item.endTime,
+                                    item.subjectId,
+                                    item.className
+                                  ) : null}
                               >
                                 <Text style={styles.assignmentBadgeText}>
-                                  {item.assignmentCount}
+                                  {periodAssignmentCounts[item.period || '']}
                                 </Text>
                               </TouchableOpacity>
                             )}
