@@ -580,22 +580,30 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
     height: calculateMaxHeight(), // Changed from maxHeight to a fixed height
   };
   
-    return (
-      <Modal
-        visible={isVisible}
-        transparent={true}
-      animationType={modalAnimationType}
-        onRequestClose={onClose}
+  // Use a view directly instead of Modal component
+  return (
+    isVisible ? (
+      <View
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          justifyContent: 'flex-end',
+          zIndex: 9999,
+          elevation: 9999
+        }}
       >
         <Pressable 
           style={styles.modalOverlay} 
           onPress={onClose}
         >
-        <Animated.View 
-          style={dropdownStyle}
-          entering={animationType === 'slide' ? SlideInDown.springify() : FadeIn.duration(200)}
-        >
-          {/* Header */}
+          <Animated.View 
+            style={[dropdownStyle, { marginBottom: 0 }]}
+            entering={animationType === 'slide' ? SlideInDown.springify() : FadeIn.duration(200)}
+          >
+            {/* Header */}
             <View style={styles.dropdownHeader}>
               <Text style={styles.dropdownTitle}>{title}</Text>
             <View style={styles.headerRightContainer}>
@@ -624,6 +632,7 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
                 bounces={false}
                 style={styles.scrollContainer}
               contentContainerStyle={styles.scrollContentContainer}
+              keyboardShouldPersistTaps="handled"
             >
               {/* Search bar above content */}
               {showSearch && searchBarPosition === 'above-content' && renderSearchBar()}
@@ -656,9 +665,10 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
           )}
         </Animated.View>
         </Pressable>
-      </Modal>
-    );
-  });
+      </View>
+    ) : null
+  );
+});
 
 const styles = StyleSheet.create({
   // Modal container styles
@@ -666,6 +676,13 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
         justifyContent: 'flex-end',
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 9999,
+        elevation: 9999,
     },
     dropdownContainer: {
         backgroundColor: '#1C1C1E',
@@ -676,8 +693,10 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: -2 },
         shadowOpacity: 0.25,
         shadowRadius: 3.84,
-        elevation: 5,
+        elevation: 9999,
+        zIndex: 10000,
         paddingBottom: Platform.OS === 'ios' ? 34 : 16,
+        marginBottom: 0,
     },
     scrollContainer: {
         flexGrow: 0,
