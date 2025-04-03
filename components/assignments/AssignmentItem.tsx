@@ -20,6 +20,7 @@ import { getRemainingTimeText } from '../../utils/notificationUtils';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
+import { useAssignmentOptions } from '../../app/(tabs)/assignments';
 
 interface AssignmentItemProps {
   assignment: Assignment;
@@ -195,6 +196,7 @@ export default function AssignmentItem({
   const [period, setPeriod] = useState<Period | null>(null);
   const [remainingTime, setRemainingTime] = useState<string>('');
   const { t, currentLanguage } = useTranslation();
+  const { showOptionsMenu } = useAssignmentOptions();
   
   // Add state for subtasks
   const [expanded, setExpanded] = useState(isHighlighted);
@@ -219,9 +221,6 @@ export default function AssignmentItem({
   const checkScale = useSharedValue(assignment.isCompleted ? 1 : 0);
   const expandHeight = useSharedValue(0);
   const highlightOpacity = useSharedValue(0);
-  
-  // Add state for options modal
-  const [showOptionsModal, setShowOptionsModal] = useState(false);
   
   // Load subtasks from storage when needed
   const loadSubtasks = async () => {
@@ -385,10 +384,33 @@ export default function AssignmentItem({
     setExpanded(!expanded);
   };
   
-  // Function to open options menu
+  // Use ref for options button
+  const optionsButtonRef = useRef<View | null>(null);
+  
+  // Function to open options menu using context
   const handleOpenOptions = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setShowOptionsModal(true);
+    
+    if (optionsButtonRef.current) {
+      // Measure the position of the options button
+      optionsButtonRef.current.measure((x, y, width, height, pageX, pageY) => {
+        // Position the menu just below the button
+        const position = { 
+          top: pageY + 45, // Position just below the button
+          right: 50 // Fixed distance from right edge
+        };
+        
+        showOptionsMenu(assignment.id, position, onDelete);
+      });
+    } else {
+      // Fallback position if ref isn't available
+      const position = { 
+        top: 100,
+        right: 20
+      };
+      
+      showOptionsMenu(assignment.id, position, onDelete);
+    }
   };
   
   // Custom handler for toggling assignment completion
@@ -539,49 +561,10 @@ export default function AssignmentItem({
   
   // Function to handle edit option
   const handleEditAssignment = () => {
-    setShowOptionsModal(false);
     router.push({
       pathname: '/edit-assignment',
       params: { id: assignment.id }
     } as any);
-  };
-  
-  // Show options modal
-  const renderOptionsModal = () => {
-    if (!showOptionsModal) return null;
-    
-    return (
-      <Pressable 
-        style={styles.modalOverlay} 
-        onPress={() => setShowOptionsModal(false)}
-      >
-        <Animated.View 
-          style={styles.optionsContainer}
-          entering={FadeIn.duration(200)}
-        >
-          <TouchableOpacity 
-            style={styles.optionItem}
-            onPress={handleEditAssignment}
-          >
-            <Ionicons name="create-outline" size={20} color="#3478F6" />
-            <Text style={styles.optionText}>{t('assignments').edit}</Text>
-          </TouchableOpacity>
-          
-          {onDelete && (
-            <TouchableOpacity 
-              style={[styles.optionItem, styles.deleteOption]}
-              onPress={() => {
-                setShowOptionsModal(false);
-                onDelete();
-              }}
-            >
-              <Ionicons name="trash-outline" size={20} color="#FF3B30" />
-              <Text style={styles.deleteOptionText}>{t('assignments').delete}</Text>
-            </TouchableOpacity>
-          )}
-        </Animated.View>
-      </Pressable>
-    );
   };
   
   return (
@@ -759,7 +742,7 @@ export default function AssignmentItem({
           )}
           
           {/* Wrapper for options button with margin */}
-          <View style={{ marginTop: 8 }}>
+          <View style={{ marginTop: 8 }} ref={optionsButtonRef}>
             <TouchableOpacity 
               style={styles.optionsButton}
               onPress={handleOpenOptions}
@@ -936,9 +919,6 @@ export default function AssignmentItem({
           </TouchableOpacity>
         </Animated.View>
       )}
-      
-      {/* Options Modal */}
-      {renderOptionsModal()}
     </View>
   );
 }
@@ -1353,50 +1333,5 @@ const styles = StyleSheet.create({
     marginTop: 6,
     alignSelf: 'flex-end',
     paddingVertical: 2,
-  },
-  modalOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 10,
-  },
-  optionsContainer: {
-    backgroundColor: '#1C1C1E',
-    borderRadius: 16,
-    width: '80%',
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#2C2C2E',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  optionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#2C2C2E',
-  },
-  optionText: {
-    fontSize: 16,
-    color: '#FFFFFF',
-    marginLeft: 12,
-  },
-  deleteOption: {
-    borderBottomWidth: 0,
-    marginTop: 4,
-  },
-  deleteOptionText: {
-    fontSize: 16,
-    color: '#FF3B30',
-    marginLeft: 12,
-  },
+  }
 }); 
