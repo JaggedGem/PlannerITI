@@ -472,7 +472,7 @@ export default function AssignmentItem({
         layout={Layout.springify()}
       >
         {/* Highlight overlay for animation - always present but controlled by opacity */}
-        <Animated.View style={highlightStyle} />
+        <Animated.View style={highlightStyle} pointerEvents="none" />
         
         <View style={styles.leftSection}>
           <View style={styles.checkboxContainer}>
