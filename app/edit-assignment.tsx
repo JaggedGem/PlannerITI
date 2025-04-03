@@ -680,7 +680,13 @@ const TimePicker = ({
                     styles.timePresetButtonText,
                     isSelected && styles.timePresetButtonTextSelected
                   ]}>
-                    {preset.label} ({presetTimeString})
+                    {preset.label}
+                  </Text>
+                  <Text style={[
+                    styles.timePresetTimeText,
+                    isSelected && styles.timePresetTimeTextSelected
+                  ]}>
+                    {presetTimeString}
                   </Text>
                 </TouchableOpacity>
               </Animated.View>
@@ -1577,50 +1583,49 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   timePickerContainer: {
-    marginTop: 8,
     backgroundColor: '#1A1A1A',
     borderRadius: 12,
     padding: 16,
-    borderWidth: 1,
-    borderColor: '#333333',
+    marginBottom: 16,
   },
   timeDisplay: {
     color: '#FFFFFF',
-    fontSize: 24,
+    fontSize: 18,
     fontWeight: '600',
-    textAlign: 'center',
-    marginBottom: 15,
+    marginBottom: 12,
   },
   timePresetContainer: {
-    marginBottom: 15,
+    marginBottom: 16,
   },
   timePresetScrollContent: {
-    paddingHorizontal: 4,
     paddingBottom: 8,
   },
   timePresetButton: {
+    backgroundColor: '#242424',
     paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: '#242424',
     borderRadius: 8,
-    marginRight: 10,
-    borderWidth: 1,
-    borderColor: '#333333',
-    minWidth: 100,
+    marginRight: 8,
   },
   timePresetButtonSelected: {
     backgroundColor: '#3478F6',
-    borderColor: '#3478F6',
   },
   timePresetButtonText: {
     color: '#FFFFFF',
     fontSize: 14,
-    marginBottom: 4,
   },
   timePresetButtonTextSelected: {
+    fontWeight: '600',
+  },
+  timePresetTimeText: {
+    color: '#8A8A8D',
+    fontSize: 12,
+  },
+  timePresetTimeTextSelected: {
     color: '#FFFFFF',
     fontWeight: '600',
   },
+  // Time wheel styles
   timeWheelContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1648,8 +1653,6 @@ const styles = StyleSheet.create({
   },
   timeWheelButton: {
     padding: 8,
-    borderRadius: 20,
-    backgroundColor: '#333333',
     width: 40,
     height: 40,
     alignItems: 'center',
