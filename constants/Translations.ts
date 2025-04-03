@@ -7,6 +7,7 @@ type TranslationType = {
   general: {
     more: string;
     less: string;
+    found: string;
   };
   settings: {
     language: string;
@@ -215,6 +216,32 @@ type TranslationType = {
       addFirst: string;
       placeholder: string;
       progress: string;
+      loading: string;
+    };
+    status: {
+      overdue: string;
+      completedIn: string;
+      dueIn: string;
+      dueTomorrow: string;
+      dueToday: string;
+      inMinutes: string;
+      inHours: string;
+      inDays: string;
+      inWeeks: string;
+    };
+    archive: {
+      title: string;
+      pastDue: string;
+      completed: string;
+      noItems: string;
+      archiveAll: string; 
+      archiveConfirmation: string;
+    };
+    errors: {
+      recoveringTitle: string;
+      recovering: string;
+      tip: string;
+      somethingWrong: string;
     };
   };
   grades: {
@@ -410,6 +437,7 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
     general: {
       more: 'More',
       less: 'Less',
+      found: 'Found',
     },
     settings: {
       language: 'Language',
@@ -615,9 +643,35 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       subtasks: {
         title: 'Subtasks',
         add: 'Add subtask',
-        addFirst: 'Add subtasks',
+        addFirst: 'Adaugă subtask-uri',
         placeholder: 'Enter subtask...',
         progress: 'Subtask progress',
+        loading: 'Loading subtasks...',
+      },
+      status: {
+        overdue: 'Overdue',
+        completedIn: 'Completed in',
+        dueIn: 'Due in',
+        dueTomorrow: 'Due tomorrow',
+        dueToday: 'Due today',
+        inMinutes: 'in minutes',
+        inHours: 'in hours',
+        inDays: 'in days',
+        inWeeks: 'in weeks',
+      },
+      archive: {
+        title: 'Archive',
+        pastDue: 'Past due',
+        completed: 'Completed',
+        noItems: 'No items',
+        archiveAll: 'Archive all',
+        archiveConfirmation: 'Are you sure you want to archive all completed assignments?',
+      },
+      errors: {
+        recoveringTitle: 'Recovering',
+        recovering: 'Recovering',
+        tip: 'Tip',
+        somethingWrong: 'Something went wrong',
       },
     },
     grades: {
@@ -831,6 +885,7 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
     general: {
       more: 'Mai mult',
       less: 'Mai puțin',
+      found: 'Găsite',
     },
     settings: {
       language: 'Limbă',
@@ -1039,6 +1094,32 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         addFirst: 'Adaugă subtask-uri',
         placeholder: 'Introduceți subtask...',
         progress: 'Progresul subtask-ului',
+        loading: 'Loading subtasks...',
+      },
+      status: {
+        overdue: 'Târziu',
+        completedIn: 'Completat în',
+        dueIn: 'Scadent în',
+        dueTomorrow: 'Scadent mâine',
+        dueToday: 'Scadent astăzi',
+        inMinutes: 'în minute',
+        inHours: 'în ore',
+        inDays: 'în zile',
+        inWeeks: 'în săptămâni',
+      },
+      archive: {
+        title: 'Arhivă',
+        pastDue: 'Târziu',
+        completed: 'Completat',
+        noItems: 'Niciun element',
+        archiveAll: 'Arhivează toate',
+        archiveConfirmation: 'Sunteți sigur că doriți să arhivezi toate temele îndeplinite?',
+      },
+      errors: {
+        recoveringTitle: 'Recuperare',
+        recovering: 'Recuperare',
+        tip: 'Sfat',
+        somethingWrong: 'Ceva nu a mers bine',
       },
     },
     grades: {
@@ -1252,6 +1333,7 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
     general: {
       more: 'Больше',
       less: 'Меньше',
+      found: 'Найдено',
     },
     settings: {
       language: 'Язык',
@@ -1460,6 +1542,32 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         addFirst: 'Добавить подзадачи',
         placeholder: 'Введите подзадачу...',
         progress: 'Прогресс подзадачи',
+        loading: 'Загрузка подзадач...',
+      },
+      status: {
+        overdue: 'Просрочено',
+        completedIn: 'Завершено в',
+        dueIn: 'Срок в',
+        dueTomorrow: 'Срок завтра',
+        dueToday: 'Срок сегодня',
+        inMinutes: 'в минутах',
+        inHours: 'в часах',
+        inDays: 'в днях',
+        inWeeks: 'в неделях',
+      },
+      archive: {
+        title: 'Архив',
+        pastDue: 'Просрочено',
+        completed: 'Завершено',
+        noItems: 'Нет элементов',
+        archiveAll: 'Архивировать все',
+        archiveConfirmation: 'Вы уверены, что хотите архивировать все выполненные задания?',
+      },
+      errors: {
+        recoveringTitle: 'Восстановление',
+        recovering: 'Восстановление',
+        tip: 'Совет',
+        somethingWrong: 'Что-то пошло не так',
       },
     },
     grades: {
