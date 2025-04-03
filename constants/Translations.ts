@@ -141,6 +141,7 @@ type TranslationType = {
       classes: string;
       priority: string;
     };
+    saving: string;
     common: {
       uncategorized: string;
       period: string;
@@ -572,6 +573,7 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         classes: 'Classes',
         priority: 'Priority',
       },
+      saving: 'Saving...',
       common: {
         uncategorized: 'Uncategorized',
         period: 'Period',
@@ -1021,6 +1023,7 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         classes: 'Clase',
         priority: 'Prioritate',
       },
+      saving: 'Se salvează...',
       common: {
         uncategorized: 'Necategorizat',
         period: 'Perioada',
@@ -1470,6 +1473,7 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         classes: 'Классы',
         priority: 'Приоритет',
       },
+      saving: 'Сохранение...',
       common: {
         uncategorized: 'Без категории',
         period: 'Период',
