@@ -4,6 +4,10 @@ type TranslationType = {
     long: string[];
   };
   months: string[];
+  general: {
+    more: string;
+    less: string;
+  };
   settings: {
     language: string;
     subGroup: string;
@@ -403,6 +407,10 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       long: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
     },
     months: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+    general: {
+      more: 'More',
+      less: 'Less',
+    },
     settings: {
       language: 'Language',
       subGroup: 'Subgroup',
@@ -820,6 +828,10 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       long: ['Duminică', 'Luni', 'Marți', 'Miercuri', 'Joi', 'Vineri', 'Sâmbătă'],
     },
     months: ['Ianuarie', 'Februarie', 'Martie', 'Aprilie', 'Mai', 'Iunie', 'Iulie', 'August', 'Septembrie', 'Octombrie', 'Noiembrie', 'Decembrie'],
+    general: {
+      more: 'Mai mult',
+      less: 'Mai puțin',
+    },
     settings: {
       language: 'Limbă',
       subGroup: 'Subgrupă',
@@ -1237,6 +1249,10 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       long: ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'],
     },
     months: ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'],
+    general: {
+      more: 'Больше',
+      less: 'Меньше',
+    },
     settings: {
       language: 'Язык',
       subGroup: 'Подгруппа',
