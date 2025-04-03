@@ -876,6 +876,7 @@ export default function NewAssignmentScreen() {
   const [loadingNextPeriod, setLoadingNextPeriod] = useState(false);
   const [assignmentType, setAssignmentType] = useState<AssignmentType>(AssignmentType.HOMEWORK);
   const [autoDetectedType, setAutoDetectedType] = useState<boolean>(false);
+  const [isSaving, setIsSaving] = useState(false);
   
   // Subtasks state
   const [subtasks, setSubtasks] = useState<{id: string, title: string, isCompleted: boolean}[]>([]);
@@ -1662,28 +1663,40 @@ export default function NewAssignmentScreen() {
 
   // Save assignment and navigate back
   const handleSave = async () => {
-    if (!title || !courseName) {
-      Alert.alert("Error", "Please enter a title and select a course");
+    if (!title || !courseName || isSaving) {
+      if (!title || !courseName) {
+        Alert.alert("Error", "Please enter a title and select a course");
+      }
       return;
     }
     
-    // Get the selected subject
-    const selectedSubject = subjects.find(s => s.id === selectedSubjectId) || 
-                          filteredSubjects.find(s => s.id === selectedSubjectId);
+    // Set saving state to prevent multiple submissions
+    setIsSaving(true);
     
-    await addAssignment({
-      title,
-      description,
-      courseCode: selectedSubject?.name || courseName, // Use subject name as course code
-      courseName: courseName,
-      dueDate: dueDate.toISOString(),
-      isPriority,
-      subjectId: selectedSubjectId || undefined,
-      assignmentType: assignmentType,
-      subtasks: subtasks.length > 0 ? subtasks : undefined
-    });
-    
-    router.back();
+    try {
+      // Get the selected subject
+      const selectedSubject = subjects.find(s => s.id === selectedSubjectId) || 
+                            filteredSubjects.find(s => s.id === selectedSubjectId);
+      
+      await addAssignment({
+        title,
+        description,
+        courseCode: selectedSubject?.name || courseName, // Use subject name as course code
+        courseName: courseName,
+        dueDate: dueDate.toISOString(),
+        isPriority,
+        subjectId: selectedSubjectId || undefined,
+        assignmentType: assignmentType,
+        subtasks: subtasks.length > 0 ? subtasks : undefined
+      });
+      
+      router.back();
+    } catch (error) {
+      console.error('Error saving assignment:', error);
+      // Reset saving state if there's an error
+      setIsSaving(false);
+      Alert.alert("Error", "Failed to save assignment. Please try again.");
+    }
   };
   
   // Cancel and navigate back
@@ -2033,10 +2046,18 @@ export default function NewAssignmentScreen() {
               </TouchableOpacity>
               <TouchableOpacity 
                 onPress={handleSave} 
-                style={[styles.saveButton, (!title || !courseName) && styles.saveButtonDisabled]} 
-                disabled={!title || !courseName}
+                style={[
+                  styles.saveButton, 
+                  (!title || !courseName || isSaving) && styles.saveButtonDisabled
+                ]} 
+                disabled={!title || !courseName || isSaving}
               >
-                <Text style={[styles.saveButtonText, (!title || !courseName) && styles.saveButtonTextDisabled]}>{t('assignments').save}</Text>
+                <Text style={[
+                  styles.saveButtonText, 
+                  (!title || !courseName || isSaving) && styles.saveButtonTextDisabled
+                ]}>
+                  {isSaving ? t('assignments').saving || 'Saving...' : t('assignments').save}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
