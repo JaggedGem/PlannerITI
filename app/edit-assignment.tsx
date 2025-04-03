@@ -413,7 +413,7 @@ const DatePicker = ({
         style={styles.dateDisplayButton}
         onPress={() => setShowCalendar(!showCalendar)}
       >
-        <Ionicons name="calendar-outline" size={20} color="#3478F6" />
+        <Ionicons name="calendar-outline" size={20} color="#2C3DCD" />
         <Text style={styles.dateDisplayText}>
           {formatDate(selectedDate)}
         </Text>
@@ -907,6 +907,17 @@ export default function EditAssignmentScreen() {
   const [subtasks, setSubtasks] = useState<{id: string, title: string, isCompleted: boolean}[]>([]);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   
+  // Add state to track original assignment data for change detection
+  const [originalAssignment, setOriginalAssignment] = useState<{
+    title: string;
+    description: string;
+    dueDate: string;
+    isPriority: boolean;
+    assignmentType: AssignmentType;
+    subjectId?: string;
+    subtasks: {id: string, title: string, isCompleted: boolean}[];
+  } | null>(null);
+  
   // Refs for inputs
   const titleInputRef = useRef<TextInput>(null);
   
@@ -953,6 +964,17 @@ export default function EditAssignmentScreen() {
         const storedSubtasks = await getSubtasksForAssignment(assignment.id);
         setSubtasks(storedSubtasks);
         
+        // Save original data for change detection
+        setOriginalAssignment({
+          title: assignment.title,
+          description: assignment.description || '',
+          dueDate: assignment.dueDate,
+          isPriority: assignment.isPriority,
+          assignmentType: assignment.assignmentType,
+          subjectId: assignment.subjectId,
+          subtasks: storedSubtasks
+        });
+        
         // If assignment has a subject ID, try to find and select the subject
         if (assignment.subjectId) {
           try {
@@ -984,6 +1006,49 @@ export default function EditAssignmentScreen() {
     }
   }, [id]);
   
+  // Helper function to check if any changes were made
+  const hasChanges = () => {
+    if (!originalAssignment) return false;
+    
+    // Compare basic fields
+    if (title.trim() !== originalAssignment.title) return true;
+    if (description.trim() !== originalAssignment.description) return true;
+    if (isPriority !== originalAssignment.isPriority) return true;
+    if (assignmentType !== originalAssignment.assignmentType) return true;
+    
+    // Compare date (ignoring timezone issues by comparing just the time parts)
+    const originalDate = new Date(originalAssignment.dueDate);
+    if (
+      dueDate.getFullYear() !== originalDate.getFullYear() ||
+      dueDate.getMonth() !== originalDate.getMonth() ||
+      dueDate.getDate() !== originalDate.getDate() ||
+      dueDate.getHours() !== originalDate.getHours() ||
+      dueDate.getMinutes() !== originalDate.getMinutes()
+    ) return true;
+    
+    // Compare subject
+    const currentSubjectId = selectedSubject ? selectedSubject.id : subjectId;
+    if (currentSubjectId !== originalAssignment.subjectId) return true;
+    
+    // Compare subtasks (first check length, then content)
+    if (subtasks.length !== originalAssignment.subtasks.length) return true;
+    
+    // Deep compare subtasks
+    for (let i = 0; i < subtasks.length; i++) {
+      const current = subtasks[i];
+      const original = originalAssignment.subtasks[i];
+      
+      if (current.id !== original.id ||
+          current.title !== original.title ||
+          current.isCompleted !== original.isCompleted) {
+        return true;
+      }
+    }
+    
+    // No changes detected
+    return false;
+  };
+  
   // Handle saving the updated assignment
   const handleUpdate = async () => {
     if (!title.trim()) {
@@ -992,6 +1057,12 @@ export default function EditAssignmentScreen() {
         'Please enter a title for the assignment.',
         [{ text: 'OK' }]
       );
+      return;
+    }
+    
+    // Don't proceed if no changes were made
+    if (!hasChanges()) {
+      router.back();
       return;
     }
     
@@ -1092,7 +1163,7 @@ export default function EditAssignmentScreen() {
     return (
       <SafeAreaView style={styles.loadingContainer}>
         <StatusBar barStyle="light-content" />
-        <ActivityIndicator size="large" color="#3478F6" />
+        <ActivityIndicator size="large" color="#2C3DCD" />
         <Text style={styles.loadingText}>{t('assignments').loading}</Text>
       </SafeAreaView>
     );
@@ -1109,19 +1180,23 @@ export default function EditAssignmentScreen() {
           onPress={handleCancel}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Ionicons name="chevron-back" size={28} color="#3478F6" />
+          <Ionicons name="chevron-back" size={28} color="#2C3DCD" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t('assignments').editTitle}</Text>
         <TouchableOpacity 
-          style={[styles.saveButton, !title.trim() && styles.saveButtonDisabled]}
+          style={[
+            styles.saveButton, 
+            (!title.trim() || isSaving || !hasChanges()) && styles.saveButtonDisabled
+          ]}
           onPress={handleUpdate}
-          disabled={!title.trim() || isSaving}
+          disabled={!title.trim() || isSaving || !hasChanges()}
         >
-          {isSaving ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
-          ) : (
-            <Text style={styles.saveButtonText}>{t('assignments').update}</Text>
-          )}
+          <Text style={[
+            styles.saveButtonText, 
+            (!title.trim() || isSaving || !hasChanges()) && styles.saveButtonTextDisabled
+          ]}>
+            {isSaving ? t('assignments').updating || 'Updating...' : t('assignments').update}
+          </Text>
         </TouchableOpacity>
       </View>
       
@@ -1254,7 +1329,7 @@ export default function EditAssignmentScreen() {
                 }}
               >
                 {subtask.isCompleted && (
-                  <Ionicons name="checkmark" size={16} color="#3478F6" />
+                  <Ionicons name="checkmark" size={16} color="#2C3DCD" />
                 )}
               </TouchableOpacity>
               <Text style={[
@@ -1387,18 +1462,23 @@ const styles = StyleSheet.create({
   saveButton: {
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: '#3478F6',
+    backgroundColor: '#2C3DCD',
     borderRadius: 8,
     minWidth: 80,
     alignItems: 'center',
   },
   saveButtonDisabled: {
-    backgroundColor: '#2A2A2A',
+    backgroundColor: '#292929',
+    borderWidth: 1,
+    borderColor: '#3e3e3e',
   },
   saveButtonText: {
     color: '#FFFFFF',
     fontWeight: '600',
     fontSize: 15,
+  },
+  saveButtonTextDisabled: {
+    color: '#6e6e6e',
   },
   scrollView: {
     flex: 1,
@@ -1551,11 +1631,11 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   calendarDayButtonSelected: {
-    backgroundColor: '#3478F6',
+    backgroundColor: '#2C3DCD',
   },
   calendarDayButtonToday: {
     borderWidth: 1,
-    borderColor: '#3478F6',
+    borderColor: '#2C3DCD',
   },
   calendarDayText: {
     color: '#FFFFFF',
@@ -1565,7 +1645,7 @@ const styles = StyleSheet.create({
     color: '#4D4D4D',
   },
   calendarDayTextToday: {
-    color: '#3478F6',
+    color: '#2C3DCD',
     fontWeight: '600',
   },
   calendarDayTextSelected: {
@@ -1578,7 +1658,7 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#3478F6',
+    backgroundColor: '#2C3DCD',
   },
   todayButton: {
     alignSelf: 'center',
@@ -1588,10 +1668,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#1A1A1A',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#3478F6',
+    borderColor: '#2C3DCD',
   },
   todayButtonText: {
-    color: '#3478F6',
+    color: '#2C3DCD',
     fontSize: 14,
     fontWeight: '500',
   },
@@ -1621,7 +1701,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   timePresetButtonSelected: {
-    backgroundColor: '#3478F6',
+    backgroundColor: '#2C3DCD',
   },
   timePresetButtonText: {
     color: '#FFFFFF',
@@ -1720,7 +1800,7 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: 4,
     borderWidth: 1,
-    borderColor: '#3478F6',
+    borderColor: '#2C3DCD',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
@@ -1756,7 +1836,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#3478F6',
+    backgroundColor: '#2C3DCD',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1781,8 +1861,8 @@ const styles = StyleSheet.create({
     minWidth: 100,
   },
   quickDateButtonSelected: {
-    backgroundColor: '#3478F6',
-    borderColor: '#3478F6',
+    backgroundColor: '#2C3DCD',
+    borderColor: '#2C3DCD',
   },
   quickDateButtonText: {
     color: '#FFFFFF',
