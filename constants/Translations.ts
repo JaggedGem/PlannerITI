@@ -136,6 +136,11 @@ type TranslationType = {
     empty: string;
     addNew: string;
     save: string;
+    edit: string;
+    delete: string;
+    update: string;
+    updating: string;
+    editTitle: string;
     segments: {
       dueDate: string;
       classes: string;
@@ -573,6 +578,11 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       empty: 'No assignments found',
       addNew: 'New Assignment',
       save: 'Save',
+      edit: 'Edit',
+      delete: 'Delete',
+      update: 'Update',
+      updating: 'Updating...',
+      editTitle: 'Edit Assignment',
       segments: {
         dueDate: 'Due date',
         classes: 'Classes',
@@ -1025,9 +1035,14 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
     assignments: {
       title: 'Teme',
       loading: 'Se încarcă temele...',
-      empty: 'Nu s-au găsit teme',
+      empty: 'Nu există teme',
       save: 'Salvează',
       addNew: 'Temă Nouă',
+      edit: 'Editează',
+      delete: 'Șterge',
+      update: 'Actualizează',
+      updating: 'Se actualizează...',
+      editTitle: 'Editează Tema',
       segments: {
         dueDate: 'Data scadentă',
         classes: 'Clase',
@@ -1480,9 +1495,14 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
     assignments: {
       title: 'Задания',
       loading: 'Загрузка заданий...',
-      empty: 'Задания не найдены',
+      empty: 'Заданий не найдено',
       addNew: 'Новое Задание',
       save: 'Сохранить',
+      edit: 'Редактировать',
+      delete: 'Удалить',
+      update: 'Обновить',
+      updating: 'Обновление...',
+      editTitle: 'Редактировать Задание',
       segments: {
         dueDate: 'Срок сдачи',
         classes: 'Классы',

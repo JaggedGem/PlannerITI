@@ -166,6 +166,18 @@ function RootLayoutNav() {
               headerShown: false,
             }} 
           />
+          <Stack.Screen 
+            name="new-assignment" 
+            options={{ 
+              headerShown: false,
+            }} 
+          />
+          <Stack.Screen 
+            name="edit-assignment" 
+            options={{ 
+              headerShown: false,
+            }} 
+          />
         </Stack>
         <UpdateNotification />
         <LoginNotification />

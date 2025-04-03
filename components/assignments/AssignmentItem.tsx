@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { View, Text, StyleSheet, Pressable, TouchableOpacity, TextInput } from 'react-native';
+import { View, Text, StyleSheet, Pressable, TouchableOpacity, TextInput, Alert } from 'react-native';
 import { Assignment, getPeriodById, AssignmentType, Subtask, toggleSubtaskCompletion, addSubtask, deleteSubtask, updateAllSubtaskCompletion, getSubtasksForAssignment } from '../../utils/assignmentStorage';
 import { format } from 'date-fns';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +19,7 @@ import { useTranslation } from '@/hooks/useTranslation';
 import { getRemainingTimeText } from '../../utils/notificationUtils';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router } from 'expo-router';
 
 interface AssignmentItemProps {
   assignment: Assignment;
@@ -219,6 +220,10 @@ export default function AssignmentItem({
   const expandHeight = useSharedValue(0);
   const highlightOpacity = useSharedValue(0);
   
+  // Add state for options modal
+  const [showOptionsModal, setShowOptionsModal] = useState(false);
+  const longPressTimeout = useRef<NodeJS.Timeout | null>(null);
+  
   // Load subtasks from storage when needed
   const loadSubtasks = async () => {
     setIsLoadingSubtasks(true);
@@ -362,11 +367,22 @@ export default function AssignmentItem({
   const handlePressIn = () => {
     scale.value = withSpring(0.98, { damping: 12, stiffness: 400 });
     opacity.value = withTiming(0.9, { duration: 100 });
+    
+    // Start timer for long press
+    longPressTimeout.current = setTimeout(() => {
+      handleLongPress();
+    }, 500); // 500ms long press duration
   };
   
   const handlePressOut = () => {
     scale.value = withSpring(1, { damping: 15, stiffness: 400 });
     opacity.value = withTiming(1, { duration: 100 });
+    
+    // Clear timeout if press is released
+    if (longPressTimeout.current) {
+      clearTimeout(longPressTimeout.current);
+      longPressTimeout.current = null;
+    }
   };
   
   // Toggle the expanded state
@@ -520,6 +536,59 @@ export default function AssignmentItem({
       setIsDescriptionMultiline(assignment.description.length > 30);
     }
   }, [assignment.description]);
+  
+  // Function to handle edit option
+  const handleEditAssignment = () => {
+    setShowOptionsModal(false);
+    router.push({
+      pathname: '/edit-assignment',
+      params: { id: assignment.id }
+    } as any);
+  };
+  
+  // Function to handle long press
+  const handleLongPress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setShowOptionsModal(true);
+  };
+
+  // Show options modal
+  const renderOptionsModal = () => {
+    if (!showOptionsModal) return null;
+    
+    return (
+      <Pressable 
+        style={styles.modalOverlay} 
+        onPress={() => setShowOptionsModal(false)}
+      >
+        <Animated.View 
+          style={styles.optionsContainer}
+          entering={FadeIn.duration(200)}
+        >
+          <TouchableOpacity 
+            style={styles.optionItem}
+            onPress={handleEditAssignment}
+          >
+            <Ionicons name="create-outline" size={20} color="#3478F6" />
+            <Text style={styles.optionText}>{t('assignments').edit}</Text>
+          </TouchableOpacity>
+          
+          {onDelete && (
+            <TouchableOpacity 
+              style={[styles.optionItem, styles.deleteOption]}
+              onPress={() => {
+                setShowOptionsModal(false);
+                onDelete();
+              }}
+            >
+              <Ionicons name="trash-outline" size={20} color="#FF3B30" />
+              <Text style={styles.deleteOptionText}>{t('assignments').delete}</Text>
+            </TouchableOpacity>
+          )}
+        </Animated.View>
+      </Pressable>
+    );
+  };
   
   return (
     <View style={styles.outerContainer}>
@@ -869,6 +938,9 @@ export default function AssignmentItem({
           </TouchableOpacity>
         </Animated.View>
       )}
+      
+      {/* Options Modal */}
+      {renderOptionsModal()}
     </View>
   );
 }
@@ -1269,5 +1341,50 @@ const styles = StyleSheet.create({
     marginTop: 6,
     alignSelf: 'flex-end',
     paddingVertical: 2,
+  },
+  modalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  optionsContainer: {
+    backgroundColor: '#1C1C1E',
+    borderRadius: 16,
+    width: '80%',
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#2C2C2E',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  optionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2C2C2E',
+  },
+  optionText: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    marginLeft: 12,
+  },
+  deleteOption: {
+    borderBottomWidth: 0,
+    marginTop: 4,
+  },
+  deleteOptionText: {
+    fontSize: 16,
+    color: '#FF3B30',
+    marginLeft: 12,
   },
 }); 
