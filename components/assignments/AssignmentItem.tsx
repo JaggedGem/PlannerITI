@@ -280,12 +280,12 @@ export default function AssignmentItem({
     if (diffMinutes < 24 * 60) {
       // Less than an hour
       if (diffMinutes < 60) {
-        return `${diffMinutes} ${t('assignments').status.inMinutes}`;
+        return `${t('assignments').status.in} ${diffMinutes} ${diffMinutes === 1 ? t('assignments').status.inMinute : t('assignments').status.inMinutes}`;
       }
       
       // A few hours
       const hours = Math.floor(diffMinutes / 60);
-      return `${hours} ${t('assignments').status.inHours}`;
+      return `${t('assignments').status.in} ${hours} ${hours === 1 ? t('assignments').status.inHour : t('assignments').status.inHours}`;
     }
     
     // Less than 2 days
@@ -296,12 +296,12 @@ export default function AssignmentItem({
     // Less than a week
     if (diffMinutes < 7 * 24 * 60) {
       const days = Math.floor(diffMinutes / (24 * 60));
-      return `${days} ${t('assignments').status.inDays}`;
+      return `${t('assignments').status.in} ${days} ${days === 1 ? t('assignments').status.inDay : t('assignments').status.inDays}`;
     }
     
     // More than a week
     const weeks = Math.floor(diffMinutes / (7 * 24 * 60));
-    return `${weeks} ${t('assignments').status.inWeeks}`;
+    return `${t('assignments').status.in} ${weeks} ${weeks === 1 ? t('assignments').status.inWeek : t('assignments').status.inWeeks}`;
   };
 
   // Update remaining time text

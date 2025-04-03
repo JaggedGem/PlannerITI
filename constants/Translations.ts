@@ -226,9 +226,14 @@ type TranslationType = {
       dueIn: string;
       dueTomorrow: string;
       dueToday: string;
+      in: string;
+      inMinute: string;
       inMinutes: string;
+      inHour: string;
       inHours: string;
+      inDay: string;
       inDays: string;
+      inWeek: string;
       inWeeks: string;
     };
     archive: {
@@ -658,10 +663,15 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         dueIn: 'Due in',
         dueTomorrow: 'Due tomorrow',
         dueToday: 'Due today',
-        inMinutes: 'in minutes',
-        inHours: 'in hours',
-        inDays: 'in days',
-        inWeeks: 'in weeks',
+        in: 'in',
+        inMinute: 'minute',
+        inMinutes: 'minutes',
+        inHour: 'hour',
+        inHours: 'hours',
+        inDay: 'day',
+        inDays: 'days',
+        inWeek: 'week',
+        inWeeks: 'weeks',
       },
       archive: {
         title: 'Archive',
@@ -1108,10 +1118,15 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         dueIn: 'Scadent în',
         dueTomorrow: 'Scadent mâine',
         dueToday: 'Scadent astăzi',
-        inMinutes: 'în minute',
-        inHours: 'în ore',
-        inDays: 'în zile',
-        inWeeks: 'în săptămâni',
+        in: 'în',
+        inMinute: 'minute',
+        inMinutes: 'minute',
+        inHour: 'oră',
+        inHours: 'ore',
+        inDay: 'zi',
+        inDays: 'zile',
+        inWeek: 'săptămână',
+        inWeeks: 'săptămâni',
       },
       archive: {
         title: 'Arhivă',
@@ -1558,10 +1573,15 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         dueIn: 'Срок в',
         dueTomorrow: 'Срок завтра',
         dueToday: 'Срок сегодня',
-        inMinutes: 'в минутах',
-        inHours: 'в часах',
-        inDays: 'в днях',
-        inWeeks: 'в неделях',
+        in: 'в',
+        inMinute: 'минуту',
+        inMinutes: 'минуты',
+        inHour: 'час',
+        inHours: 'часа',
+        inDay: 'день',
+        inDays: 'дня',
+        inWeek: 'неделю',
+        inWeeks: 'недели',
       },
       archive: {
         title: 'Архив',
