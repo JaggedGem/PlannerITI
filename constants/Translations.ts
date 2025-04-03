@@ -646,7 +646,7 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       subtasks: {
         title: 'Subtasks',
         add: 'Add subtask',
-        addFirst: 'Adaugă subtask-uri',
+        addFirst: 'Add subtasks',
         placeholder: 'Enter subtask...',
         progress: 'Subtask progress',
         loading: 'Loading subtasks...',
