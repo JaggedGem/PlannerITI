@@ -217,6 +217,7 @@ type TranslationType = {
       placeholder: string;
       progress: string;
       loading: string;
+      hint: string;
     };
     status: {
       overdue: string;
@@ -647,6 +648,7 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         placeholder: 'Enter subtask...',
         progress: 'Subtask progress',
         loading: 'Loading subtasks...',
+        hint: 'Breaking tasks into steps improves progress tracking.',
       },
       status: {
         overdue: 'Overdue',
@@ -1095,6 +1097,7 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         placeholder: 'Introduceți subtask...',
         progress: 'Progresul subtask-ului',
         loading: 'Loading subtasks...',
+        hint: 'Împărțirea sarcinilor în pași îmbunătățește urmărirea progresului.',
       },
       status: {
         overdue: 'Târziu',
@@ -1543,6 +1546,7 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         placeholder: 'Введите подзадачу...',
         progress: 'Прогресс подзадачи',
         loading: 'Загрузка подзадач...',
+        hint: 'Разбиение задач на шаги улучшает отслеживание прогресса.',
       },
       status: {
         overdue: 'Просрочено',

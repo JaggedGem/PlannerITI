@@ -2219,7 +2219,7 @@ export default function NewAssignmentScreen() {
             >
               <View style={styles.subtasksHeader}>
                 <Ionicons name="layers-outline" size={22} color="#2C3DCD" style={styles.subtasksIcon} />
-                <Text style={styles.subtasksTitle}>Break down your assignment</Text>
+                <Text style={styles.subtasksTitle}>{t('assignments').subtasks.title}</Text>
               </View>
               
               {subtasks.length > 0 && (
@@ -2268,7 +2268,7 @@ export default function NewAssignmentScreen() {
                   <Ionicons name="add-outline" size={24} color="#8A8A8D" style={{ marginRight: 8 }} />
                   <TextInput
                     style={styles.subtaskInput}
-                    placeholder={subtasks.length === 0 ? "Add steps to your assignment..." : "Add another step..."}
+                    placeholder={subtasks.length === 0 ? t('assignments').subtasks.addFirst : t('assignments').subtasks.add}
                     placeholderTextColor="#8A8A8D"
                     value={newSubtaskText}
                     onChangeText={setNewSubtaskText}
@@ -2295,7 +2295,7 @@ export default function NewAssignmentScreen() {
                     style={styles.subtasksHintContainer}
                   >
                     <Text style={styles.subtasksHintText}>
-                      Breaking tasks into steps improves progress tracking.
+                      {t('assignments').subtasks.hint}
                     </Text>
                   </Animated.View>
                 )}
