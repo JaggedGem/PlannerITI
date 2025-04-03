@@ -222,7 +222,6 @@ export default function AssignmentItem({
   
   // Add state for options modal
   const [showOptionsModal, setShowOptionsModal] = useState(false);
-  const longPressTimeout = useRef<NodeJS.Timeout | null>(null);
   
   // Load subtasks from storage when needed
   const loadSubtasks = async () => {
@@ -363,32 +362,33 @@ export default function AssignmentItem({
     };
   });
   
-  // Press handlers for interactive feedback
+  // Simplified press handlers for interactive feedback only
   const handlePressIn = () => {
     scale.value = withSpring(0.98, { damping: 12, stiffness: 400 });
     opacity.value = withTiming(0.9, { duration: 100 });
-    
-    // Start timer for long press
-    longPressTimeout.current = setTimeout(() => {
-      handleLongPress();
-    }, 500); // 500ms long press duration
   };
   
   const handlePressOut = () => {
     scale.value = withSpring(1, { damping: 15, stiffness: 400 });
     opacity.value = withTiming(1, { duration: 100 });
-    
-    // Clear timeout if press is released
-    if (longPressTimeout.current) {
-      clearTimeout(longPressTimeout.current);
-      longPressTimeout.current = null;
-    }
   };
   
-  // Toggle the expanded state
+  // Handle the tap on the main item - toggles completion
+  const handleItemPress = () => {
+    handleToggleAssignment();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+  
+  // Function to toggle expanded state
   const toggleExpanded = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setExpanded(!expanded);
+  };
+  
+  // Function to open options menu
+  const handleOpenOptions = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setShowOptionsModal(true);
   };
   
   // Custom handler for toggling assignment completion
@@ -546,12 +546,6 @@ export default function AssignmentItem({
     } as any);
   };
   
-  // Function to handle long press
-  const handleLongPress = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setShowOptionsModal(true);
-  };
-
   // Show options modal
   const renderOptionsModal = () => {
     if (!showOptionsModal) return null;
@@ -600,7 +594,7 @@ export default function AssignmentItem({
           isOverdue && styles.overdueContainer,
           inOrphanedCourse && styles.inOrphanedCourseContainer
         ]}
-        onPress={handleToggleAssignment}
+        onPress={handleItemPress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         entering={FadeIn.duration(300)}
@@ -610,13 +604,17 @@ export default function AssignmentItem({
         <Animated.View style={highlightStyle} pointerEvents="none" />
         
         <View style={styles.leftSection}>
-          <View style={styles.checkboxContainer}>
+          <TouchableOpacity 
+            style={styles.checkboxContainer}
+            onPress={handleToggleAssignment}
+            hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
+          >
             <View style={[styles.checkbox, assignment.isCompleted && styles.checkboxChecked]}>
               <Animated.View style={[styles.checkIcon, checkboxStyle]}>
                 <Ionicons name="checkmark" size={14} color="#FFFFFF" />
               </Animated.View>
             </View>
-          </View>
+          </TouchableOpacity>
           
           <View style={styles.contentContainer}>
             <View style={styles.titleRow}>
@@ -635,7 +633,6 @@ export default function AssignmentItem({
                 {assignment.title}
               </Text>
               
-              {/* Subtask expand button */}
               {hasSubtasks && (
                 <TouchableOpacity 
                   style={styles.expandButton}
@@ -761,15 +758,16 @@ export default function AssignmentItem({
             </Text>
           )}
           
-          {onDelete && (
-            <Pressable 
-              style={styles.deleteButton}
-              onPress={onDelete}
+          {/* Wrapper for options button with margin */}
+          <View style={{ marginTop: 8 }}>
+            <TouchableOpacity 
+              style={styles.optionsButton}
+              onPress={handleOpenOptions}
               hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
             >
-              <Ionicons name="trash-outline" size={16} color="#FF3B30" />
-            </Pressable>
-          )}
+              <Ionicons name="ellipsis-horizontal" size={16} color="#8A8A8D" />
+            </TouchableOpacity>
+          </View>
         </View>
       </AnimatedPressable>
       
@@ -997,6 +995,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 2,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  optionsButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(142, 142, 142, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+    marginTop: 8,
   },
   typeIndicator: {
     width: 18,
