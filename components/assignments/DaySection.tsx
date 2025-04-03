@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import CourseSection from './CourseSection';
 import { Assignment, getPeriodById } from '../../utils/assignmentStorage';
@@ -72,6 +72,9 @@ export default function DaySection({
   const [enhancedAssignments, setEnhancedAssignments] = useState<EnhancedAssignment[]>([]);
   const { t } = useTranslation();
   
+  // Memoize the highlight value to prevent re-renders
+  const memoizedHighlight = useMemo(() => assignmentToHighlight, [assignmentToHighlight]);
+  
   // Fetch period info for assignments with periodId
   useEffect(() => {
     const loadPeriodInfo = async () => {
@@ -100,7 +103,7 @@ export default function DaySection({
   
   // Auto-expand if we have a highlighted assignment in this day
   useEffect(() => {
-    if (assignmentToHighlight && assignments.some(a => a.id === assignmentToHighlight)) {
+    if (memoizedHighlight && assignments.some(a => a.id === memoizedHighlight)) {
       // Make sure this section is expanded
       if (isCollapsed) {
         setIsCollapsed(false);
@@ -110,7 +113,7 @@ export default function DaySection({
         });
       }
     }
-  }, [assignmentToHighlight, assignments, isCollapsed, rotation]);
+  }, [memoizedHighlight, assignments, isCollapsed, rotation]);
   
   // Group assignments by course and sort by period if available
   const groupedByCourse: { [key: string]: EnhancedAssignment[] } = {};
@@ -226,7 +229,7 @@ export default function DaySection({
                 onToggleAssignment={onToggleAssignment}
                 onDeleteAssignment={onDeleteAssignment}
                 showDueDate={false}
-                assignmentToHighlight={assignmentToHighlight}
+                assignmentToHighlight={memoizedHighlight}
               />
             </Animated.View>
           ))}

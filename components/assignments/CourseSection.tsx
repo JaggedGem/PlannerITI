@@ -96,6 +96,10 @@ export default function CourseSection({
     });
   }, [assignments]);
   
+  // Memoize which assignment should be highlighted to avoid re-renders
+  // This will only update when assignmentToHighlight or assignments change
+  const highlightedAssignmentId = useMemo(() => assignmentToHighlight, [assignmentToHighlight]);
+  
   // Determine if courseName is different enough from courseCode to display separately
   const shouldShowCourseName = courseName && 
     courseCode !== courseName && 
@@ -157,7 +161,7 @@ export default function CourseSection({
             : assignment;
             
           // Check if this assignment should be highlighted
-          const isHighlighted = assignmentToHighlight === assignment.id;
+          const isHighlighted = highlightedAssignmentId === assignment.id;
           
           return (
             <AssignmentItem

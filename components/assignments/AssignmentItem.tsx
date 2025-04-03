@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable, TouchableOpacity, TextInput } from 'react-native';
 import { Assignment, getPeriodById, AssignmentType, Subtask, toggleSubtaskCompletion, addSubtask, deleteSubtask, updateAllSubtaskCompletion, getSubtasksForAssignment } from '../../utils/assignmentStorage';
 import { format } from 'date-fns';
@@ -11,12 +11,14 @@ import Animated, {
   FadeIn,
   Layout,
   FadeOut,
-  Easing
+  Easing,
+  withSequence
 } from 'react-native-reanimated';
 import { Period } from '../../services/scheduleService';
 import { useTranslation } from '@/hooks/useTranslation';
 import { getRemainingTimeText } from '../../utils/notificationUtils';
 import * as Haptics from 'expo-haptics';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface AssignmentItemProps {
   assignment: Assignment;
@@ -29,6 +31,9 @@ interface AssignmentItemProps {
 }
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+// Key to store highlighted assignment IDs
+const HIGHLIGHTED_ASSIGNMENTS_KEY = 'highlighted_assignments';
 
 // Function to get translated label for each assignment type
 const getAssignmentTypeLabel = (type: AssignmentType): string => {
@@ -104,6 +109,78 @@ const getAssignmentTypeColor = (type: AssignmentType): string => {
   }
 };
 
+// Effect to handle highlighting animation
+const useHighlightEffect = (
+  isHighlighted: boolean,
+  assignment: Assignment,
+  highlightOpacity: Animated.SharedValue<number>,
+  setExpanded: React.Dispatch<React.SetStateAction<boolean>>,
+  setHighlight: React.Dispatch<React.SetStateAction<boolean>>
+) => {
+  // Use ref to track if animation has already played
+  const animationPlayedRef = useRef(false);
+  
+  useEffect(() => {
+    if (!isHighlighted) return;
+    
+    let isMounted = true;
+    
+    const checkIfAlreadyHighlighted = async () => {
+      try {
+        // Get previously highlighted assignments
+        const highlightedJson = await AsyncStorage.getItem(HIGHLIGHTED_ASSIGNMENTS_KEY);
+        const highlightedIds = highlightedJson ? JSON.parse(highlightedJson) : [];
+        
+        // If this assignment was already highlighted, don't play the animation again
+        if (highlightedIds.includes(assignment.id)) {
+          animationPlayedRef.current = true;
+          return;
+        }
+        
+        if (isHighlighted && !animationPlayedRef.current && isMounted) {
+          // Mark as animation played so it doesn't repeat on re-renders
+          animationPlayedRef.current = true;
+          
+          // Auto-expand highlighted items
+          setExpanded(true);
+          
+          // Start with a visible highlight
+          setHighlight(true);
+          
+          // Create a smooth pulse animation that fades out
+          highlightOpacity.value = withSequence(
+            // First pulse up quickly
+            withTiming(1, { duration: 400, easing: Easing.out(Easing.cubic) }),
+            // Then hold for 2 seconds
+            withTiming(1, { duration: 2000 }),
+            // Then pulse down slightly
+            withTiming(0.8, { duration: 300, easing: Easing.inOut(Easing.cubic) }),
+            // Then pulse up again
+            withTiming(0.9, { duration: 300, easing: Easing.inOut(Easing.cubic) }),
+            // Finally fade out slowly
+            withTiming(0, { 
+              duration: 1000,
+              easing: Easing.out(Easing.cubic)
+            })
+          );
+          
+          // Add this assignment to the highlighted list
+          const updatedHighlightedIds = [...highlightedIds, assignment.id];
+          await AsyncStorage.setItem(HIGHLIGHTED_ASSIGNMENTS_KEY, JSON.stringify(updatedHighlightedIds));
+        }
+      } catch (error) {
+        console.error('Error handling highlight effect:', error);
+      }
+    };
+    
+    checkIfAlreadyHighlighted();
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [isHighlighted, highlightOpacity, assignment.id, setExpanded, setHighlight]);
+};
+
 export default function AssignmentItem({ 
   assignment, 
   onToggle, 
@@ -126,12 +203,15 @@ export default function AssignmentItem({
   const [isLoadingSubtasks, setIsLoadingSubtasks] = useState(false);
   const [highlight, setHighlight] = useState(isHighlighted);
   
+  // Use ref to track if animation has already played
+  const animationPlayedRef = useRef(false);
+  
   // Animated values for interactive feedback
   const scale = useSharedValue(1);
   const opacity = useSharedValue(1);
   const checkScale = useSharedValue(assignment.isCompleted ? 1 : 0);
   const expandHeight = useSharedValue(0);
-  const highlightOpacity = useSharedValue(isHighlighted ? 1 : 0);
+  const highlightOpacity = useSharedValue(0);
   
   // Load subtasks from storage when needed
   const loadSubtasks = async () => {
@@ -219,13 +299,14 @@ export default function AssignmentItem({
   const highlightStyle = useAnimatedStyle(() => {
     return {
       opacity: highlightOpacity.value,
-      backgroundColor: '#3478F640',
+      backgroundColor: '#3478F620', // More subtle blue color with 20% opacity
       position: 'absolute',
       top: 0,
       left: 0,
       right: 0,
       bottom: 0,
-      borderRadius: 8,
+      borderRadius: 12, // Match container border radius
+      zIndex: 1, // Ensure highlight is above all other content
     };
   });
   
@@ -372,26 +453,7 @@ export default function AssignmentItem({
   const isOverdue = remainingTime === 'Overdue' && !assignment.isCompleted;
   
   // Effect to handle highlighting animation
-  useEffect(() => {
-    if (isHighlighted) {
-      // Show highlight effect
-      highlightOpacity.value = 1;
-      
-      // Auto-expand highlighted items
-      setExpanded(true);
-      
-      // Add a highlight effect that fades out
-      highlightOpacity.value = withTiming(0, { 
-        duration: 2000,
-        easing: Easing.out(Easing.cubic)
-      });
-      
-      // Clear highlight after animation
-      setTimeout(() => {
-        setHighlight(false);
-      }, 2000);
-    }
-  }, [isHighlighted, highlightOpacity]);
+  useHighlightEffect(isHighlighted, assignment, highlightOpacity, setExpanded, setHighlight);
   
   return (
     <View style={styles.outerContainer}>
@@ -401,8 +463,7 @@ export default function AssignmentItem({
           containerStyle,
           isOrphaned && styles.orphanedContainer,
           isOverdue && styles.overdueContainer,
-          inOrphanedCourse && styles.inOrphanedCourseContainer,
-          highlight && styles.highlightedContainer
+          inOrphanedCourse && styles.inOrphanedCourseContainer
         ]}
         onPress={handleToggleAssignment}
         onPressIn={handlePressIn}
@@ -410,8 +471,8 @@ export default function AssignmentItem({
         entering={FadeIn.duration(300)}
         layout={Layout.springify()}
       >
-        {/* Highlight overlay for animation */}
-        {highlight && <Animated.View style={highlightStyle} />}
+        {/* Highlight overlay for animation - always present but controlled by opacity */}
+        <Animated.View style={highlightStyle} />
         
         <View style={styles.leftSection}>
           <View style={styles.checkboxContainer}>
@@ -1059,7 +1120,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   highlightedContainer: {
-    backgroundColor: '#3478F640',
-    borderRadius: 8,
+    backgroundColor: '#3478F620', // More subtle color to match animation
+    borderRadius: 12,
   },
 }); 
