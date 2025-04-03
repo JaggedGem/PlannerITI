@@ -203,6 +203,12 @@ export default function AssignmentItem({
   const [isLoadingSubtasks, setIsLoadingSubtasks] = useState(false);
   const [highlight, setHighlight] = useState(isHighlighted);
   
+  // Add state for description expansion
+  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
+  // Add ref to measure if description is multiline (needs expansion)
+  const descriptionRef = useRef<Text>(null);
+  const [isDescriptionMultiline, setIsDescriptionMultiline] = useState(false);
+  
   // Use ref to track if animation has already played
   const animationPlayedRef = useRef(false);
   
@@ -455,6 +461,24 @@ export default function AssignmentItem({
   // Effect to handle highlighting animation
   useHighlightEffect(isHighlighted, assignment, highlightOpacity, setExpanded, setHighlight);
   
+  // Toggle description expansion with haptic feedback
+  const toggleDescriptionExpanded = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setIsDescriptionExpanded(!isDescriptionExpanded);
+  };
+
+  // Add animation value for description height
+  const descriptionHeight = useSharedValue('auto');
+  
+  // Check if the description is long enough to need expansion
+  useEffect(() => {
+    if (assignment.description && descriptionRef.current) {
+      // We'll set this to true if the description is long enough
+      // This is a simplified approach - for a more accurate solution, you'd measure the text
+      setIsDescriptionMultiline(assignment.description.length > 30);
+    }
+  }, [assignment.description]);
+  
   return (
     <View style={styles.outerContainer}>
       <AnimatedPressable
@@ -535,16 +559,69 @@ export default function AssignmentItem({
             
             {/* Show description if available and no subtasks or not expanded */}
             {assignment.description && (!hasSubtasks || !expanded) ? (
-              <Text 
-                style={[
-                  styles.description,
-                  isOrphaned && styles.orphanedDescription,
-                  inOrphanedCourse && styles.inOrphanedCourseText
-                ]}
-                numberOfLines={1}
+              <Animated.View 
+                style={styles.descriptionContainer}
+                layout={Layout.springify().mass(0.3)}
               >
-                {assignment.description}
-              </Text>
+                <View style={styles.descriptionRow}>
+                  <Text 
+                    ref={descriptionRef}
+                    style={[
+                      styles.description,
+                      isOrphaned && styles.orphanedDescription,
+                      inOrphanedCourse && styles.inOrphanedCourseText
+                    ]}
+                    numberOfLines={isDescriptionExpanded ? undefined : 1}
+                    onLayout={(event) => {
+                      // Check if text is clipped (needs expansion)
+                      const { height } = event.nativeEvent.layout;
+                      // If the height is greater than a single line (approx 18-20px), 
+                      // we consider it multiline
+                      if (height > 20 && !isDescriptionMultiline) {
+                        setIsDescriptionMultiline(true);
+                      }
+                    }}
+                  >
+                    {assignment.description}
+                  </Text>
+                  
+                  {/* Show expand/collapse button only if description is multiline and not expanded */}
+                  {isDescriptionMultiline && !isDescriptionExpanded && (
+                    <TouchableOpacity 
+                      style={styles.expandDescriptionButton}
+                      onPress={toggleDescriptionExpanded}
+                      hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
+                    >
+                      <Text style={styles.expandDescriptionText}>
+                        {t('general').more}
+                      </Text>
+                      <Ionicons 
+                        name="chevron-down"
+                        size={14} 
+                        color="#3478F6" 
+                      />
+                    </TouchableOpacity>
+                  )}
+                </View>
+                
+                {/* Show less button if expanded */}
+                {isDescriptionExpanded && (
+                  <TouchableOpacity 
+                    style={styles.collapseDescriptionButton}
+                    onPress={toggleDescriptionExpanded}
+                    hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
+                  >
+                    <Text style={styles.expandDescriptionText}>
+                      {t('general').less}
+                    </Text>
+                    <Ionicons 
+                      name="chevron-up" 
+                      size={14} 
+                      color="#3478F6" 
+                    />
+                  </TouchableOpacity>
+                )}
+              </Animated.View>
             ) : null}
           </View>
         </View>
@@ -829,6 +906,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#8A8A8D',
     marginBottom: 3,
+    lineHeight: 18,
+    flex: 1,
   },
   metadataContainer: {
     flexDirection: 'row',
@@ -1122,5 +1201,31 @@ const styles = StyleSheet.create({
   highlightedContainer: {
     backgroundColor: '#3478F620', // More subtle color to match animation
     borderRadius: 12,
+  },
+  descriptionContainer: {
+    marginTop: 3,
+  },
+  descriptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  expandDescriptionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 4,
+    paddingVertical: 2,
+  },
+  expandDescriptionText: {
+    fontSize: 12,
+    color: '#3478F6',
+    marginRight: 2,
+  },
+  collapseDescriptionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+    alignSelf: 'flex-end',
+    paddingVertical: 2,
   },
 }); 
