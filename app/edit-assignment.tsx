@@ -631,6 +631,7 @@ const TimePicker = ({
     );
   };
   
+  // Remove the custom renderPresets function and restore the original ScrollView with mapping
   return (
     <View style={styles.timePickerContainer}>
       <Animated.Text 
@@ -669,10 +670,7 @@ const TimePicker = ({
                     isSelected && styles.timePresetButtonSelected
                   ]}
                   onPress={() => {
-                    // Animate the button
                     animatePresetButton();
-                    
-                    // Update time
                     const newTime = new Date(selectedTime);
                     newTime.setHours(preset.hour, preset.minute);
                     onTimeChange(newTime);
@@ -682,13 +680,7 @@ const TimePicker = ({
                     styles.timePresetButtonText,
                     isSelected && styles.timePresetButtonTextSelected
                   ]}>
-                    {preset.label}
-                  </Text>
-                  <Text style={[
-                    styles.timePresetTimeText,
-                    isSelected && styles.timePresetTimeTextSelected
-                  ]}>
-                    {presetTimeString}
+                    {preset.label} ({presetTimeString})
                   </Text>
                 </TouchableOpacity>
               </Animated.View>
@@ -697,89 +689,107 @@ const TimePicker = ({
         </ScrollView>
       </View>
       
-      <View style={styles.timePickerContent}>
-        <View style={styles.timePickerControls}>
-          <View style={styles.timeColumn}>
-            <Text style={styles.timeColumnLabel}>Hour</Text>
-            <View style={styles.timePickerSelector}>
-              <Animated.View style={[styles.timePickerList, hourAnimStyle]}>
-                {hours.map(hour => (
-                  <TouchableOpacity
-                    key={`hour-${hour}`}
-                    style={[
-                      styles.timePickerItem,
-                      (selectedTime.getHours() % 12 || 12) === hour && styles.timePickerItemSelected
-                    ]}
-                    onPress={() => updateHour(hour)}
-                  >
-                    <Text style={[
-                      styles.timePickerItemText,
-                      (selectedTime.getHours() % 12 || 12) === hour && styles.timePickerItemTextSelected
-                    ]}>
-                      {hour}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </Animated.View>
-            </View>
+      <View style={styles.timeWheelContainer}>
+        <View style={styles.timeWheelGroup}>
+          <Text style={styles.timeWheelLabel}>Hour</Text>
+          <View style={styles.timeWheel}>
+            <TouchableOpacity 
+              style={styles.timeWheelButton}
+              onPress={() => {
+                if (shouldUse24HourFormat) {
+                  // 24-hour format logic
+                  const currentHour = selectedTime.getHours();
+                  const nextHour = currentHour === 23 ? 0 : currentHour + 1;
+                  updateHour(nextHour);
+                } else {
+                  // 12-hour format logic
+                  const currentHour = selectedTime.getHours() % 12 || 12;
+                  const nextHour = currentHour === 12 ? 1 : currentHour + 1;
+                  updateHour(nextHour);
+                }
+              }}
+            >
+              <Ionicons name="chevron-up" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+            
+            <Animated.Text style={[styles.timeWheelText, hourAnimStyle]}>
+              {shouldUse24HourFormat 
+                ? selectedTime.getHours().toString().padStart(2, '0') 
+                : (selectedTime.getHours() % 12 || 12)}
+            </Animated.Text>
+            
+            <TouchableOpacity 
+              style={styles.timeWheelButton}
+              onPress={() => {
+                if (shouldUse24HourFormat) {
+                  // 24-hour format logic
+                  const currentHour = selectedTime.getHours();
+                  const prevHour = currentHour === 0 ? 23 : currentHour - 1;
+                  updateHour(prevHour);
+                } else {
+                  // 12-hour format logic
+                  const currentHour = selectedTime.getHours() % 12 || 12;
+                  const prevHour = currentHour === 1 ? 12 : currentHour - 1;
+                  updateHour(prevHour);
+                }
+              }}
+            >
+              <Ionicons name="chevron-down" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
           </View>
-          
-          <Text style={styles.timeColon}>:</Text>
-          
-          <View style={styles.timeColumn}>
-            <Text style={styles.timeColumnLabel}>Minute</Text>
-            <View style={styles.timePickerSelector}>
-              <Animated.View style={[styles.timePickerList, minuteAnimStyle]}>
-                {minutes.map(minute => (
-                  <TouchableOpacity
-                    key={`minute-${minute}`}
-                    style={[
-                      styles.timePickerItem,
-                      Math.floor(selectedTime.getMinutes() / 5) * 5 === minute && styles.timePickerItemSelected
-                    ]}
-                    onPress={() => updateMinute(minute)}
-                  >
-                    <Text style={[
-                      styles.timePickerItemText,
-                      Math.floor(selectedTime.getMinutes() / 5) * 5 === minute && styles.timePickerItemTextSelected
-                    ]}>
-                      {minute.toString().padStart(2, '0')}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </Animated.View>
-            </View>
+        </View>
+        
+        <Text style={styles.timeWheelSeparator}>:</Text>
+        
+        <View style={styles.timeWheelGroup}>
+          <Text style={styles.timeWheelLabel}>Minute</Text>
+          <View style={styles.timeWheel}>
+            <TouchableOpacity 
+              style={styles.timeWheelButton}
+              onPress={() => {
+                const currentMinute = selectedTime.getMinutes();
+                const nextMinute = Math.min(55, currentMinute + 5);
+                if (currentMinute === 55) updateMinute(0);
+                else updateMinute(nextMinute);
+              }}
+            >
+              <Ionicons name="chevron-up" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+            
+            <Animated.Text style={[styles.timeWheelText, minuteAnimStyle]}>
+              {selectedTime.getMinutes() < 10 
+                ? `0${selectedTime.getMinutes()}` 
+                : selectedTime.getMinutes()}
+            </Animated.Text>
+            
+            <TouchableOpacity 
+              style={styles.timeWheelButton}
+              onPress={() => {
+                const currentMinute = selectedTime.getMinutes();
+                if (currentMinute === 0) updateMinute(55);
+                else updateMinute(Math.max(0, currentMinute - 5));
+              }}
+            >
+              <Ionicons name="chevron-down" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
           </View>
-          
-          {!shouldUse24HourFormat && (
-            <Animated.View style={[styles.amPmContainer, amPmAnimStyle]}>
-              <TouchableOpacity
-                style={[
-                  styles.amPmButton,
-                  selectedTime.getHours() < 12 && styles.amPmButtonSelected
-                ]}
-                onPress={selectedTime.getHours() >= 12 ? toggleAmPm : undefined}
+        </View>
+        
+        {!shouldUse24HourFormat && (
+          <View style={styles.timeWheelGroup}>
+            <Text style={styles.timeWheelLabel}>AM/PM</Text>
+            <Animated.View style={amPmAnimStyle}>
+              <TouchableOpacity 
+                style={styles.amPmToggle}
+                onPress={toggleAmPm}
               >
-                <Text style={[
-                  styles.amPmButtonText,
-                  selectedTime.getHours() < 12 && styles.amPmButtonTextSelected
-                ]}>AM</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.amPmButton,
-                  selectedTime.getHours() >= 12 && styles.amPmButtonSelected
-                ]}
-                onPress={selectedTime.getHours() < 12 ? toggleAmPm : undefined}
-              >
-                <Text style={[
-                  styles.amPmButtonText,
-                  selectedTime.getHours() >= 12 && styles.amPmButtonTextSelected
-                ]}>PM</Text>
+                <Text style={styles.amPmToggleText}>
+                  {selectedTime.getHours() >= 12 ? 'PM' : 'AM'}
+                </Text>
               </TouchableOpacity>
             </Animated.View>
-          )}
-        </View>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -1611,84 +1621,62 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '600',
   },
-  timePresetTimeText: {
-    color: '#8A8A8D',
-    fontSize: 12,
-  },
-  timePresetTimeTextSelected: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
-  timePickerContent: {
-    marginTop: 10,
-  },
-  timePickerControls: {
+  timeWheelContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 16,
   },
-  timeColumn: {
+  timeWheelGroup: {
     alignItems: 'center',
-    width: 70,
+    marginHorizontal: 8,
   },
-  timeColumnLabel: {
-    color: '#8A8A8D',
+  timeWheelLabel: {
+    color: '#FFFFFF',
     fontSize: 12,
     marginBottom: 8,
+    opacity: 0.7,
   },
-  timeColon: {
-    color: '#FFFFFF',
-    fontSize: 24,
-    fontWeight: '600',
-    marginHorizontal: 10,
-    marginTop: 20,
+  timeWheel: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#242424',
+    borderRadius: 12,
+    padding: 8,
+    width: 80,
   },
-  timePickerSelector: {
-    height: 120,
-    overflow: 'hidden',
+  timeWheelButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#333333',
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  timePickerList: {
-    alignItems: 'center',
-  },
-  timePickerItem: {
-    padding: 8,
-    width: 60,
-    alignItems: 'center',
-  },
-  timePickerItemSelected: {
-    backgroundColor: '#3478F6',
-    borderRadius: 8,
-  },
-  timePickerItemText: {
-    color: '#8A8A8D',
-    fontSize: 18,
-  },
-  timePickerItemTextSelected: {
+  timeWheelText: {
     color: '#FFFFFF',
+    fontSize: 26,
     fontWeight: '600',
+    marginVertical: 8,
   },
-  amPmContainer: {
-    marginLeft: 15,
-    marginTop: 24,
-  },
-  amPmButton: {
-    width: 50,
-    paddingVertical: 8,
-    alignItems: 'center',
-    marginVertical: 4,
-    borderRadius: 8,
-  },
-  amPmButtonSelected: {
-    backgroundColor: '#3478F6',
-  },
-  amPmButtonText: {
-    color: '#8A8A8D',
-    fontSize: 16,
-  },
-  amPmButtonTextSelected: {
+  timeWheelSeparator: {
     color: '#FFFFFF',
+    fontSize: 30,
+    fontWeight: '600',
+    marginHorizontal: 10,
+  },
+  amPmToggle: {
+    backgroundColor: '#242424',
+    padding: 10,
+    borderRadius: 12,
+    width: 80,
+    alignItems: 'center',
+  },
+  amPmToggleText: {
+    color: '#FFFFFF',
+    fontSize: 16,
     fontWeight: '600',
   },
   datePickerButtonText: {
