@@ -84,13 +84,15 @@ const QuickOption = React.memo(({
   label, 
   index, 
   selectedDate,
-  onSelect 
+  onSelect,
+  currentLanguage
 }: { 
   days: number; 
   label: string; 
   index: number;
   selectedDate: Date;
   onSelect: (days: number) => void;
+  currentLanguage: string;
 }) => {
   const isSelected = React.useMemo(() => {
     const targetDate = new Date();
@@ -102,8 +104,11 @@ const QuickOption = React.memo(({
   const dateString = React.useMemo(() => {
     const date = new Date();
     date.setDate(date.getDate() + days);
-    return format(date, 'MMM d');
-  }, [days]);
+    return date.toLocaleDateString(currentLanguage, {
+      month: 'short',
+      day: 'numeric'
+    });
+  }, [days, currentLanguage]);
 
   return (
     <Animated.View
@@ -398,6 +403,7 @@ const DatePicker = ({
               index={index}
               selectedDate={selectedDate}
               onSelect={selectQuickOption}
+              currentLanguage={currentLanguage}
             />
           ))}
         </ScrollView>
@@ -498,7 +504,9 @@ const DatePicker = ({
               }, 300);
             }}
           >
-            <Text style={styles.todayButtonText}>Today</Text>
+            <Text style={styles.todayButtonText}>
+              {quickDateOptions[0]?.label || 'Today'}
+            </Text>
           </TouchableOpacity>
         )}
       </Animated.View>
@@ -1182,7 +1190,12 @@ export default function EditAssignmentScreen() {
           <DatePicker
             selectedDate={dueDate}
             onDateChange={setDueDate}
-            formatDate={(date) => format(date, 'MMMM d, yyyy')}
+            formatDate={(date) => date.toLocaleDateString(currentLanguage, {
+              weekday: 'short',
+              month: 'long',
+              day: 'numeric',
+              year: 'numeric'
+            })}
             currentLanguage={currentLanguage}
             days={t('weekdays').short}
             quickDateOptions={[
