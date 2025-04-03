@@ -262,18 +262,60 @@ export default function AssignmentItem({
     loadPeriodInfo();
   }, [assignment.periodId]);
 
+  // Function to get remaining time text with translations
+  const updateRemainingTimeText = (dueDate: string): string => {
+    // Code from getRemainingTimeText function but with translated strings
+    const now = new Date();
+    const due = new Date(dueDate);
+    
+    // If due date is in the past and not completed, show as overdue
+    if (due < now) {
+      return t('assignments').status.overdue;
+    }
+    
+    const diffMs = due.getTime() - now.getTime();
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+    
+    // Less than a day
+    if (diffMinutes < 24 * 60) {
+      // Less than an hour
+      if (diffMinutes < 60) {
+        return `${diffMinutes} ${t('assignments').status.inMinutes}`;
+      }
+      
+      // A few hours
+      const hours = Math.floor(diffMinutes / 60);
+      return `${hours} ${t('assignments').status.inHours}`;
+    }
+    
+    // Less than 2 days
+    if (diffMinutes < 48 * 60) {
+      return t('assignments').status.dueTomorrow;
+    }
+    
+    // Less than a week
+    if (diffMinutes < 7 * 24 * 60) {
+      const days = Math.floor(diffMinutes / (24 * 60));
+      return `${days} ${t('assignments').status.inDays}`;
+    }
+    
+    // More than a week
+    const weeks = Math.floor(diffMinutes / (7 * 24 * 60));
+    return `${weeks} ${t('assignments').status.inWeeks}`;
+  };
+
   // Update remaining time text
   useEffect(() => {
     // Initial update
-    setRemainingTime(getRemainingTimeText(assignment.dueDate));
+    setRemainingTime(updateRemainingTimeText(assignment.dueDate));
     
     // Update remaining time every minute
     const interval = setInterval(() => {
-      setRemainingTime(getRemainingTimeText(assignment.dueDate));
+      setRemainingTime(updateRemainingTimeText(assignment.dueDate));
     }, 60000); // 1 minute
     
     return () => clearInterval(interval);
-  }, [assignment.dueDate]);
+  }, [assignment.dueDate, t]);
   
   // Format the due date/time for display with localization
   const formattedTime = (() => {
@@ -456,7 +498,7 @@ export default function AssignmentItem({
   const isOrphaned = assignment.isOrphaned;
   
   // Determine if assignment is overdue
-  const isOverdue = remainingTime === 'Overdue' && !assignment.isCompleted;
+  const isOverdue = remainingTime === t('assignments').status.overdue && !assignment.isCompleted;
   
   // Effect to handle highlighting animation
   useHighlightEffect(isHighlighted, assignment, highlightOpacity, setExpanded, setHighlight);
@@ -671,7 +713,7 @@ export default function AssignmentItem({
           layout={Layout.springify().mass(0.3)}
         >
           {isLoadingSubtasks ? (
-            <Text style={styles.loadingText}>Loading subtasks...</Text>
+            <Text style={styles.loadingText}>{t('assignments').subtasks.loading}</Text>
           ) : (
             subtasks.map((subtask) => (
               <Animated.View 
@@ -730,7 +772,7 @@ export default function AssignmentItem({
               </TouchableOpacity>
               <TextInput
                 style={styles.subtaskInput}
-                placeholder="Add subtask..."
+                placeholder={t('assignments').subtasks.placeholder}
                 placeholderTextColor="#8A8A8D"
                 value={newSubtaskTitle}
                 onChangeText={setNewSubtaskTitle}
@@ -765,7 +807,7 @@ export default function AssignmentItem({
               onPress={() => setShowAddSubtask(true)}
             >
               <Ionicons name="add-circle-outline" size={16} color="#3478F6" />
-              <Text style={styles.addSubtaskText}>Add subtask</Text>
+              <Text style={styles.addSubtaskText}>{t('assignments').subtasks.add}</Text>
             </TouchableOpacity>
           )}
         </Animated.View>
@@ -778,7 +820,7 @@ export default function AssignmentItem({
           onPress={() => setShowAddSubtask(true)}
         >
           <Ionicons name="add-circle-outline" size={16} color="#3478F6" />
-          <Text style={styles.addSubtaskText}>Add subtask</Text>
+          <Text style={styles.addSubtaskText}>{t('assignments').subtasks.addFirst}</Text>
         </TouchableOpacity>
       )}
       
@@ -797,7 +839,7 @@ export default function AssignmentItem({
           </TouchableOpacity>
           <TextInput
             style={styles.subtaskInput}
-            placeholder="Add subtask..."
+            placeholder={t('assignments').subtasks.placeholder}
             placeholderTextColor="#8A8A8D"
             value={newSubtaskTitle}
             onChangeText={setNewSubtaskTitle}

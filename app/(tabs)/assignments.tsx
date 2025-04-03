@@ -395,7 +395,7 @@ const ArchivedAssignmentsView = memo(({
       onScroll={handleScroll}
       scrollEventThrottle={400}
     >
-      <Text style={styles.archivedHeaderText}>{'Past Due Assignments'}</Text>
+      <Text style={styles.archivedHeaderText}>{t('assignments').archive.pastDue}</Text>
       {itemsToRender.map((assignment, index) => (
         <Animated.View
           key={assignment.id}
@@ -498,16 +498,19 @@ class AssignmentsErrorBoundary extends React.Component<ErrorBoundaryProps, Error
 
   render() {
     if (this.state.hasError) {
+      // Use translation directly with useTranslation hook
+      const { t } = useTranslation();
+      
       // Fallback UI when an error occurs
       return (
         <SafeAreaView style={styles.container}>
           <StatusBar barStyle="light-content" />
           <View style={styles.errorContainer}>
-            <Text style={styles.errorTitle}>Something went wrong</Text>
-            <Text style={styles.errorMessage}>The app is recovering...</Text>
+            <Text style={styles.errorTitle}>{t('assignments').errors.somethingWrong}</Text>
+            <Text style={styles.errorMessage}>{t('assignments').errors.recovering}</Text>
             {this.state.errorCount > 2 && (
               <Text style={styles.errorHint}>
-                Tip: Avoid rapid switching between tabs
+                {t('assignments').errors.tip}: Avoid rapid switching between tabs
               </Text>
             )}
           </View>

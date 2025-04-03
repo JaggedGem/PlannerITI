@@ -126,7 +126,7 @@ export default function CourseSection({
               isCourseOrphaned && styles.orphanedText
             ]}>
               {courseCode}
-              {isCourseOrphaned && ' (Orphaned)'}
+              {isCourseOrphaned && ` (${t('assignments').common.orphaned})`}
             </Text>
             {shouldShowCourseName && (
               <Text style={[
@@ -138,7 +138,7 @@ export default function CourseSection({
             )}
             {isCourseOrphaned && (
               <Text style={styles.orphanedDescription}>
-                {t('assignments').common.orphanedReason || 'Course not found in your schedule'}
+                {t('assignments').common.orphanedReason}
               </Text>
             )}
           </View>

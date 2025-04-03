@@ -57,7 +57,10 @@ export default function ArchiveView({
     // Group by month
     visibleAssignments.forEach(assignment => {
       const date = new Date(assignment.dueDate);
-      const monthYear = `${date.toLocaleString('default', { month: 'long' })} ${date.getFullYear()}`;
+      const monthIndex = date.getMonth();
+      const year = date.getFullYear();
+      // Use translated month names
+      const monthYear = `${t('months')[monthIndex]} ${year}`;
       
       if (!grouped[monthYear]) {
         grouped[monthYear] = [];
@@ -67,7 +70,7 @@ export default function ArchiveView({
     });
     
     return grouped;
-  }, [assignments, visibleItems]);
+  }, [assignments, visibleItems, t]);
   
   // Handle loading more items
   const loadMoreItems = useCallback(() => {
@@ -114,7 +117,7 @@ export default function ArchiveView({
         >
           <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Archive</Text>
+        <Text style={styles.headerTitle}>{t('assignments').archive.title}</Text>
         <View style={{width: 40}} />
       </View>
       
@@ -128,16 +131,16 @@ export default function ArchiveView({
         {assignments.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyTitle}>
-              No archived assignments
+              {t('assignments').archive.noItems}
             </Text>
             <Text style={styles.emptySubtitle}>
-              Past due assignments will appear here
+              {t('assignments').archive.pastDue}
             </Text>
           </View>
         ) : (
           <>
             <Text style={styles.assignmentsCount}>
-              Found {assignments.length} archived assignments
+              {t('general').found} {assignments.length} {t('assignments').archive.title.toLowerCase()}
             </Text>
             
             {Object.entries(groupedAssignments).map(([monthYear, monthAssignments]) => (
@@ -171,7 +174,7 @@ export default function ArchiveView({
                           {assignment.title}
                         </Text>
                         <Text style={styles.assignmentSubtitle}>
-                          {assignment.courseName || "No Course"} • {new Date(assignment.dueDate).toLocaleDateString()}
+                          {assignment.courseName || t('assignments').common.uncategorized} • {new Date(assignment.dueDate).toLocaleDateString()}
                         </Text>
                       </View>
                       
@@ -190,7 +193,7 @@ export default function ArchiveView({
             {hasMore && visibleItems < assignments.length && (
               <View style={styles.loadingMoreContainer}>
                 <ActivityIndicator color="#3478F6" />
-                <Text style={styles.loadingMoreText}>Loading more...</Text>
+                <Text style={styles.loadingMoreText}>{t('loading')}...</Text>
               </View>
             )}
           </>
