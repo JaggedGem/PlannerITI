@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, memo, useRef, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useMemo, memo, useRef, useLayoutEffect, createContext, useContext } from 'react';
 import { StyleSheet, ScrollView, SafeAreaView, StatusBar, View, Text, ActivityIndicator, Platform, InteractionManager, AppState, TouchableOpacity, Modal, Pressable } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { useColorScheme } from 'react-native';
@@ -23,6 +23,7 @@ import { useTranslation } from '@/hooks/useTranslation';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ArchiveView from '../../components/assignments/ArchiveView';
 import * as Haptics from 'expo-haptics';
+import { AssignmentOptionsMenu } from '../../components/assignments/AssignmentOptionsMenu';
 
 // Add circuit breaker constants
 const CRASH_DETECTION_KEY = 'assignment_tab_crash_detection';
@@ -597,6 +598,65 @@ const ModernDropdown = memo(({
   );
 });
 
+// Create context for the options menu
+interface AssignmentOptionsContextType {
+  showOptionsMenu: (assignmentId: string, position: { top: number; right: number }, deleteHandler?: () => void) => void;
+  hideOptionsMenu: () => void;
+}
+
+export const AssignmentOptionsContext = createContext<AssignmentOptionsContextType>({
+  showOptionsMenu: () => {},
+  hideOptionsMenu: () => {}
+});
+
+// Hook to use the options context
+export const useAssignmentOptions = () => useContext(AssignmentOptionsContext);
+
+// Options menu provider component
+const AssignmentOptionsProvider = ({ children }: { children: React.ReactNode }) => {
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [currentAssignmentId, setCurrentAssignmentId] = useState<string>('');
+  const [deleteHandler, setDeleteHandler] = useState<(() => void) | undefined>(undefined);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; right: number }>({ top: 0, right: 0 });
+
+  const showOptionsMenu = (assignmentId: string, position: { top: number; right: number }, onDelete?: () => void) => {
+    setCurrentAssignmentId(assignmentId);
+    setMenuPosition(position);
+    setDeleteHandler(() => onDelete);
+    setMenuVisible(true);
+  };
+
+  const hideOptionsMenu = () => {
+    setMenuVisible(false);
+  };
+
+  return (
+    <AssignmentOptionsContext.Provider value={{ showOptionsMenu, hideOptionsMenu }}>
+      <View style={{ flex: 1 }}>
+        {children}
+        <View style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 9999,
+          elevation: 9999,
+          pointerEvents: menuVisible ? 'auto' : 'none'
+        }}>
+          <AssignmentOptionsMenu
+            isVisible={menuVisible}
+            onClose={hideOptionsMenu}
+            assignmentId={currentAssignmentId}
+            onDelete={deleteHandler}
+            position={menuPosition}
+          />
+        </View>
+      </View>
+    </AssignmentOptionsContext.Provider>
+  );
+};
+
 // Define the main Assignments component - this needs to be before AssignmentsWithErrorBoundary
 const Assignments = () => {
   const colorScheme = useColorScheme() ?? 'light';
@@ -1150,7 +1210,9 @@ const Assignments = () => {
 // Wrap the main component with the error boundary
 const AssignmentsWithErrorBoundary = () => (
   <AssignmentsErrorBoundary>
-    <Assignments />
+    <AssignmentOptionsProvider>
+      <Assignments />
+    </AssignmentOptionsProvider>
   </AssignmentsErrorBoundary>
 );
 
