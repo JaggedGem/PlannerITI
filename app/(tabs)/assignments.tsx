@@ -608,8 +608,9 @@ const Assignments = () => {
   const [isArchiveModalVisible, setIsArchiveModalVisible] = useState(false);
   
   // For auto-expanding a specific assignment when navigating from the DayView
-  const [assignmentToExpand, setAssignmentToExpand] = useState<string | null>(null);
-  const [dateToExpand, setDateToExpand] = useState<string | null>(null);
+  // Store these in refs to avoid re-renders when clearing them
+  const assignmentToExpandRef = useRef<string | null>(null);
+  const dateToExpandRef = useRef<string | null>(null);
   
   // Track which tabs have been viewed already to disable animations after first view
   const [hasViewedTab, setHasViewedTab] = useState<{[key: number]: boolean}>({0: false, 1: false, 2: false, 3: false});
@@ -640,20 +641,22 @@ const Assignments = () => {
   // Check for navigation data when screen is focused
   useFocusEffect(
     useCallback(() => {
+      let isMounted = true;
+
       const checkNavigationData = async () => {
         try {
           const navigationDataJson = await AsyncStorage.getItem('assignment_navigation_data');
           
-          if (navigationDataJson) {
+          if (navigationDataJson && isMounted) {
             const navigationData = JSON.parse(navigationDataJson);
             
             if (navigationData.autoExpand && navigationData.assignmentId) {
-              // Set the assignment ID to expand
-              setAssignmentToExpand(navigationData.assignmentId);
+              // Store in ref to avoid re-renders when we clear it
+              assignmentToExpandRef.current = navigationData.assignmentId;
               
-              // If we have a date, set it too
+              // If we have a date, store it too
               if (navigationData.date) {
-                setDateToExpand(navigationData.date);
+                dateToExpandRef.current = navigationData.date;
               }
               
               // Switch to the due date view (index 0) if not already there
@@ -671,9 +674,39 @@ const Assignments = () => {
       };
       
       checkNavigationData();
+      
+      return () => {
+        isMounted = false;
+      };
     }, [selectedSegmentIndex])
   );
   
+  // Reset the highlighted assignments list when the component mounts
+  // This ensures we can re-highlight assignments after app restarts
+  useEffect(() => {
+    const resetHighlightedAssignments = async () => {
+      try {
+        // Check if the app was recently launched (within the last minute)
+        const now = Date.now();
+        const lastReset = await AsyncStorage.getItem('last_highlight_reset');
+        const lastResetTime = lastReset ? parseInt(lastReset) : 0;
+        
+        // Only reset if the app hasn't been active for more than a minute
+        if (now - lastResetTime > 60000) {
+          await AsyncStorage.removeItem('highlighted_assignments');
+          await AsyncStorage.setItem('last_highlight_reset', now.toString());
+        }
+      } catch (error) {
+        console.error('Error resetting highlighted assignments:', error);
+      }
+    };
+    
+    resetHighlightedAssignments();
+  }, []);
+  
+  // No need for additional useEffects to clear the highlight state
+  // as we're now using refs which don't cause re-renders
+
   // Simple fetch assignments implementation with data caching
   const fetchAssignments = useCallback(async () => {
     try {
@@ -881,10 +914,10 @@ const Assignments = () => {
           let shouldExpandDay = index === 0; // Default: expand first day
           
           // If we have an assignment to expand and a date to expand
-          if (assignmentToExpand && dateToExpand) {
+          if (assignmentToExpandRef.current && dateToExpandRef.current) {
             // Check if this group contains the target date
             const groupDate = new Date(group.date);
-            const targetDate = new Date(dateToExpand);
+            const targetDate = new Date(dateToExpandRef.current);
             
             // If the dates match (same day), this group should be expanded
             if (groupDate.getFullYear() === targetDate.getFullYear() &&
@@ -915,7 +948,7 @@ const Assignments = () => {
                     onToggleAssignment={onToggle}
                     onDeleteAssignment={onDelete}
                     defaultExpanded={shouldExpandDay}
-                    assignmentToHighlight={assignmentToExpand}
+                    assignmentToHighlight={assignmentToExpandRef.current}
                   />
                 </View>
               ) : (
@@ -930,7 +963,7 @@ const Assignments = () => {
                     onToggleAssignment={onToggle}
                     onDeleteAssignment={onDelete}
                     defaultExpanded={shouldExpandDay}
-                    assignmentToHighlight={assignmentToExpand}
+                    assignmentToHighlight={assignmentToExpandRef.current}
                   />
                 </Animated.View>
               )}
@@ -939,7 +972,7 @@ const Assignments = () => {
         })}
       </ScrollView>
     );
-  }, [t, assignmentToExpand, dateToExpand]);
+  }, [t]);
   
   // Simplified CoursesView with disabled animations after first view
   const SimplifiedCoursesView = useCallback(({
