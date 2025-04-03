@@ -998,7 +998,7 @@ export default function EditAssignmentScreen() {
         dueDate: dueDate.toISOString(),
         isPriority,
         assignmentType,
-        courseCode: selectedSubject ? selectedSubject.id || courseCode : courseCode,
+        courseCode: selectedSubject ? selectedSubject.name : courseName,
         courseName: selectedSubject ? selectedSubject.name : courseName,
         periodId: periodId,
         subjectId: selectedSubject ? selectedSubject.id : subjectId,
