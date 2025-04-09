@@ -670,6 +670,16 @@ const GradeCalculatorModal = ({
   const [hasCalculated, setHasCalculated] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
   
+  // Calculate grade quality color - same as used in SubjectCard
+  const getGradeColor = (grade: string): string => {
+    const numGrade = parseFloat(grade.replace(',', '.'));
+    if (isNaN(numGrade)) return 'rgba(44, 61, 205, 0.5)'; // Default blue for non-numeric
+    if (numGrade < 5) return 'rgba(255, 107, 107, 0.5)'; // Red for failing
+    if (numGrade >= 9) return 'rgba(75, 181, 67, 0.5)';  // Green for excellent
+    if (numGrade >= 7) return 'rgba(255, 184, 0, 0.5)';  // Orange for good
+    return 'rgba(44, 61, 205, 0.5)';                     // Blue for average
+  };
+  
   // Reset state when modal is opened
   useEffect(() => {
     if (isVisible) {
@@ -755,28 +765,32 @@ const GradeCalculatorModal = ({
               <View style={styles.pickerContainer}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   {subjects.map((subject, index) => (
-                    <TouchableOpacity
-                      key={`subject-option-${index}`}
-                      style={[
-                        styles.subjectOption,
-                        selectedSubject?.name === subject.name && styles.subjectOptionSelected
-                      ]}
-                      onPress={() => {
-                        setSelectedSubject(subject);
-                        setHasCalculated(false);
-                        Haptics.selectionAsync();
-                      }}
-                    >
-                      <Text 
+                    <React.Fragment key={`subject-option-${index}`}>
+                      {index > 0 && (
+                        <View style={styles.subjectSeparator} />
+                      )}
+                      <TouchableOpacity
                         style={[
-                          styles.subjectOptionText,
-                          selectedSubject?.name === subject.name && styles.subjectOptionTextSelected
-                        ]} 
-                        numberOfLines={1}
+                          styles.subjectOption,
+                          selectedSubject?.name === subject.name && styles.subjectOptionSelected
+                        ]}
+                        onPress={() => {
+                          setSelectedSubject(subject);
+                          setHasCalculated(false);
+                          Haptics.selectionAsync();
+                        }}
                       >
-                        {subject.name}
-                      </Text>
-                    </TouchableOpacity>
+                        <Text 
+                          style={[
+                            styles.subjectOptionText,
+                            selectedSubject?.name === subject.name && styles.subjectOptionTextSelected
+                          ]} 
+                          numberOfLines={1}
+                        >
+                          {subject.name}
+                        </Text>
+                      </TouchableOpacity>
+                    </React.Fragment>
                   ))}
                 </ScrollView>
               </View>
@@ -793,7 +807,7 @@ const GradeCalculatorModal = ({
                         <View 
                           key={`current-grade-${index}`} 
                           style={{
-                            backgroundColor: 'rgba(44, 61, 205, 0.5)',
+                            backgroundColor: getGradeColor(grade),
                             borderRadius: 8,
                             paddingHorizontal: 12,
                             paddingVertical: 6,
@@ -935,14 +949,32 @@ const GradesScreen = ({
     }
   }, [responseHtml]);
   
+  // Get current semester number based on date
+  const currentSemesterNumber = useMemo(() => getCurrentSemester(), []);
+
   // UI state
   const [refreshing, setRefreshing] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('grades');
   const [activeSemesterIndex, setActiveSemesterIndex] = useState(
-    studentGrades?.currentSemester 
-      ? studentGrades.currentGrades.findIndex(s => s.semester === studentGrades.currentSemester) 
+    studentGrades?.currentGrades
+      ? studentGrades.currentGrades.findIndex(s => s.semester === currentSemesterNumber) 
       : 0
   );
+  
+  // Make sure activeSemesterIndex is valid
+  useEffect(() => {
+    if (studentGrades?.currentGrades) {
+      // Find the index of the current semester
+      const currentIndex = studentGrades.currentGrades.findIndex(
+        s => s.semester === currentSemesterNumber
+      );
+      
+      // If found, set it as active
+      if (currentIndex >= 0) {
+        setActiveSemesterIndex(currentIndex);
+      }
+    }
+  }, [studentGrades, currentSemesterNumber]);
   
   // Grade calculator modal state
   const [calculatorVisible, setCalculatorVisible] = useState(false);
@@ -964,18 +996,15 @@ const GradesScreen = ({
   // Initialize with only the current semester expanded
   useEffect(() => {
     if (studentGrades?.currentGrades?.length) {
-      // Get the current semester based on date
-      const currentSemester = getCurrentSemester();
-      
       // Create an object with only current semester expanded
       const initialExpandedState: Record<number, boolean> = {};
       studentGrades.currentGrades.forEach(semester => {
         // Only expand the current semester
-        initialExpandedState[semester.semester] = semester.semester === currentSemester;
+        initialExpandedState[semester.semester] = semester.semester === currentSemesterNumber;
       });
       setExpandedSemesters(initialExpandedState);
     }
-  }, [studentGrades?.currentGrades]);
+  }, [studentGrades?.currentGrades, currentSemesterNumber]);
 
   // Get current semester data
   const currentSemesterData = useMemo(() => {
@@ -983,12 +1012,22 @@ const GradesScreen = ({
       return null;
     }
     
+    // First try to find the current semester based on date
+    const currentIndex = studentGrades.currentGrades.findIndex(
+      s => s.semester === currentSemesterNumber
+    );
+    
+    if (currentIndex >= 0) {
+      return studentGrades.currentGrades[currentIndex];
+    }
+    
+    // Fall back to the active index if current semester not found
     return studentGrades.currentGrades[
       activeSemesterIndex >= 0 && activeSemesterIndex < studentGrades.currentGrades.length 
         ? activeSemesterIndex 
         : 0
     ];
-  }, [studentGrades, activeSemesterIndex]);
+  }, [studentGrades, activeSemesterIndex, currentSemesterNumber]);
 
   // Calculate average grades for current semester
   const semesterAverage = useMemo(() => {
@@ -2295,5 +2334,12 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  subjectSeparator: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#232433',
+    marginHorizontal: 5,
+    alignSelf: 'center',
   },
 });
