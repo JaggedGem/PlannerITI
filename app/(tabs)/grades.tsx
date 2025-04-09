@@ -630,7 +630,7 @@ const findGradesToReachAverage = (currentGrades: number[], targetAverage: number
     const newDifference = Math.abs(targetAverage - newAverage);
 
     // Check if this is a valid solution (close enough to target)
-    if (newDifference < 0.1) {
+    if (newDifference < 0.01) {
       // Calculate reasonableness score for this solution
       const score = calculateReasonablenessScore(newGrades, newDifference);
       
@@ -699,17 +699,20 @@ const findGradesToReachAverage = (currentGrades: number[], targetAverage: number
 const GradeCalculatorModal = ({ 
   isVisible, 
   onClose, 
-  subjects 
+  subjects,
+  allSemesters  // Add this new parameter to access all semester data
 }: { 
   isVisible: boolean, 
   onClose: () => void, 
-  subjects: GradeSubject[] 
+  subjects: GradeSubject[],
+  allSemesters: SemesterGrades[] 
 }) => {
   const { t } = useTranslation();
   const [selectedSubject, setSelectedSubject] = useState<GradeSubject | null>(null);
   const [targetAverage, setTargetAverage] = useState('');
   const [calculatedGrades, setCalculatedGrades] = useState<number[]>([]);
   const [hasCalculated, setHasCalculated] = useState(false);
+  const [isAnnualCalculation, setIsAnnualCalculation] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
   
   // Calculate grade quality color - same as used in SubjectCard
@@ -729,6 +732,7 @@ const GradeCalculatorModal = ({
       setTargetAverage('');
       setCalculatedGrades([]);
       setHasCalculated(false);
+      setIsAnnualCalculation(false);
     }
   }, [isVisible, subjects]);
   
@@ -738,11 +742,31 @@ const GradeCalculatorModal = ({
                          .filter(g => !isNaN(g));
   };
   
+  // Get all grades for the selected subject from all semesters
+  const getAllGradesForSubject = (subjectName: string): number[] => {
+    const allGrades: number[] = [];
+    
+    // Iterate through all semesters to find the subject
+    allSemesters.forEach(semester => {
+      const subjectInSemester = semester.subjects.find(s => s.name === subjectName);
+      if (subjectInSemester) {
+        const numericGrades = getNumericGrades(subjectInSemester);
+        allGrades.push(...numericGrades);
+      }
+    });
+    
+    return allGrades;
+  };
+  
   // Calculate the current average of the selected subject
   const getCurrentAverage = (): string => {
     if (!selectedSubject) return '-';
     
-    const numericGrades = getNumericGrades(selectedSubject);
+    // Decide which grades to use based on calculation mode
+    const numericGrades = isAnnualCalculation 
+      ? getAllGradesForSubject(selectedSubject.name)
+      : getNumericGrades(selectedSubject);
+    
     if (numericGrades.length === 0) return '-';
     
     const sum = numericGrades.reduce((a, b) => a + b, 0);
@@ -753,7 +777,11 @@ const GradeCalculatorModal = ({
   const handleCalculate = () => {
     if (!selectedSubject || !targetAverage) return;
     
-    const numericGrades = getNumericGrades(selectedSubject);
+    // Decide which grades to use based on calculation mode
+    const numericGrades = isAnnualCalculation 
+      ? getAllGradesForSubject(selectedSubject.name)
+      : getNumericGrades(selectedSubject);
+    
     const target = parseFloat(targetAverage);
     
     if (isNaN(target) || target < 1 || target > 10) {
@@ -776,6 +804,43 @@ const GradeCalculatorModal = ({
       scrollViewRef.current?.scrollToEnd({ animated: true });
     }, 300);
   };
+  
+  // Check if the selected subject exists in multiple semesters
+  const isSubjectInMultipleSemesters = (subjectName: string): boolean => {
+    // Count how many semesters contain this subject
+    let count = 0;
+    allSemesters.forEach(semester => {
+      if (semester.subjects.some(s => s.name === subjectName)) {
+        count++;
+      }
+    });
+    return count > 1;
+  };
+  
+  // Get all current grades for the selected subject (for display)
+  const getAllCurrentGrades = (): string[] => {
+    if (!selectedSubject) return [];
+    
+    if (!isAnnualCalculation) {
+      return selectedSubject.grades;
+    }
+    
+    // Collect grades from all semesters for this subject
+    const allGrades: string[] = [];
+    allSemesters.forEach(semester => {
+      const subjectInSemester = semester.subjects.find(s => s.name === selectedSubject.name);
+      if (subjectInSemester) {
+        allGrades.push(...subjectInSemester.grades);
+      }
+    });
+    
+    return allGrades;
+  };
+  
+  // Determine if annual calculation option should be shown
+  const showAnnualOption = useMemo(() => {
+    return selectedSubject ? isSubjectInMultipleSemesters(selectedSubject.name) : false;
+  }, [selectedSubject, allSemesters]);
   
   return (
     <Modal
@@ -819,6 +884,7 @@ const GradeCalculatorModal = ({
                         onPress={() => {
                           setSelectedSubject(subject);
                           setHasCalculated(false);
+                          setIsAnnualCalculation(false);
                           Haptics.selectionAsync();
                         }}
                       >
@@ -838,14 +904,74 @@ const GradeCalculatorModal = ({
               </View>
             </View>
             
+            {/* Annual vs Current Semester Toggle - only show if subject exists in multiple semesters */}
+            {selectedSubject && showAnnualOption && (
+              <View style={styles.formGroup}>
+                <View style={styles.calculationTypeContainer}>
+                  <Text style={styles.label}>
+                    {t('grades').calculator.calculationType || "Calculation Type:"}
+                  </Text>
+                  <View style={styles.calculationToggle}>
+                    <TouchableOpacity
+                      style={[
+                        styles.toggleOption,
+                        !isAnnualCalculation && styles.toggleOptionActive
+                      ]}
+                      onPress={() => {
+                        setIsAnnualCalculation(false);
+                        setHasCalculated(false);
+                        Haptics.selectionAsync();
+                      }}
+                    >
+                      <Text 
+                        style={[
+                          styles.toggleOptionText, 
+                          !isAnnualCalculation && styles.toggleOptionTextActive
+                        ]}
+                      >
+                        {t('grades').calculator.semesterOnly || "Current Semester"}
+                      </Text>
+                    </TouchableOpacity>
+                    
+                    <View style={styles.toggleSeparator} />
+                    
+                    <TouchableOpacity
+                      style={[
+                        styles.toggleOption,
+                        isAnnualCalculation && styles.toggleOptionActive
+                      ]}
+                      onPress={() => {
+                        setIsAnnualCalculation(true);
+                        setHasCalculated(false);
+                        Haptics.selectionAsync();
+                      }}
+                    >
+                      <Text 
+                        style={[
+                          styles.toggleOptionText, 
+                          isAnnualCalculation && styles.toggleOptionTextActive
+                        ]}
+                      >
+                        {t('grades').calculator.annualAverage || "Annual Average"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            )}
+            
             {/* Current Grades Display */}
             {selectedSubject && (
               <View style={styles.formGroup}>
-                <Text style={styles.label}>{t('grades').calculator.currentGrades}</Text>
+                <Text style={styles.label}>
+                  {isAnnualCalculation 
+                    ? (t('grades').calculator.allGrades || "All Grades") 
+                    : t('grades').calculator.currentGrades}
+                </Text>
                 <View style={styles.currentGradesContainer}>
-                  {selectedSubject.grades.length > 0 ? (
+                  {getAllCurrentGrades().length > 0 ? (
                     <View style={styles.gradesGrid}>
-                      {selectedSubject.grades.map((grade, index) => (
+                      {getAllCurrentGrades().map((grade, index) => (
                         <View 
                           key={`current-grade-${index}`} 
                           style={{
@@ -1348,6 +1474,7 @@ const GradesScreen = ({
           isVisible={calculatorVisible}
           onClose={() => setCalculatorVisible(false)}
           subjects={currentSemesterData.subjects}
+          allSemesters={studentGrades.currentGrades}
         />
       )}
 
@@ -1724,6 +1851,8 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
+    marginBottom: 4,
+    marginTop: 8,
   },
   input: {
     backgroundColor: '#1A1A1A',
@@ -2378,6 +2507,46 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   subjectSeparator: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#232433',
+    marginHorizontal: 5,
+    alignSelf: 'center',
+  },
+  calculationTypeContainer: {
+    flexDirection: 'column',
+    marginBottom: 10,
+  },
+  calculationToggle: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#1A1A1A',
+    borderRadius: 12,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: '#232433',
+  },
+  toggleOption: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    flex: 1,
+    alignItems: 'center',
+  },
+  toggleOptionActive: {
+    backgroundColor: '#2C3DCD',
+  },
+  toggleOptionText: {
+    color: '#8A8A8D',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  toggleOptionTextActive: {
+    color: 'white',
+    fontWeight: '600',
+  },
+  toggleSeparator: {
     width: 1,
     height: 24,
     backgroundColor: '#232433',

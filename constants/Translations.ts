@@ -293,7 +293,10 @@ type TranslationType = {
       noSolution: string;
       resultsTitle: string;
       alreadyAchieved: string;
-      
+      calculationType: string;
+      semesterOnly: string;
+      annualAverage: string;
+      allGrades: string;
     }
     add: string;
     edit: string;
@@ -751,6 +754,10 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         noSolution: 'No solution found',
         resultsTitle: 'Results',
         alreadyAchieved: 'You have already achieved this target average.',
+        calculationType: 'Calculation Type',
+        semesterOnly: 'Semester Only',
+        annualAverage: 'Annual Average',
+        allGrades: 'All Grades',
       },
       add: 'Add Grade',
       edit: 'Edit Grade',
@@ -1226,6 +1233,10 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         noSolution: 'Nu există soluție',
         resultsTitle: 'Rezultate',
         alreadyAchieved: 'Ați atins deja această medie țintă.',
+        calculationType: 'Tipul de calcul',
+        semesterOnly: 'Doar Semestrul',
+        annualAverage: 'Media Anuală',
+        allGrades: 'Toate Notele',
       },
       add: 'Adaugă Notă',
       edit: 'Editează Nota',
@@ -1701,6 +1712,10 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         noSolution: 'Нет решения',
         resultsTitle: 'Результаты',
         alreadyAchieved: 'Вы уже достигли этой целевой средней оценки.',
+        calculationType: 'Тип расчета',
+        semesterOnly: 'Только семестр',
+        annualAverage: 'Средняя оценка за год',
+        allGrades: 'Все оценки',
       },
       add: 'Добавить оценку',
       edit: 'Редактировать оценку',
