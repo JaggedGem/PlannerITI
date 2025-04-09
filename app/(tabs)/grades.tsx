@@ -1498,20 +1498,7 @@ const GradesScreen = ({
             >
               <Text style={[styles.averageLabel, textOpacity]}>{t('grades').average}</Text>
               <Text style={[styles.averageValue, textOpacity]}>
-                {(() => {
-                  // Combine all subjects from all semesters
-                  const allSubjects = studentGrades.currentGrades.flatMap(sem => sem.subjects);
-                  // Get valid averages from all subjects
-                  const validAverages = allSubjects
-                    .map(subject => subject.average)
-                    .filter(avg => avg !== undefined) as number[];
-                  
-                  if (validAverages.length === 0) return "0.00";
-                  
-                  // Calculate the total sum and divide by number of subjects
-                  const sum = validAverages.reduce((acc, val) => acc + val, 0);
-                  return (sum / validAverages.length).toFixed(2);
-                })()}
+                {(allSemestersAverages.reduce((acc, item) => acc + parseFloat(item!.average), 0) / allSemestersAverages.length).toFixed(2)}
               </Text>
             </Animated.View>
           )}
