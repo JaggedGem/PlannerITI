@@ -1,4 +1,4 @@
-import { StyleSheet, View, Text, TouchableOpacity, FlatList, RefreshControl, Modal, TextInput, Platform, KeyboardAvoidingView, ActivityIndicator, DeviceEventEmitter, ScrollView } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, FlatList, RefreshControl, Modal, TextInput, Platform, KeyboardAvoidingView, ActivityIndicator, DeviceEventEmitter, ScrollView, Keyboard } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -580,6 +580,328 @@ const ErrorNotification = ({ message }: { message: string }) => (
   </Animated.View>
 );
 
+/**
+ * Finds the shortest combination of additional grades that will make the average close to the target.
+ * @param currentGrades Array of current grades (1-10)
+ * @param targetAverage The desired average to achieve
+ * @returns Array of grades to add to reach target average
+ */
+const findGradesToReachAverage = (currentGrades: number[], targetAverage: number): number[] => {
+  // Handle edge cases
+  if (!currentGrades.length) {
+    return [Math.round(targetAverage)]; // If no current grades, just return the target as a single grade
+  }
+
+  // Calculate current sum and count
+  const currentSum = currentGrades.reduce((sum, grade) => sum + grade, 0);
+  const currentCount = currentGrades.length;
+  const currentAverage = currentSum / currentCount;
+
+  // If we've already reached the target average, return empty array
+  if (Math.abs(currentAverage - targetAverage) < 0.01) {
+    return [];
+  }
+
+  // Initialize variables for backtracking
+  let bestSolution: number[] = [];
+  let closestAverage = currentAverage;
+  let closestDifference = Math.abs(targetAverage - currentAverage);
+
+  // Recursive backtracking function
+  const backtrack = (newGrades: number[], depth: number, maxDepth: number) => {
+    // Calculate new average with these added grades
+    const newSum = currentSum + newGrades.reduce((sum, grade) => sum + grade, 0);
+    const newCount = currentCount + newGrades.length;
+    const newAverage = newSum / newCount;
+    const newDifference = Math.abs(targetAverage - newAverage);
+
+    // Check if this is a better solution
+    if (newDifference < closestDifference || 
+        (newDifference === closestDifference && newGrades.length < bestSolution.length)) {
+      closestDifference = newDifference;
+      closestAverage = newAverage;
+      bestSolution = [...newGrades];
+    }
+
+    // Base case: if we've reached maximum depth or found an exact match
+    if (depth >= maxDepth || newDifference < 0.01) {
+      return;
+    }
+
+    // Try adding each possible grade (1-10)
+    for (let grade = 1; grade <= 10; grade++) {
+      // Optimization: only add grades that move us in the right direction
+      const gradeEffect = (grade - newAverage) * (targetAverage > newAverage ? 1 : -1);
+      if (gradeEffect >= 0) { // This grade will move the average in the right direction
+        newGrades.push(grade);
+        backtrack(newGrades, depth + 1, maxDepth);
+        newGrades.pop(); // Backtrack
+      }
+    }
+  };
+
+  // Start with trying to add 1-5 grades (reasonable limit)
+  for (let maxDepth = 1; maxDepth <= 5; maxDepth++) {
+    backtrack([], 0, maxDepth);
+    
+    // If we found a solution that's close enough, return it
+    if (closestDifference < 0.1) {
+      return bestSolution;
+    }
+  }
+
+  return bestSolution;
+};
+
+// Grade Calculator Modal component
+const GradeCalculatorModal = ({ 
+  isVisible, 
+  onClose, 
+  subjects 
+}: { 
+  isVisible: boolean, 
+  onClose: () => void, 
+  subjects: GradeSubject[] 
+}) => {
+  const { t } = useTranslation();
+  const [selectedSubject, setSelectedSubject] = useState<GradeSubject | null>(null);
+  const [targetAverage, setTargetAverage] = useState('');
+  const [calculatedGrades, setCalculatedGrades] = useState<number[]>([]);
+  const [hasCalculated, setHasCalculated] = useState(false);
+  const scrollViewRef = useRef<ScrollView>(null);
+  
+  // Reset state when modal is opened
+  useEffect(() => {
+    if (isVisible) {
+      setSelectedSubject(subjects.length > 0 ? subjects[0] : null);
+      setTargetAverage('');
+      setCalculatedGrades([]);
+      setHasCalculated(false);
+    }
+  }, [isVisible, subjects]);
+  
+  // Convert string grades to numbers
+  const getNumericGrades = (subject: GradeSubject): number[] => {
+    return subject.grades.map(g => parseFloat(g.replace(',', '.')))
+                         .filter(g => !isNaN(g));
+  };
+  
+  // Calculate the current average of the selected subject
+  const getCurrentAverage = (): string => {
+    if (!selectedSubject) return '-';
+    
+    const numericGrades = getNumericGrades(selectedSubject);
+    if (numericGrades.length === 0) return '-';
+    
+    const sum = numericGrades.reduce((a, b) => a + b, 0);
+    return (sum / numericGrades.length).toFixed(2);
+  };
+  
+  // Handle calculation
+  const handleCalculate = () => {
+    if (!selectedSubject || !targetAverage) return;
+    
+    const numericGrades = getNumericGrades(selectedSubject);
+    const target = parseFloat(targetAverage);
+    
+    if (isNaN(target) || target < 1 || target > 10) {
+      // Invalid target average
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      return;
+    }
+    
+    // Dismiss keyboard
+    Keyboard.dismiss();
+    
+    const result = findGradesToReachAverage(numericGrades, target);
+    setCalculatedGrades(result);
+    setHasCalculated(true);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    
+    // Scroll to the bottom to show results after a short delay
+    // to ensure the results are rendered
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 300);
+  };
+  
+  return (
+    <Modal
+      visible={isVisible}
+      animationType="fade"
+      transparent={true}
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={[styles.calculatorModalContent, { height: '70%' }]}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{t('grades').calculator.title}</Text>
+            <TouchableOpacity onPress={onClose}>
+              <MaterialIcons name="close" size={24} color="white" />
+            </TouchableOpacity>
+          </View>
+          
+          <ScrollView 
+            ref={scrollViewRef}
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingBottom: 20 }}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+          >
+            {/* Subject Selection */}
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>{t('grades').calculator.selectSubject}</Text>
+              <View style={styles.pickerContainer}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  {subjects.map((subject, index) => (
+                    <TouchableOpacity
+                      key={`subject-option-${index}`}
+                      style={[
+                        styles.subjectOption,
+                        selectedSubject?.name === subject.name && styles.subjectOptionSelected
+                      ]}
+                      onPress={() => {
+                        setSelectedSubject(subject);
+                        setHasCalculated(false);
+                        Haptics.selectionAsync();
+                      }}
+                    >
+                      <Text 
+                        style={[
+                          styles.subjectOptionText,
+                          selectedSubject?.name === subject.name && styles.subjectOptionTextSelected
+                        ]} 
+                        numberOfLines={1}
+                      >
+                        {subject.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            </View>
+            
+            {/* Current Grades Display */}
+            {selectedSubject && (
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>{t('grades').calculator.currentGrades}</Text>
+                <View style={styles.currentGradesContainer}>
+                  {selectedSubject.grades.length > 0 ? (
+                    <View style={styles.gradesGrid}>
+                      {selectedSubject.grades.map((grade, index) => (
+                        <View 
+                          key={`current-grade-${index}`} 
+                          style={{
+                            backgroundColor: 'rgba(44, 61, 205, 0.5)',
+                            borderRadius: 8,
+                            paddingHorizontal: 12,
+                            paddingVertical: 6,
+                            minWidth: 40,
+                            alignItems: 'center',
+                            marginBottom: 8,
+                          }}
+                        >
+                          <Text style={styles.gradeText}>{grade}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : (
+                    <Text style={{
+                      color: '#8A8A8D',
+                      fontSize: 14,
+                      textAlign: 'center',
+                      padding: 10,
+                    }}>
+                      {t('grades').calculator.noGrades}
+                    </Text>
+                  )}
+                  
+                  <View style={styles.currentAverageContainer}>
+                    <Text style={styles.currentAverageLabel}>
+                      {t('grades').calculator.currentAverage}:
+                    </Text>
+                    <Text style={styles.currentAverageValue}>
+                      {getCurrentAverage()}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            )}
+            
+            {/* Target Average Input */}
+            <View style={[styles.formGroup, { marginBottom: 20 }]}>
+              <Text style={styles.label}>{t('grades').calculator.targetAverage}</Text>
+              <TextInput
+                style={styles.input}
+                value={targetAverage}
+                onChangeText={setTargetAverage}
+                placeholder="8.50"
+                placeholderTextColor="#8A8A8D"
+                keyboardType="numeric"
+                maxLength={4}
+              />
+            </View>
+            
+            {/* Calculate Button */}
+            <TouchableOpacity
+              style={[
+                styles.calculateButton,
+                (!selectedSubject || !targetAverage) && styles.calculateButtonDisabled
+              ]}
+              onPress={handleCalculate}
+              disabled={!selectedSubject || !targetAverage}
+            >
+              <Text style={styles.calculateButtonText}>
+                {t('grades').calculator.calculate}
+              </Text>
+            </TouchableOpacity>
+            
+            {/* Results */}
+            {hasCalculated && (
+              <Animated.View 
+                entering={FadeInUp.springify()}
+                style={styles.resultsContainer}
+              >
+                <Text style={styles.resultsTitle}>
+                  {calculatedGrades.length > 0 
+                    ? t('grades').calculator.resultsTitle 
+                    : t('grades').calculator.noSolution}
+                </Text>
+                
+                {calculatedGrades.length > 0 ? (
+                  <View style={styles.gradesGrid}>
+                    {calculatedGrades.map((grade, index) => (
+                      <View 
+                        key={`result-grade-${index}`} 
+                        style={{
+                          backgroundColor: 'rgba(75, 181, 67, 0.5)',
+                          borderRadius: 8,
+                          paddingHorizontal: 12,
+                          paddingVertical: 6,
+                          minWidth: 40,
+                          alignItems: 'center',
+                          marginBottom: 8,
+                        }}
+                      >
+                        <Text style={styles.gradeText}>{grade}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={styles.noSolutionText}>
+                    {t('grades').calculator.alreadyAchieved}
+                  </Text>
+                )}
+              </Animated.View>
+            )}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
 // Main Grades component
 const GradesScreen = ({ 
   idnp, 
@@ -621,6 +943,9 @@ const GradesScreen = ({
       ? studentGrades.currentGrades.findIndex(s => s.semester === studentGrades.currentSemester) 
       : 0
   );
+  
+  // Grade calculator modal state
+  const [calculatorVisible, setCalculatorVisible] = useState(false);
   
   // Track expanded semester dropdowns and subjects
   const [expandedSemesters, setExpandedSemesters] = useState<Record<number, boolean>>({});
@@ -762,7 +1087,7 @@ const GradesScreen = ({
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header with student info and refresh button */}
+      {/* Header with student info and buttons */}
       <View style={[styles.headerContainer, refreshing && { opacity: 0.7 }]}>
         <View style={styles.headerLeft}>
           <Text style={[styles.studentName, textOpacity]}>
@@ -772,18 +1097,32 @@ const GradesScreen = ({
             {studentGrades.studentInfo.group} | {studentGrades.studentInfo.specialization}
           </Text>
         </View>
-        <TouchableOpacity 
-          style={styles.refreshButton}
-          onPress={handleRefresh}
-          disabled={refreshing}
-        >
-          <MaterialIcons 
-            name="refresh" 
-            size={24} 
-            color="white" 
-            style={[refreshing && styles.refreshingIcon]}
-          />
-        </TouchableOpacity>
+        <View style={styles.headerButtons}>
+          {currentSemesterData?.subjects && currentSemesterData.subjects.length > 0 && (
+            <TouchableOpacity 
+              style={styles.calculatorButton}
+              onPress={() => {
+                setCalculatorVisible(true);
+                Haptics.selectionAsync();
+              }}
+              disabled={refreshing}
+            >
+              <MaterialIcons name="calculate" size={22} color="white" />
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity 
+            style={styles.refreshButton}
+            onPress={handleRefresh}
+            disabled={refreshing}
+          >
+            <MaterialIcons 
+              name="refresh" 
+              size={24} 
+              color="white" 
+              style={[refreshing && styles.refreshingIcon]}
+            />
+          </TouchableOpacity>
+        </View>
       </View>
       
       {/* Data staleness warning */}
@@ -920,6 +1259,15 @@ const GradesScreen = ({
         </ScrollView>
       ) : (
         <ExamsView exams={studentGrades.exams} />
+      )}
+
+      {/* Grade Calculator Modal */}
+      {currentSemesterData && (
+        <GradeCalculatorModal
+          isVisible={calculatorVisible}
+          onClose={() => setCalculatorVisible(false)}
+          subjects={currentSemesterData.subjects}
+        />
       )}
 
       {/* Overlay the content with a semi-transparent loading indicator when refreshing */}
@@ -1263,13 +1611,16 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'flex-end',
+    width: '100%',
   },
-  modalContent: {
+  calculatorModalContent: {
     backgroundColor: '#1A1A1A',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
-    maxHeight: '90%',
+    height: '70%',
+    width: '100%',
+    paddingBottom: Platform.OS === 'ios' ? 40 : 20, // Extra padding for iOS devices
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1294,7 +1645,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   input: {
-    backgroundColor: '#232433',
+    backgroundColor: '#1A1A1A',
+    borderWidth: 1,
+    borderColor: '#232433',
     borderRadius: 12,
     padding: 16,
     color: 'white',
@@ -1832,5 +2185,115 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#141414',
     padding: 20,
+  },
+  pickerContainer: {
+    borderWidth: 1,
+    borderColor: '#232433',
+    borderRadius: 12,
+    padding: 8,
+  },
+  subjectOption: {
+    padding: 12,
+    borderRadius: 8,
+  },
+  subjectOptionSelected: {
+    backgroundColor: '#2C3DCD',
+  },
+  subjectOptionText: {
+    color: 'white',
+    fontSize: 16,
+  },
+  subjectOptionTextSelected: {
+    fontWeight: '600',
+  },
+  currentGradesContainer: {
+    backgroundColor: '#1A1A1A',
+    borderWidth: 1,
+    borderColor: '#232433',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
+  calculatorGradeItem: {
+    backgroundColor: 'rgba(44, 61, 205, 0.5)',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    minWidth: 40,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  currentAverageContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  currentAverageLabel: {
+    color: 'white',
+    fontSize: 16,
+  },
+  currentAverageValue: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  calculateButton: {
+    backgroundColor: '#2C3DCD',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    width: '100%',
+  },
+  calculateButtonDisabled: {
+    backgroundColor: '#8A8A8D',
+  },
+  calculateButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  resultsContainer: {
+    marginTop: 20,
+    padding: 12,
+    backgroundColor: '#1A1A1A',
+    borderWidth: 1,
+    borderColor: '#232433',
+    borderRadius: 12,
+  },
+  resultsTitle: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 12,
+  },
+  resultGradeItem: {
+    backgroundColor: 'rgba(75, 181, 67, 0.5)',
+  },
+  noGradesText: {
+    color: '#8A8A8D',
+    fontSize: 14,
+    textAlign: 'center',
+    padding: 10,
+  },
+  noSolutionText: {
+    color: 'white',
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  calculatorButton: {
+    backgroundColor: '#2C3DCD',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

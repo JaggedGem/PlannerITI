@@ -279,6 +279,22 @@ type TranslationType = {
       grade: string;
       category: string;
     };
+    calculator: {
+      title: string;
+      selectSubject: string;
+      currentGrades: string;
+      noGrades: string;
+      currentAverage: string;
+      targetAverage: string;
+      targetGrade: string;
+      minimumGradesNeeded: string;
+      calculate: string;
+      clear: string;
+      noSolution: string;
+      resultsTitle: string;
+      alreadyAchieved: string;
+      
+    }
     add: string;
     edit: string;
     form: {
@@ -720,6 +736,21 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         date: 'Date',
         grade: 'Grade',
         category: 'Category',
+      },
+      calculator: {
+        title: 'Grade Calculator',
+        selectSubject: 'Select Subject',
+        currentGrades: 'Current Grades',
+        noGrades: 'No grades recorded yet',
+        currentAverage: 'Current Average',
+        targetAverage: 'Target Average',
+        targetGrade: 'Target Grade',
+        minimumGradesNeeded: 'Minimum Grades Needed',
+        calculate: 'Calculate',
+        clear: 'Clear',
+        noSolution: 'No solution found',
+        resultsTitle: 'Results',
+        alreadyAchieved: 'You have already achieved this target average.',
       },
       add: 'Add Grade',
       edit: 'Edit Grade',
@@ -1181,6 +1212,21 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         grade: 'Nota',
         category: 'Categorie'
       },
+      calculator: {
+        title: 'Calculator de Note',
+        selectSubject: 'Selectează Materie',
+        currentGrades: 'Note curente',
+        noGrades: 'Nicio notă înregistrată încă',
+        currentAverage: 'Media curentă',
+        targetAverage: 'Media țintă',
+        targetGrade: 'Nota țintă',
+        minimumGradesNeeded: 'Numărul minim de note necesare',
+        calculate: 'Calculează',
+        clear: 'Șterge',
+        noSolution: 'Nu există soluție',
+        resultsTitle: 'Rezultate',
+        alreadyAchieved: 'Ați atins deja această medie țintă.',
+      },
       add: 'Adaugă Notă',
       edit: 'Editează Nota',
       form: {
@@ -1640,6 +1686,21 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         date: 'Дата',
         grade: 'Оценка',
         category: 'Категория',
+      },
+      calculator: {
+        title: 'Калькулятор оценок',
+        selectSubject: 'Выберите Предмет',
+        currentGrades: 'Текущие оценки',
+        noGrades: 'Нет оценок в записи',
+        currentAverage: 'Текущая Средняя Оценка',
+        targetAverage: 'Целевая Средняя Оценка',
+        targetGrade: 'Целевая Оценка',
+        minimumGradesNeeded: 'Минимальное количество оценок',
+        calculate: 'Вычислить',
+        clear: 'Очистить',
+        noSolution: 'Нет решения',
+        resultsTitle: 'Результаты',
+        alreadyAchieved: 'Вы уже достигли этой целевой средней оценки.',
       },
       add: 'Добавить оценку',
       edit: 'Редактировать оценку',
