@@ -581,7 +581,8 @@ const ErrorNotification = ({ message }: { message: string }) => (
 );
 
 /**
- * Finds the shortest combination of additional grades that will make the average close to the target.
+ * Finds a realistic combination of additional grades that will make the average close to the target.
+ * Prioritizes grades that are achievable rather than just suggesting 10s.
  * @param currentGrades Array of current grades (1-10)
  * @param targetAverage The desired average to achieve
  * @returns Array of grades to add to reach target average
@@ -602,10 +603,23 @@ const findGradesToReachAverage = (currentGrades: number[], targetAverage: number
     return [];
   }
 
-  // Initialize variables for backtracking
+  // Initialize variables for finding the best solution
   let bestSolution: number[] = [];
-  let closestAverage = currentAverage;
+  let lowestVariance = Number.MAX_VALUE;
   let closestDifference = Math.abs(targetAverage - currentAverage);
+
+  // Calculate the "reasonableness" score of a solution (lower is better)
+  const calculateReasonablenessScore = (grades: number[], avgDiff: number) => {
+    // Calculate variance as a measure of how spread out the grades are
+    const avg = grades.reduce((sum, g) => sum + g, 0) / grades.length;
+    const variance = grades.reduce((sum, g) => sum + Math.pow(g - avg, 2), 0) / grades.length;
+    
+    // Count extreme grades (1-3 and 9-10)
+    const extremeGrades = grades.filter(g => g <= 3 || g >= 9).length;
+    
+    // Penalize solutions with high variance or too many extreme grades
+    return variance + (extremeGrades * 2) + (Math.abs(avgDiff) * 5);
+  };
 
   // Recursive backtracking function
   const backtrack = (newGrades: number[], depth: number, maxDepth: number) => {
@@ -615,24 +629,52 @@ const findGradesToReachAverage = (currentGrades: number[], targetAverage: number
     const newAverage = newSum / newCount;
     const newDifference = Math.abs(targetAverage - newAverage);
 
-    // Check if this is a better solution
-    if (newDifference < closestDifference || 
-        (newDifference === closestDifference && newGrades.length < bestSolution.length)) {
-      closestDifference = newDifference;
-      closestAverage = newAverage;
-      bestSolution = [...newGrades];
+    // Check if this is a valid solution (close enough to target)
+    if (newDifference < 0.1) {
+      // Calculate reasonableness score for this solution
+      const score = calculateReasonablenessScore(newGrades, newDifference);
+      
+      // Update best solution if this one is more reasonable or closer to target
+      if (score < lowestVariance || 
+          (Math.abs(score - lowestVariance) < 0.01 && newDifference < closestDifference)) {
+        lowestVariance = score;
+        closestDifference = newDifference;
+        bestSolution = [...newGrades];
+      }
     }
 
-    // Base case: if we've reached maximum depth or found an exact match
-    if (depth >= maxDepth || newDifference < 0.01) {
+    // Base case: if we've reached maximum depth
+    if (depth >= maxDepth) {
       return;
     }
 
-    // Try adding each possible grade (1-10)
-    for (let grade = 1; grade <= 10; grade++) {
-      // Optimization: only add grades that move us in the right direction
-      const gradeEffect = (grade - newAverage) * (targetAverage > newAverage ? 1 : -1);
-      if (gradeEffect >= 0) { // This grade will move the average in the right direction
+    // Get range of grades to try based on target average
+    let gradeRange: number[];
+    
+    if (targetAverage > currentAverage) {
+      // If we need to increase average, start with grades around target and go up
+      const start = Math.max(1, Math.floor(targetAverage) - 1);
+      const end = Math.min(10, Math.ceil(targetAverage) + 3);
+      gradeRange = Array.from({length: end - start + 1}, (_, i) => start + i);
+    } else {
+      // If we need to decrease average, start with grades around target and go down
+      const start = Math.max(1, Math.floor(targetAverage) - 3);
+      const end = Math.min(10, Math.ceil(targetAverage) + 1);
+      gradeRange = Array.from({length: end - start + 1}, (_, i) => start + i);
+    }
+    
+    // Prioritize grades closer to the target average
+    gradeRange.sort((a, b) => Math.abs(a - targetAverage) - Math.abs(b - targetAverage));
+    
+    // Try adding each possible grade
+    for (const grade of gradeRange) {
+      // Check if this grade would move us in the right direction
+      const newAvgWithGrade = (newSum + grade) / (newCount + 1);
+      const newDiffWithGrade = Math.abs(targetAverage - newAvgWithGrade);
+      const currentDiff = Math.abs(targetAverage - newAverage);
+      
+      // Only add if it moves us closer to target or if we're within reasonable range
+      if (newDiffWithGrade <= currentDiff || newDiffWithGrade < 0.5) {
         newGrades.push(grade);
         backtrack(newGrades, depth + 1, maxDepth);
         newGrades.pop(); // Backtrack
@@ -640,12 +682,12 @@ const findGradesToReachAverage = (currentGrades: number[], targetAverage: number
     }
   };
 
-  // Start with trying to add 1-5 grades (reasonable limit)
+  // Try with an increasing number of grades (1-5)
   for (let maxDepth = 1; maxDepth <= 5; maxDepth++) {
     backtrack([], 0, maxDepth);
     
-    // If we found a solution that's close enough, return it
-    if (closestDifference < 0.1) {
+    // If we found a reasonable solution, return it
+    if (bestSolution.length > 0 && bestSolution.length <= maxDepth) {
       return bestSolution;
     }
   }
