@@ -310,30 +310,6 @@ type TranslationType = {
       upcoming: string;
       noSubjects: string;
     };
-    calculator: {
-      title: string;
-      selectSubjects: string;
-      setTarget: string;
-      continue: string;
-      targetType: string;
-      semester: string;
-      annual: string;
-      targetAverage: string;
-      currentAverage: string;
-      numGrades: string;
-      numGradesHelp: string;
-      subjectWeights: string;
-      equalWeights: string;
-      customWeights: string;
-      weightsHelp: string;
-      calculate: string;
-      done: string;
-      resultsSuccess: string;
-      resultsFailure: string;
-      current: string;
-      suggestedGrades: string;
-      noSuggestions: string;
-    };
   };
   recovery: {
     recoveryDay: string;
@@ -775,30 +751,6 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         noExams: 'No exams available',
         upcoming: 'Upcoming',
         noSubjects: 'No subjects available for Semester {{semester}}',
-      },
-      calculator: {
-        title: 'Grade Calculator',
-        selectSubjects: 'Select Subjects',
-        setTarget: 'Set Target Average',
-        continue: 'Continue',
-        targetType: 'Target Type',
-        semester: 'Semester',
-        annual: 'Annual',
-        targetAverage: 'Target Average',
-        currentAverage: 'Current Average',
-        numGrades: 'Number of Grades',
-        numGradesHelp: 'Enter the number of new grades you want to achieve for each subject',
-        subjectWeights: 'Subject Weights',
-        equalWeights: 'Equal Weights',
-        customWeights: 'Custom Weights',
-        weightsHelp: 'Customize the weight of each subject',
-        calculate: 'Calculate',
-        done: 'Done',
-        resultsSuccess: 'Potential grade combinations to reach the target average:',
-        resultsFailure: 'Unable to find grade combinations to reach the target average',
-        current: 'Current',
-        suggestedGrades: 'Suggested Grades',
-        noSuggestions: 'No suggestions available',
       },
     },
     recovery: {
@@ -1260,30 +1212,6 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         upcoming: 'În curând',
         noSubjects: 'Nu există materii disponibile pentru Semestrul {{semester}}',
       },
-      calculator: {
-        title: 'Calculator de Note',
-        selectSubjects: 'Selectează Materiile',
-        setTarget: 'Setează Media Țintă',
-        continue: 'Continuă',
-        targetType: 'Tipul Țintă',
-        semester: 'Semestrul',
-        annual: 'Anual',
-        targetAverage: 'Media Țintă',
-        currentAverage: 'Media Curentă',
-        numGrades: 'Numărul de Note',
-        numGradesHelp: 'Introduceți numărul de note noi pe care doriți să le obțineți pentru fiecare materie',
-        subjectWeights: 'Ponderile Materiilor',
-        equalWeights: 'Ponderi Egale',
-        customWeights: 'Ponderi Personalizate',
-        weightsHelp: 'Personalizați ponderile fiecărei materii',
-        calculate: 'Calculează',
-        done: 'Gata',
-        resultsSuccess: 'Combinări posibile de note pentru a atinge media țintă:',
-        resultsFailure: 'Nu s-au putut găsi combinații de note pentru a atinge media țintă',
-        current: 'Curent',
-        suggestedGrades: 'Note Sugerate',
-        noSuggestions: 'Nu sunt sugestii disponibile',
-      },
     },
     recovery: {
       recoveryDay: 'Zi de Recuperare',
@@ -1743,30 +1671,6 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         noExams: 'Нет доступных экзаменов',
         upcoming: 'Предстоящие',
         noSubjects: 'Нет предметов для Семестра {{semester}}',
-      },
-      calculator: {
-        title: 'Grade Calculator',
-        selectSubjects: 'Select Subjects',
-        setTarget: 'Set Target Average',
-        continue: 'Continue',
-        targetType: 'Target Type',
-        semester: 'Semester',
-        annual: 'Annual',
-        targetAverage: 'Target Average',
-        currentAverage: 'Current Average',
-        numGrades: 'Number of Grades',
-        numGradesHelp: 'Enter the number of new grades you want to achieve for each subject',
-        subjectWeights: 'Subject Weights',
-        equalWeights: 'Equal Weights',
-        customWeights: 'Custom Weights',
-        weightsHelp: 'Customize the weight of each subject',
-        calculate: 'Calculate',
-        done: 'Done',
-        resultsSuccess: 'Potential grade combinations to reach the target average:',
-        resultsFailure: 'Unable to find grade combinations to reach the target average',
-        current: 'Current',
-        suggestedGrades: 'Suggested Grades',
-        noSuggestions: 'No suggestions available',
       },
     },
     recovery: {
