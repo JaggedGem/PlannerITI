@@ -31,7 +31,7 @@ const LOGIN_DISMISSED_KEY = '@login_notification_dismissed';
 const GRAVATAR_CACHE_KEY = '@gravatar_cache';
 const USER_CREDENTIALS_KEY = 'user_credentials';
 const AUTH_VERSION_KEY = '@auth_version';
-const CURRENT_AUTH_VERSION = '2'; // Increment this when auth system changes
+const CURRENT_AUTH_VERSION = '3'; // Increment this when auth system changes
 
 // Add timeout constants for network requests
 const REQUEST_TIMEOUT = 8000; // 8 seconds timeout
@@ -159,7 +159,7 @@ class AuthService {
       if (storedVersion !== CURRENT_AUTH_VERSION) {
         // Version mismatch - need to reset auth state
         console.log('Auth version changed, resetting authentication state');
-        await this.resetAllAuthData();
+        await this.logout();
         await AsyncStorage.setItem(AUTH_VERSION_KEY, CURRENT_AUTH_VERSION);
         return true;
       }
@@ -170,32 +170,9 @@ class AuthService {
     }
   }
 
-  // Method to completely reset all auth-related data
-  private async resetAllAuthData(): Promise<void> {
-    this.token = null;
-    this.userData = null;
-    this.skippedLogin = false;
-    
-    // Clear all auth-related storage
-    try {
-      await AsyncStorage.removeItem(AUTH_TOKEN_KEY);
-      await AsyncStorage.removeItem(SKIP_LOGIN_KEY);
-      await AsyncStorage.removeItem(LOGIN_DISMISSED_KEY);
-      await AsyncStorage.removeItem(GRAVATAR_CACHE_KEY);
-      await this.clearStoredCredentials();
-      
-      DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, { 
-        isAuthenticated: false,
-        skipped: false 
-      });
-    } catch (error) {
-      console.error('Error resetting auth data:', error);
-    }
-  }
-
   // Public method to force auth reset
   async forceAuthReset(): Promise<void> {
-    await this.resetAllAuthData();
+    await this.logout();
     await AsyncStorage.setItem(AUTH_VERSION_KEY, CURRENT_AUTH_VERSION);
   }
 
