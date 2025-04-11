@@ -50,7 +50,7 @@ const INITIAL_DOWNLOAD_DONE_KEY = '@initial_settings_download_done';
 const SYNC_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
 
 // Add debounce timeout
-const SYNC_DEBOUNCE_DELAY = 2000; // 2 seconds
+const SYNC_DEBOUNCE_DELAY = 5000; // 5 seconds
 
 // Default notification settings
 const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
@@ -92,7 +92,6 @@ class SettingsService {
     if (this.initialDownloadDone) {
       // Only sync to server based on time interval, not from server
       this.syncToServerIfNeeded().catch(error => {
-        console.error('Error during settings sync to server:', error);
       });
     }
     
@@ -108,7 +107,6 @@ class SettingsService {
         this.notificationSettings = { ...DEFAULT_NOTIFICATION_SETTINGS, ...JSON.parse(savedSettings) };
       }
     } catch (error) {
-      console.error('Error loading notification settings:', error);
     }
   }
 
@@ -117,7 +115,6 @@ class SettingsService {
     try {
       await AsyncStorage.setItem(NOTIFICATION_SETTINGS_KEY, JSON.stringify(this.notificationSettings));
     } catch (error) {
-      console.error('Error saving notification settings:', error);
     }
   }
 
@@ -132,7 +129,6 @@ class SettingsService {
     await this.saveNotificationSettings();
     // Trigger a sync to the server when settings are updated
     this.syncToServer().catch(error => {
-      console.error('Error syncing settings to server after update:', error);
     });
   }
 
@@ -140,7 +136,6 @@ class SettingsService {
   triggerSync(): void {
     // Skip sync if we're currently applying server settings
     if (this.applyingServerSettings) {
-      console.log('Skipping sync to server because we are applying server settings');
       return;
     }
     
@@ -156,7 +151,6 @@ class SettingsService {
       this.syncDebounceTimeout = setTimeout(() => {
         if (this.pendingSync) {
           this.syncToServer().catch(error => {
-            console.error('Error syncing settings to server after trigger:', error);
           });
           this.pendingSync = false;
         }
@@ -191,7 +185,6 @@ class SettingsService {
       }
       return false;
     } catch (error) {
-      console.error('Error checking sync status:', error);
       return false;
     }
   }
@@ -212,22 +205,18 @@ class SettingsService {
     }
     
     try {
-      console.log('Syncing settings TO server...');
       // Upload local settings to server
       const success = await this.uploadSettings();
       
       if (success) {
-        console.log('Successfully uploaded settings to server');
         // Update last sync timestamp
         await AsyncStorage.setItem(LAST_SETTINGS_SYNC_KEY, Date.now().toString());
       } else {
-        console.log('Failed to upload settings to server');
       }
       
       this.isSyncing = false;
       return success;
     } catch (error) {
-      console.error('Error syncing settings to server:', error);
       this.isSyncing = false;
       return false;
     }
@@ -264,7 +253,6 @@ class SettingsService {
 
       return await response.json();
     } catch (error) {
-      console.error(`API request failed: ${method} ${endpoint}`, error);
       throw error;
     }
   }
@@ -277,12 +265,10 @@ class SettingsService {
 
     try {
       const settings = this.prepareSettingsForSync();
-      console.log('Uploading local settings to server:', JSON.stringify(settings, null, 2));
       
       // Get encryption password using the public method
       const encryptionPassword = await authService.getCredentialsForEncryption();
       if (!encryptionPassword) {
-        console.error('Cannot encrypt settings: encryption password not available');
         return false;
       }
       
@@ -293,10 +279,8 @@ class SettingsService {
         password: encryptionPassword
       });
       
-      console.log('Server response after uploading settings:', response);
       return true;
     } catch (error) {
-      console.error('Error uploading settings:', error);
       return false;
     }
   }
@@ -315,21 +299,17 @@ class SettingsService {
     try {
       // First, check if settings exist on server
       const dataLabels = await this.makeAuthRequest('/secure/list-encrypted-data', 'GET');
-      console.log('Available data labels from server:', dataLabels);
       
       // Data labels are objects with a data_label property, not strings
       if (!Array.isArray(dataLabels) || !dataLabels.some(item => item.data_label === SETTINGS_DATA_LABEL)) {
         // No settings found on server
-        console.log('No settings found on server, will upload local settings');
         return false;
       }
       
-      console.log('Found settings on server, attempting to decrypt');
       
       // Get encryption password for decryption
       const encryptionPassword = await authService.getCredentialsForEncryption();
       if (!encryptionPassword) {
-        console.error('Cannot decrypt settings: encryption password not available');
         return false;
       }
       
@@ -339,16 +319,13 @@ class SettingsService {
         password: encryptionPassword
       });
       
-      console.log('Decrypt response from server:', response);
       
       if (!response.plaintext) {
-        console.error('No plaintext found in server response');
         return false;
       }
       
       // Parse the downloaded settings
       const settings: SyncableSettings = JSON.parse(response.plaintext);
-      console.log('Downloaded settings from server:', JSON.stringify(settings, null, 2));
       
       // Set the flag to prevent triggering sync while applying server settings
       this.applyingServerSettings = true;
@@ -356,14 +333,10 @@ class SettingsService {
       try {
         // Always apply server settings over local settings
         if (settings.userSettings) {
-          console.log('Applying server user settings:', JSON.stringify(settings.userSettings, null, 2));
-          console.log('Replacing local settings:', JSON.stringify(scheduleService.getSettings(), null, 2));
           scheduleService.updateSettings(settings.userSettings);
         }
         
         if (settings.notificationSettings) {
-          console.log('Applying server notification settings:', JSON.stringify(settings.notificationSettings, null, 2));
-          console.log('Replacing local notification settings:', JSON.stringify(this.notificationSettings, null, 2));
           this.notificationSettings = { ...DEFAULT_NOTIFICATION_SETTINGS, ...settings.notificationSettings };
           await this.saveNotificationSettings();
         }
@@ -380,7 +353,6 @@ class SettingsService {
     } catch (error) {
       // Make sure the flag is reset even on error
       this.applyingServerSettings = false;
-      console.error('Error downloading settings:', error);
       return false;
     }
   }
@@ -395,7 +367,6 @@ class SettingsService {
       await this.makeAuthRequest(`/secure/delete-encrypted-data/${SETTINGS_DATA_LABEL}`, 'DELETE');
       return true;
     } catch (error) {
-      console.error('Error deleting remote settings:', error);
       return false;
     }
   }
@@ -418,7 +389,6 @@ class SettingsService {
       // Check if we have the encryption password
       const encryptionPassword = await authService.getCredentialsForEncryption();
       if (!encryptionPassword) {
-        console.error('Cannot force push settings: encryption password not available');
         return false;
       }
       
@@ -432,7 +402,6 @@ class SettingsService {
       
       return success;
     } catch (error) {
-      console.error('Error force pushing settings:', error);
       return false;
     }
   }
@@ -448,7 +417,6 @@ class SettingsService {
     this.authStateListener = DeviceEventEmitter.addListener('auth_state_changed', (event) => {
       // Only react to fresh login events - this is the only case where we need to sync from server
       if (event.isAuthenticated && !event.skipped && event.freshLogin) {
-        console.log('Fresh login detected, syncing settings from server');
         this.syncAfterLogin();
       }
       // Don't log or process any other auth state changes
@@ -478,20 +446,17 @@ class SettingsService {
     this.pendingSync = false;
     
     try {
-      console.log('Syncing settings after login...');
       // First try to download settings from server - this should happen ONLY on login
       const downloadSuccess = await this.downloadSettings();
       
       // If no settings found on server, then upload local settings
       if (!downloadSuccess) {
-        console.log('No settings found on server, uploading local settings');
         await this.uploadSettings();
         
         // Mark initial download as done even if we uploaded instead
         this.initialDownloadDone = true;
         await AsyncStorage.setItem(INITIAL_DOWNLOAD_DONE_KEY, 'true');
       } else {
-        console.log('Successfully applied server settings to local device after login');
       }
       
       // Update last sync timestamp
@@ -500,7 +465,6 @@ class SettingsService {
       this.isSyncing = false;
       return true;
     } catch (error) {
-      console.error('Error syncing settings after login:', error);
       this.isSyncing = false;
       return false;
     }
