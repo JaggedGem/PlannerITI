@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform, NativeModules } from 'react-native';
 import { format } from 'date-fns';
+// Import settingsService using dynamic import to avoid circular dependency
+// Will set it at the end of the file
 
 export interface Period {
   _id: string;
@@ -986,12 +988,12 @@ export const scheduleService = {
   addCustomPeriod(period: Omit<CustomPeriod, '_id'>) {
     const newPeriod = {
       ...period,
-      _id: `custom_${Date.now()}`
+      _id: Date.now().toString(),
     };
     this.settings.customPeriods.push(newPeriod);
     this.saveSettings();
     this.notifyListeners();
-    return newPeriod;
+    return newPeriod._id;
   },
 
   updateCustomPeriod(periodId: string, updates: Partial<CustomPeriod>) {
@@ -1009,16 +1011,11 @@ export const scheduleService = {
   },
 
   deleteCustomPeriod(periodId: string) {
-    const index = this.settings.customPeriods.findIndex(p => p._id === periodId);
-    if (index !== -1) {
-      this.settings.customPeriods.splice(index, 1);
-      this.saveSettings();
-      this.notifyListeners();
-      return true;
-    }
-    return false;
+    this.settings.customPeriods = this.settings.customPeriods.filter(p => p._id !== periodId);
+    this.saveSettings();
+    this.notifyListeners();
   },
-
+  
   // Reset settings to defaults
   resetSettings() {
     this.settings = {
@@ -1116,3 +1113,51 @@ export const scheduleService = {
   // Initial sync of recovery days
   scheduleService.syncRecoveryDays();
 })();
+
+// Import settingsService here after scheduleService is defined to avoid circular dependency
+import settingsService from './settingsService';
+
+// Use settingsService inside methods that update settings
+const triggerSettingsSync = () => {
+  // Skip triggering sync if we're applying server settings
+  if (settingsService && !settingsService.isApplyingServerSettings()) {
+    settingsService.triggerSync();
+  }
+};
+
+// Update methods that modify settings to use triggerSettingsSync
+const originalUpdateSettings = scheduleService.updateSettings;
+scheduleService.updateSettings = function(newSettings: Partial<UserSettings>) {
+  originalUpdateSettings.call(this, newSettings);
+  triggerSettingsSync();
+};
+
+const originalAddCustomPeriod = scheduleService.addCustomPeriod;
+scheduleService.addCustomPeriod = function(period: Omit<CustomPeriod, '_id'>) {
+  const result = originalAddCustomPeriod.call(this, period);
+  triggerSettingsSync();
+  return result;
+};
+
+const originalUpdateCustomPeriod = scheduleService.updateCustomPeriod;
+scheduleService.updateCustomPeriod = function(periodId: string, updates: Partial<CustomPeriod>) {
+  const result = originalUpdateCustomPeriod.call(this, periodId, updates);
+  triggerSettingsSync();
+  return result;
+};
+
+const originalDeleteCustomPeriod = scheduleService.deleteCustomPeriod;
+scheduleService.deleteCustomPeriod = function(periodId: string) {
+  const result = originalDeleteCustomPeriod.call(this, periodId);
+  triggerSettingsSync();
+  return result;
+};
+
+const originalResetSettings = scheduleService.resetSettings;
+scheduleService.resetSettings = function() {
+  originalResetSettings.call(this);
+  triggerSettingsSync();
+};
+
+// Set scheduleService reference in settingsService
+settingsService.setScheduleService(scheduleService);
