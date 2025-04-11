@@ -467,7 +467,7 @@ export default function WeekView() {
       setScheduleData(data);
       
       // Process recovery days for this week
-      const recoveryDays = data.recoveryDays || [];
+      const recoveryDays = Array.isArray(data.recoveryDays) ? data.recoveryDays : [];
       
       // Get weekend recovery days for current week
       const weekendRecoveryDays = recoveryDays.filter(rd => {
@@ -516,7 +516,7 @@ export default function WeekView() {
   // Schedule update function wrapped in useCallback
   const updateWeekSchedule = useCallback(async () => {
     if (scheduleData) {
-      const recoveryDays = scheduleData.recoveryDays || [];
+      const recoveryDays = Array.isArray(scheduleData.recoveryDays) ? scheduleData.recoveryDays : [];
       const weekendRecoveryDays = recoveryDays.filter(rd => {
         const rdDate = new Date(rd.date);
         const startOfWeek = new Date(weekStart);
@@ -614,7 +614,7 @@ export default function WeekView() {
 
   // Calculate day dates for the week, including weekend recovery days if they exist
   const normalDayCount = 5; // Monday-Friday
-  const recoveryDays = scheduleData?.recoveryDays || [];
+  const recoveryDays = Array.isArray(scheduleData?.recoveryDays) ? scheduleData.recoveryDays : [];
   const weekendRecoveryDays = recoveryDays.filter(rd => {
     const rdDate = new Date(rd.date);
     const startOfWeek = new Date(weekStart);
@@ -724,7 +724,7 @@ export default function WeekView() {
           const data = await scheduleService.getClassSchedule(settings.selectedGroupId);
           
           // Process recovery days for the new week
-          const recoveryDays = data.recoveryDays || [];
+          const recoveryDays = Array.isArray(data.recoveryDays) ? data.recoveryDays : [];
           const weekendRecoveryDays = recoveryDays.filter(rd => {
             const rdDate = new Date(rd.date);
             const startOfWeek = new Date(newWeekStart);
@@ -802,7 +802,7 @@ export default function WeekView() {
           const currentWeekStart = getWeekStart(now);
           
           // Process recovery days for current week
-          const recoveryDays = data.recoveryDays || [];
+          const recoveryDays = Array.isArray(data.recoveryDays) ? data.recoveryDays : [];
           const weekendRecoveryDays = recoveryDays.filter(rd => {
             const rdDate = new Date(rd.date);
             const startOfWeek = new Date(currentWeekStart);

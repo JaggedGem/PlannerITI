@@ -751,6 +751,11 @@ export const scheduleService = {
   isRecoveryDay(date: Date): RecoveryDay | null {
     const dateString = date.toISOString().split('T')[0]; // Format as YYYY-MM-DD
     
+    // Ensure cachedRecoveryDays exists before calling find
+    if (!this.cachedRecoveryDays || !Array.isArray(this.cachedRecoveryDays)) {
+      return null;
+    }
+    
     // Find a matching recovery day that is active and applies to the current group
     const recoveryDay = this.cachedRecoveryDays.find(day => 
       day.date === dateString && 
