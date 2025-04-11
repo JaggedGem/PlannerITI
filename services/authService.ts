@@ -297,7 +297,8 @@ class AuthService {
         await this.loadUserData();
         DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, { 
           isAuthenticated: true,
-          skipped: false 
+          skipped: false,
+          freshLogin: true
         });
       }
 
@@ -392,15 +393,23 @@ class AuthService {
     this.userData = null;
     this.skippedLogin = false;
     try {
+      // Clear auth tokens and credentials
       await AsyncStorage.removeItem(AUTH_TOKEN_KEY);
       await AsyncStorage.removeItem(SKIP_LOGIN_KEY);
       await AsyncStorage.removeItem(LOGIN_DISMISSED_KEY);
       await this.clearStoredCredentials();
+      
+      // Reset settings sync state keys directly
+      await AsyncStorage.removeItem('@initial_settings_download_done');
+      await AsyncStorage.removeItem('@last_settings_sync');
+      
       DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, { 
         isAuthenticated: false,
-        skipped: false 
+        skipped: false,
+        freshLogin: false
       });
     } catch (error) {
+      console.error('Error during logout:', error);
     }
   }
 
@@ -423,7 +432,8 @@ class AuthService {
         // Emit auth state with skipped = true
         DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, { 
           isAuthenticated: false,
-          skipped: true 
+          skipped: true,
+          freshLogin: false // Not a fresh login
         });
         this.isLoading = false;
         return null;
@@ -453,7 +463,8 @@ class AuthService {
       this.userData = userData;
       DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, { 
         isAuthenticated: true,
-        skipped: false 
+        skipped: false,
+        freshLogin: false // Not a fresh login, just loading existing auth
       });
       this.isLoading = false;
       return userData;
@@ -482,6 +493,20 @@ class AuthService {
 
   isLoadingUserData(): boolean {
     return this.isLoading;
+  }
+
+  // Add a public method to get stored credentials for encryption
+  async getCredentialsForEncryption(): Promise<string | null> {
+    try {
+      const credentials = await this.getStoredCredentials();
+      if (!credentials) {
+        return null;
+      }
+      return credentials.password;
+    } catch (error) {
+      console.error('Error getting credentials for encryption:', error);
+      return null;
+    }
   }
 }
 
