@@ -1,4 +1,4 @@
-import { StyleSheet, View, Text, TouchableOpacity, FlatList, RefreshControl, Modal, TextInput, Platform, KeyboardAvoidingView, ActivityIndicator, DeviceEventEmitter, ScrollView, Keyboard } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, FlatList, RefreshControl, Modal, TextInput, Platform, KeyboardAvoidingView, ActivityIndicator, DeviceEventEmitter, ScrollView, Keyboard, Switch, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -16,6 +16,8 @@ import {
   GradeSubject,
   Exam
 } from '@/services/gradesService';
+import idnpService from '@/services/idnpService';
+import authService from '@/services/authService';
 
 // Types for local grades
 type GradeCategory = 'exam' | 'test' | 'homework' | 'project' | 'other';
@@ -76,7 +78,23 @@ const IDNPScreen = ({ onSave, errorMessage, isSubmitting }: {
 }) => {
   const [idnp, setIdnp] = useState('');
   const [error, setError] = useState(errorMessage || '');
+  const [syncToServer, setSyncToServer] = useState(false);
   const { t } = useTranslation();
+
+  // Load sync preference when component mounts
+  useEffect(() => {
+    const loadSyncPreference = async () => {
+      try {
+        // Use the new idnpService
+        const syncEnabled = await idnpService.isSyncEnabled();
+        setSyncToServer(syncEnabled);
+      } catch (error) {
+        // Silent error handling
+      }
+    };
+    
+    loadSyncPreference();
+  }, []);
 
   useEffect(() => {
     if (errorMessage) {
@@ -95,7 +113,34 @@ const IDNPScreen = ({ onSave, errorMessage, isSubmitting }: {
     setError('');
     
     // Let the parent component handle the API call
-    onSave(idnp, true);
+    onSave(idnp, syncToServer);
+  };
+
+  // Toggle sync preference and update in the service
+  const handleToggleSync = async (value: boolean) => {
+    console.log('[IDNPScreen] Toggle sync to:', value);
+    setSyncToServer(value);
+    
+    // Only save if user is authenticated
+    const isAuth = await authService.isAuthenticated();
+    console.log('[IDNPScreen] User authenticated for sync toggle:', isAuth);
+    
+    if (isAuth) {
+      console.log('[IDNPScreen] Updating sync setting in idnpService');
+      const result = await idnpService.setSyncEnabled(value);
+      console.log('[IDNPScreen] idnpService.setSyncEnabled result:', result);
+      
+      // Provide user feedback on success/failure
+      if (result) {
+        console.log('[IDNPScreen] Sync setting updated successfully');
+        Haptics.selectionAsync();
+      } else {
+        console.error('[IDNPScreen] Failed to update sync setting');
+        Alert.alert('Error', 'Failed to update sync setting');
+      }
+    } else {
+      console.log('[IDNPScreen] Not authenticated, only updating UI state');
+    }
   };
 
   return (
@@ -124,6 +169,22 @@ const IDNPScreen = ({ onSave, errorMessage, isSubmitting }: {
         />
         
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+        {/* Add sync toggle only if user is logged in */}
+        {authService.isAuthenticated() && (
+          <View style={styles.syncToggleContainer}>
+            <Text style={styles.syncToggleLabel}>
+              Save to account (encrypted)
+            </Text>
+            <Switch
+              value={syncToServer}
+              onValueChange={handleToggleSync}
+              trackColor={{ false: '#232433', true: '#2C3DCD' }}
+              thumbColor={syncToServer ? '#FFFFFF' : '#FFFFFF'}
+              disabled={isSubmitting}
+            />
+          </View>
+        )}
 
         <Text style={styles.disclaimerText}>
           {t('grades').idnp.disclaimer}
@@ -1514,30 +1575,48 @@ export default function Grades() {
   useEffect(() => {
     // Load stored IDNP and cached grades data
     const loadStoredData = async () => {
+      console.log('[Grades] Starting to load stored data');
       try {
-        const savedIdnp = await AsyncStorage.getItem(IDNP_KEY);
+        // Use idnpService to get IDNP
+        console.log('[Grades] Requesting IDNP from idnpService');
+        const savedIdnp = await idnpService.getIdnp();
+        console.log('[Grades] idnpService returned IDNP:', savedIdnp ? 'exists' : 'not found');
         
         if (savedIdnp) {
+          console.log('[Grades] Setting IDNP in state');
           setIdnp(savedIdnp);
           
           // Try to load cached grades data
+          console.log('[Grades] Checking for cached grades data');
           const gradesDataJson = await AsyncStorage.getItem(GRADES_DATA_KEY);
           if (gradesDataJson) {
+            console.log('[Grades] Found cached grades data, parsing');
             const gradesData: StoredGradesData = JSON.parse(gradesDataJson);
             setResponseHtml(gradesData.html);
             setLastUpdated(gradesData.timestamp);
+            console.log('[Grades] Cached data loaded, timestamp:', new Date(gradesData.timestamp).toISOString());
+          } else {
+            console.log('[Grades] No cached grades data found');
           }
           
           // Load last updated timestamp
+          console.log('[Grades] Checking for last updated timestamp');
           const timestamp = await AsyncStorage.getItem(GRADES_TIMESTAMP_KEY);
           if (timestamp) {
-            setLastUpdated(parseInt(timestamp, 10));
+            const parsedTime = parseInt(timestamp, 10);
+            setLastUpdated(parsedTime);
+            console.log('[Grades] Last updated timestamp loaded:', new Date(parsedTime).toISOString());
+          } else {
+            console.log('[Grades] No last updated timestamp found');
           }
+        } else {
+          console.log('[Grades] No saved IDNP found, user will need to enter it');
         }
       } catch (error) {
-        // Silently handle error
+        console.error('[Grades] Error loading stored data:', error);
       } finally {
         setIsLoading(false);
+        console.log('[Grades] Finished loading stored data');
       }
     };
 
@@ -1559,30 +1638,40 @@ export default function Grades() {
 
   const fetchStudentData = useCallback(async (studentIdnp: string) => {
     // Prevent duplicate requests using ref
-    if (fetchingRef.current) return;
+    if (fetchingRef.current) {
+      console.log('[Grades] fetchStudentData skipped - already fetching');
+      return;
+    }
     fetchingRef.current = true;
+    console.log('[Grades] Starting to fetch student data with IDNP:', studentIdnp.substring(0, 4) + '********');
     
     setIsFetching(true);
     setErrorMessage(null);
     
     try {
       // Fetch student info - this handles both login and info retrieval
+      console.log('[Grades] Calling gradesService.fetchStudentInfo');
       const htmlResponse = await fetchStudentInfo(studentIdnp);
       
       if (!htmlResponse || htmlResponse.trim() === '') {
+        console.error('[Grades] Empty response received from API');
         throw new Error('Empty response received');
       }
+      
+      console.log('[Grades] Successfully received HTML response from API');
       
       // If we got here, the fetch was successful
       setResponseHtml(htmlResponse);
 
       // Save the IDNP since it was successful
       await AsyncStorage.setItem(IDNP_KEY, studentIdnp);
+      console.log('[Grades] IDNP saved to local storage');
       
       // Save the timestamp of the fetch
       const timestamp = Date.now();
       setLastUpdated(timestamp);
       await AsyncStorage.setItem(GRADES_TIMESTAMP_KEY, timestamp.toString());
+      console.log('[Grades] Updated timestamp saved:', new Date(timestamp).toISOString());
       
       // Store the grades HTML and timestamp for offline access
       const gradesData: StoredGradesData = {
@@ -1590,21 +1679,27 @@ export default function Grades() {
         timestamp: timestamp
       };
       await AsyncStorage.setItem(GRADES_DATA_KEY, JSON.stringify(gradesData));
+      console.log('[Grades] Grades data stored for offline access');
       
       // Notify other components of the IDNP update
       DeviceEventEmitter.emit(IDNP_UPDATE_EVENT, studentIdnp);
+      console.log('[Grades] Emitted IDNP_UPDATE_EVENT');
       
       // Show success notification
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       
     } catch (error) {
+      console.error('[Grades] Error fetching student data:', error);
+      
       // If this was a fresh login attempt, clear the IDNP
       if (!responseHtml) {
+        console.log('[Grades] Fresh attempt failed, clearing local IDNP');
         await AsyncStorage.removeItem(IDNP_KEY);
         setIdnp(null);
         setErrorMessage(t('grades').networkError);
       } else {
         // If we have cached data, just show an error toast but keep the cached data
+        console.log('[Grades] Using cached data, showing error message');
         setErrorMessage(`${t('grades').networkErrorCache} ${new Date(lastUpdated || 0).toLocaleDateString()}`);
         
         // Error notification
@@ -1618,17 +1713,29 @@ export default function Grades() {
     } finally {
       setIsFetching(false);
       fetchingRef.current = false;
+      console.log('[Grades] Fetch completed, reset fetching flags');
     }
   }, [responseHtml, lastUpdated]);
 
-  const handleSaveIdnp = useCallback((newIdnp: string, shouldSave: boolean) => {
+  const handleSaveIdnp = useCallback(async (newIdnp: string, shouldSync: boolean) => {
     // Don't proceed if already fetching
-    if (fetchingRef.current) return;
+    if (fetchingRef.current) {
+      console.log('[Grades] Save IDNP skipped - fetch already in progress');
+      return;
+    }
+    
+    console.log('[Grades] Saving IDNP, shouldSync:', shouldSync);
     
     // Set the IDNP first to show loading screen
     setIdnp(newIdnp);
     
+    // Save to idnpService which will handle local storage and syncing if enabled
+    console.log('[Grades] Calling idnpService.setIdnp');
+    const saveResult = await idnpService.setIdnp(newIdnp, shouldSync);
+    console.log('[Grades] idnpService.setIdnp result:', saveResult);
+    
     // Then fetch the data
+    console.log('[Grades] Proceeding to fetch student data with the IDNP');
     fetchStudentData(newIdnp);
   }, [fetchStudentData]);
 
@@ -2552,5 +2659,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#232433',
     marginHorizontal: 5,
     alignSelf: 'center',
+  },
+  syncToggleContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  syncToggleLabel: {
+    color: 'white',
+    fontSize: 16,
   },
 });
