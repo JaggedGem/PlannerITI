@@ -9,7 +9,6 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useTranslation } from '@/hooks/useTranslation';
-import { useAuthContext } from '@/components/auth/AuthContext';
 
 const LOGIN_DISMISSED_KEY = '@login_notification_dismissed';
 
@@ -24,45 +23,13 @@ export default function LoginNotification() {
   const accentColor = useThemeColor({}, 'tint');
   const darkMode = useThemeColor({}, 'background') === '#1a1b26';
   const { t } = useTranslation();
-  const { isAuthenticated } = useAuthContext();
 
   useEffect(() => {
     checkDismissedStatus();
   }, []);
 
-  // Add effect to hide notification when user becomes authenticated
-  useEffect(() => {
-    if (isAuthenticated && isVisible) {
-      // Hide the notification if user is authenticated
-      Animated.parallel([
-        Animated.timing(slideAnim, {
-          toValue: -100,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacityAnim, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-        Animated.spring(scaleAnim, {
-          toValue: 0.95,
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        setIsVisible(false);
-        setShowOverlay(false);
-      });
-    }
-  }, [isAuthenticated, isVisible]);
-
   const checkDismissedStatus = async () => {
     try {
-      // Don't show notification if user is already authenticated
-      if (isAuthenticated) {
-        return;
-      }
-      
       const dismissed = await AsyncStorage.getItem(LOGIN_DISMISSED_KEY);
       if (dismissed !== 'true') {
         setIsVisible(true);
