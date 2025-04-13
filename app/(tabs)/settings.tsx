@@ -27,12 +27,13 @@ import { StorageViewer } from '../../components/StorageViewer';
 import * as Notifications from 'expo-notifications';
 import { initializeNotifications } from '../../utils/notificationUtils';
 
+// Store keys
 const IDNP_KEY = '@planner_idnp';
-const IDNP_UPDATE_EVENT = 'idnp_updated';
-const AUTH_STATE_CHANGE_EVENT = 'auth_state_changed';
 const SKIP_LOGIN_KEY = '@planner_skip_login';
-const USER_CACHE_KEY = '@planner_user_cache';
+const AUTH_STATE_CHANGE_EVENT = 'auth_state_changed';
+const IDNP_UPDATE_EVENT = 'IDNP_UPDATE';
 const AUTH_TOKEN_KEY = '@auth_token';  // Adding this constant
+const IDNP_SYNC_KEY = '@planner_idnp_sync';
 
 // Import CACHE_KEYS from scheduleService
 // We need to access this directly from scheduleService to use the same keys
@@ -407,20 +408,22 @@ const CustomToggle = ({
   onValueChange, 
   activeColor = '#2C3DCD',
   inactiveColor = '#232433',
-  thumbColor = '#ffffff'
+  thumbColor = '#ffffff',
+  disabled = false
 }: { 
   value: boolean;
   onValueChange: (value: boolean) => void;
   activeColor?: string;
   inactiveColor?: string;
   thumbColor?: string;
+  disabled?: boolean;
 }) => {
   const translateX = useRef(new Animated.Value(value ? 22 : 2)).current;
   const backgroundColorAnim = useRef(new Animated.Value(value ? 1 : 0)).current;
   
   const backgroundColor = backgroundColorAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [inactiveColor, activeColor]
+    outputRange: [disabled ? '#3A3A3A' : inactiveColor, disabled ? '#6B7DB3' : activeColor]
   });
 
   useEffect(() => {
@@ -440,24 +443,26 @@ const CustomToggle = ({
   }, [value]);
 
   const toggleSwitch = () => {
+    if (disabled) return;
+    
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onValueChange(!value);
   };
 
   return (
     <TouchableOpacity 
-      activeOpacity={0.8} 
+      activeOpacity={disabled ? 1 : 0.8} 
       onPress={toggleSwitch}
     >
       <Animated.View style={[
         styles.toggleContainer,
-        { backgroundColor }
+        { backgroundColor, opacity: disabled ? 0.6 : 1 }
       ]}>
         <Animated.View style={[
           styles.toggleThumb,
-          { transform: [{ translateX }] }
+          { transform: [{ translateX }], backgroundColor: disabled ? '#CCCCCC' : thumbColor }
         ]}>
-          {value && (
+          {value && !disabled && (
             <MaterialIcons name="check" size={14} color={activeColor} style={styles.toggleIcon} />
           )}
         </Animated.View>
@@ -513,6 +518,7 @@ export default function Settings() {
   const [tempNotificationTime, setTempNotificationTime] = useState(new Date());
   const [storageModalVisible, setStorageModalVisible] = useState(false);
   const [storageItems, setStorageItems] = useState<[string, string | null][]>([]);
+  const [syncIdnp, setSyncIdnp] = useState<boolean>(true);
 
   // Add useEffect to load IDNP and listen for updates
   useEffect(() => {
@@ -520,8 +526,10 @@ export default function Settings() {
       try {
         const idnp = await AsyncStorage.getItem(IDNP_KEY);
         const hasSkipped = await AsyncStorage.getItem(SKIP_LOGIN_KEY);
+        const syncSetting = await AsyncStorage.getItem(IDNP_SYNC_KEY);
         setSavedIdnp(idnp);
         setSkipLogin(hasSkipped === 'true');
+        setSyncIdnp(syncSetting !== 'false'); // Default to true if not set
       } catch (error) {
         // Silent error handling
       }
@@ -608,10 +616,20 @@ export default function Settings() {
   // Handle IDNP confirmation
   const handleConfirmClearIdnp = useCallback(async () => {
     try {
+      // Remove local IDNP
       await AsyncStorage.removeItem(IDNP_KEY);
       setSavedIdnp(null);
+      
       // Emit null to notify that IDNP has been cleared
       DeviceEventEmitter.emit(IDNP_UPDATE_EVENT, null);
+      
+      // Also delete from server if sync is enabled (placeholder for future implementation)
+      if (syncIdnp) {
+        // Placeholder for API call to delete IDNP from server
+        // Example: await apiService.deleteIdnp();
+        console.log('IDNP cleared - server deletion would happen here');
+      }
+      
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setShowConfirmDialog(false);
       
@@ -620,7 +638,7 @@ export default function Settings() {
     } catch (error) {
       // Silent error handling
     }
-  }, [router]);
+  }, [router, syncIdnp]);
 
   const handleDeletePeriod = useCallback((periodId: string) => {
     setPeriodToDelete(periodId);
@@ -984,20 +1002,8 @@ export default function Settings() {
   };
 
   // Function to render the account section based on authentication state
-  const renderAccountSection = () => {
-    const [gravatarProfile, setGravatarProfile] = useState<{ display_name?: string; avatar_url?: string } | null>(null);
-  
-    // Load Gravatar profile when user data changes
-    useEffect(() => {
-      const loadGravatarProfile = async () => {
-        if (user?.email) {
-          const profile = await authService.getGravatarProfile(user.email);
-          setGravatarProfile(profile);
-        }
-      };
-      loadGravatarProfile();
-    }, [user]);
-  
+  const renderAccountSection = useCallback(() => {
+    // Use MemoizedGravatarProfile component instead of creating state inside render function
     if (!isAuthenticated) {
       return (
         <View style={styles.section}>
@@ -1013,47 +1019,68 @@ export default function Settings() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>{t('settings').account.title}</Text>
         <View style={styles.accountInfo}>
-          <TouchableOpacity 
-            style={styles.accountAvatar}
-            onPress={() => Linking.openURL('https://gravatar.com')}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            {gravatarProfile?.avatar_url ? (
-              <Image 
-                source={{ uri: gravatarProfile.avatar_url }} 
-                style={styles.avatarImage}
-                defaultSource={require('../../assets/images/default-avatar.jpg')}
-              />
-            ) : (
-              <Text style={styles.avatarText}>
-                {user?.email.charAt(0).toUpperCase()}
-              </Text>
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.accountDetails}
-            onPress={() => setShowAccountActionSheet(true)}
-            activeOpacity={0.7}
-          >
-            <View style={styles.accountDetailsContent}>
-              <Text style={styles.accountEmail} numberOfLines={1}>
-                {gravatarProfile?.display_name || user?.email}
-              </Text>
-              {!user?.is_verified && (
-                <View style={styles.verificationBadge}>
-                  <MaterialIcons name="warning" size={14} color="#FFB020" />
-                  <Text style={styles.verificationText}>
-                    {t('settings').account.notVerified}
-                  </Text>
-                </View>
-              )}
-            </View>
-            <MaterialIcons name="chevron-right" size={24} color="#8A8A8D" />
-          </TouchableOpacity>
+          <MemoizedGravatarProfile />
         </View>
       </View>
     );
-  };
+  }, [isAuthenticated, router, t]);
+  
+  // Separate component for Gravatar profile to handle its own state
+  const MemoizedGravatarProfile = memo(() => {
+    const [gravatarProfile, setGravatarProfile] = useState<{ display_name?: string; avatar_url?: string } | null>(null);
+    
+    useEffect(() => {
+      const loadGravatarProfile = async () => {
+        if (user?.email) {
+          const profile = await authService.getGravatarProfile(user.email);
+          setGravatarProfile(profile);
+        }
+      };
+      loadGravatarProfile();
+    }, []);
+    
+    return (
+      <>
+        <TouchableOpacity 
+          style={styles.accountAvatar}
+          onPress={() => Linking.openURL('https://gravatar.com')}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          {gravatarProfile?.avatar_url ? (
+            <Image 
+              source={{ uri: gravatarProfile.avatar_url }} 
+              style={styles.avatarImage}
+              defaultSource={require('../../assets/images/default-avatar.jpg')}
+            />
+          ) : (
+            <Text style={styles.avatarText}>
+              {user?.email.charAt(0).toUpperCase()}
+            </Text>
+          )}
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={styles.accountDetails}
+          onPress={() => setShowAccountActionSheet(true)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.accountDetailsContent}>
+            <Text style={styles.accountEmail} numberOfLines={1}>
+              {gravatarProfile?.display_name || user?.email}
+            </Text>
+            {!user?.is_verified && (
+              <View style={styles.verificationBadge}>
+                <MaterialIcons name="warning" size={14} color="#FFB020" />
+                <Text style={styles.verificationText}>
+                  {t('settings').account.notVerified}
+                </Text>
+              </View>
+            )}
+          </View>
+          <MaterialIcons name="chevron-right" size={24} color="#8A8A8D" />
+        </TouchableOpacity>
+      </>
+    );
+  });
 
   // Function to render the developer section
   const renderDeveloperSection = () => {
@@ -1595,23 +1622,115 @@ export default function Settings() {
     }
   }, [notificationSettings]);
 
+  // Handle IDNP sync toggle
+  const handleIdnpSyncToggle = useCallback(async (value: boolean) => {
+    try {
+      // Check if user is authenticated before proceeding
+      if (!isAuthenticated) {
+        // If not authenticated, prompt to sign in
+        router.push('/auth');
+        return;
+      }
+      
+      setSyncIdnp(value);
+      await AsyncStorage.setItem(IDNP_SYNC_KEY, value ? 'true' : 'false');
+      
+      // If sync is disabled, delete IDNP from server (placeholder for future implementation)
+      if (!value && savedIdnp) {
+        // Placeholder for API call to delete IDNP from server
+        // Example: await apiService.deleteIdnp();
+        console.log('IDNP sync disabled - server deletion would happen here');
+      }
+      
+      // If sync is enabled and we have an IDNP, sync it to server (placeholder)
+      if (value && savedIdnp) {
+        // Placeholder for API call to sync IDNP to server
+        // Example: await apiService.syncIdnp(savedIdnp);
+        console.log('IDNP sync enabled - server upload would happen here');
+      }
+      
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch (error) {
+      console.error('Error toggling IDNP sync:', error);
+    }
+  }, [savedIdnp, isAuthenticated, router]);
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Account Section */}
         {renderAccountSection()}
 
-        {/* Add IDNP section before Language Selection */}
+        {/* Add IDNP Sync Settings - right after account section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t('settings').idnp.syncTitle}</Text>
+          
+          <View style={styles.elevatedContainer}>
+            <View style={styles.syncHeader}>
+              <View style={styles.syncIconContainer}>
+                <MaterialIcons name="security" size={22} color="#FFFFFF" />
+              </View>
+              <View style={styles.syncContent}>
+                <Text style={styles.syncLabel}>{t('settings').idnp.syncToggle}</Text>
+                <CustomToggle
+                  value={isAuthenticated && syncIdnp}
+                  onValueChange={handleIdnpSyncToggle}
+                  activeColor="#2C3DCD"
+                  disabled={!isAuthenticated}
+                />
+              </View>
+            </View>
+            
+            {!isAuthenticated ? (
+              <View style={styles.loginPromptContainer}>
+                <View style={styles.loginPromptContent}>
+                  <MaterialIcons name="info-outline" size={20} color="#FFB020" style={{marginRight: 8}} />
+                  <Text style={styles.loginPromptText}>
+                    {t('settings').idnp.loginRequired}
+                  </Text>
+                </View>
+                <TouchableOpacity 
+                  style={styles.loginButton}
+                  onPress={() => router.push('/auth')}
+                >
+                  <Text style={styles.loginButtonText}>{t('settings').account.signIn}</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <Text style={styles.infoText}>
+                {syncIdnp 
+                  ? t('settings').idnp.syncEnabledInfo 
+                  : t('settings').idnp.syncDisabledInfo}
+              </Text>
+            )}
+            
+            {isAuthenticated && syncIdnp && (
+              <View style={styles.syncStatusIndicator}>
+                <MaterialIcons name="check-circle" size={16} color="#4CAF50" style={{marginRight: 6}} />
+                <Text style={styles.syncStatusText}>
+                  {savedIdnp ? t('settings').idnp.syncedStatus : t('settings').idnp.noIdnpSaved}
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* Add IDNP management section when IDNP is saved */}
         {savedIdnp && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('settings').idnp.title}</Text>
-            <TouchableOpacity
-              style={styles.clearIdnpButton}
-              onPress={handleClearIdnp}
-            >
-              <MaterialIcons name="delete-outline" size={24} color="#FF6B6B" />
-              <Text style={styles.clearIdnpText}>{t('settings').idnp.clearButton}</Text>
-            </TouchableOpacity>
+            <View style={styles.idnpInfo}>
+              <Text style={styles.idnpValue}>
+                {savedIdnp.substring(0, 4) + '••••••' + savedIdnp.substring(10)}
+              </Text>
+              <TouchableOpacity
+                style={styles.clearIdnpButton}
+                onPress={handleClearIdnp}
+              >
+                <MaterialIcons name="delete-outline" size={24} color="#FF6B6B" />
+                <Text style={styles.clearIdnpText}>{t('settings').idnp.clearButton}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
@@ -1645,52 +1764,6 @@ export default function Settings() {
             </View>
           </TouchableOpacity>
         </View>
-
-        {/* Language Selection Modal */}
-        <Modal
-          visible={showLanguageModal}
-          transparent={true}
-          animationType="slide"
-          onRequestClose={() => setShowLanguageModal(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>{t('settings').language}</Text>
-                <TouchableOpacity onPress={() => setShowLanguageModal(false)}>
-                  <MaterialIcons name="close" size={24} color="white" />
-                </TouchableOpacity>
-              </View>
-              <View style={styles.languagesList}>
-                {Object.entries(languages).map(([code, { name, icon }]) => (
-                  <TouchableOpacity
-                    key={code}
-                    style={[
-                      styles.languageOption,
-                      settings.language === code && styles.selectedLanguageOption
-                    ]}
-                    onPress={() => {
-                      handleLanguageChange(code as keyof typeof languages);
-                      setShowLanguageModal(false);
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    }}
-                  >
-                    <Text style={styles.languageIcon}>{icon}</Text>
-                    <Text style={[
-                      styles.languageOptionText,
-                      settings.language === code && styles.selectedLanguageOptionText
-                    ]}>
-                      {name}
-                    </Text>
-                    {settings.language === code && (
-                      <MaterialIcons name="check" size={24} color="white" />
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          </View>
-        </Modal>
 
         {/* Subgroup Selection Section */}
         <View style={styles.section}>
@@ -1781,6 +1854,52 @@ export default function Settings() {
         {/* Notification Settings Section */}
         {renderNotificationSettings()}
       </ScrollView>
+
+      {/* Language Selection Modal */}
+      <Modal
+        visible={showLanguageModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowLanguageModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{t('settings').language}</Text>
+              <TouchableOpacity onPress={() => setShowLanguageModal(false)}>
+                <MaterialIcons name="close" size={24} color="white" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.languagesList}>
+              {Object.entries(languages).map(([code, { name, icon }]) => (
+                <TouchableOpacity
+                  key={code}
+                  style={[
+                    styles.languageOption,
+                    settings.language === code && styles.selectedLanguageOption
+                  ]}
+                  onPress={() => {
+                    handleLanguageChange(code as keyof typeof languages);
+                    setShowLanguageModal(false);
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }}
+                >
+                  <Text style={styles.languageIcon}>{icon}</Text>
+                  <Text style={[
+                    styles.languageOptionText,
+                    settings.language === code && styles.selectedLanguageOptionText
+                  ]}>
+                    {name}
+                  </Text>
+                  {settings.language === code && (
+                    <MaterialIcons name="check" size={24} color="white" />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Time Pickers */}
       {showStartPicker && (
@@ -3161,6 +3280,101 @@ const styles = StyleSheet.create({
   testNotificationText: {
     color: 'white',
     fontSize: 16,
+    fontWeight: '600',
+  },
+  elevatedContainer: {
+    backgroundColor: '#1A1A1A',
+    borderRadius: 12,
+    padding: 16,
+    marginVertical: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  infoText: {
+    color: '#E0E0E6',
+    fontSize: 14,
+    marginTop: 12,
+    lineHeight: 20,
+  },
+  idnpInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  idnpValue: {
+    color: '#8A8A8D',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  syncHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  syncIconContainer: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#2C3DCD',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  syncLabel: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  syncStatusIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    padding: 8,
+    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    borderRadius: 8,
+  },
+  syncStatusText: {
+    color: '#A2E1A6',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  syncContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  loginPromptContainer: {
+    marginVertical: 12,
+  },
+  loginPromptContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 176, 32, 0.15)',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  loginPromptText: {
+    color: '#FFB020',
+    fontSize: 14,
+    flex: 1,
+    lineHeight: 20,
+  },
+  loginButton: {
+    backgroundColor: '#2C3DCD',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  loginButtonText: {
+    color: 'white',
+    fontSize: 14,
     fontWeight: '600',
   },
 });

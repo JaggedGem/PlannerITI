@@ -36,6 +36,13 @@ type TranslationType = {
       };
     };
     idnp: {
+      syncToggle: string;
+      syncTitle: string;
+      syncEnabledInfo: string;
+      syncDisabledInfo: string;
+      syncedStatus: string;
+      noIdnpSaved: string;
+      loginRequired: string;
       title: string;
       clearButton: string;
       clearConfirmTitle: string;
@@ -497,6 +504,13 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         },
       },
       idnp: {
+        syncToggle: 'Sync IDNP to server',
+        syncTitle: 'IDNP Sync Settings',
+        syncEnabledInfo: 'Your IDNP is securely stored on our server. This allows you to access your grades on any device without re-entering it.',
+        syncDisabledInfo: 'Your IDNP is only stored locally on this device. If you disable syncing, it will be removed from our server.',
+        syncedStatus: 'IDNP is synced',
+        noIdnpSaved: 'No IDNP saved',
+        loginRequired: 'Sign in to your account to enable IDNP syncing across devices',
         title: 'IDNP Settings',
         clearButton: 'Clear Saved IDNP',
         clearConfirmTitle: 'Clear Saved IDNP',
@@ -976,6 +990,13 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         },
       },
       idnp: {
+        syncToggle: 'Sincronizează IDNP pe server',
+        syncTitle: 'Setări sincronizare IDNP',
+        syncEnabledInfo: 'IDNP-ul dvs. este stocat în siguranță pe serverul nostru. Acest lucru vă permite să accesați notele pe orice dispozitiv fără a-l reintroduce.',
+        syncDisabledInfo: 'IDNP-ul dvs. este stocat doar local pe acest dispozitiv. Dacă dezactivați sincronizarea, acesta va fi eliminat de pe serverul nostru.',
+        syncedStatus: 'IDNP este sincronizat',
+        noIdnpSaved: 'Niciun IDNP salvat',
+        loginRequired: 'Conectați-vă la contul dvs. pentru a activa sincronizarea IDNP între dispozitive',
         title: 'Setări IDNP',
         clearButton: 'Șterge IDNP salvat',
         clearConfirmTitle: 'Șterge IDNP salvat',
@@ -1455,6 +1476,13 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         },
       },
       idnp: {
+        syncToggle: 'Синхронизировать IDNP на сервере',
+        syncTitle: 'Настройки синхронизации IDNP',
+        syncEnabledInfo: 'Ваш IDNP надежно хранится на нашем сервере. Это позволяет вам получать доступ к оценкам на любом устройстве без повторного ввода.',
+        syncDisabledInfo: 'Ваш IDNP хранится только локально на этом устройстве. Если вы отключите синхронизацию, он будет удален с нашего сервера.',
+        syncedStatus: 'IDNP синхронизирован',
+        noIdnpSaved: 'Нет сохраненных IDNP',
+        loginRequired: 'Войдите в свой аккаунт, чтобы включить синхронизацию IDNP между устройствами',
         title: 'Настройки IDNP',
         clearButton: 'Очистить сохраненный IDNP',
         clearConfirmTitle: 'Очистить сохраненный IDNP',
