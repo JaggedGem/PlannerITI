@@ -26,7 +26,6 @@ import { getAssignments, AssignmentType } from '../../utils/assignmentStorage';
 import { StorageViewer } from '../../components/StorageViewer';
 import * as Notifications from 'expo-notifications';
 import { initializeNotifications } from '../../utils/notificationUtils';
-import idnpService from '@/services/idnpService';
 
 const IDNP_KEY = '@planner_idnp';
 const IDNP_UPDATE_EVENT = 'idnp_updated';
@@ -876,29 +875,23 @@ export default function Settings() {
     type === 'start' ? setStartTime(date) : setEndTime(date);
   }, []);
 
-  // Handle logout
   const handleLogout = async () => {
+    setShowAccountActionSheet(false);
     try {
-      console.log('[Settings] Logging out, resetting IDNP sync status');
-      // Clear IDNP sync status
-      await idnpService.resetSyncStatus();
-      console.log('[Settings] IDNP sync status reset complete');
-      
-      // Logout from auth service
-      console.log('[Settings] Calling auth service logout');
-      await authService.logout();
-      
-      // Reset storage (except settings)
-      console.log('[Settings] Clearing IDNP from local storage');
-      await AsyncStorage.removeItem(IDNP_KEY);
-      
-      // Show success message
+      // Clear the skip login flag as well when explicitly logging out
+      await AsyncStorage.removeItem(SKIP_LOGIN_KEY);
+      await logout();
+      // Immediately update local state
+      setIsAuthenticated(false);
+      setSkipLogin(false);
+      // Broadcast auth state change to all components
+      DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, { 
+        isAuthenticated: false,
+        skipped: false 
+      });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setShowAccountActionSheet(false);
-      console.log('[Settings] Logout complete');
     } catch (error) {
-      console.error('[Settings] Logout error:', error);
-      Alert.alert('Error', 'Failed to log out. Please try again.');
+      console.error("Logout error:", error);
     }
   };
 
@@ -993,7 +986,6 @@ export default function Settings() {
   // Function to render the account section based on authentication state
   const renderAccountSection = () => {
     const [gravatarProfile, setGravatarProfile] = useState<{ display_name?: string; avatar_url?: string } | null>(null);
-    const [idnpSyncEnabled, setIdnpSyncEnabled] = useState(false);
   
     // Load Gravatar profile when user data changes
     useEffect(() => {
@@ -1005,54 +997,6 @@ export default function Settings() {
       };
       loadGravatarProfile();
     }, [user]);
-    
-    // Load IDNP sync settings when component renders
-    useEffect(() => {
-      const loadIdnpSyncSettings = async () => {
-        if (isAuthenticated) {
-          console.log('[Settings] Loading IDNP sync settings, user authenticated');
-          const syncEnabled = await idnpService.isSyncEnabled();
-          console.log('[Settings] IDNP sync enabled from service:', syncEnabled);
-          setIdnpSyncEnabled(syncEnabled);
-        } else {
-          console.log('[Settings] Skip loading IDNP sync settings, not authenticated');
-        }
-      };
-      loadIdnpSyncSettings();
-    }, [isAuthenticated]);
-    
-    // Handle IDNP sync toggle
-    const handleIdnpSyncToggle = async (value: boolean) => {
-      try {
-        console.log('[Settings] Toggling IDNP sync to:', value);
-        
-        // Update the toggle state
-        setIdnpSyncEnabled(value);
-        
-        // Update the setting in the service
-        console.log('[Settings] Calling idnpService.setSyncEnabled');
-        const result = await idnpService.setSyncEnabled(value);
-        console.log('[Settings] idnpService.setSyncEnabled result:', result);
-        
-        // Show feedback
-        Haptics.selectionAsync();
-        
-        // If disabling, show success alert
-        if (!value) {
-          console.log('[Settings] IDNP sync disabled, showing confirmation');
-          Alert.alert(
-            'IDNP Sync Disabled',
-            'Your IDNP has been removed from the server.',
-            [{ text: 'OK' }]
-          );
-        }
-      } catch (error) {
-        console.error('[Settings] Error updating IDNP sync settings:', error);
-        // Revert the UI state if there was an error
-        setIdnpSyncEnabled(!value);
-        Alert.alert('Error', 'Failed to update IDNP sync settings');
-      }
-    };
   
     if (!isAuthenticated) {
       return (
@@ -1106,22 +1050,6 @@ export default function Settings() {
             </View>
             <MaterialIcons name="chevron-right" size={24} color="#8A8A8D" />
           </TouchableOpacity>
-        </View>
-        
-        {/* Add IDNP Sync Setting */}
-        <View style={styles.settingItem}>
-          <View style={styles.settingLabelContainer}>
-            <Text style={styles.settingLabel}>Sync IDNP to Server</Text>
-            <Text style={styles.settingDescription}>
-              Securely store your IDNP across devices (encrypted)
-            </Text>
-          </View>
-          <Switch
-            value={idnpSyncEnabled}
-            onValueChange={handleIdnpSyncToggle}
-            trackColor={{ false: '#232433', true: '#2C3DCD' }}
-            thumbColor="white"
-          />
         </View>
       </View>
     );
@@ -3234,30 +3162,5 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
-  },
-  settingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  settingTextContainer: {
-    flex: 1,
-  },
-  settingTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: 'white',
-  },
-  privacyLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  privacyLinkText: {
-    color: '#8A8A8D',
-    fontSize: 16,
-    fontWeight: '600',
-    marginRight: 8,
   },
 });
