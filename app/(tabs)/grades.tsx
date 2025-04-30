@@ -16,6 +16,8 @@ import {
   GradeSubject,
   Exam
 } from '@/services/gradesService';
+// Import authService
+import authService from '@/services/authService';
 
 // Types for local grades
 type GradeCategory = 'exam' | 'test' | 'homework' | 'project' | 'other';
@@ -36,6 +38,8 @@ const IDNP_KEY = '@planner_idnp';
 const GRADES_DATA_KEY = '@planner_grades_data';
 const GRADES_TIMESTAMP_KEY = '@planner_grades_timestamp';
 const IDNP_UPDATE_EVENT = 'idnp_updated';
+// Define IDNP_SYNC_KEY locally or import if possible
+const IDNP_SYNC_KEY = '@planner_idnp_sync';
 
 // Number of days before data is considered stale
 const STALE_DATA_DAYS = 7;
@@ -1619,15 +1623,43 @@ export default function Grades() {
       setIsFetching(false);
       fetchingRef.current = false;
     }
-  }, [responseHtml, lastUpdated]);
+  }, [responseHtml, lastUpdated, t]);
 
-  const handleSaveIdnp = useCallback((newIdnp: string, shouldSave: boolean) => {
+  // Function to sync IDNP to server
+  const syncIdnpToServer = async (idnpToSync: string) => {
+    try {
+      // Use the authService method to encrypt and sync
+      // Assuming 'idnp' is the key for storing this data type
+      await authService.encryptAndSyncData('idnp', idnpToSync);
+      console.log('IDNP synced to server successfully.');
+    } catch (error) {
+      console.error('Failed to sync IDNP to server:', error);
+      // Handle sync error silently or show a non-blocking notification
+    }
+  };
+
+  const handleSaveIdnp = useCallback(async (newIdnp: string, shouldSave: boolean) => {
     // Don't proceed if already fetching
     if (fetchingRef.current) return;
-    
+
     // Set the IDNP first to show loading screen
     setIdnp(newIdnp);
-    
+
+    // Check if sync is enabled
+    try {
+      const syncSetting = await AsyncStorage.getItem(IDNP_SYNC_KEY);
+      const isSyncEnabled = syncSetting !== 'false'; // Sync is enabled by default or if set to 'true'
+
+      if (isSyncEnabled) {
+        // Call the sync function *before* fetching student data
+        await syncIdnpToServer(newIdnp);
+      }
+    } catch (error) {
+      console.error('Error checking IDNP sync setting:', error);
+      // Proceed even if checking the setting fails? Or handle differently?
+      // For now, we'll log the error and continue.
+    }
+
     // Then fetch the data
     fetchStudentData(newIdnp);
   }, [fetchStudentData]);
@@ -1643,7 +1675,9 @@ export default function Grades() {
         }
       });
     }
-  }, []);
+  // Intentionally omitting fetchStudentData from dependencies to prevent re-fetch on responseHtml change
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idnp, responseHtml, errorMessage]);
 
   if (isLoading && !responseHtml) {
     return <LoadingScreen message={t('schedule').loading} />;
@@ -1680,6 +1714,17 @@ export default function Grades() {
         lastUpdated={lastUpdated}
         onRefresh={async () => {
           if (idnp) {
+            // Check sync setting before refreshing
+            try {
+              const syncSetting = await AsyncStorage.getItem(IDNP_SYNC_KEY);
+              const isSyncEnabled = syncSetting !== 'false';
+              if (isSyncEnabled) {
+                // Re-sync IDNP on manual refresh if needed
+                await syncIdnpToServer(idnp);
+              }
+            } catch (error) {
+              console.error('Error checking IDNP sync setting on refresh:', error);
+            }
             await fetchStudentData(idnp);
           }
         }}

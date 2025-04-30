@@ -254,8 +254,14 @@ class AuthService {
         throw new Error(error.detail || 'Request failed');
       }
   
-      const data = await response.json();
-      return data;
+      // Check if response has content before parsing JSON
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.indexOf("application/json") !== -1) {
+          return await response.json();
+      } else {
+          // Return empty object or handle non-JSON response as needed
+          return {};
+      }
     } catch (error) {
       clearTimeout(timeoutId);
       if (error instanceof Error) {
@@ -506,6 +512,43 @@ class AuthService {
     } catch (error) {
       console.error('Error getting credentials for encryption:', error);
       return null;
+    }
+  }
+
+  /**
+   * Sends plaintext data and the user's password to the server for encryption and storage.
+   * @param key The key identifying the data type (e.g., 'idnp').
+   * @param data The string data to encrypt and sync.
+   */
+  async encryptAndSyncData(key: string, data: string): Promise<void> {
+    if (!this.isAuthenticated()) {
+      console.warn('User not authenticated. Cannot sync encrypted data.');
+      // Optionally throw an error or return early
+      return;
+      // throw new Error('User not authenticated');
+    }
+
+    try {
+      const credentials = await this.getStoredCredentials();
+      if (!credentials || !credentials.password) {
+        console.error('Could not retrieve credentials for encryption.');
+        throw new Error('Credentials not found for encryption.');
+      }
+
+      // Send the plaintext data and password to the server endpoint
+      // The server will handle the encryption using the provided password
+      await this.makeAuthRequest('/secure/encrypt-data', 'POST', {
+        data_label: key, // Changed from 'key' to 'data_label' to match settingsService pattern
+        plaintext: data,
+        password: credentials.password
+      });
+
+      console.log(`Data with key '${key}' sent for server-side encryption and sync successfully.`);
+
+    } catch (error) {
+      console.error(`Error sending data for server-side encryption (key: '${key}'):`, error);
+      // Optionally re-throw or handle the error (e.g., show a notification)
+      throw error; // Re-throwing to allow the caller to handle it
     }
   }
 }
