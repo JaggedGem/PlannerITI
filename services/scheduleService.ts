@@ -140,7 +140,7 @@ export const CACHE_KEYS = {
 };
 
 const CACHE_EXPIRY = 3 * 24 * 60 * 60 * 1000; // 3 days in milliseconds
-const DEFAULT_GROUP_NAME = 'P-2412';
+const DEFAULT_GROUP_NAME = 'P-2422';
 
 const PERIOD_TIMES_CACHE_KEY = 'period_times_cache';
 const LAST_PERIOD_SYNC_KEY = 'last_period_sync';
