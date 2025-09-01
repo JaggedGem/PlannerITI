@@ -124,8 +124,8 @@ export const DAYS_MAP_INVERSE = {
   'friday': 5
 } as const;
 
-// Initial reference date for week calculation (September 2, 2024)
-const REFERENCE_DATE = new Date(2024, 8, 2); // Note: Month is 0-based, so 8 is September
+// Initial reference date for week calculation (September 1, 2025)
+const REFERENCE_DATE = new Date(2025, 8, 1); // Note: Month is 0-based, so 8 is September
 
 // Export the cache keys so they can be accessed from outside
 export const CACHE_KEYS = {
