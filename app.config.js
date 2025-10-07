@@ -45,8 +45,7 @@ module.exports = () => {
           foregroundImage: "assets/images/adaptive-icon.png",
           backgroundColor: "#232433"
         },
-        package: variantConfig.androidPackage,
-        versionCode: 2
+        package: variantConfig.androidPackage
       },
       web: {
         bundler: "metro",
