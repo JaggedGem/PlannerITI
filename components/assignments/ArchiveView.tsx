@@ -103,7 +103,6 @@ export default function ArchiveView({
   
   // Handle closing
   const handleClose = useCallback(() => {
-    console.log('Closing archive view');
     router.back();
   }, []);
   

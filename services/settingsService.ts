@@ -1,7 +1,7 @@
 import { Platform, DeviceEventEmitter, EmitterSubscription } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import authService from './authService';
-import { scheduleService as scheduleServiceImport, UserSettings, CustomPeriod } from './scheduleService';
+import { scheduleService as scheduleServiceImport, UserSettings } from './scheduleService';
 import Constants from "expo-constants";
 
 // To avoid circular dependency, we'll set this after initialization
@@ -65,7 +65,7 @@ class SettingsService {
   private static instance: SettingsService;
   private notificationSettings: NotificationSettings = DEFAULT_NOTIFICATION_SETTINGS;
   private isSyncing: boolean = false;
-  private syncDebounceTimeout: NodeJS.Timeout | null = null;
+  private syncDebounceTimeout: ReturnType<typeof setTimeout> | null = null;
   private pendingSync: boolean = false;
   private authStateListener: EmitterSubscription | null = null;
   private initialDownloadDone: boolean = false;
@@ -161,6 +161,11 @@ class SettingsService {
   // Allow setting scheduleService reference after initialization to avoid circular dependency
   setScheduleService(service: typeof scheduleServiceImport): void {
     scheduleService = service;
+    // Register callbacks to avoid direct import cycle side-effects
+    scheduleService.registerSettingsSync({
+      triggerSync: () => this.triggerSync(),
+      isApplyingServerSettings: () => this.isApplyingServerSettings()
+    });
   }
 
   // Prepare settings for sync
@@ -498,6 +503,9 @@ class SettingsService {
 }
 
 const instance = SettingsService.getInstance();
+
+// Ensure registration happens
+instance.setScheduleService(scheduleServiceImport);
 
 // Handle cleanup on app termination
 if (Platform.OS !== 'web') {

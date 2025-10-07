@@ -1,12 +1,13 @@
-import { StyleSheet, View, Text, TouchableOpacity, Dimensions } from 'react-native';
-import { useMemo } from 'react';
+import { StyleSheet, View, Text, TouchableOpacity, Dimensions, InteractionManager } from 'react-native';
+import { useMemo, useEffect } from 'react';
 import { MaterialIcons } from '@expo/vector-icons';
-import Animated, { 
-  useAnimatedStyle, 
-  withTiming, 
-  withSpring,
-  interpolate,
-  Extrapolate
+import Animated, {
+  useAnimatedStyle,
+  withTiming,
+  withSequence,
+  withDelay,
+  useSharedValue,
+  Easing,
 } from 'react-native-reanimated';
 import { scheduleService, ScheduleView } from '@/services/scheduleService';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -24,38 +25,76 @@ export default function ViewModeMenu({ isOpen, onClose, isEvenWeek, weekText, cu
   const { t } = useTranslation();
   const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
+  // Shared progress value (0 -> closed, 1 -> open)
+  const progress = useSharedValue(isOpen ? 1 : 0);
+  const wobble = useSharedValue(0); // 0 = rest, positive pushes downward
+
+  useEffect(() => {
+    progress.value = withTiming(isOpen ? 1 : 0, {
+      duration: isOpen ? 170 : 110,
+      easing: isOpen ? Easing.out(Easing.quad) : Easing.inOut(Easing.quad)
+    });
+
+    if (isOpen) {
+      // Start a subtle downward wobble after the main appear begins
+      wobble.value = 0;
+      wobble.value = withDelay(60, withSequence(
+        withTiming(1, { duration: 90, easing: Easing.out(Easing.quad) }),  // push down
+        withTiming(-0.35, { duration: 120, easing: Easing.inOut(Easing.quad) }), // slight rebound up
+        withTiming(0.15, { duration: 90, easing: Easing.inOut(Easing.quad) }),  // micro settle
+        withTiming(0, { duration: 120, easing: Easing.out(Easing.quad) })       // rest
+      ));
+    } else {
+      // Reset wobble when closing
+      wobble.value = 0;
+    }
+  }, [isOpen, progress, wobble]);
+
 
   const animatedContainerStyle = useAnimatedStyle(() => {
+    const p = progress.value;
+    const baseScale = 0.92 + p * (1 - 0.92);
+    const overshoot = (p * (1 - p)) * 0.06;
+    // Add very slight scale modulation during wobble (max ±0.01)
+    const wobbleScale = 1 + (wobble.value * 0.01);
+    const scale = (baseScale + overshoot) * wobbleScale;
+    const baseTranslate = (-14) * (1 - p);
+    // Wobble downward: positive wobble pushes downward up to ~6px (1 * 6)
+    const wobbleOffset = wobble.value * 6;
+    const translateY = baseTranslate + wobbleOffset;
     return {
-      opacity: withTiming(isOpen ? 1 : 0, { duration: 200 }),
+      opacity: p,
       transform: [
-        { 
-          scale: withSpring(isOpen ? 1 : 0.8, {
-            damping: 15,
-            stiffness: 150,
-          })
-        },
-        {
-          translateY: withSpring(isOpen ? 0 : -40, {
-            damping: 15,
-            stiffness: 150,
-          })
-        }
+        { scale },
+        { translateY }
       ],
-      pointerEvents: isOpen ? 'auto' : 'none' as any,
+      pointerEvents: p > 0.05 ? 'auto' : 'none' as any,
     };
-  }, [isOpen]);
+  });
 
   const overlayStyle = useAnimatedStyle(() => {
     return {
-      opacity: withTiming(isOpen ? 1 : 0, { duration: 200 }),
-      pointerEvents: isOpen ? 'auto' : 'none' as any,
+      opacity: progress.value,
+      pointerEvents: progress.value > 0.05 ? 'auto' : 'none' as any,
     };
-  }, [isOpen]);
+  });
 
   const handleViewChange = (view: ScheduleView) => {
-    scheduleService.updateSettings({ scheduleView: view });
+    // If selecting the currently active view just close the menu quickly
+    if (view === currentView) {
+      onClose();
+      return;
+    }
+
+    // Close menu first to let its animation run without heavy work
     onClose();
+
+    // Defer the potentially heavy settings update (which triggers unmount/mount of large views)
+    // This greatly reduces frame drops on low-end devices
+    // Shorter defer so switch happens faster once menu begins closing
+    setTimeout(() => {
+      scheduleService.updateSettings({ scheduleView: view });
+    }, 60);
   };
 
   const menuItems = useMemo(() => [

@@ -158,7 +158,6 @@ class AuthService {
       
       if (storedVersion !== CURRENT_AUTH_VERSION) {
         // Version mismatch - need to reset auth state
-        console.log('Auth version changed, resetting authentication state');
         await this.logout();
         await AsyncStorage.setItem(AUTH_VERSION_KEY, CURRENT_AUTH_VERSION);
         return true;
@@ -543,12 +542,28 @@ class AuthService {
         password: credentials.password
       });
 
-      console.log(`Data with key '${key}' sent for server-side encryption and sync successfully.`);
-
     } catch (error) {
       console.error(`Error sending data for server-side encryption (key: '${key}'):`, error);
       // Optionally re-throw or handle the error (e.g., show a notification)
       throw error; // Re-throwing to allow the caller to handle it
+    }
+  }
+
+  /**
+   * Deletes encrypted data from the server.
+   * @param key The key identifying the data type to delete (e.g., 'idnp').
+   */
+  async deleteEncryptedData(key: string): Promise<void> {
+    if (!this.isAuthenticated()) {
+      console.warn('User not authenticated. Cannot delete encrypted data.');
+      return;
+    }
+
+    try {
+      await this.makeAuthRequest(`/secure/delete-encrypted-data/${key}`, 'DELETE');
+    } catch (error) {
+      console.error(`Error deleting encrypted data (key: '${key}'):`, error);
+      throw error;
     }
   }
 }

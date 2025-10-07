@@ -1,8 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform, NativeModules } from 'react-native';
 import { format } from 'date-fns';
-// Import settingsService using dynamic import to avoid circular dependency
-// Will set it at the end of the file
+// Refactored: remove direct runtime import of settingsService to break cycle.
+// Consumers (settingsService) should call scheduleService.registerSettingsSync({...}) after import.
 
 export interface Period {
   _id: string;
@@ -125,7 +125,7 @@ export const DAYS_MAP_INVERSE = {
 } as const;
 
 // Initial reference date for week calculation (September 1, 2025)
-const REFERENCE_DATE = new Date(2025, 8, 1); // Note: Month is 0-based, so 8 is September
+const REFERENCE_DATE = new Date(2025, 8, 1); // Month 8 = September
 
 // Export the cache keys so they can be accessed from outside
 export const CACHE_KEYS = {
@@ -144,8 +144,9 @@ const DEFAULT_GROUP_NAME = 'P-2422';
 
 const PERIOD_TIMES_CACHE_KEY = 'period_times_cache';
 const LAST_PERIOD_SYNC_KEY = 'last_period_sync';
-const PERIOD_SYNC_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
-const RECOVERY_DAYS_SYNC_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+// Removed interval logic: we now refresh on app load & manual refresh.
+const PERIOD_SYNC_INTERVAL = 0; // No interval-based skip; kept for backward compatibility
+const RECOVERY_DAYS_SYNC_INTERVAL = 0;
 
 type SettingsListener = () => void;
 
@@ -200,6 +201,22 @@ export const scheduleService = {
   cachedRecoveryDays: [] as RecoveryDay[],
   cachedSubjects: [] as Subject[],
   cachedAssignmentCounts: [] as PeriodAssignmentCount[],
+  // Debug controls
+  _debug: false,
+  _ready: false,
+  _initializing: false,
+  _settingsSyncCallbacks: [] as Array<() => void>,
+  _isApplyingServerSettings: () => false, // optional callback provided by settingsService
+  _triggerExternalSync: () => {},
+
+  enableDebug(value: boolean) { this._debug = value; },
+  log(...args: any[]) { if (this._debug) console.log('[scheduleService]', ...args); },
+  isReady() { return this._ready; },
+  async ready(): Promise<void> { if (this._ready) return; if (this._initializing) { return new Promise(res => { const i = setInterval(()=>{ if(this._ready){ clearInterval(i); res(); }},50); }); } await this.initialize(); },
+  registerSettingsSync(options: { triggerSync: () => void; isApplyingServerSettings: () => boolean }) {
+    this._triggerExternalSync = options.triggerSync;
+    this._isApplyingServerSettings = options.isApplyingServerSettings;
+  },
 
   subscribe(listener: SettingsListener) {
     this.listeners.add(listener);
@@ -661,26 +678,23 @@ export const scheduleService = {
     }
   },
 
-  async syncPeriodTimes(): Promise<void> {
+  async syncPeriodTimes(force: boolean = false): Promise<void> {
     try {
-      // Check if we need to sync
-      const lastSync = await AsyncStorage.getItem(LAST_PERIOD_SYNC_KEY);
-      if (lastSync) {
-        const lastSyncTime = new Date(lastSync).getTime();
-        if (Date.now() - lastSyncTime < PERIOD_SYNC_INTERVAL) {
-          return;
+      if (!force && PERIOD_SYNC_INTERVAL > 0) {
+        const lastSync = await AsyncStorage.getItem(LAST_PERIOD_SYNC_KEY);
+        if (lastSync) {
+          const lastSyncTime = new Date(lastSync).getTime();
+          if (Date.now() - lastSyncTime < PERIOD_SYNC_INTERVAL) return;
         }
       }
-
-      // Fetch new period times
       const response = await fetch('https://papi.jagged.me/api/schedule');
       if (!response.ok) throw new Error('Failed to fetch period times');
-      
       const periodTimes = await response.json();
       await AsyncStorage.setItem(PERIOD_TIMES_CACHE_KEY, JSON.stringify(periodTimes));
       await AsyncStorage.setItem(LAST_PERIOD_SYNC_KEY, new Date().toISOString());
+      this.log('Period times synced');
     } catch (error) {
-      // Silent error handling - will use cached times or fall back to default times
+      this.log('Period times sync failed (using cached if available)');
     }
   },
 
@@ -708,35 +722,23 @@ export const scheduleService = {
     }
   },
 
-  async syncRecoveryDays(): Promise<void> {
+  async syncRecoveryDays(force: boolean = false): Promise<void> {
     try {
-      // Check if we need to sync
-      const lastSync = await AsyncStorage.getItem(CACHE_KEYS.LAST_RECOVERY_SYNC);
-      if (lastSync) {
-        const lastSyncTime = new Date(lastSync).getTime();
-        if (Date.now() - lastSyncTime < RECOVERY_DAYS_SYNC_INTERVAL) {
-          return;
+      if (!force && RECOVERY_DAYS_SYNC_INTERVAL > 0) {
+        const lastSync = await AsyncStorage.getItem(CACHE_KEYS.LAST_RECOVERY_SYNC);
+        if (lastSync) {
+          const lastSyncTime = new Date(lastSync).getTime();
+          if (Date.now() - lastSyncTime < RECOVERY_DAYS_SYNC_INTERVAL) return;
         }
       }
-
-      // Check for internet connectivity
-      if (!await this.hasInternetConnection()) {
-        return;
-      }
-
-      // Fetch recovery days
+      if (!await this.hasInternetConnection()) return;
       const response = await fetch('https://papi.jagged.me/api/recovery-days');
       if (!response.ok) throw new Error('Failed to fetch recovery days');
-      
       const recoveryDays: RecoveryDay[] = await response.json();
-      
-      // Cache the recovery days
       await AsyncStorage.setItem(CACHE_KEYS.RECOVERY_DAYS, JSON.stringify(recoveryDays));
       await AsyncStorage.setItem(CACHE_KEYS.LAST_RECOVERY_SYNC, new Date().toISOString());
-      
       this.cachedRecoveryDays = recoveryDays;
-      
-      // Refresh the schedule cache with the new recovery days
+      this.log('Recovery days synced');
       if (this.settings.selectedGroupId) {
         const cachedData = await this.getCachedSchedule(this.settings.selectedGroupId);
         if (cachedData) {
@@ -744,9 +746,7 @@ export const scheduleService = {
           await this.cacheSchedule(this.settings.selectedGroupId, transformedData);
         }
       }
-    } catch (error) {
-      // Silent error handling - will use cached recovery days or return empty array
-    }
+    } catch (error) { this.log('Recovery days sync failed'); }
   },
 
   // Check if a specific date is a recovery day
@@ -1083,81 +1083,109 @@ export const scheduleService = {
       console.error('Error updating assignment counts:', error);
     }
   },
-};
-
-// Initialize settings and data from storage - add assignment counts initialization
-(async () => {
-  await scheduleService.loadSettings();
   
-  // Load recovery days into memory immediately
-  const cachedRecoveryDays = await AsyncStorage.getItem(CACHE_KEYS.RECOVERY_DAYS);
-  if (cachedRecoveryDays) {
-    scheduleService.cachedRecoveryDays = JSON.parse(cachedRecoveryDays);
-  }
-  
-  // Load subjects into memory immediately
-  const cachedSubjects = await AsyncStorage.getItem(CACHE_KEYS.SUBJECTS);
-  if (cachedSubjects) {
-    scheduleService.cachedSubjects = JSON.parse(cachedSubjects);
-  }
-  
-  // Load assignment counts into memory immediately
-  const cachedAssignmentCounts = await AsyncStorage.getItem(CACHE_KEYS.ASSIGNMENT_COUNTS);
-  if (cachedAssignmentCounts) {
-    scheduleService.cachedAssignmentCounts = JSON.parse(cachedAssignmentCounts);
-  }
-  
-  // Sync period times immediately to ensure we have the latest data
-  await scheduleService.syncPeriodTimes();
-  
-  // Initial sync of recovery days
-  scheduleService.syncRecoveryDays();
-})();
+  // Force refresh schedule regardless of cache age; fallback to cached when offline or failure
+  async refreshSchedule(force: boolean = true): Promise<ApiResponse | null> {
+    try {
+      // Ensure we have a selected group; attempt to find default if missing
+      if (!this.settings.selectedGroupId) {
+        await this.findAndSetDefaultGroup();
+      }
+      const groupId = this.settings.selectedGroupId;
+      if (!groupId) return null;
 
-// Import settingsService here after scheduleService is defined to avoid circular dependency
-import settingsService from './settingsService';
+      const hasInternet = await this.hasInternetConnection();
+      if (!hasInternet) {
+        // Offline: return cached data if present
+        const cached = await this.getCachedSchedule(groupId);
+        return cached ? this.transformScheduleData(cached) : null;
+      }
 
-// Use settingsService inside methods that update settings
-const triggerSettingsSync = () => {
-  // Skip triggering sync if we're applying server settings
-  if (settingsService && !settingsService.isApplyingServerSettings()) {
-    settingsService.triggerSync();
-  }
+      // Online: attempt fresh fetch (always, per requirement)
+      try {
+        await Promise.all([
+          this.syncRecoveryDays(true),
+          this.syncPeriodTimes(true)
+        ]);
+        const fresh = await this.fetchAndCacheSchedule(groupId);
+        return this.transformScheduleData(fresh);
+      } catch (err) {
+        // On failure, fallback to cache
+        const cached = await this.getCachedSchedule(groupId);
+        return cached ? this.transformScheduleData(cached) : null;
+      }
+    } catch (error) {
+      // Final fallback
+      try {
+        if (this.settings.selectedGroupId) {
+          const cached = await this.getCachedSchedule(this.settings.selectedGroupId);
+          return cached ? this.transformScheduleData(cached) : null;
+        }
+      } catch (_) { /* silent */ }
+      return null;
+    }
+  },
+
+  async ensureSelectedGroup(): Promise<boolean> {
+    if (this.settings.selectedGroupId) return true;
+    const success = await this.findAndSetDefaultGroup();
+    return success;
+  },
+
+  async clearScheduleCache(groupId?: string) {
+    try {
+      const gid = groupId || this.settings.selectedGroupId;
+      if (!gid) return;
+      await AsyncStorage.removeItem(CACHE_KEYS.SCHEDULE_PREFIX + gid);
+      await AsyncStorage.removeItem(CACHE_KEYS.LAST_FETCH_PREFIX + gid);
+      this.log('Cleared schedule cache for group', gid);
+    } catch {}
+  },
+
+  async getLastScheduleFetchTime(groupId?: string): Promise<Date | null> {
+    try {
+      const gid = groupId || this.settings.selectedGroupId;
+      if (!gid) return null;
+      const lastFetch = await AsyncStorage.getItem(CACHE_KEYS.LAST_FETCH_PREFIX + gid);
+      return lastFetch ? new Date(lastFetch) : null;
+    } catch {
+      return null;
+    }
+  },
+  async initialize() {
+    if (this._ready || this._initializing) return;
+    this._initializing = true;
+    await this.loadSettings();
+    // Load caches
+    const [cachedRecoveryDays, cachedSubjects, cachedAssignmentCounts] = await Promise.all([
+      AsyncStorage.getItem(CACHE_KEYS.RECOVERY_DAYS),
+      AsyncStorage.getItem(CACHE_KEYS.SUBJECTS),
+      AsyncStorage.getItem(CACHE_KEYS.ASSIGNMENT_COUNTS)
+    ]);
+    if (cachedRecoveryDays) this.cachedRecoveryDays = JSON.parse(cachedRecoveryDays);
+    if (cachedSubjects) this.cachedSubjects = JSON.parse(cachedSubjects);
+    if (cachedAssignmentCounts) this.cachedAssignmentCounts = JSON.parse(cachedAssignmentCounts);
+    // Perform initial syncs (no interval gating)
+    await Promise.all([
+      this.syncPeriodTimes(true),
+      this.syncRecoveryDays(true)
+    ]);
+    await this.ensureSelectedGroup();
+    this._ready = true;
+    this._initializing = false;
+    this.log('Initialization complete');
+  },
 };
 
-// Update methods that modify settings to use triggerSettingsSync
-const originalUpdateSettings = scheduleService.updateSettings;
-scheduleService.updateSettings = function(newSettings: Partial<UserSettings>) {
-  originalUpdateSettings.call(this, newSettings);
-  triggerSettingsSync();
-};
-
-const originalAddCustomPeriod = scheduleService.addCustomPeriod;
-scheduleService.addCustomPeriod = function(period: Omit<CustomPeriod, '_id'>) {
-  const result = originalAddCustomPeriod.call(this, period);
-  triggerSettingsSync();
-  return result;
-};
-
-const originalUpdateCustomPeriod = scheduleService.updateCustomPeriod;
-scheduleService.updateCustomPeriod = function(periodId: string, updates: Partial<CustomPeriod>) {
-  const result = originalUpdateCustomPeriod.call(this, periodId, updates);
-  triggerSettingsSync();
-  return result;
-};
-
-const originalDeleteCustomPeriod = scheduleService.deleteCustomPeriod;
-scheduleService.deleteCustomPeriod = function(periodId: string) {
-  const result = originalDeleteCustomPeriod.call(this, periodId);
-  triggerSettingsSync();
-  return result;
-};
-
-const originalResetSettings = scheduleService.resetSettings;
-scheduleService.resetSettings = function() {
-  originalResetSettings.call(this);
-  triggerSettingsSync();
-};
-
-// Set scheduleService reference in settingsService
-settingsService.setScheduleService(scheduleService);
+// Monkey patch update methods to trigger external sync only if provided
+['updateSettings','addCustomPeriod','updateCustomPeriod','deleteCustomPeriod','resetSettings'].forEach(method => {
+  const original = (scheduleService as any)[method];
+  if (!original) return;
+  (scheduleService as any)[method] = function(...args: any[]) {
+    const result = original.apply(this, args);
+    if (!this._isApplyingServerSettings()) {
+      try { this._triggerExternalSync(); } catch {}
+    }
+    return result;
+  };
+});
