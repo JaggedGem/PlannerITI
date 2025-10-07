@@ -17,6 +17,7 @@
       }
     },
     "beta": {
+      "autoIncrement": true,
       "distribution": "internal",
       "channel": "beta",
       "android": {
