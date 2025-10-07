@@ -116,7 +116,7 @@ const CoursesView = memo(({
   const [visibleCourseCount, setVisibleCourseCount] = useState(0);
   
   // Refs to track and cancel pending operations
-  const timersRef = useRef<Array<NodeJS.Timeout>>([]);
+  const timersRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
   const isComponentMountedRef = useRef(true);
   
   // Pre-calculate course sections to avoid jank
@@ -256,7 +256,7 @@ const DateGroupedView = memo(({
   // Use a ref to track whether we've rendered once already
   const [isFirstRender, setIsFirstRender] = useState(true);
   const isComponentMountedRef = useRef(true);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { t } = useTranslation();
   
   // Reset first render flag when groups change
@@ -945,7 +945,6 @@ const Assignments = () => {
   
   // Replace the toggleArchiveModal function with this:
   const handleArchivePress = useCallback(() => {
-    console.log('Archive button clicked');
     router.push('/archive');
   }, []);
   

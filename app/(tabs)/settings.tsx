@@ -26,6 +26,7 @@ import { getAssignments, AssignmentType } from '../../utils/assignmentStorage';
 import { StorageViewer } from '../../components/StorageViewer';
 import * as Notifications from 'expo-notifications';
 import { initializeNotifications } from '../../utils/notificationUtils';
+import { formatCompactDate } from '@/utils/dateLocalization';
 
 // Store keys
 const IDNP_KEY = '@planner_idnp';
@@ -472,7 +473,7 @@ const CustomToggle = ({
 };
 
 export default function Settings() {
-  const { t } = useTranslation();
+  const { t, currentLanguage } = useTranslation();
   const router = useRouter();
   const flatListRef = useRef<FlatList<Group>>(null);
   const { user, logout, reloadUser, loading } = useAuthContext();
@@ -519,6 +520,45 @@ export default function Settings() {
   const [storageModalVisible, setStorageModalVisible] = useState(false);
   const [storageItems, setStorageItems] = useState<[string, string | null][]>([]);
   const [syncIdnp, setSyncIdnp] = useState<boolean>(true);
+  // Schedule refresh state
+  const [isRefreshingSchedule, setIsRefreshingSchedule] = useState(false);
+  const [lastScheduleRefresh, setLastScheduleRefresh] = useState<Date | null>(null);
+
+  // Load last refresh time on mount
+  useEffect(() => {
+    (async () => {
+      const last = await scheduleService.getLastScheduleFetchTime();
+      setLastScheduleRefresh(last);
+    })();
+  }, []);
+
+  const handleManualScheduleRefresh = useCallback(async () => {
+    if (isRefreshingSchedule) return;
+    setIsRefreshingSchedule(true);
+    try {
+      const refreshed = await scheduleService.refreshSchedule(true);
+      if (refreshed) {
+        const last = await scheduleService.getLastScheduleFetchTime();
+        setLastScheduleRefresh(last);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        Alert.alert('Offline', 'Using cached schedule');
+      }
+    } catch (e) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Schedule', 'Failed to refresh schedule');
+    } finally {
+      setIsRefreshingSchedule(false);
+    }
+  }, [isRefreshingSchedule]);
+
+  const handleClearScheduleCache = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await scheduleService.clearScheduleCache();
+    setLastScheduleRefresh(null);
+    Alert.alert('Cache Cleared', 'Schedule cache removed. Refresh to fetch latest data.');
+  }, []);
 
   // Add useEffect to load IDNP and listen for updates
   useEffect(() => {
@@ -616,19 +656,34 @@ export default function Settings() {
   // Handle IDNP confirmation
   const handleConfirmClearIdnp = useCallback(async () => {
     try {
+      const currentIdnp = await AsyncStorage.getItem(IDNP_KEY);
+      
       // Remove local IDNP
       await AsyncStorage.removeItem(IDNP_KEY);
       setSavedIdnp(null);
       
+      // Clear ALL grades-related cached data (legacy and new cache keys)
+      await AsyncStorage.removeItem('@planner_grades_data');
+      await AsyncStorage.removeItem('@planner_grades_timestamp');
+      
+      // Clear the new gradesService cache keys if we have an IDNP
+      if (currentIdnp) {
+        await AsyncStorage.removeItem(`@grades_cache_html_${currentIdnp}`);
+        await AsyncStorage.removeItem(`@grades_cache_time_${currentIdnp}`);
+      }
+      
       // Emit null to notify that IDNP has been cleared
       DeviceEventEmitter.emit(IDNP_UPDATE_EVENT, null);
       
-      // Also delete from server if sync is enabled (placeholder for future implementation)
-      if (syncIdnp) {
-        // Placeholder for API call to delete IDNP from server
-        // Example: await apiService.deleteIdnp();
-        console.log('IDNP cleared - server deletion would happen here');
-      }
+      // Delete from server if sync is enabled and user is authenticated - Temporarily disabled
+      /* if (syncIdnp && isAuthenticated) {
+        try {
+          await authService.deleteEncryptedData('idnp');
+        } catch (error) {
+          console.error('Error deleting IDNP from server:', error);
+          // Continue even if server deletion fails - local data is already cleared
+        }
+      } */
       
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setShowConfirmDialog(false);
@@ -636,9 +691,10 @@ export default function Settings() {
       // Use replace instead of push to force a screen refresh
       router.replace('/grades');
     } catch (error) {
-      // Silent error handling
+      console.error('Error clearing IDNP:', error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
-  }, [router, syncIdnp]);
+  }, [router, syncIdnp, isAuthenticated]);
 
   const handleDeletePeriod = useCallback((periodId: string) => {
     setPeriodToDelete(periodId);
@@ -664,7 +720,7 @@ export default function Settings() {
     scheduleService.updateSettings({ group });
   }, []);
 
-  const handleGroupSelection = useCallback((group: Group) => {
+  const handleGroupSelection = useCallback(async (group: Group) => {
     // Get the current settings to preserve the subgroup selection
     const currentSettings = scheduleService.getSettings();
     
@@ -674,6 +730,9 @@ export default function Settings() {
       selectedGroupName: group.name,
       group: currentSettings.group || SUBGROUPS[0]
     });
+    
+    // Update the last refresh timestamp to current time
+    setLastScheduleRefresh(new Date());
     
     // Handle orphaned assignments asynchronously after settings update
     setTimeout(async () => {
@@ -747,7 +806,6 @@ export default function Settings() {
   useEffect(() => {
     const unsubscribe = scheduleService.subscribe(() => {
       const updatedSettings = scheduleService.getSettings();
-      console.log("Settings updated:", updatedSettings);
       setSettings(updatedSettings);
     });
 
@@ -1615,15 +1673,13 @@ export default function Settings() {
       setShowNotificationTimeModal(false);
       
       // Debugging
-      console.log('Notification time saved:', updatedTime.toISOString());
-      console.log('Hours:', date.getHours(), 'Minutes:', date.getMinutes());
     } catch (error) {
       console.error('Error saving notification time:', error);
     }
   }, [notificationSettings]);
 
-  // Handle IDNP sync toggle
-  const handleIdnpSyncToggle = useCallback(async (value: boolean) => {
+  // Handle IDNP sync toggle - Temporarily disabled - To be implemented later
+  /* const handleIdnpSyncToggle = useCallback(async (value: boolean) => {
     try {
       // Check if user is authenticated before proceeding
       if (!isAuthenticated) {
@@ -1639,21 +1695,19 @@ export default function Settings() {
       if (!value && savedIdnp) {
         // Placeholder for API call to delete IDNP from server
         // Example: await apiService.deleteIdnp();
-        console.log('IDNP sync disabled - server deletion would happen here');
       }
       
       // If sync is enabled and we have an IDNP, sync it to server (placeholder)
       if (value && savedIdnp) {
         // Placeholder for API call to sync IDNP to server
         // Example: await apiService.syncIdnp(savedIdnp);
-        console.log('IDNP sync enabled - server upload would happen here');
       }
       
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } catch (error) {
       console.error('Error toggling IDNP sync:', error);
     }
-  }, [savedIdnp, isAuthenticated, router]);
+  }, [savedIdnp, isAuthenticated, router]); */
 
   return (
     <SafeAreaView style={styles.container}>
@@ -1661,8 +1715,8 @@ export default function Settings() {
         {/* Account Section */}
         {renderAccountSection()}
 
-        {/* Add IDNP Sync Settings - right after account section */}
-        <View style={styles.section}>
+        {/* IDNP Sync Settings - Temporarily disabled - To be implemented later */}
+        {/* <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('settings').idnp.syncTitle}</Text>
           
           <View style={styles.elevatedContainer}>
@@ -1713,7 +1767,7 @@ export default function Settings() {
               </View>
             )}
           </View>
-        </View>
+        </View> */}
 
         {/* Add IDNP management section when IDNP is saved */}
         {savedIdnp && (
@@ -1734,22 +1788,6 @@ export default function Settings() {
           </View>
         )}
 
-        {/* Class Selection Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('settings').group.title}</Text>
-          <TouchableOpacity
-            style={styles.classSelector}
-            onPress={() => setShowGroupModal(true)}
-          >
-            <View style={styles.classSelectorContent}>
-              <Text style={styles.selectedClassName}>
-                {settings.selectedGroupName || t('settings').group.select}
-              </Text>
-              <MaterialIcons name="keyboard-arrow-down" size={24} color="#8A8A8D" />
-            </View>
-          </TouchableOpacity>
-        </View>
-
         {/* Language Selection Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('settings').language}</Text>
@@ -1763,6 +1801,77 @@ export default function Settings() {
               <MaterialIcons name="keyboard-arrow-down" size={24} color="#8A8A8D" />
             </View>
           </TouchableOpacity>
+        </View>
+
+        {/* Manual Schedule Refresh Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="schedule" size={24} color="#2C3DCD" style={styles.sectionIcon} />
+            <Text style={styles.sectionTitle}>{t('settings').schedule.title}</Text>
+          </View>
+          <View style={[styles.card, styles.scheduleCard]}>
+            <View style={styles.scheduleDetails}>
+              {/* Group Selection Dropdown */}
+              <TouchableOpacity
+                style={styles.scheduleDetailRow}
+                onPress={() => setShowGroupModal(true)}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons
+                  name="group"
+                  size={20}
+                  color="#8A8A8D"
+                  style={styles.scheduleDetailIcon}
+                />
+                <View style={styles.scheduleDetailTextGroup}>
+                  <Text style={styles.scheduleDetailLabel}>{t('settings').schedule.group}</Text>
+                  <View style={styles.scheduleGroupValueContainer}>
+                    <Text style={styles.scheduleDetailValue} numberOfLines={1}>
+                      {settings.selectedGroupName || t('settings').group.select}
+                    </Text>
+                    <MaterialIcons name="arrow-drop-down" size={20} color="#8A8A8D" />
+                  </View>
+                </View>
+              </TouchableOpacity>
+
+              {/* Last Updated */}
+              <View style={[styles.scheduleDetailRow, styles.scheduleDetailRowLast]}>
+                <MaterialIcons
+                  name="update"
+                  size={20}
+                  color="#8A8A8D"
+                  style={styles.scheduleDetailIcon}
+                />
+                <View style={styles.scheduleDetailTextGroup}>
+                  <Text style={styles.scheduleDetailLabel}>{t('settings').schedule.lastUpdated}</Text>
+                  <Text style={styles.scheduleDetailValue}>
+                    {lastScheduleRefresh
+                      ? formatCompactDate(lastScheduleRefresh, currentLanguage, true)
+                      : t('settings').schedule.noRecentRefresh}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.refreshButton,
+                styles.scheduleRefreshButton,
+                isRefreshingSchedule && { opacity: 0.7 }
+              ]}
+              onPress={handleManualScheduleRefresh}
+              disabled={isRefreshingSchedule}
+            >
+              {isRefreshingSchedule ? (
+                <ActivityIndicator size="small" color="#ffffff" />
+              ) : (
+                <MaterialIcons name="refresh" size={20} color="#ffffff" />
+              )}
+              <Text style={[styles.refreshButtonText, styles.scheduleRefreshButtonText]}>
+                {isRefreshingSchedule ? t('settings').schedule.refreshing : t('settings').schedule.refresh}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Subgroup Selection Section */}
@@ -3190,6 +3299,49 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 16,
   },
+  scheduleCard: {
+    paddingBottom: 20,
+  },
+  scheduleCardTitle: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  scheduleDetails: {
+    marginBottom: 16,
+  },
+  scheduleDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  scheduleDetailRowLast: {
+    marginBottom: 0,
+  },
+  scheduleDetailIcon: {
+    marginRight: 12,
+    marginTop: 2,
+  },
+  scheduleDetailTextGroup: {
+    flex: 1,
+  },
+  scheduleDetailLabel: {
+    color: '#8A8A8D',
+    fontSize: 12,
+    marginBottom: 2,
+  },
+  scheduleDetailValue: {
+    color: 'white',
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '500',
+  },
+  scheduleGroupValueContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -3376,5 +3528,28 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 14,
     fontWeight: '600',
+  },
+  refreshButton: {
+    flexDirection: 'row',
+    backgroundColor: '#2C3DCD',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    gap: 6,
+  },
+  scheduleRefreshButton: {
+    marginTop: 4,
+    alignSelf: 'stretch',
+    justifyContent: 'center',
+  },
+  refreshButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  scheduleRefreshButtonText: {
+    flexShrink: 1,
   },
 });

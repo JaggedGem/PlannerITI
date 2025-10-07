@@ -12,7 +12,7 @@ const INFO_URL = 'https://api.ceiti.md/index.php/date/info/';
  * @param idnp The student's IDNP (13 digits)
  * @returns Promise with the login response
  */
-export const loginWithIdnp = async (idnp: string): Promise<any> => {
+export const loginWithIdnp = async (idnp: string, signal?: AbortSignal): Promise<any> => {
   try {
     const response = await fetch(LOGIN_URL, {
       method: 'POST',
@@ -20,6 +20,7 @@ export const loginWithIdnp = async (idnp: string): Promise<any> => {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: `idnp=${idnp}`,
+      signal,
     });
     
     if (!response.ok) {
@@ -38,14 +39,15 @@ export const loginWithIdnp = async (idnp: string): Promise<any> => {
  * @param idnp The student's IDNP (13 digits)
  * @returns Promise with the student's grade information
  */
-export const fetchStudentInfo = async (idnp: string): Promise<string> => {
+export const fetchStudentInfo = async (idnp: string, signal?: AbortSignal): Promise<string> => {
   try {
     // First login with the IDNP
-    await loginWithIdnp(idnp);
+    await loginWithIdnp(idnp, signal);
     
     // Then fetch the student info
     const infoResponse = await fetch(`${INFO_URL}${idnp}`, {
       method: 'GET',
+      signal,
     });
     
     if (!infoResponse.ok) {
@@ -65,6 +67,7 @@ export interface StudentInfo {
   firstName: string;
   patronymic: string;
   studyYear: string;
+  yearNumber?: number; // Numeric year from roman numerals (I=1, II=2, III=3, IV=4)
   group: string;
   specialization: string;
   curator?: string;
@@ -167,6 +170,27 @@ const extractTableValue = (html: string, tableId: string, labelPattern: string):
 };
 
 /**
+ * Convert roman numeral to arabic number
+ * @param roman Roman numeral string (I, II, III, IV)
+ * @returns The numeric value or undefined if invalid
+ */
+const romanToArabic = (roman: string): number | undefined => {
+  const romanMap: { [key: string]: number } = {
+    'I': 1,
+    'II': 2,
+    'III': 3,
+    'IV': 4,
+    'V': 5,
+    'VI': 6,
+    'VII': 7,
+    'VIII': 8
+  };
+  
+  const trimmed = roman.trim().toUpperCase();
+  return romanMap[trimmed];
+};
+
+/**
  * Parse student personal information from the HTML response using regex
  * @param html The HTML response from the API
  * @returns Student info object
@@ -194,11 +218,16 @@ const parseStudentInfo = (html: string): StudentInfo => {
     const deptHeadMatch = html.match(deptHeadPattern);
     const statusMatch = html.match(statusPattern);
     
+    // Extract and convert roman numeral year
+    const studyYearStr = studyYearMatch ? studyYearMatch[1].trim() : "";
+    const yearNumber = studyYearStr ? romanToArabic(studyYearStr) : undefined;
+    
     return {
       name: nameMatch ? nameMatch[1].trim() : "Unknown",
       firstName: firstNameMatch ? firstNameMatch[1].trim() : "Student",
       patronymic: patronymicMatch ? patronymicMatch[1].trim() : "",
-      studyYear: studyYearMatch ? studyYearMatch[1].trim() : "",
+      studyYear: studyYearStr,
+      yearNumber: yearNumber,
       group: groupMatch ? groupMatch[1].trim() : "",
       specialization: specMatch ? specMatch[1].trim() : "",
       curator: curatorMatch ? curatorMatch[1].trim() : undefined,
@@ -762,7 +791,7 @@ export const parseStudentGradesData = (html: string): StudentGrades => {
     const studentInfo = parseStudentInfo(html);
     const exams = parseExams(html);
     const currentGrades = parseCurrentGrades(html);
-    applyExamGradesToAverages(currentGrades, exams);
+    applyExamGradesToAverages(currentGrades, exams, studentInfo);
     const annualGrades = parseAnnualGrades(html);
     const currentSemester = determineCurrentSemester(html);
     
@@ -780,14 +809,31 @@ export const parseStudentGradesData = (html: string): StudentGrades => {
 
 /**
  * Apply exam and thesis grades to recalculate subject averages in each semester
+ * Only applies grades from the current academic year to avoid contaminating averages with past year exams
  * @param semesters Array of semester data
  * @param exams Array of exam data
+ * @param studentInfo Student information containing yearNumber
  */
-const applyExamGradesToAverages = (semesters: SemesterGrades[], exams: Exam[]): void => {
+const applyExamGradesToAverages = (semesters: SemesterGrades[], exams: Exam[], studentInfo: StudentInfo): void => {
+  // Determine the current year's semester range
+  const currentYear = studentInfo.yearNumber || 1; // Default to year 1 if not available
+  const currentYearFirstSemester = (currentYear - 1) * 2 + 1;
+  const currentYearLastSemester = currentYear * 2;
+  
+  // Filter exams to only include current year's exams
+  const currentYearExams = exams.filter(exam => 
+    exam.semester >= currentYearFirstSemester && exam.semester <= currentYearLastSemester
+  );
+  
   // Process each semester
   semesters.forEach(semester => {
+    // Skip if this semester is not in the current year
+    if (semester.semester < currentYearFirstSemester || semester.semester > currentYearLastSemester) {
+      return;
+    }
+    
     // Get exams for this specific semester
-    const semesterExams = exams.filter(exam => exam.semester === semester.semester);
+    const semesterExams = currentYearExams.filter(exam => exam.semester === semester.semester);
     
     // Process each subject in the semester
     semester.subjects.forEach(subject => {
@@ -859,5 +905,127 @@ const ensureBothSemestersExist = (result: SemesterGrades[]): void => {
         displayedAverage: "-"
       }]
     });
+  }
+};
+
+// --- Caching & Silent Refresh Layer ---
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { DeviceEventEmitter } from 'react-native';
+
+const IDNP_KEY = '@planner_idnp';
+
+const GRADES_CACHE_KEY_PREFIX = '@grades_cache_html_';
+const GRADES_CACHE_TIME_KEY_PREFIX = '@grades_cache_time_';
+const GRADES_UPDATED_EVENT = 'grades_updated_event';
+export const GRADES_REFRESH_START_EVENT = 'grades_refresh_start_event';
+export const GRADES_REFRESH_END_EVENT = 'grades_refresh_end_event';
+
+// Toggle for console logging (can be flipped to false for production noise reduction)
+const GRADES_DEBUG_LOGS = true;
+
+type GradesListener = () => void;
+const gradeListeners = new Set<GradesListener>();
+// Track in-flight refresh promises per IDNP to avoid duplicate network requests
+const inflightRefresh: Record<string, Promise<void>> = {};
+const inflightControllers: Record<string, AbortController> = {};
+
+export const gradesDataService = {
+  subscribe(listener: GradesListener) {
+    gradeListeners.add(listener);
+    return () => gradeListeners.delete(listener);
+  },
+  notify() {
+    gradeListeners.forEach(l => l());
+    DeviceEventEmitter.emit(GRADES_UPDATED_EVENT);
+  },
+  cancelRefresh(idnp?: string) {
+    if (idnp) {
+      inflightControllers[idnp]?.abort();
+    } else {
+      Object.values(inflightControllers).forEach(controller => controller.abort());
+    }
+  },
+  async clearCache(idnp: string) {
+    await Promise.all([
+      AsyncStorage.removeItem(GRADES_CACHE_KEY_PREFIX + idnp),
+      AsyncStorage.removeItem(GRADES_CACHE_TIME_KEY_PREFIX + idnp)
+    ]);
+    this.notify();
+  },
+  isRefreshing(idnp: string) {
+    return !!inflightRefresh[idnp];
+  },
+  async getCached(idnp: string) {
+    const [html, ts] = await Promise.all([
+      AsyncStorage.getItem(GRADES_CACHE_KEY_PREFIX + idnp),
+      AsyncStorage.getItem(GRADES_CACHE_TIME_KEY_PREFIX + idnp)
+    ]);
+    return html ? { html, timestamp: ts ? parseInt(ts,10) : null } : null;
+  },
+  async store(idnp: string, html: string) {
+    const currentIdnp = await AsyncStorage.getItem(IDNP_KEY);
+    if (currentIdnp !== idnp) {
+      if (GRADES_DEBUG_LOGS) console.log('[grades] store skipped - IDNP mismatch');
+      return null;
+    }
+    const ts = Date.now();
+    await Promise.all([
+      AsyncStorage.setItem(GRADES_CACHE_KEY_PREFIX + idnp, html),
+      AsyncStorage.setItem(GRADES_CACHE_TIME_KEY_PREFIX + idnp, ts.toString())
+    ]);
+    this.notify();
+    return ts;
+  },
+  async silentRefresh(idnp: string): Promise<{ updated: boolean; html: string | null; timestamp: number | null }> {
+    const startTime = Date.now();
+    const cached = await this.getCached(idnp);
+    if (GRADES_DEBUG_LOGS) console.log('[grades] silentRefresh start', { idnp, hasCached: !!cached });
+    DeviceEventEmitter.emit(GRADES_REFRESH_START_EVENT, { idnp, cachedTimestamp: cached?.timestamp || null });
+
+    // If a refresh is already in progress for this IDNP, don't start another
+    if (!inflightRefresh[idnp]) {
+      inflightRefresh[idnp] = (async () => {
+        const controller = new AbortController();
+        inflightControllers[idnp]?.abort();
+        inflightControllers[idnp] = controller;
+        try {
+          const freshHtml = await fetchStudentInfo(idnp, controller.signal);
+          const currentIdnp = await AsyncStorage.getItem(IDNP_KEY);
+          if (controller.signal.aborted || currentIdnp !== idnp) {
+            if (GRADES_DEBUG_LOGS) console.log('[grades] refresh aborted or IDNP changed, skipping store');
+            await Promise.all([
+              AsyncStorage.removeItem(GRADES_CACHE_KEY_PREFIX + idnp),
+              AsyncStorage.removeItem(GRADES_CACHE_TIME_KEY_PREFIX + idnp)
+            ]);
+            DeviceEventEmitter.emit(GRADES_REFRESH_END_EVENT, { idnp, updated: false, aborted: true, duration: Date.now() - startTime });
+          } else if (freshHtml && freshHtml.trim()) {
+            if (GRADES_DEBUG_LOGS) console.log('[grades] fetched fresh HTML, storing');
+            await this.store(idnp, freshHtml);
+            if (GRADES_DEBUG_LOGS) console.log('[grades] store complete');
+            DeviceEventEmitter.emit(GRADES_REFRESH_END_EVENT, { idnp, updated: true, duration: Date.now() - startTime });
+          } else {
+            if (GRADES_DEBUG_LOGS) console.log('[grades] fresh HTML empty, keeping cache');
+            DeviceEventEmitter.emit(GRADES_REFRESH_END_EVENT, { idnp, updated: false, duration: Date.now() - startTime });
+          }
+        } catch (err) {
+          if (controller.signal.aborted) {
+            if (GRADES_DEBUG_LOGS) console.log('[grades] silentRefresh aborted');
+            DeviceEventEmitter.emit(GRADES_REFRESH_END_EVENT, { idnp, updated: false, aborted: true, duration: Date.now() - startTime });
+          } else {
+            if (GRADES_DEBUG_LOGS) console.log('[grades] silentRefresh error', err);
+            DeviceEventEmitter.emit(GRADES_REFRESH_END_EVENT, { idnp, updated: false, error: true, duration: Date.now() - startTime });
+          }
+        } finally {
+          if (inflightControllers[idnp] === controller) {
+            delete inflightControllers[idnp];
+          }
+          delete inflightRefresh[idnp];
+        }
+      })();
+    } else if (GRADES_DEBUG_LOGS) {
+      // silentRefresh deduped (in-flight)
+    }
+
+    return { updated: false, html: cached?.html || null, timestamp: cached?.timestamp || null };
   }
 };

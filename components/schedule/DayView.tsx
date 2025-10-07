@@ -1,4 +1,4 @@
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Dimensions, ViewStyle, TextStyle, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Dimensions, ViewStyle, TextStyle, ActivityIndicator, InteractionManager } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { scheduleService, DAYS_MAP, ApiResponse } from '@/services/scheduleService';
@@ -543,18 +543,26 @@ export default function DayView() {
 
   // Schedule data fetching effect
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        // Check if we need to fetch data
-        await fetchSchedule();
-      } catch (err) {
-        console.error('Failed to load schedule:', err);
-        setError('Unable to load schedule. Please try again later.');
-        setIsLoading(false);
-      }
+    const settings = scheduleService.getSettings();
+    const run = () => {
+      const loadData = async () => {
+        try {
+          await fetchSchedule();
+        } catch (err) {
+          console.error('Failed to load schedule:', err);
+          setError('Unable to load schedule. Please try again later.');
+          setIsLoading(false);
+        }
+      };
+      loadData();
     };
-    
-    loadData();
+    // If Day view not currently active, defer heavy fetch until interactions settle
+    if (settings.scheduleView !== 'day') {
+      const handle = InteractionManager.runAfterInteractions(run);
+      return () => handle.cancel && handle.cancel();
+    } else {
+      run();
+    }
   }, [fetchSchedule]);
 
   // Initial scroll to today, only once on mount

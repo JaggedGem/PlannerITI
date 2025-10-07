@@ -29,7 +29,7 @@ module.exports = () => {
     expo: {
       name: "PlannerITI",
       slug: "PlannerITI",
-      version: "1.0.0",
+      version: "1.0.1",
       orientation: "portrait",
       icon: "assets/images/icon.png",
       scheme: "myapp",
@@ -37,14 +37,16 @@ module.exports = () => {
       newArchEnabled: true,
       ios: {
         supportsTablet: true,
-        bundleIdentifier: variantConfig.iosBundleIdentifier
+        bundleIdentifier: variantConfig.iosBundleIdentifier,
+        buildNumber: "2"
       },
       android: {
         adaptiveIcon: {
           foregroundImage: "assets/images/adaptive-icon.png",
           backgroundColor: "#232433"
         },
-        package: variantConfig.androidPackage
+        package: variantConfig.androidPackage,
+        versionCode: 2
       },
       web: {
         bundler: "metro",

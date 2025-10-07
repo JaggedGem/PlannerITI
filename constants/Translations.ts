@@ -108,6 +108,14 @@ type TranslationType = {
       errorTitle: string;
       digestErrorMessage: string;
     };
+    schedule: {
+      title: string;
+      refresh: string;
+      refreshing: string;
+      group: string;
+      lastUpdated: string;
+      noRecentRefresh: string;
+    };
   };
   schedule: {
     noClassesWeekend: string;
@@ -575,6 +583,14 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         digestSentMessage: 'Check your notifications to see your daily assignment summary',
         errorTitle: 'Error',
         digestErrorMessage: 'Failed to send daily digest'
+      },
+      schedule: {
+        title: 'Schedule',
+        refresh: 'Refresh Schedule',
+        refreshing: 'Refreshing...',
+        group: 'Group',
+        lastUpdated: 'Last updated',
+        noRecentRefresh: 'No recent refresh'
       }
     },
     schedule: {
@@ -1061,6 +1077,14 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         digestSentMessage: 'Verificați notificările pentru a vedea rezumatul temelor viitoare',
         errorTitle: 'Eroare',
         digestErrorMessage: 'Nu s-a putut trimite digestul zilnic'
+      },
+      schedule: {
+        title: 'Orar',
+        refresh: 'Reîmprospătează Orarul',
+        refreshing: 'Se reîmprospătează...',
+        group: 'Grupă',
+        lastUpdated: 'Ultima actualizare',
+        noRecentRefresh: 'Nicio actualizare recentă'
       }
     },
     schedule: {
@@ -1547,6 +1571,14 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         digestSentMessage: 'Проверьте уведомления для просмотра сводного отчета по заданиям',
         errorTitle: 'Ошибка',
         digestErrorMessage: 'Не удалось отправить ежедневный дайджест'
+      },
+      schedule: {
+        title: 'Расписание',
+        refresh: 'Обновить расписание',
+        refreshing: 'Обновление...',
+        group: 'Группа',
+        lastUpdated: 'Последнее обновление',
+        noRecentRefresh: 'Нет недавних обновлений'
       }
     },
     schedule: {
