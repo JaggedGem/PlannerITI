@@ -23,6 +23,9 @@
       "android": {
         "buildType": "apk"
       },
+      "npm": {
+        "args": ["--legacy-peer-deps"]
+      },
       "env": {
         "APP_VARIANT": "beta",
         "ANDROID_PACKAGE": "me.jagged.planneriti.beta",
@@ -36,6 +39,9 @@
       "channel": "production",
       "android": {
         "buildType": "apk"
+      },
+      "npm": {
+        "args": ["--legacy-peer-deps"]
       },
       "env": {
         "APP_VARIANT": "production",
