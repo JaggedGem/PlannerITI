@@ -1,3 +1,4 @@
+import React from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator, FlatList, Modal, TextInput, Switch, Platform, Alert, Animated, ScrollView, Linking, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useEffect, useRef, useCallback, memo, useMemo } from 'react';
@@ -10,13 +11,30 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { DeviceEventEmitter } from 'react-native';
 import { useAuthContext } from '@/components/auth/AuthContext';
 import authService from '@/services/authService';
+import { 
+  handleGroupChange as handleOrphanedAssignments 
+} from '../../utils/assignmentStorage';
+import { 
+  getNotificationSettings, 
+  saveNotificationSettings, 
+  DEFAULT_NOTIFICATION_SETTINGS, 
+  NotificationSettings, 
+  scheduleAllNotifications,
+  createAndScheduleDailyDigest
+} from '../../utils/notificationUtils';
+import { getAssignments, AssignmentType } from '../../utils/assignmentStorage';
+import { StorageViewer } from '../../components/StorageViewer';
+import * as Notifications from 'expo-notifications';
+import { initializeNotifications } from '../../utils/notificationUtils';
+import { formatCompactDate } from '@/utils/dateLocalization';
 
+// Store keys
 const IDNP_KEY = '@planner_idnp';
-const IDNP_UPDATE_EVENT = 'idnp_updated';
-const AUTH_STATE_CHANGE_EVENT = 'auth_state_changed';
 const SKIP_LOGIN_KEY = '@planner_skip_login';
-const USER_CACHE_KEY = '@planner_user_cache';
+const AUTH_STATE_CHANGE_EVENT = 'auth_state_changed';
+const IDNP_UPDATE_EVENT = 'IDNP_UPDATE';
 const AUTH_TOKEN_KEY = '@auth_token';  // Adding this constant
+const IDNP_SYNC_KEY = '@planner_idnp_sync';
 
 // Import CACHE_KEYS from scheduleService
 // We need to access this directly from scheduleService to use the same keys
@@ -31,7 +49,7 @@ const languages = {
   ru: { name: 'Русский', icon: '🇷🇺' }
 };
 
-const groups: SubGroupType[] = ['Subgroup 1', 'Subgroup 2'];
+const SUBGROUPS: SubGroupType[] = ['Subgroup 1', 'Subgroup 2'];
 
 // Array of theme-appropriate colors for random selection
 const THEME_COLORS = [
@@ -112,6 +130,7 @@ const TimePicker = ({
   onChange, 
   label,
   onClose,
+  onConfirm,
   use12HourFormat = false,
   translations = { cancel: 'Cancel', confirm: 'Confirm' }
 }: { 
@@ -119,6 +138,7 @@ const TimePicker = ({
   onChange: (date: Date) => void;
   label: string;
   onClose: () => void;
+  onConfirm?: (date: Date) => void;
   use12HourFormat?: boolean;
   translations?: { cancel: string; confirm: string };
 }) => {
@@ -253,6 +273,9 @@ const TimePicker = ({
 
   const handleConfirm = () => {
     onChange(localValue);
+    if (onConfirm) {
+      onConfirm(localValue);
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     onClose();
   };
@@ -289,10 +312,13 @@ const TimePicker = ({
                 snapToInterval={itemHeight}
                 decelerationRate={Platform.select({ ios: 0.992, android: 0.985 })}
                 onScroll={handleHourScroll}
+                onScrollBeginDrag={handleScrollBeginDrag}
+                onScrollEndDrag={(e) => handleScrollEndDrag(e, 'hours')}
                 onMomentumScrollEnd={() => Haptics.selectionAsync()}
                 scrollEventThrottle={16}
                 style={{ height: itemHeight * visibleItems }}
                 contentContainerStyle={{ paddingVertical: itemHeight * 2 }}
+                nestedScrollEnabled={true}
               >
                 {hours.map((hour) => (
                   <View key={`hour-${hour}`} style={[styles.timePickerItem, { height: itemHeight }]}>
@@ -316,10 +342,13 @@ const TimePicker = ({
                 snapToInterval={itemHeight}
                 decelerationRate={Platform.select({ ios: 0.992, android: 0.985 })}
                 onScroll={handleMinuteScroll}
+                onScrollBeginDrag={handleScrollBeginDrag}
+                onScrollEndDrag={(e) => handleScrollEndDrag(e, 'minutes')}
                 onMomentumScrollEnd={() => Haptics.selectionAsync()}
                 scrollEventThrottle={16}
                 style={{ height: itemHeight * visibleItems }}
                 contentContainerStyle={{ paddingVertical: itemHeight * 2 }}
+                nestedScrollEnabled={true}
               >
                 {minutes.map((minute) => (
                   <View key={`minute-${minute}`} style={[
@@ -355,14 +384,14 @@ const TimePicker = ({
           </View>
 
           <View style={styles.timePickerActions}>
-            <TouchableOpacity
-              style={[styles.timePickerButton, styles.timePickerCancelButton]}
+            <TouchableOpacity 
+              style={[styles.timePickerButton, styles.timePickerCancelButton]} 
               onPress={onClose}
             >
               <Text style={styles.timePickerButtonText}>{translations.cancel}</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.timePickerButton, styles.timePickerConfirmButton]}
+            <TouchableOpacity 
+              style={[styles.timePickerButton, styles.timePickerConfirmButton]} 
               onPress={handleConfirm}
             >
               <Text style={[styles.timePickerButtonText, styles.timePickerConfirmText]}>{translations.confirm}</Text>
@@ -380,20 +409,22 @@ const CustomToggle = ({
   onValueChange, 
   activeColor = '#2C3DCD',
   inactiveColor = '#232433',
-  thumbColor = '#ffffff'
+  thumbColor = '#ffffff',
+  disabled = false
 }: { 
   value: boolean;
   onValueChange: (value: boolean) => void;
   activeColor?: string;
   inactiveColor?: string;
   thumbColor?: string;
+  disabled?: boolean;
 }) => {
   const translateX = useRef(new Animated.Value(value ? 22 : 2)).current;
   const backgroundColorAnim = useRef(new Animated.Value(value ? 1 : 0)).current;
   
   const backgroundColor = backgroundColorAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [inactiveColor, activeColor]
+    outputRange: [disabled ? '#3A3A3A' : inactiveColor, disabled ? '#6B7DB3' : activeColor]
   });
 
   useEffect(() => {
@@ -413,24 +444,26 @@ const CustomToggle = ({
   }, [value]);
 
   const toggleSwitch = () => {
+    if (disabled) return;
+    
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onValueChange(!value);
   };
 
   return (
     <TouchableOpacity 
-      activeOpacity={0.8} 
+      activeOpacity={disabled ? 1 : 0.8} 
       onPress={toggleSwitch}
     >
       <Animated.View style={[
         styles.toggleContainer,
-        { backgroundColor }
+        { backgroundColor, opacity: disabled ? 0.6 : 1 }
       ]}>
         <Animated.View style={[
           styles.toggleThumb,
-          { transform: [{ translateX }] }
+          { transform: [{ translateX }], backgroundColor: disabled ? '#CCCCCC' : thumbColor }
         ]}>
-          {value && (
+          {value && !disabled && (
             <MaterialIcons name="check" size={14} color={activeColor} style={styles.toggleIcon} />
           )}
         </Animated.View>
@@ -440,7 +473,7 @@ const CustomToggle = ({
 };
 
 export default function Settings() {
-  const { t } = useTranslation();
+  const { t, currentLanguage } = useTranslation();
   const router = useRouter();
   const flatListRef = useRef<FlatList<Group>>(null);
   const { user, logout, reloadUser, loading } = useAuthContext();
@@ -481,6 +514,51 @@ export default function Settings() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!user);
   // Add state for tracking whether the user has skipped login
   const [skipLogin, setSkipLogin] = useState<boolean>(false);
+  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(DEFAULT_NOTIFICATION_SETTINGS);
+  const [showNotificationTimeModal, setShowNotificationTimeModal] = useState(false);
+  const [tempNotificationTime, setTempNotificationTime] = useState(new Date());
+  const [storageModalVisible, setStorageModalVisible] = useState(false);
+  const [storageItems, setStorageItems] = useState<[string, string | null][]>([]);
+  const [syncIdnp, setSyncIdnp] = useState<boolean>(true);
+  // Schedule refresh state
+  const [isRefreshingSchedule, setIsRefreshingSchedule] = useState(false);
+  const [lastScheduleRefresh, setLastScheduleRefresh] = useState<Date | null>(null);
+
+  // Load last refresh time on mount
+  useEffect(() => {
+    (async () => {
+      const last = await scheduleService.getLastScheduleFetchTime();
+      setLastScheduleRefresh(last);
+    })();
+  }, []);
+
+  const handleManualScheduleRefresh = useCallback(async () => {
+    if (isRefreshingSchedule) return;
+    setIsRefreshingSchedule(true);
+    try {
+      const refreshed = await scheduleService.refreshSchedule(true);
+      if (refreshed) {
+        const last = await scheduleService.getLastScheduleFetchTime();
+        setLastScheduleRefresh(last);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        Alert.alert('Offline', 'Using cached schedule');
+      }
+    } catch (e) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Schedule', 'Failed to refresh schedule');
+    } finally {
+      setIsRefreshingSchedule(false);
+    }
+  }, [isRefreshingSchedule]);
+
+  const handleClearScheduleCache = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await scheduleService.clearScheduleCache();
+    setLastScheduleRefresh(null);
+    Alert.alert('Cache Cleared', 'Schedule cache removed. Refresh to fetch latest data.');
+  }, []);
 
   // Add useEffect to load IDNP and listen for updates
   useEffect(() => {
@@ -488,8 +566,10 @@ export default function Settings() {
       try {
         const idnp = await AsyncStorage.getItem(IDNP_KEY);
         const hasSkipped = await AsyncStorage.getItem(SKIP_LOGIN_KEY);
+        const syncSetting = await AsyncStorage.getItem(IDNP_SYNC_KEY);
         setSavedIdnp(idnp);
         setSkipLogin(hasSkipped === 'true');
+        setSyncIdnp(syncSetting !== 'false'); // Default to true if not set
       } catch (error) {
         // Silent error handling
       }
@@ -546,6 +626,27 @@ export default function Settings() {
     }, [])
   );
 
+  // Use useFocusEffect to ensure settings are up to date when the screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      // Update settings from the service when the screen comes into focus
+      setSettings(scheduleService.getSettings());
+      
+      // Check auth state
+      const checkAuthState = async () => {
+        try {
+          // Check if the skip login flag is set
+          const hasSkipped = await AsyncStorage.getItem(SKIP_LOGIN_KEY);
+          setSkipLogin(hasSkipped === 'true');
+        } catch (error) {
+          // Silent error handling
+        }
+      };
+
+      checkAuthState();
+    }, [])
+  );
+
   // Custom clear IDNP function
   const handleClearIdnp = useCallback(() => {
     setConfirmDialogType('idnp');
@@ -555,19 +656,45 @@ export default function Settings() {
   // Handle IDNP confirmation
   const handleConfirmClearIdnp = useCallback(async () => {
     try {
+      const currentIdnp = await AsyncStorage.getItem(IDNP_KEY);
+      
+      // Remove local IDNP
       await AsyncStorage.removeItem(IDNP_KEY);
       setSavedIdnp(null);
+      
+      // Clear ALL grades-related cached data (legacy and new cache keys)
+      await AsyncStorage.removeItem('@planner_grades_data');
+      await AsyncStorage.removeItem('@planner_grades_timestamp');
+      
+      // Clear the new gradesService cache keys if we have an IDNP
+      if (currentIdnp) {
+        await AsyncStorage.removeItem(`@grades_cache_html_${currentIdnp}`);
+        await AsyncStorage.removeItem(`@grades_cache_time_${currentIdnp}`);
+      }
+      
       // Emit null to notify that IDNP has been cleared
       DeviceEventEmitter.emit(IDNP_UPDATE_EVENT, null);
+      
+      // Delete from server if sync is enabled and user is authenticated - Temporarily disabled
+      /* if (syncIdnp && isAuthenticated) {
+        try {
+          await authService.deleteEncryptedData('idnp');
+        } catch (error) {
+          console.error('Error deleting IDNP from server:', error);
+          // Continue even if server deletion fails - local data is already cleared
+        }
+      } */
+      
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setShowConfirmDialog(false);
       
       // Use replace instead of push to force a screen refresh
       router.replace('/grades');
     } catch (error) {
-      // Silent error handling
+      console.error('Error clearing IDNP:', error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
-  }, [router]);
+  }, [router, syncIdnp, isAuthenticated]);
 
   const handleDeletePeriod = useCallback((periodId: string) => {
     setPeriodToDelete(periodId);
@@ -593,11 +720,30 @@ export default function Settings() {
     scheduleService.updateSettings({ group });
   }, []);
 
-  const handleGroupSelection = useCallback((group: Group) => {
+  const handleGroupSelection = useCallback(async (group: Group) => {
+    // Get the current settings to preserve the subgroup selection
+    const currentSettings = scheduleService.getSettings();
+    
+    // Update the group settings - maintain the current subgroup or set default if not set
     scheduleService.updateSettings({ 
       selectedGroupId: group._id,
-      selectedGroupName: group.name
+      selectedGroupName: group.name,
+      group: currentSettings.group || SUBGROUPS[0]
     });
+    
+    // Update the last refresh timestamp to current time
+    setLastScheduleRefresh(new Date());
+    
+    // Handle orphaned assignments asynchronously after settings update
+    setTimeout(async () => {
+      try {
+        // Pass the group ID (string) to handle orphaned assignments
+        await handleOrphanedAssignments(group._id);
+      } catch (error) {
+        console.error("Error handling group change for assignments:", error);
+      }
+    }, 100);
+    
     setShowGroupModal(false);
     setSearchQuery('');
   }, []);
@@ -659,7 +805,8 @@ export default function Settings() {
   // Effect hooks
   useEffect(() => {
     const unsubscribe = scheduleService.subscribe(() => {
-      setSettings(scheduleService.getSettings());
+      const updatedSettings = scheduleService.getSettings();
+      setSettings(updatedSettings);
     });
 
     const fetchGroups = async () => {
@@ -800,9 +947,9 @@ export default function Settings() {
     );
   }, []);
 
-  const handleTimePickerChange = (type: 'start' | 'end') => (date: Date) => {
+  const handleTimePickerChange = useCallback((type: 'start' | 'end') => (date: Date) => {
     type === 'start' ? setStartTime(date) : setEndTime(date);
-  };
+  }, []);
 
   const handleLogout = async () => {
     setShowAccountActionSheet(false);
@@ -913,20 +1060,8 @@ export default function Settings() {
   };
 
   // Function to render the account section based on authentication state
-  const renderAccountSection = () => {
-    const [gravatarProfile, setGravatarProfile] = useState<{ display_name?: string; avatar_url?: string } | null>(null);
-  
-    // Load Gravatar profile when user data changes
-    useEffect(() => {
-      const loadGravatarProfile = async () => {
-        if (user?.email) {
-          const profile = await authService.getGravatarProfile(user.email);
-          setGravatarProfile(profile);
-        }
-      };
-      loadGravatarProfile();
-    }, [user]);
-  
+  const renderAccountSection = useCallback(() => {
+    // Use MemoizedGravatarProfile component instead of creating state inside render function
     if (!isAuthenticated) {
       return (
         <View style={styles.section}>
@@ -942,47 +1077,68 @@ export default function Settings() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>{t('settings').account.title}</Text>
         <View style={styles.accountInfo}>
-          <TouchableOpacity 
-            style={styles.accountAvatar}
-            onPress={() => Linking.openURL('https://gravatar.com')}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            {gravatarProfile?.avatar_url ? (
-              <Image 
-                source={{ uri: gravatarProfile.avatar_url }} 
-                style={styles.avatarImage}
-                defaultSource={require('../../assets/images/default-avatar.jpg')}
-              />
-            ) : (
-              <Text style={styles.avatarText}>
-                {user?.email.charAt(0).toUpperCase()}
-              </Text>
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.accountDetails}
-            onPress={() => setShowAccountActionSheet(true)}
-            activeOpacity={0.7}
-          >
-            <View style={styles.accountDetailsContent}>
-              <Text style={styles.accountEmail} numberOfLines={1}>
-                {gravatarProfile?.display_name || user?.email}
-              </Text>
-              {!user?.is_verified && (
-                <View style={styles.verificationBadge}>
-                  <MaterialIcons name="warning" size={14} color="#FFB020" />
-                  <Text style={styles.verificationText}>
-                    {t('settings').account.notVerified}
-                  </Text>
-                </View>
-              )}
-            </View>
-            <MaterialIcons name="chevron-right" size={24} color="#8A8A8D" />
-          </TouchableOpacity>
+          <MemoizedGravatarProfile />
         </View>
       </View>
     );
-  };
+  }, [isAuthenticated, router, t]);
+  
+  // Separate component for Gravatar profile to handle its own state
+  const MemoizedGravatarProfile = memo(() => {
+    const [gravatarProfile, setGravatarProfile] = useState<{ display_name?: string; avatar_url?: string } | null>(null);
+    
+    useEffect(() => {
+      const loadGravatarProfile = async () => {
+        if (user?.email) {
+          const profile = await authService.getGravatarProfile(user.email);
+          setGravatarProfile(profile);
+        }
+      };
+      loadGravatarProfile();
+    }, []);
+    
+    return (
+      <>
+        <TouchableOpacity 
+          style={styles.accountAvatar}
+          onPress={() => Linking.openURL('https://gravatar.com')}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          {gravatarProfile?.avatar_url ? (
+            <Image 
+              source={{ uri: gravatarProfile.avatar_url }} 
+              style={styles.avatarImage}
+              defaultSource={require('../../assets/images/default-avatar.jpg')}
+            />
+          ) : (
+            <Text style={styles.avatarText}>
+              {user?.email.charAt(0).toUpperCase()}
+            </Text>
+          )}
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={styles.accountDetails}
+          onPress={() => setShowAccountActionSheet(true)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.accountDetailsContent}>
+            <Text style={styles.accountEmail} numberOfLines={1}>
+              {gravatarProfile?.display_name || user?.email}
+            </Text>
+            {!user?.is_verified && (
+              <View style={styles.verificationBadge}>
+                <MaterialIcons name="warning" size={14} color="#FFB020" />
+                <Text style={styles.verificationText}>
+                  {t('settings').account.notVerified}
+                </Text>
+              </View>
+            )}
+          </View>
+          <MaterialIcons name="chevron-right" size={24} color="#8A8A8D" />
+        </TouchableOpacity>
+      </>
+    );
+  });
 
   // Function to render the developer section
   const renderDeveloperSection = () => {
@@ -1010,73 +1166,548 @@ export default function Settings() {
             onPress={() => {
               scheduleService.resetSettings();
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              Alert.alert('Success', 'Settings have been reset');
+              Alert.alert('Success', 'Schedule settings have been reset');
             }}
           >
-            <MaterialIcons name="settings-backup-restore" size={24} color="#FFB020" />
-            <Text style={styles.devToolText}>Reset Settings</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.devToolButton}
-            onPress={() => {
-              DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, { 
-                isAuthenticated: false,
-                skipped: false 
-              });
-              setIsAuthenticated(false);
-              setSkipLogin(false);
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              Alert.alert('Success', 'Auth state reset');
-            }}
-          >
-            <MaterialIcons name="lock-reset" size={24} color="#2C3DCD" />
-            <Text style={styles.devToolText}>Reset Auth State</Text>
+            <MaterialIcons name="restart-alt" size={24} color="#FFD700" />
+            <Text style={styles.devToolText}>Reset Schedule Settings</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.devToolButton}
             onPress={async () => {
-              // Toggle debug mode
-              const currentMode = await AsyncStorage.getItem('@debug_mode') === 'true';
-              await AsyncStorage.setItem('@debug_mode', (!currentMode).toString());
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              Alert.alert('Debug Mode', currentMode ? 'Disabled' : 'Enabled');
+              try {
+                // Cancel all existing notifications
+                await Notifications.cancelAllScheduledNotificationsAsync();
+                
+                // Reset notification channels (Android only)
+                if (Platform.OS === 'android') {
+                  try {
+                    await Notifications.deleteNotificationChannelAsync('assignments');
+                  } catch (e) {
+                    // Channel may not exist, ignore error
+                  }
+                }
+                
+                // Re-initialize the notification system
+                await initializeNotifications();
+                
+                // Refresh all notifications
+                const assignments = await getAssignments();
+                await scheduleAllNotifications(assignments);
+                
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                Alert.alert('Success', 'Notification system reset. This can resolve issues with timing.');
+              } catch (error) {
+                console.error('Error resetting notification system:', error);
+                Alert.alert('Error', 'Failed to reset notification system');
+              }
             }}
           >
-            <MaterialIcons name="bug-report" size={24} color="#26A69A" />
-            <Text style={styles.devToolText}>Toggle Debug Mode</Text>
+            <MaterialIcons name="refresh" size={24} color="#9C27B0" />
+            <Text style={styles.devToolText}>Reset Notification System</Text>
           </TouchableOpacity>
-          
+
           <TouchableOpacity
             style={styles.devToolButton}
             onPress={async () => {
-              // Clear schedule cache
-              const keys = await AsyncStorage.getAllKeys();
-              const scheduleCacheKeys = keys.filter(key => key.startsWith(SCHEDULE_PREFIX));
-              await AsyncStorage.multiRemove(scheduleCacheKeys);
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              Alert.alert('Success', 'Schedule cache cleared');
+              try {
+                // Get all keys
+                const keys = await AsyncStorage.getAllKeys();
+                
+                // Get all values for the keys
+                const results = await AsyncStorage.multiGet(keys);
+                
+                // Save storage items and show modal
+                setStorageItems([...results]);
+                setStorageModalVisible(true);
+                
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              } catch (error) {
+                console.error('Error viewing AsyncStorage:', error);
+                Alert.alert('Error', 'Failed to view AsyncStorage contents');
+              }
             }}
           >
-            <MaterialIcons name="event-busy" size={24} color="#EC407A" />
-            <Text style={styles.devToolText}>Clear Schedule Cache</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={styles.devToolButton}
-            onPress={() => {
-              // Show AsyncStorage keys - implementation depends on your UI preferences
-              Alert.alert('Not implemented', 'This feature would display all AsyncStorage keys');
-            }}
-          >
-            <MaterialIcons name="list-alt" size={24} color="#66BB6A" />
-            <Text style={styles.devToolText}>View Storage Keys</Text>
+            <MaterialIcons name="storage" size={24} color="#42A5F5" />
+            <Text style={styles.devToolText}>View AsyncStorage</Text>
           </TouchableOpacity>
         </View>
       </View>
     );
   };
+
+  // Load notification settings
+  useEffect(() => {
+    const loadNotificationSettings = async () => {
+      try {
+        const settings = await getNotificationSettings();
+        setNotificationSettings(settings);
+        
+        // Set up temp notification time from stored settings
+        const notificationTime = new Date();
+        const timeFromSettings = new Date(settings.notificationTime);
+        notificationTime.setHours(timeFromSettings.getHours());
+        notificationTime.setMinutes(timeFromSettings.getMinutes());
+        setTempNotificationTime(notificationTime);
+      } catch (error) {
+        console.error('Error loading notification settings:', error);
+      }
+    };
+    
+    loadNotificationSettings();
+  }, []);
+  
+  // Handle notification toggle
+  const handleToggleNotifications = useCallback(async (value: boolean) => {
+    try {
+      const updatedSettings = { ...notificationSettings, enabled: value };
+      setNotificationSettings(updatedSettings);
+      await saveNotificationSettings(updatedSettings);
+      
+      // If enabling notifications, schedule them for all assignments
+      if (value) {
+        const assignments = await getAssignments();
+        await scheduleAllNotifications(assignments);
+      }
+    } catch (error) {
+      console.error('Error toggling notifications:', error);
+    }
+  }, [notificationSettings]);
+  
+  // Handle saving notification time
+  const handleSaveNotificationTime = useCallback(async () => {
+    try {
+      // Create a new date object with just the time component
+      const updatedTime = new Date();
+      updatedTime.setHours(tempNotificationTime.getHours());
+      updatedTime.setMinutes(tempNotificationTime.getMinutes());
+      updatedTime.setSeconds(0);
+      updatedTime.setMilliseconds(0);
+      
+      const updatedSettings = { 
+        ...notificationSettings, 
+        notificationTime: updatedTime.toISOString() 
+      };
+      
+      setNotificationSettings(updatedSettings);
+      await saveNotificationSettings(updatedSettings);
+      
+      // Reschedule notifications with the new time
+      const assignments = await getAssignments();
+      await scheduleAllNotifications(assignments);
+      
+      setShowNotificationTimeModal(false);
+    } catch (error) {
+      console.error('Error saving notification time:', error);
+    }
+  }, [notificationSettings, tempNotificationTime]);
+  
+  // Handle updating reminder days setting
+  const handleUpdateReminderDays = useCallback(async (setting: keyof NotificationSettings, value: number) => {
+    try {
+      if (value < 0) return; // Prevent negative values
+      
+      const updatedSettings = { ...notificationSettings, [setting]: value };
+      setNotificationSettings(updatedSettings);
+      await saveNotificationSettings(updatedSettings);
+      
+      // Reschedule notifications with the new settings
+      const assignments = await getAssignments();
+      await scheduleAllNotifications(assignments);
+    } catch (error) {
+      console.error('Error updating reminder days:', error);
+    }
+  }, [notificationSettings]);
+  
+  // Handle daily reminders toggle
+  const handleToggleDailyReminders = useCallback(async (setting: keyof NotificationSettings, value: boolean) => {
+    try {
+      const updatedSettings = { ...notificationSettings, [setting]: value };
+      setNotificationSettings(updatedSettings);
+      await saveNotificationSettings(updatedSettings);
+      
+      // Reschedule notifications with the new settings
+      const assignments = await getAssignments();
+      await scheduleAllNotifications(assignments);
+    } catch (error) {
+      console.error('Error toggling daily reminders:', error);
+    }
+  }, [notificationSettings]);
+  
+  // Format time for display (12 or 24 hour)
+  const formatTimeDisplay = useCallback((date: Date) => {
+    const hours = date.getHours();
+    const minutes = date.getMinutes();
+    
+    // 12-hour format
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours % 12 || 12; // Convert 0 to 12 for 12 AM
+    const displayMinutes = minutes < 10 ? `0${minutes}` : minutes;
+    
+    return `${displayHours}:${displayMinutes} ${period}`;
+  }, []);
+  
+  // Show notification time picker
+  const handleShowNotificationTimePicker = useCallback(() => {
+    // Create a date object from the stored notification time
+    const date = new Date(notificationSettings.notificationTime);
+    setTempNotificationTime(date);
+    setShowNotificationTimeModal(true);
+  }, [notificationSettings]);
+  
+  // Render notification settings section
+  const renderNotificationSettings = useCallback(() => {
+    return (
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <MaterialIcons name="notifications" size={24} color="#3478F6" style={styles.sectionIcon} />
+          <Text style={styles.sectionTitle}>{t('settings').notifications.title}</Text>
+        </View>
+        
+        {/* Master toggle card */}
+        <View style={styles.card}>
+          <View style={styles.settingItem}>
+            <View style={styles.settingLabelContainer}>
+              <Text style={styles.settingLabel}>{t('settings').notifications.enabled}</Text>
+              <Text style={styles.settingDescription}>
+                {notificationSettings.enabled 
+                  ? t('settings').notifications.enabledDescription 
+                  : t('settings').notifications.disabledDescription}
+              </Text>
+            </View>
+            <CustomToggle
+              value={notificationSettings.enabled}
+              onValueChange={handleToggleNotifications}
+              activeColor="#3478F6"
+            />
+          </View>
+        </View>
+        
+        {notificationSettings.enabled && (
+          <>
+            {/* Time settings card */}
+            <View style={styles.card}>
+              <View style={styles.cardHeader}>
+                <MaterialIcons name="access-time" size={20} color="#3478F6" />
+                <Text style={styles.cardTitle}>{t('settings').notifications.timeSettings}</Text>
+              </View>
+              
+              <View style={styles.settingItem}>
+                <View style={styles.settingLabelContainer}>
+                  <Text style={styles.settingLabel}>{t('settings').notifications.time}</Text>
+                  <Text style={styles.settingDescription}>
+                    {t('settings').notifications.timeDescription}
+                  </Text>
+                </View>
+          <TouchableOpacity
+                  style={styles.timeButton}
+                  onPress={handleShowNotificationTimePicker}
+                >
+                  <Text style={styles.timeButtonText}>
+                    {formatTimeDisplay(new Date(notificationSettings.notificationTime))}
+                  </Text>
+                  <MaterialIcons name="edit" size={16} color="#3478F6" />
+          </TouchableOpacity>
+              </View>
+            </View>
+            
+            {/* Reminder days card */}
+            <View style={styles.card}>
+              <View style={styles.cardHeader}>
+                <MaterialIcons name="event" size={20} color="#3478F6" />
+                <Text style={styles.cardTitle}>{t('settings').notifications.reminderDays}</Text>
+              </View>
+              
+              <Text style={styles.cardDescription}>
+                {t('settings').notifications.reminderDaysDescription}
+              </Text>
+              
+              {/* Important assignments group */}
+              <View style={styles.reminderGroup}>
+                <Text style={styles.reminderGroupTitle}>{t('settings').notifications.importantAssignments}</Text>
+                
+                <ReminderSetting
+                  label={t('settings').notifications.exams}
+                  value={notificationSettings.examReminderDays}
+                  onDecrease={() => handleUpdateReminderDays('examReminderDays', notificationSettings.examReminderDays - 1)}
+                  onIncrease={() => handleUpdateReminderDays('examReminderDays', notificationSettings.examReminderDays + 1)}
+                  isMinValue={notificationSettings.examReminderDays <= 1}
+                  icon="school"
+                  accentColor="#FF5757"
+                />
+                
+                <ReminderSetting
+                  label={t('settings').notifications.tests}
+                  value={notificationSettings.testReminderDays}
+                  onDecrease={() => handleUpdateReminderDays('testReminderDays', notificationSettings.testReminderDays - 1)}
+                  onIncrease={() => handleUpdateReminderDays('testReminderDays', notificationSettings.testReminderDays + 1)}
+                  isMinValue={notificationSettings.testReminderDays <= 1}
+                  icon="assignment"
+                  accentColor="#3478F6"
+                />
+                
+                <ReminderSetting
+                  label={t('settings').notifications.quizzes}
+                  value={notificationSettings.quizReminderDays}
+                  onDecrease={() => handleUpdateReminderDays('quizReminderDays', notificationSettings.quizReminderDays - 1)}
+                  onIncrease={() => handleUpdateReminderDays('quizReminderDays', notificationSettings.quizReminderDays + 1)}
+                  isMinValue={notificationSettings.quizReminderDays <= 1}
+                  icon="quiz"
+                  accentColor="#FFB930"
+                />
+              </View>
+              
+              {/* Other assignments group */}
+              <View style={styles.reminderGroup}>
+                <Text style={styles.reminderGroupTitle}>{t('settings').notifications.otherAssignments}</Text>
+                
+                <ReminderSetting
+                  label={t('settings').notifications.projects}
+                  value={notificationSettings.projectReminderDays}
+                  onDecrease={() => handleUpdateReminderDays('projectReminderDays', notificationSettings.projectReminderDays - 1)}
+                  onIncrease={() => handleUpdateReminderDays('projectReminderDays', notificationSettings.projectReminderDays + 1)}
+                  isMinValue={notificationSettings.projectReminderDays <= 1}
+                  icon="category"
+                  accentColor="#4CAF50"
+                />
+                
+                <ReminderSetting
+                  label={t('settings').notifications.homework}
+                  value={notificationSettings.homeworkReminderDays}
+                  onDecrease={() => handleUpdateReminderDays('homeworkReminderDays', notificationSettings.homeworkReminderDays - 1)}
+                  onIncrease={() => handleUpdateReminderDays('homeworkReminderDays', notificationSettings.homeworkReminderDays + 1)}
+                  isMinValue={notificationSettings.homeworkReminderDays <= 1}
+                  icon="book"
+                  accentColor="#9C27B0"
+                />
+                
+                <ReminderSetting
+                  label={t('settings').notifications.other}
+                  value={notificationSettings.otherReminderDays}
+                  onDecrease={() => handleUpdateReminderDays('otherReminderDays', notificationSettings.otherReminderDays - 1)}
+                  onIncrease={() => handleUpdateReminderDays('otherReminderDays', notificationSettings.otherReminderDays + 1)}
+                  isMinValue={notificationSettings.otherReminderDays <= 1}
+                  icon="more-horiz"
+                  accentColor="#607D8B"
+                />
+              </View>
+            </View>
+            
+            {/* Daily reminders card */}
+            <View style={styles.card}>
+              <View style={styles.cardHeader}>
+                <MaterialIcons name="update" size={20} color="#3478F6" />
+                <Text style={styles.cardTitle}>{t('settings').notifications.dailyReminders}</Text>
+              </View>
+              
+              <Text style={styles.cardDescription}>
+                {t('settings').notifications.dailyRemindersDescription}
+              </Text>
+              
+              <View style={styles.settingItem}>
+                <View style={styles.settingLabelContainer}>
+                  <View style={styles.settingLabelWithIcon}>
+                    <MaterialIcons name="school" size={18} color="#FF5757" style={styles.settingItemIcon} />
+                    <Text style={styles.settingLabel}>{t('settings').notifications.dailyExams}</Text>
+                  </View>
+                </View>
+                <CustomToggle
+                  value={notificationSettings.dailyRemindersForExams}
+                  onValueChange={(value) => handleToggleDailyReminders('dailyRemindersForExams', value)}
+                  activeColor="#FF5757"
+                />
+              </View>
+              
+              <View style={styles.settingItem}>
+                <View style={styles.settingLabelContainer}>
+                  <View style={styles.settingLabelWithIcon}>
+                    <MaterialIcons name="assignment" size={18} color="#3478F6" style={styles.settingItemIcon} />
+                    <Text style={styles.settingLabel}>{t('settings').notifications.dailyTests}</Text>
+                  </View>
+                </View>
+                <CustomToggle
+                  value={notificationSettings.dailyRemindersForTests}
+                  onValueChange={(value) => handleToggleDailyReminders('dailyRemindersForTests', value)}
+                  activeColor="#3478F6"
+                />
+              </View>
+              
+              <View style={styles.settingItem}>
+                <View style={styles.settingLabelContainer}>
+                  <View style={styles.settingLabelWithIcon}>
+                    <MaterialIcons name="quiz" size={18} color="#FFB930" style={styles.settingItemIcon} />
+                    <Text style={styles.settingLabel}>{t('settings').notifications.dailyQuizzes}</Text>
+                  </View>
+                </View>
+                <CustomToggle
+                  value={notificationSettings.dailyRemindersForQuizzes}
+                  onValueChange={(value) => handleToggleDailyReminders('dailyRemindersForQuizzes', value)}
+                  activeColor="#FFB930"
+                />
+              </View>
+            </View>
+
+            {/* Send daily digest now button */}
+            {IS_DEV && (
+              <TouchableOpacity
+                style={[styles.testNotificationButton, { backgroundColor: '#4CAF50', marginTop: 8 }]}
+                onPress={async () => {
+                  try {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    const assignments = await getAssignments();
+                    await createAndScheduleDailyDigest(assignments, true);
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                    Alert.alert(
+                      t('settings').notifications.digestSentTitle,
+                      t('settings').notifications.digestSentMessage
+                    );
+                  } catch (error) {
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                    Alert.alert(
+                      t('settings').notifications.errorTitle,
+                      t('settings').notifications.digestErrorMessage
+                    );
+                    console.error('Daily digest error:', error);
+                  }
+                }}
+              >
+                <MaterialIcons name="calendar-today" size={20} color="#FFFFFF" style={styles.testNotificationIcon} />
+                <Text style={styles.testNotificationText}>
+                  {t('settings').notifications.sendDigestNow}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </>
+        )}
+      </View>
+    );
+  }, [
+    t, 
+    notificationSettings, 
+    handleToggleNotifications, 
+    handleUpdateReminderDays, 
+    handleToggleDailyReminders, 
+    handleShowNotificationTimePicker,
+    formatTimeDisplay
+  ]);
+
+  // Component for reminder day settings with consistent styling
+  const ReminderSetting = ({
+    label,
+    value,
+    onDecrease,
+    onIncrease,
+    isMinValue,
+    icon,
+    accentColor = '#3478F6'
+  }: {
+    label: string;
+    value: number;
+    onDecrease: () => void;
+    onIncrease: () => void;
+    isMinValue: boolean;
+    icon: keyof typeof MaterialIcons.glyphMap;
+    accentColor?: string;
+  }) => (
+    <View style={styles.reminderSettingItem}>
+      <View style={styles.settingLabelWithIcon}>
+        <MaterialIcons name={icon} size={18} color={accentColor} style={styles.settingItemIcon} />
+        <Text style={styles.settingLabel}>{label}</Text>
+      </View>
+      <View style={styles.dayCounter}>
+          <TouchableOpacity
+          style={[styles.counterButton, isMinValue && styles.counterButtonDisabled]}
+          onPress={onDecrease}
+          disabled={isMinValue}
+        >
+          <MaterialIcons name="remove" size={18} color={isMinValue ? '#555' : accentColor} />
+          </TouchableOpacity>
+        
+        <View style={[styles.counterValueContainer, { borderColor: accentColor }]}>
+          <Text style={styles.counterValue}>{value}</Text>
+          <Text style={styles.counterUnit}>{t('settings').notifications.days}</Text>
+        </View>
+        
+        <TouchableOpacity 
+          style={styles.counterButton}
+          onPress={onIncrease}
+        >
+          <MaterialIcons name="add" size={18} color={accentColor} />
+        </TouchableOpacity>
+        </View>
+      </View>
+    );
+
+  // Handle notification time change 
+  const handleNotificationTimeChange = useCallback((date: Date) => {
+    setTempNotificationTime(date);
+  }, []);
+
+  const handleCloseTimePicker = useCallback(() => {
+    setShowNotificationTimeModal(false);
+  }, []);
+
+  const handleConfirmTimePicker = useCallback(async (date: Date) => {
+    try {
+      // Create a new date object with just the time component
+      const updatedTime = new Date();
+      updatedTime.setHours(date.getHours());
+      updatedTime.setMinutes(date.getMinutes());
+      updatedTime.setSeconds(0);
+      updatedTime.setMilliseconds(0);
+      
+      const updatedSettings = { 
+        ...notificationSettings, 
+        notificationTime: updatedTime.toISOString() 
+      };
+      
+      setNotificationSettings(updatedSettings);
+      await saveNotificationSettings(updatedSettings);
+      
+      // Reschedule notifications with the new time
+      const assignments = await getAssignments();
+      await scheduleAllNotifications(assignments);
+      
+      // Close the modal
+      setShowNotificationTimeModal(false);
+      
+      // Debugging
+    } catch (error) {
+      console.error('Error saving notification time:', error);
+    }
+  }, [notificationSettings]);
+
+  // Handle IDNP sync toggle - Temporarily disabled - To be implemented later
+  /* const handleIdnpSyncToggle = useCallback(async (value: boolean) => {
+    try {
+      // Check if user is authenticated before proceeding
+      if (!isAuthenticated) {
+        // If not authenticated, prompt to sign in
+        router.push('/auth');
+        return;
+      }
+      
+      setSyncIdnp(value);
+      await AsyncStorage.setItem(IDNP_SYNC_KEY, value ? 'true' : 'false');
+      
+      // If sync is disabled, delete IDNP from server (placeholder for future implementation)
+      if (!value && savedIdnp) {
+        // Placeholder for API call to delete IDNP from server
+        // Example: await apiService.deleteIdnp();
+      }
+      
+      // If sync is enabled and we have an IDNP, sync it to server (placeholder)
+      if (value && savedIdnp) {
+        // Placeholder for API call to sync IDNP to server
+        // Example: await apiService.syncIdnp(savedIdnp);
+      }
+      
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch (error) {
+      console.error('Error toggling IDNP sync:', error);
+    }
+  }, [savedIdnp, isAuthenticated, router]); */
 
   return (
     <SafeAreaView style={styles.container}>
@@ -1084,35 +1715,78 @@ export default function Settings() {
         {/* Account Section */}
         {renderAccountSection()}
 
-        {/* Add IDNP section before Language Selection */}
+        {/* IDNP Sync Settings - Temporarily disabled - To be implemented later */}
+        {/* <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t('settings').idnp.syncTitle}</Text>
+          
+          <View style={styles.elevatedContainer}>
+            <View style={styles.syncHeader}>
+              <View style={styles.syncIconContainer}>
+                <MaterialIcons name="security" size={22} color="#FFFFFF" />
+              </View>
+              <View style={styles.syncContent}>
+                <Text style={styles.syncLabel}>{t('settings').idnp.syncToggle}</Text>
+                <CustomToggle
+                  value={isAuthenticated && syncIdnp}
+                  onValueChange={handleIdnpSyncToggle}
+                  activeColor="#2C3DCD"
+                  disabled={!isAuthenticated}
+                />
+              </View>
+            </View>
+            
+            {!isAuthenticated ? (
+              <View style={styles.loginPromptContainer}>
+                <View style={styles.loginPromptContent}>
+                  <MaterialIcons name="info-outline" size={20} color="#FFB020" style={{marginRight: 8}} />
+                  <Text style={styles.loginPromptText}>
+                    {t('settings').idnp.loginRequired}
+                  </Text>
+                </View>
+                <TouchableOpacity 
+                  style={styles.loginButton}
+                  onPress={() => router.push('/auth')}
+                >
+                  <Text style={styles.loginButtonText}>{t('settings').account.signIn}</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <Text style={styles.infoText}>
+                {syncIdnp 
+                  ? t('settings').idnp.syncEnabledInfo 
+                  : t('settings').idnp.syncDisabledInfo}
+              </Text>
+            )}
+            
+            {isAuthenticated && syncIdnp && (
+              <View style={styles.syncStatusIndicator}>
+                <MaterialIcons name="check-circle" size={16} color="#4CAF50" style={{marginRight: 6}} />
+                <Text style={styles.syncStatusText}>
+                  {savedIdnp ? t('settings').idnp.syncedStatus : t('settings').idnp.noIdnpSaved}
+                </Text>
+              </View>
+            )}
+          </View>
+        </View> */}
+
+        {/* Add IDNP management section when IDNP is saved */}
         {savedIdnp && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('settings').idnp.title}</Text>
-            <TouchableOpacity
-              style={styles.clearIdnpButton}
-              onPress={handleClearIdnp}
-            >
-              <MaterialIcons name="delete-outline" size={24} color="#FF6B6B" />
-              <Text style={styles.clearIdnpText}>{t('settings').idnp.clearButton}</Text>
-            </TouchableOpacity>
+            <View style={styles.idnpInfo}>
+              <Text style={styles.idnpValue}>
+                {savedIdnp.substring(0, 4) + '••••••' + savedIdnp.substring(10)}
+              </Text>
+              <TouchableOpacity
+                style={styles.clearIdnpButton}
+                onPress={handleClearIdnp}
+              >
+                <MaterialIcons name="delete-outline" size={24} color="#FF6B6B" />
+                <Text style={styles.clearIdnpText}>{t('settings').idnp.clearButton}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
-
-        {/* Class Selection Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('settings').group.title}</Text>
-          <TouchableOpacity
-            style={styles.classSelector}
-            onPress={() => setShowGroupModal(true)}
-          >
-            <View style={styles.classSelectorContent}>
-              <Text style={styles.selectedClassName}>
-                {settings.selectedGroupName || t('settings').group.select}
-              </Text>
-              <MaterialIcons name="keyboard-arrow-down" size={24} color="#8A8A8D" />
-            </View>
-          </TouchableOpacity>
-        </View>
 
         {/* Language Selection Section */}
         <View style={styles.section}>
@@ -1129,57 +1803,82 @@ export default function Settings() {
           </TouchableOpacity>
         </View>
 
-        {/* Language Selection Modal */}
-        <Modal
-          visible={showLanguageModal}
-          transparent={true}
-          animationType="slide"
-          onRequestClose={() => setShowLanguageModal(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>{t('settings').language}</Text>
-                <TouchableOpacity onPress={() => setShowLanguageModal(false)}>
-                  <MaterialIcons name="close" size={24} color="white" />
-                </TouchableOpacity>
-              </View>
-              <View style={styles.languagesList}>
-                {Object.entries(languages).map(([code, { name, icon }]) => (
-                  <TouchableOpacity
-                    key={code}
-                    style={[
-                      styles.languageOption,
-                      settings.language === code && styles.selectedLanguageOption
-                    ]}
-                    onPress={() => {
-                      handleLanguageChange(code as keyof typeof languages);
-                      setShowLanguageModal(false);
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    }}
-                  >
-                    <Text style={styles.languageIcon}>{icon}</Text>
-                    <Text style={[
-                      styles.languageOptionText,
-                      settings.language === code && styles.selectedLanguageOptionText
-                    ]}>
-                      {name}
+        {/* Manual Schedule Refresh Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="schedule" size={24} color="#2C3DCD" style={styles.sectionIcon} />
+            <Text style={styles.sectionTitle}>{t('settings').schedule.title}</Text>
+          </View>
+          <View style={[styles.card, styles.scheduleCard]}>
+            <View style={styles.scheduleDetails}>
+              {/* Group Selection Dropdown */}
+              <TouchableOpacity
+                style={styles.scheduleDetailRow}
+                onPress={() => setShowGroupModal(true)}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons
+                  name="group"
+                  size={20}
+                  color="#8A8A8D"
+                  style={styles.scheduleDetailIcon}
+                />
+                <View style={styles.scheduleDetailTextGroup}>
+                  <Text style={styles.scheduleDetailLabel}>{t('settings').schedule.group}</Text>
+                  <View style={styles.scheduleGroupValueContainer}>
+                    <Text style={styles.scheduleDetailValue} numberOfLines={1}>
+                      {settings.selectedGroupName || t('settings').group.select}
                     </Text>
-                    {settings.language === code && (
-                      <MaterialIcons name="check" size={24} color="white" />
-                    )}
-                  </TouchableOpacity>
-                ))}
+                    <MaterialIcons name="arrow-drop-down" size={20} color="#8A8A8D" />
+                  </View>
+                </View>
+              </TouchableOpacity>
+
+              {/* Last Updated */}
+              <View style={[styles.scheduleDetailRow, styles.scheduleDetailRowLast]}>
+                <MaterialIcons
+                  name="update"
+                  size={20}
+                  color="#8A8A8D"
+                  style={styles.scheduleDetailIcon}
+                />
+                <View style={styles.scheduleDetailTextGroup}>
+                  <Text style={styles.scheduleDetailLabel}>{t('settings').schedule.lastUpdated}</Text>
+                  <Text style={styles.scheduleDetailValue}>
+                    {lastScheduleRefresh
+                      ? formatCompactDate(lastScheduleRefresh, currentLanguage, true)
+                      : t('settings').schedule.noRecentRefresh}
+                  </Text>
+                </View>
               </View>
             </View>
+
+            <TouchableOpacity
+              style={[
+                styles.refreshButton,
+                styles.scheduleRefreshButton,
+                isRefreshingSchedule && { opacity: 0.7 }
+              ]}
+              onPress={handleManualScheduleRefresh}
+              disabled={isRefreshingSchedule}
+            >
+              {isRefreshingSchedule ? (
+                <ActivityIndicator size="small" color="#ffffff" />
+              ) : (
+                <MaterialIcons name="refresh" size={20} color="#ffffff" />
+              )}
+              <Text style={[styles.refreshButtonText, styles.scheduleRefreshButtonText]}>
+                {isRefreshingSchedule ? t('settings').schedule.refreshing : t('settings').schedule.refresh}
+              </Text>
+            </TouchableOpacity>
           </View>
-        </Modal>
+        </View>
 
         {/* Subgroup Selection Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('settings').subGroup}</Text>
           <View style={styles.optionsContainer}>
-            {groups.map(group => (
+            {SUBGROUPS.map(group => (
               <TouchableOpacity
                 key={group}
                 style={[
@@ -1203,6 +1902,7 @@ export default function Settings() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>{t('settings').customPeriods.title}</Text>
+            <View style={{ flex: 1 }} />
             <TouchableOpacity
               style={styles.addButton}
               onPress={handleAddPeriod}
@@ -1259,7 +1959,56 @@ export default function Settings() {
 
         {/* Developer Section */}
         {renderDeveloperSection()}
+
+        {/* Notification Settings Section */}
+        {renderNotificationSettings()}
       </ScrollView>
+
+      {/* Language Selection Modal */}
+      <Modal
+        visible={showLanguageModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowLanguageModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{t('settings').language}</Text>
+              <TouchableOpacity onPress={() => setShowLanguageModal(false)}>
+                <MaterialIcons name="close" size={24} color="white" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.languagesList}>
+              {Object.entries(languages).map(([code, { name, icon }]) => (
+                <TouchableOpacity
+                  key={code}
+                  style={[
+                    styles.languageOption,
+                    settings.language === code && styles.selectedLanguageOption
+                  ]}
+                  onPress={() => {
+                    handleLanguageChange(code as keyof typeof languages);
+                    setShowLanguageModal(false);
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }}
+                >
+                  <Text style={styles.languageIcon}>{icon}</Text>
+                  <Text style={[
+                    styles.languageOptionText,
+                    settings.language === code && styles.selectedLanguageOptionText
+                  ]}>
+                    {name}
+                  </Text>
+                  {settings.language === code && (
+                    <MaterialIcons name="check" size={24} color="white" />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Time Pickers */}
       {showStartPicker && (
@@ -1268,6 +2017,7 @@ export default function Settings() {
           onChange={handleTimePickerChange('start')}
           label={t('settings').customPeriods.time}
           onClose={() => setShowStartPicker(false)}
+          onConfirm={handleTimePickerChange('start')}
           use12HourFormat={settings.language === 'en'}
           translations={{ cancel: t('settings').customPeriods.cancel, confirm: t('settings').customPeriods.confirm }}
         />
@@ -1278,6 +2028,7 @@ export default function Settings() {
           onChange={handleTimePickerChange('end')}
           label={t('settings').customPeriods.time}
           onClose={() => setShowEndPicker(false)}
+          onConfirm={handleTimePickerChange('end')}
           use12HourFormat={settings.language === 'en'}
           translations={{ cancel: t('settings').customPeriods.cancel, confirm: t('settings').customPeriods.confirm }}
         />
@@ -1724,7 +2475,28 @@ export default function Settings() {
         </View>
       </Modal>
 
-      {/* ...existing modals... */}
+      {/* Notification time picker modal */}
+      {showNotificationTimeModal && (
+        <TimePicker 
+          value={tempNotificationTime}
+          onChange={handleNotificationTimeChange}
+          label={t('settings').notifications.selectTime}
+          onClose={handleCloseTimePicker}
+          onConfirm={handleConfirmTimePicker}
+          use12HourFormat={true}
+          translations={{
+            cancel: t('settings').customPeriods.cancel,
+            confirm: t('settings').customPeriods.confirm
+          }}
+        />
+      )}
+
+      {/* Storage Content Modal */}
+      <StorageViewer 
+        visible={storageModalVisible}
+        onClose={() => setStorageModalVisible(false)}
+        items={storageItems}
+      />
     </SafeAreaView>
   );
 }
@@ -1871,9 +2643,12 @@ const styles = StyleSheet.create({
   },
   sectionHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
+    justifyContent: 'space-between',
+  },
+  sectionIcon: {
+    marginRight: 8,
   },
   addButton: {
     backgroundColor: '#2C3DCD',
@@ -1957,10 +2732,8 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   timeButton: {
-    flex: 1,
+    flexDirection: 'row',
     backgroundColor: '#1A1A1A',
-    borderRadius: 12,
-    padding: 16,
     alignItems: 'center',
   },
   timeButtonText: {
@@ -2191,6 +2964,11 @@ const styles = StyleSheet.create({
   timePickerConfirmText: {
     color: 'white',
     fontWeight: '600',
+  },
+  periodSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
   },
   toggleContainer: {
     width: 50,
@@ -2473,5 +3251,305 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
+  },
+  settingItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  settingLabel: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  settingButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  settingValue: {
+    color: '#8A8A8D',
+    fontSize: 16,
+    marginRight: 8,
+  },
+  sectionSubtitle: {
+    color: '#8A8A8D',
+    fontSize: 14,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  counterContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  counterButton: {
+    padding: 4,
+    marginHorizontal: 4,
+    borderRadius: 4,
+    backgroundColor: '#1A1A1A',
+  },
+  counterValue: {
+    color: 'white',
+    fontSize: 16,
+    marginHorizontal: 8,
+  },
+  card: {
+    backgroundColor: '#1A1A1A',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  scheduleCard: {
+    paddingBottom: 20,
+  },
+  scheduleCardTitle: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  scheduleDetails: {
+    marginBottom: 16,
+  },
+  scheduleDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  scheduleDetailRowLast: {
+    marginBottom: 0,
+  },
+  scheduleDetailIcon: {
+    marginRight: 12,
+    marginTop: 2,
+  },
+  scheduleDetailTextGroup: {
+    flex: 1,
+  },
+  scheduleDetailLabel: {
+    color: '#8A8A8D',
+    fontSize: 12,
+    marginBottom: 2,
+  },
+  scheduleDetailValue: {
+    color: 'white',
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '500',
+  },
+  scheduleGroupValueContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: 'white',
+    marginLeft: 8,
+  },
+  cardDescription: {
+    color: '#8A8A8D',
+    fontSize: 14,
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  settingLabelContainer: {
+    flex: 1,
+    marginRight: 8,
+  },
+  settingDescription: {
+    color: '#8A8A8D',
+    fontSize: 14,
+    marginTop: 2,
+  },
+  settingLabelWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  settingItemIcon: {
+    marginRight: 8,
+  },
+  reminderGroup: {
+    marginBottom: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+    paddingTop: 12,
+  },
+  reminderGroupTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#BBBBBB',
+    marginBottom: 12,
+  },
+  reminderSettingItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+    paddingVertical: 4,
+  },
+  dayCounter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  counterValueContainer: {
+    borderWidth: 1.5,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    marginHorizontal: 8,
+    minWidth: 45,
+    alignItems: 'center',
+  },
+  counterUnit: {
+    color: '#8A8A8D',
+    fontSize: 10,
+    fontWeight: '500',
+  },
+  counterButtonDisabled: {
+    opacity: 0.5,
+  },
+  testNotificationButton: {
+    flexDirection: 'row',
+    backgroundColor: '#3478F6',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  testNotificationIcon: {
+    marginRight: 8,
+  },
+  testNotificationText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  elevatedContainer: {
+    backgroundColor: '#1A1A1A',
+    borderRadius: 12,
+    padding: 16,
+    marginVertical: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  infoText: {
+    color: '#E0E0E6',
+    fontSize: 14,
+    marginTop: 12,
+    lineHeight: 20,
+  },
+  idnpInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  idnpValue: {
+    color: '#8A8A8D',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  syncHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  syncIconContainer: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#2C3DCD',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  syncLabel: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  syncStatusIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    padding: 8,
+    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    borderRadius: 8,
+  },
+  syncStatusText: {
+    color: '#A2E1A6',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  syncContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  loginPromptContainer: {
+    marginVertical: 12,
+  },
+  loginPromptContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 176, 32, 0.15)',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  loginPromptText: {
+    color: '#FFB020',
+    fontSize: 14,
+    flex: 1,
+    lineHeight: 20,
+  },
+  loginButton: {
+    backgroundColor: '#2C3DCD',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  loginButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  refreshButton: {
+    flexDirection: 'row',
+    backgroundColor: '#2C3DCD',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    gap: 6,
+  },
+  scheduleRefreshButton: {
+    marginTop: 4,
+    alignSelf: 'stretch',
+    justifyContent: 'center',
+  },
+  refreshButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  scheduleRefreshButtonText: {
+    flexShrink: 1,
   },
 });

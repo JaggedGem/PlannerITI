@@ -1,11 +1,12 @@
-import { StyleSheet, View, Text, TouchableOpacity, FlatList, RefreshControl, Modal, TextInput, Platform, KeyboardAvoidingView, ActivityIndicator, DeviceEventEmitter, ScrollView } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, FlatList, RefreshControl, Modal, TextInput, Platform, KeyboardAvoidingView, ActivityIndicator, DeviceEventEmitter, ScrollView, Keyboard } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { MaterialIcons } from '@expo/vector-icons';
-import Animated, { FadeInUp, Layout } from 'react-native-reanimated';
+import Animated, { FadeInUp, Layout, useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from '@/hooks/useTranslation';
+import { formatLocalizedDate } from '@/utils/dateLocalization';
 import React from 'react';
 import { 
   fetchStudentInfo, 
@@ -14,8 +15,13 @@ import {
   StudentInfo,
   SemesterGrades, 
   GradeSubject,
-  Exam
+  Exam,
+  gradesDataService,
+  GRADES_REFRESH_START_EVENT,
+  GRADES_REFRESH_END_EVENT
 } from '@/services/gradesService';
+// Import authService
+import authService from '@/services/authService';
 
 // Types for local grades
 type GradeCategory = 'exam' | 'test' | 'homework' | 'project' | 'other';
@@ -35,7 +41,9 @@ interface Grade {
 const IDNP_KEY = '@planner_idnp';
 const GRADES_DATA_KEY = '@planner_grades_data';
 const GRADES_TIMESTAMP_KEY = '@planner_grades_timestamp';
-const IDNP_UPDATE_EVENT = 'idnp_updated';
+const IDNP_UPDATE_EVENT = 'IDNP_UPDATE';
+// Define IDNP_SYNC_KEY locally or import if possible
+const IDNP_SYNC_KEY = '@planner_idnp_sync';
 
 // Number of days before data is considered stale
 const STALE_DATA_DAYS = 7;
@@ -325,9 +333,11 @@ const SubjectCard = ({
 
 // Exams component with semester filtering
 const ExamsView = ({ 
-  exams
+  exams,
+  studentInfo
 }: { 
-  exams: Exam[] 
+  exams: Exam[];
+  studentInfo: StudentInfo;
 }) => {
   const { t } = useTranslation();
   
@@ -343,11 +353,21 @@ const ExamsView = ({
   // Get current semester based on date
   const currentSemesterNumber = getCurrentSemester();
   
-  // Add state for selected semester - initialize with current semester if it exists in the data
+  // Calculate the correct semester based on student's year and current calendar semester
+  // Year 1 Semester 1 = 1, Year 1 Semester 2 = 2, Year 2 Semester 1 = 3, Year 2 Semester 2 = 4, etc.
+  const calculateStudentSemester = (): number => {
+    const yearNumber = studentInfo.yearNumber || 1; // Default to year 1 if not available
+    const calendarSemester = currentSemesterNumber; // 1 or 2
+    return (yearNumber - 1) * 2 + calendarSemester;
+  };
+  
+  const studentCurrentSemester = calculateStudentSemester();
+  
+  // Add state for selected semester - initialize with calculated student semester if it exists in the data
   const [selectedSemester, setSelectedSemester] = useState<number | null>(() => {
-    // Check if the current semester exists in the exams data
-    const hasSemester = exams.some(exam => exam.semester === currentSemesterNumber);
-    return hasSemester ? currentSemesterNumber : null;
+    // Check if the student's current semester exists in the exams data
+    const hasSemester = exams.some(exam => exam.semester === studentCurrentSemester);
+    return hasSemester ? studentCurrentSemester : null;
   });
   
   const [isOpen, setIsOpen] = useState(false);
@@ -580,6 +600,510 @@ const ErrorNotification = ({ message }: { message: string }) => (
   </Animated.View>
 );
 
+/**
+ * Finds a realistic combination of additional grades that will make the average close to the target.
+ * Prioritizes grades that are achievable rather than just suggesting 10s.
+ * @param currentGrades Array of current grades (1-10)
+ * @param targetAverage The desired average to achieve
+ * @returns Array of grades to add to reach target average
+ */
+const findGradesToReachAverage = (currentGrades: number[], targetAverage: number): number[] => {
+  // Handle edge cases
+  if (!currentGrades.length) {
+    return [Math.round(targetAverage)]; // If no current grades, just return the target as a single grade
+  }
+
+  // Calculate current sum and count
+  const currentSum = currentGrades.reduce((sum, grade) => sum + grade, 0);
+  const currentCount = currentGrades.length;
+  const currentAverage = currentSum / currentCount;
+
+  // If we've already reached the target average, return empty array
+  if (Math.abs(currentAverage - targetAverage) < 0.01) {
+    return [];
+  }
+
+  // Initialize variables for finding the best solution
+  let bestSolution: number[] = [];
+  let lowestVariance = Number.MAX_VALUE;
+  let closestDifference = Math.abs(targetAverage - currentAverage);
+
+  // Calculate the "reasonableness" score of a solution (lower is better)
+  const calculateReasonablenessScore = (grades: number[], avgDiff: number) => {
+    // Calculate variance as a measure of how spread out the grades are
+    const avg = grades.reduce((sum, g) => sum + g, 0) / grades.length;
+    const variance = grades.reduce((sum, g) => sum + Math.pow(g - avg, 2), 0) / grades.length;
+    
+    // Count extreme grades (1-3 and 9-10)
+    const extremeGrades = grades.filter(g => g <= 3 || g >= 9).length;
+    
+    // Penalize solutions with high variance or too many extreme grades
+    return variance + (extremeGrades * 2) + (Math.abs(avgDiff) * 5);
+  };
+
+  // Recursive backtracking function
+  const backtrack = (newGrades: number[], depth: number, maxDepth: number) => {
+    // Calculate new average with these added grades
+    const newSum = currentSum + newGrades.reduce((sum, grade) => sum + grade, 0);
+    const newCount = currentCount + newGrades.length;
+    const newAverage = newSum / newCount;
+    const newDifference = Math.abs(targetAverage - newAverage);
+
+    // Check if this is a valid solution (close enough to target)
+    if (newDifference < 0.01) {
+      // Calculate reasonableness score for this solution
+      const score = calculateReasonablenessScore(newGrades, newDifference);
+      
+      // Update best solution if this one is more reasonable or closer to target
+      if (score < lowestVariance || 
+          (Math.abs(score - lowestVariance) < 0.01 && newDifference < closestDifference)) {
+        lowestVariance = score;
+        closestDifference = newDifference;
+        bestSolution = [...newGrades];
+      }
+    }
+
+    // Base case: if we've reached maximum depth
+    if (depth >= maxDepth) {
+      return;
+    }
+
+    // Get range of grades to try based on target average
+    let gradeRange: number[];
+    
+    if (targetAverage > currentAverage) {
+      // If we need to increase average, start with grades around target and go up
+      const start = Math.max(1, Math.floor(targetAverage) - 1);
+      const end = Math.min(10, Math.ceil(targetAverage) + 3);
+      gradeRange = Array.from({length: end - start + 1}, (_, i) => start + i);
+    } else {
+      // If we need to decrease average, start with grades around target and go down
+      const start = Math.max(1, Math.floor(targetAverage) - 3);
+      const end = Math.min(10, Math.ceil(targetAverage) + 1);
+      gradeRange = Array.from({length: end - start + 1}, (_, i) => start + i);
+    }
+    
+    // Prioritize grades closer to the target average
+    gradeRange.sort((a, b) => Math.abs(a - targetAverage) - Math.abs(b - targetAverage));
+    
+    // Try adding each possible grade
+    for (const grade of gradeRange) {
+      // Check if this grade would move us in the right direction
+      const newAvgWithGrade = (newSum + grade) / (newCount + 1);
+      const newDiffWithGrade = Math.abs(targetAverage - newAvgWithGrade);
+      const currentDiff = Math.abs(targetAverage - newAverage);
+      
+      // Only add if it moves us closer to target or if we're within reasonable range
+      if (newDiffWithGrade <= currentDiff || newDiffWithGrade < 0.5) {
+        newGrades.push(grade);
+        backtrack(newGrades, depth + 1, maxDepth);
+        newGrades.pop(); // Backtrack
+      }
+    }
+  };
+
+  // Try with an increasing number of grades (1-5)
+  for (let maxDepth = 1; maxDepth <= 5; maxDepth++) {
+    backtrack([], 0, maxDepth);
+    
+    // If we found a reasonable solution, return it
+    if (bestSolution.length > 0 && bestSolution.length <= maxDepth) {
+      return bestSolution;
+    }
+  }
+
+  return bestSolution;
+};
+
+// Grade Calculator Modal component
+const GradeCalculatorModal = ({ 
+  isVisible, 
+  onClose, 
+  subjects,
+  allSemesters  // Add this new parameter to access all semester data
+}: { 
+  isVisible: boolean, 
+  onClose: () => void, 
+  subjects: GradeSubject[],
+  allSemesters: SemesterGrades[] 
+}) => {
+  const { t } = useTranslation();
+  const [selectedSubject, setSelectedSubject] = useState<GradeSubject | null>(null);
+  const [targetAverage, setTargetAverage] = useState('');
+  const [calculatedGrades, setCalculatedGrades] = useState<number[]>([]);
+  const [hasCalculated, setHasCalculated] = useState(false);
+  const [isAnnualCalculation, setIsAnnualCalculation] = useState(false);
+  const scrollViewRef = useRef<ScrollView>(null);
+  
+  // Calculate grade quality color - same as used in SubjectCard
+  const getGradeColor = (grade: string): string => {
+    const numGrade = parseFloat(grade.replace(',', '.'));
+    if (isNaN(numGrade)) return 'rgba(44, 61, 205, 0.5)'; // Default blue for non-numeric
+    if (numGrade < 5) return 'rgba(255, 107, 107, 0.5)'; // Red for failing
+    if (numGrade >= 9) return 'rgba(75, 181, 67, 0.5)';  // Green for excellent
+    if (numGrade >= 7) return 'rgba(255, 184, 0, 0.5)';  // Orange for good
+    return 'rgba(44, 61, 205, 0.5)';                     // Blue for average
+  };
+  
+  // Reset state when modal is opened
+  useEffect(() => {
+    if (isVisible) {
+      setSelectedSubject(subjects.length > 0 ? subjects[0] : null);
+      setTargetAverage('');
+      setCalculatedGrades([]);
+      setHasCalculated(false);
+      setIsAnnualCalculation(false);
+    }
+  }, [isVisible, subjects]);
+  
+  // Convert string grades to numbers
+  const getNumericGrades = (subject: GradeSubject): number[] => {
+    return subject.grades.map(g => parseFloat(g.replace(',', '.')))
+                         .filter(g => !isNaN(g));
+  };
+  
+  // Get all grades for the selected subject from all semesters
+  const getAllGradesForSubject = (subjectName: string): number[] => {
+    const allGrades: number[] = [];
+    
+    // Iterate through all semesters to find the subject
+    allSemesters.forEach(semester => {
+      const subjectInSemester = semester.subjects.find(s => s.name === subjectName);
+      if (subjectInSemester) {
+        const numericGrades = getNumericGrades(subjectInSemester);
+        allGrades.push(...numericGrades);
+      }
+    });
+    
+    return allGrades;
+  };
+  
+  // Calculate the current average of the selected subject
+  const getCurrentAverage = (): string => {
+    if (!selectedSubject) return '-';
+    
+    // Decide which grades to use based on calculation mode
+    const numericGrades = isAnnualCalculation 
+      ? getAllGradesForSubject(selectedSubject.name)
+      : getNumericGrades(selectedSubject);
+    
+    if (numericGrades.length === 0) return '-';
+    
+    const sum = numericGrades.reduce((a, b) => a + b, 0);
+    return (sum / numericGrades.length).toFixed(2);
+  };
+  
+  // Handle calculation
+  const handleCalculate = () => {
+    if (!selectedSubject || !targetAverage) return;
+    
+    // Decide which grades to use based on calculation mode
+    const numericGrades = isAnnualCalculation 
+      ? getAllGradesForSubject(selectedSubject.name)
+      : getNumericGrades(selectedSubject);
+    
+    const target = parseFloat(targetAverage);
+    
+    if (isNaN(target) || target < 1 || target > 10) {
+      // Invalid target average
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      return;
+    }
+    
+    // Dismiss keyboard
+    Keyboard.dismiss();
+    
+    const result = findGradesToReachAverage(numericGrades, target);
+    setCalculatedGrades(result);
+    setHasCalculated(true);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    
+    // Scroll to the bottom to show results after a short delay
+    // to ensure the results are rendered
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 300);
+  };
+  
+  // Check if the selected subject exists in multiple semesters
+  const isSubjectInMultipleSemesters = (subjectName: string): boolean => {
+    // Count how many semesters contain this subject
+    let count = 0;
+    allSemesters.forEach(semester => {
+      if (semester.subjects.some(s => s.name === subjectName)) {
+        count++;
+      }
+    });
+    return count > 1;
+  };
+  
+  // Get all current grades for the selected subject (for display)
+  const getAllCurrentGrades = (): string[] => {
+    if (!selectedSubject) return [];
+    
+    if (!isAnnualCalculation) {
+      return selectedSubject.grades;
+    }
+    
+    // Collect grades from all semesters for this subject
+    const allGrades: string[] = [];
+    allSemesters.forEach(semester => {
+      const subjectInSemester = semester.subjects.find(s => s.name === selectedSubject.name);
+      if (subjectInSemester) {
+        allGrades.push(...subjectInSemester.grades);
+      }
+    });
+    
+    return allGrades;
+  };
+  
+  // Determine if annual calculation option should be shown
+  const showAnnualOption = useMemo(() => {
+    return selectedSubject ? isSubjectInMultipleSemesters(selectedSubject.name) : false;
+  }, [selectedSubject, allSemesters]);
+  
+  return (
+    <Modal
+      visible={isVisible}
+      animationType="fade"
+      transparent={true}
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={[styles.calculatorModalContent, { height: '70%' }]}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{t('grades').calculator.title}</Text>
+            <TouchableOpacity onPress={onClose}>
+              <MaterialIcons name="close" size={24} color="white" />
+            </TouchableOpacity>
+          </View>
+          
+          <ScrollView 
+            ref={scrollViewRef}
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingBottom: 20 }}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+          >
+            {/* Subject Selection */}
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>{t('grades').calculator.selectSubject}</Text>
+              <View style={styles.pickerContainer}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  {subjects.map((subject, index) => (
+                    <React.Fragment key={`subject-option-${index}`}>
+                      {index > 0 && (
+                        <View style={styles.subjectSeparator} />
+                      )}
+                      <TouchableOpacity
+                        style={[
+                          styles.subjectOption,
+                          selectedSubject?.name === subject.name && styles.subjectOptionSelected
+                        ]}
+                        onPress={() => {
+                          setSelectedSubject(subject);
+                          setHasCalculated(false);
+                          setIsAnnualCalculation(false);
+                          Haptics.selectionAsync();
+                        }}
+                      >
+                        <Text 
+                          style={[
+                            styles.subjectOptionText,
+                            selectedSubject?.name === subject.name && styles.subjectOptionTextSelected
+                          ]} 
+                          numberOfLines={1}
+                        >
+                          {subject.name}
+                        </Text>
+                      </TouchableOpacity>
+                    </React.Fragment>
+                  ))}
+                </ScrollView>
+              </View>
+            </View>
+            
+            {/* Annual vs Current Semester Toggle - only show if subject exists in multiple semesters */}
+            {selectedSubject && showAnnualOption && (
+              <View style={styles.formGroup}>
+                <View style={styles.calculationTypeContainer}>
+                  <Text style={styles.label}>
+                    {t('grades').calculator.calculationType || "Calculation Type:"}
+                  </Text>
+                  <View style={styles.calculationToggle}>
+                    <TouchableOpacity
+                      style={[
+                        styles.toggleOption,
+                        !isAnnualCalculation && styles.toggleOptionActive
+                      ]}
+                      onPress={() => {
+                        setIsAnnualCalculation(false);
+                        setHasCalculated(false);
+                        Haptics.selectionAsync();
+                      }}
+                    >
+                      <Text 
+                        style={[
+                          styles.toggleOptionText, 
+                          !isAnnualCalculation && styles.toggleOptionTextActive
+                        ]}
+                      >
+                        {t('grades').calculator.semesterOnly || "Current Semester"}
+                      </Text>
+                    </TouchableOpacity>
+                    
+                    <View style={styles.toggleSeparator} />
+                    
+                    <TouchableOpacity
+                      style={[
+                        styles.toggleOption,
+                        isAnnualCalculation && styles.toggleOptionActive
+                      ]}
+                      onPress={() => {
+                        setIsAnnualCalculation(true);
+                        setHasCalculated(false);
+                        Haptics.selectionAsync();
+                      }}
+                    >
+                      <Text 
+                        style={[
+                          styles.toggleOptionText, 
+                          isAnnualCalculation && styles.toggleOptionTextActive
+                        ]}
+                      >
+                        {t('grades').calculator.annualAverage || "Annual Average"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            )}
+            
+            {/* Current Grades Display */}
+            {selectedSubject && (
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>
+                  {isAnnualCalculation 
+                    ? (t('grades').calculator.allGrades || "All Grades") 
+                    : t('grades').calculator.currentGrades}
+                </Text>
+                <View style={styles.currentGradesContainer}>
+                  {getAllCurrentGrades().length > 0 ? (
+                    <View style={styles.gradesGrid}>
+                      {getAllCurrentGrades().map((grade, index) => (
+                        <View 
+                          key={`current-grade-${index}`} 
+                          style={{
+                            backgroundColor: getGradeColor(grade),
+                            borderRadius: 8,
+                            paddingHorizontal: 12,
+                            paddingVertical: 6,
+                            minWidth: 40,
+                            alignItems: 'center',
+                            marginBottom: 8,
+                          }}
+                        >
+                          <Text style={styles.gradeText}>{grade}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : (
+                    <Text style={{
+                      color: '#8A8A8D',
+                      fontSize: 14,
+                      textAlign: 'center',
+                      padding: 10,
+                    }}>
+                      {t('grades').calculator.noGrades}
+                    </Text>
+                  )}
+                  
+                  <View style={styles.currentAverageContainer}>
+                    <Text style={styles.currentAverageLabel}>
+                      {t('grades').calculator.currentAverage}:
+                    </Text>
+                    <Text style={styles.currentAverageValue}>
+                      {getCurrentAverage()}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            )}
+            
+            {/* Target Average Input */}
+            <View style={[styles.formGroup, { marginBottom: 20 }]}>
+              <Text style={styles.label}>{t('grades').calculator.targetAverage}</Text>
+              <TextInput
+                style={styles.input}
+                value={targetAverage}
+                onChangeText={setTargetAverage}
+                placeholder="8.50"
+                placeholderTextColor="#8A8A8D"
+                keyboardType="numeric"
+                maxLength={4}
+              />
+            </View>
+            
+            {/* Calculate Button */}
+            <TouchableOpacity
+              style={[
+                styles.calculateButton,
+                (!selectedSubject || !targetAverage) && styles.calculateButtonDisabled
+              ]}
+              onPress={handleCalculate}
+              disabled={!selectedSubject || !targetAverage}
+            >
+              <Text style={styles.calculateButtonText}>
+                {t('grades').calculator.calculate}
+              </Text>
+            </TouchableOpacity>
+            
+            {/* Results */}
+            {hasCalculated && (
+              <Animated.View 
+                entering={FadeInUp.springify()}
+                style={styles.resultsContainer}
+              >
+                <Text style={styles.resultsTitle}>
+                  {calculatedGrades.length > 0 
+                    ? t('grades').calculator.resultsTitle 
+                    : t('grades').calculator.noSolution}
+                </Text>
+                
+                {calculatedGrades.length > 0 ? (
+                  <View style={styles.gradesGrid}>
+                    {calculatedGrades.map((grade, index) => (
+                      <View 
+                        key={`result-grade-${index}`} 
+                        style={{
+                          backgroundColor: 'rgba(75, 181, 67, 0.5)',
+                          borderRadius: 8,
+                          paddingHorizontal: 12,
+                          paddingVertical: 6,
+                          minWidth: 40,
+                          alignItems: 'center',
+                          marginBottom: 8,
+                        }}
+                      >
+                        <Text style={styles.gradeText}>{grade}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={styles.noSolutionText}>
+                    {t('grades').calculator.alreadyAchieved}
+                  </Text>
+                )}
+              </Animated.View>
+            )}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
 // Main Grades component
 const GradesScreen = ({ 
   idnp, 
@@ -592,7 +1116,42 @@ const GradesScreen = ({
   lastUpdated: number | null,
   onRefresh: () => Promise<void>
 }) => {
-  const { t } = useTranslation();
+  const { t, currentLanguage } = useTranslation();
+  const [isBackgroundRefreshing, setIsBackgroundRefreshing] = useState(false);
+  const [backgroundRefreshStart, setBackgroundRefreshStart] = useState<number | null>(null);
+  const [backgroundJustUpdated, setBackgroundJustUpdated] = useState(false);
+
+  // Animated dot opacities
+  const dot1 = useSharedValue(0.25);
+  const dot2 = useSharedValue(0.25);
+  const dot3 = useSharedValue(0.25);
+
+  useEffect(() => {
+    if (isBackgroundRefreshing) {
+      dot1.value = withRepeat(withSequence(withTiming(1, { duration: 600 }), withTiming(0.25, { duration: 600 })), -1, false);
+      setTimeout(() => {
+        dot2.value = withRepeat(withSequence(withTiming(1, { duration: 600 }), withTiming(0.25, { duration: 600 })), -1, false);
+      }, 200);
+      setTimeout(() => {
+        dot3.value = withRepeat(withSequence(withTiming(1, { duration: 600 }), withTiming(0.25, { duration: 600 })), -1, false);
+      }, 400);
+    } else {
+      dot1.value = 0.25;
+      dot2.value = 0.25;
+      dot3.value = 0.25;
+    }
+  }, [isBackgroundRefreshing, dot1, dot2, dot3]);
+
+  const dotStyle1 = useAnimatedStyle(() => ({ opacity: dot1.value }));
+  const dotStyle2 = useAnimatedStyle(() => ({ opacity: dot2.value }));
+  const dotStyle3 = useAnimatedStyle(() => ({ opacity: dot3.value }));
+
+  // If a silent refresh already started before this screen mounted, show dots immediately
+  useEffect(() => {
+    if (gradesDataService.isRefreshing(idnp)) {
+      setIsBackgroundRefreshing(true);
+    }
+  }, [idnp]);
 
   // Helper function to format semester label
   const formatSemesterLabel = (semesterNumber: number) => {
@@ -613,14 +1172,35 @@ const GradesScreen = ({
     }
   }, [responseHtml]);
   
+  // Get current semester number based on date
+  const currentSemesterNumber = useMemo(() => getCurrentSemester(), []);
+
   // UI state
   const [refreshing, setRefreshing] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('grades');
   const [activeSemesterIndex, setActiveSemesterIndex] = useState(
-    studentGrades?.currentSemester 
-      ? studentGrades.currentGrades.findIndex(s => s.semester === studentGrades.currentSemester) 
+    studentGrades?.currentGrades
+      ? studentGrades.currentGrades.findIndex(s => s.semester === currentSemesterNumber) 
       : 0
   );
+  
+  // Make sure activeSemesterIndex is valid
+  useEffect(() => {
+    if (studentGrades?.currentGrades) {
+      // Find the index of the current semester
+      const currentIndex = studentGrades.currentGrades.findIndex(
+        s => s.semester === currentSemesterNumber
+      );
+      
+      // If found, set it as active
+      if (currentIndex >= 0) {
+        setActiveSemesterIndex(currentIndex);
+      }
+    }
+  }, [studentGrades, currentSemesterNumber]);
+  
+  // Grade calculator modal state
+  const [calculatorVisible, setCalculatorVisible] = useState(false);
   
   // Track expanded semester dropdowns and subjects
   const [expandedSemesters, setExpandedSemesters] = useState<Record<number, boolean>>({});
@@ -639,18 +1219,62 @@ const GradesScreen = ({
   // Initialize with only the current semester expanded
   useEffect(() => {
     if (studentGrades?.currentGrades?.length) {
-      // Get the current semester based on date
-      const currentSemester = getCurrentSemester();
-      
       // Create an object with only current semester expanded
       const initialExpandedState: Record<number, boolean> = {};
       studentGrades.currentGrades.forEach(semester => {
         // Only expand the current semester
-        initialExpandedState[semester.semester] = semester.semester === currentSemester;
+        initialExpandedState[semester.semester] = semester.semester === currentSemesterNumber;
       });
       setExpandedSemesters(initialExpandedState);
     }
-  }, [studentGrades?.currentGrades]);
+  }, [studentGrades?.currentGrades, currentSemesterNumber]);
+
+  // Listen to background refresh start/end events for anonymous indicator
+  useEffect(() => {
+    const startListener = DeviceEventEmitter.addListener(GRADES_REFRESH_START_EVENT, () => {
+      setIsBackgroundRefreshing(true);
+      setBackgroundJustUpdated(false);
+      setBackgroundRefreshStart(Date.now());
+    });
+    const endListener = DeviceEventEmitter.addListener(GRADES_REFRESH_END_EVENT, (payload: any) => {
+      setIsBackgroundRefreshing(false);
+      setBackgroundRefreshStart(null);
+      if (payload?.updated) {
+        setBackgroundJustUpdated(true);
+        // Fade out the updated state after a short period
+        setTimeout(() => setBackgroundJustUpdated(false), 2500);
+      }
+    });
+    const sub = gradesDataService.subscribe(() => {
+      // Data updated event also clears spinner if missed
+      setIsBackgroundRefreshing(false);
+    });
+    return () => {
+      startListener.remove();
+      endListener.remove();
+      sub();
+    };
+  }, []);
+
+  // Kick off a background indicator when manual refresh invoked
+  const handleRefresh = useCallback(async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    setIsBackgroundRefreshing(true);
+    setBackgroundRefreshStart(Date.now());
+    try {
+      await onRefresh();
+    } finally {
+      setRefreshing(false);
+      // Actual end of background refresh will be when new cache event fires; set a safety timeout
+      setTimeout(() => {
+        if (isBackgroundRefreshing) {
+          setIsBackgroundRefreshing(false);
+          setBackgroundRefreshStart(null);
+        }
+      }, 8000);
+    }
+  }, [onRefresh, refreshing, isBackgroundRefreshing]);
 
   // Get current semester data
   const currentSemesterData = useMemo(() => {
@@ -658,12 +1282,22 @@ const GradesScreen = ({
       return null;
     }
     
+    // First try to find the current semester based on date
+    const currentIndex = studentGrades.currentGrades.findIndex(
+      s => s.semester === currentSemesterNumber
+    );
+    
+    if (currentIndex >= 0) {
+      return studentGrades.currentGrades[currentIndex];
+    }
+    
+    // Fall back to the active index if current semester not found
     return studentGrades.currentGrades[
       activeSemesterIndex >= 0 && activeSemesterIndex < studentGrades.currentGrades.length 
         ? activeSemesterIndex 
         : 0
     ];
-  }, [studentGrades, activeSemesterIndex]);
+  }, [studentGrades, activeSemesterIndex, currentSemesterNumber]);
 
   // Calculate average grades for current semester
   const semesterAverage = useMemo(() => {
@@ -697,16 +1331,6 @@ const GradesScreen = ({
       };
     }).filter(item => item !== null);
   }, [studentGrades]);
-
-  // Handle refresh
-  const handleRefresh = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      await onRefresh();
-    } finally {
-      setRefreshing(false);
-    }
-  }, [onRefresh]);
   
   // Style modifier for text components when refreshing
   const textOpacity = { opacity: refreshing ? 0.5 : 1 };
@@ -716,14 +1340,8 @@ const GradesScreen = ({
     if (!lastUpdated) return 'Never';
     
     const date = new Date(lastUpdated);
-    return date.toLocaleDateString(undefined, { 
-      year: 'numeric', 
-      month: 'short', 
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  }, [lastUpdated]);
+    return formatLocalizedDate(date, currentLanguage, true);
+  }, [lastUpdated, currentLanguage]);
   
   // Toggle subject expand/collapse
   const toggleSubject = useCallback((subjectName: string, semesterNumber: number) => {
@@ -762,7 +1380,7 @@ const GradesScreen = ({
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header with student info and refresh button */}
+      {/* Header with student info and buttons */}
       <View style={[styles.headerContainer, refreshing && { opacity: 0.7 }]}>
         <View style={styles.headerLeft}>
           <Text style={[styles.studentName, textOpacity]}>
@@ -772,18 +1390,32 @@ const GradesScreen = ({
             {studentGrades.studentInfo.group} | {studentGrades.studentInfo.specialization}
           </Text>
         </View>
-        <TouchableOpacity 
-          style={styles.refreshButton}
-          onPress={handleRefresh}
-          disabled={refreshing}
-        >
-          <MaterialIcons 
-            name="refresh" 
-            size={24} 
-            color="white" 
-            style={[refreshing && styles.refreshingIcon]}
-          />
-        </TouchableOpacity>
+        <View style={styles.headerButtons}>
+          {currentSemesterData?.subjects && currentSemesterData.subjects.length > 0 && (
+            <TouchableOpacity 
+              style={styles.calculatorButton}
+              onPress={() => {
+                setCalculatorVisible(true);
+                Haptics.selectionAsync();
+              }}
+              disabled={refreshing}
+            >
+              <MaterialIcons name="calculate" size={22} color="white" />
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity 
+            style={styles.refreshButton}
+            onPress={handleRefresh}
+            disabled={refreshing}
+          >
+            <MaterialIcons 
+              name="refresh" 
+              size={24} 
+              color="white" 
+              style={[refreshing && styles.refreshingIcon]}
+            />
+          </TouchableOpacity>
+        </View>
       </View>
       
       {/* Data staleness warning */}
@@ -919,14 +1551,41 @@ const GradesScreen = ({
           </Text>
         </ScrollView>
       ) : (
-        <ExamsView exams={studentGrades.exams} />
+        <ExamsView exams={studentGrades.exams} studentInfo={studentGrades.studentInfo} />
+      )}
+
+      {/* Grade Calculator Modal */}
+      {currentSemesterData && (
+        <GradeCalculatorModal
+          isVisible={calculatorVisible}
+          onClose={() => setCalculatorVisible(false)}
+          subjects={currentSemesterData.subjects}
+          allSemesters={studentGrades.currentGrades}
+        />
       )}
 
       {/* Overlay the content with a semi-transparent loading indicator when refreshing */}
+      {/* Overlay only for initial/explicit pull refresh; background uses subtle bar */}
       {refreshing && (
         <View style={styles.refreshOverlay}>
           <ActivityIndicator size="large" color="#2C3DCD" />
           <Text style={styles.refreshingText}>{t('grades').refreshing}</Text>
+        </View>
+      )}
+      {/* Anonymous background refresh indicator (pulsing dots) */}
+      {(isBackgroundRefreshing || backgroundJustUpdated) && (
+        <View style={styles.backgroundIndicatorWrapper} pointerEvents="none">
+          <View style={[styles.backgroundIndicatorPill, backgroundJustUpdated && styles.backgroundIndicatorUpdated]}>
+            {!backgroundJustUpdated ? (
+              <View style={styles.dotsContainer}>
+                <Animated.View style={[styles.dot, dotStyle1]} />
+                <Animated.View style={[styles.dot, dotStyle2]} />
+                <Animated.View style={[styles.dot, dotStyle3]} />
+              </View>
+            ) : (
+              <Text style={styles.backgroundUpdatedText}>{'Updated'}</Text>
+            )}
+          </View>
         </View>
       )}
     </SafeAreaView>
@@ -937,7 +1596,7 @@ const GradesScreen = ({
 export default function Grades() {
   // Fix: Use a ref to prevent duplicate API requests
   const fetchingRef = useRef(false);
-  const { t } = useTranslation();
+  const { t, currentLanguage } = useTranslation();
 
   const [idnp, setIdnp] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -945,6 +1604,8 @@ export default function Grades() {
   const [responseHtml, setResponseHtml] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
+  // Prevent multiple initial cache hydrations overwriting fresh data
+  const initialLoadDoneRef = useRef(false);
 
   // Helper function to format semester label - added to fix reference error
   const formatSemesterLabel = (semesterNumber: number) => {
@@ -964,24 +1625,75 @@ export default function Grades() {
         if (savedIdnp) {
           setIdnp(savedIdnp);
           
-          // Try to load cached grades data
-          const gradesDataJson = await AsyncStorage.getItem(GRADES_DATA_KEY);
-          if (gradesDataJson) {
-            const gradesData: StoredGradesData = JSON.parse(gradesDataJson);
-            setResponseHtml(gradesData.html);
-            setLastUpdated(gradesData.timestamp);
-          }
-          
-          // Load last updated timestamp
-          const timestamp = await AsyncStorage.getItem(GRADES_TIMESTAMP_KEY);
-          if (timestamp) {
-            setLastUpdated(parseInt(timestamp, 10));
+          // Try to load cached grades data (prefer the newer unified service cache if fresher)
+          if (!responseHtml) { // Only hydrate if we don't already have data in state
+            const legacyJson = await AsyncStorage.getItem(GRADES_DATA_KEY);
+            let legacyData: StoredGradesData | null = null;
+            if (legacyJson) {
+              try { legacyData = JSON.parse(legacyJson); } catch { legacyData = null; }
+            }
+            const newCached = await gradesDataService.getCached(savedIdnp);
+
+            // Decide which cache to use
+            let chosenHtml: string | null = null;
+            let chosenTimestamp: number | null = null;
+
+            if (legacyData && newCached) {
+              const legacyTs = legacyData.timestamp || 0;
+              const newTs = newCached.timestamp || 0;
+              if (newTs > legacyTs) {
+                // New cache is fresher
+                chosenHtml = newCached.html;
+                chosenTimestamp = newTs || Date.now();
+              } else if (newTs === legacyTs && newCached.html !== legacyData.html) {
+                // Same timestamp (or missing) but different content – prefer new cache to avoid stale reversion
+                chosenHtml = newCached.html;
+                chosenTimestamp = newTs || legacyTs || Date.now();
+              } else {
+                // Legacy is equal or newer
+                chosenHtml = legacyData.html;
+                chosenTimestamp = legacyData.timestamp;
+              }
+            } else if (newCached) {
+              chosenHtml = newCached.html;
+              chosenTimestamp = newCached.timestamp || null;
+            } else if (legacyData) {
+              chosenHtml = legacyData.html;
+              chosenTimestamp = legacyData.timestamp;
+            }
+
+            if (chosenHtml) {
+              setResponseHtml(chosenHtml);
+              if (chosenTimestamp) setLastUpdated(chosenTimestamp);
+            }
+
+            // Mirror unified (new) cache back to legacy keys if we selected newCached so future loads stay in sync
+            if (newCached && chosenHtml === newCached.html) {
+              try {
+                await AsyncStorage.setItem(
+                  GRADES_DATA_KEY,
+                  JSON.stringify({ html: newCached.html, timestamp: newCached.timestamp || Date.now() })
+                );
+                if (newCached.timestamp) {
+                  await AsyncStorage.setItem(GRADES_TIMESTAMP_KEY, newCached.timestamp.toString());
+                }
+              } catch { /* silent */ }
+            }
+
+            // If we still have no explicit timestamp set (e.g., only legacy html stored earlier), attempt legacy timestamp key
+            if (!lastUpdated && !chosenTimestamp) {
+              const timestamp = await AsyncStorage.getItem(GRADES_TIMESTAMP_KEY);
+              if (timestamp) {
+                setLastUpdated(parseInt(timestamp, 10));
+              }
+            }
           }
         }
       } catch (error) {
         // Silently handle error
       } finally {
         setIsLoading(false);
+        initialLoadDoneRef.current = true;
       }
     };
 
@@ -991,15 +1703,50 @@ export default function Grades() {
       if (!newIdnp) {
         setResponseHtml('');
         setLastUpdated(null);
+        setErrorMessage(null);
       }
     });
 
     loadStoredData();
 
+    // Load cached only; do NOT trigger another network refresh here (App already did at startup)
+    if (!initialLoadDoneRef.current) {
+      (async () => {
+        if (idnp && !responseHtml) {
+          const cached = await gradesDataService.getCached(idnp);
+          if (cached) {
+            setResponseHtml(cached.html);
+            setLastUpdated(cached.timestamp || null);
+          }
+        }
+      })();
+    }
+
+    const unsubscribeGrades = gradesDataService.subscribe(async () => {
+      if (!idnp) return;
+      const updated = await gradesDataService.getCached(idnp);
+      if (!updated) return;
+      const isDifferent = updated.html !== responseHtml;
+      if (isDifferent) {
+        setResponseHtml(updated.html);
+      }
+      if (updated.timestamp && updated.timestamp !== lastUpdated) {
+        setLastUpdated(updated.timestamp);
+      }
+      // Persist new unified cache to legacy keys so future single-source loads don't revert
+      try {
+        await AsyncStorage.setItem(GRADES_DATA_KEY, JSON.stringify({ html: updated.html, timestamp: updated.timestamp || Date.now() }));
+        if (updated.timestamp) {
+          await AsyncStorage.setItem(GRADES_TIMESTAMP_KEY, updated.timestamp.toString());
+        }
+      } catch (_) {}
+    });
+
     return () => {
       subscription.remove();
+      unsubscribeGrades();
     };
-  }, []);
+  }, [idnp]);
 
   const fetchStudentData = useCallback(async (studentIdnp: string) => {
     // Prevent duplicate requests using ref
@@ -1028,12 +1775,10 @@ export default function Grades() {
       setLastUpdated(timestamp);
       await AsyncStorage.setItem(GRADES_TIMESTAMP_KEY, timestamp.toString());
       
-      // Store the grades HTML and timestamp for offline access
-      const gradesData: StoredGradesData = {
-        html: htmlResponse,
-        timestamp: timestamp
-      };
-      await AsyncStorage.setItem(GRADES_DATA_KEY, JSON.stringify(gradesData));
+      // Store legacy cache
+      await AsyncStorage.setItem(GRADES_DATA_KEY, JSON.stringify({ html: htmlResponse, timestamp }));
+      // Also store via new caching layer for consistency & event emission (dedup automatic)
+      try { await gradesDataService.store(studentIdnp, htmlResponse); } catch (_) {}
       
       // Notify other components of the IDNP update
       DeviceEventEmitter.emit(IDNP_UPDATE_EVENT, studentIdnp);
@@ -1049,7 +1794,7 @@ export default function Grades() {
         setErrorMessage(t('grades').networkError);
       } else {
         // If we have cached data, just show an error toast but keep the cached data
-        setErrorMessage(`${t('grades').networkErrorCache} ${new Date(lastUpdated || 0).toLocaleDateString()}`);
+        setErrorMessage(`${t('grades').networkErrorCache} ${formatLocalizedDate(new Date(lastUpdated || 0), currentLanguage, false)}`);
         
         // Error notification
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -1063,15 +1808,42 @@ export default function Grades() {
       setIsFetching(false);
       fetchingRef.current = false;
     }
-  }, [responseHtml, lastUpdated]);
+  }, [responseHtml, lastUpdated, t]);
 
-  const handleSaveIdnp = useCallback((newIdnp: string, shouldSave: boolean) => {
+  // Function to sync IDNP to server - Temporarily disabled - To be implemented later
+  /* const syncIdnpToServer = async (idnpToSync: string) => {
+    try {
+      // Use the authService method to encrypt and sync
+      // Assuming 'idnp' is the key for storing this data type
+      await authService.encryptAndSyncData('idnp', idnpToSync);
+    } catch (error) {
+      console.error('Failed to sync IDNP to server:', error);
+      // Handle sync error silently or show a non-blocking notification
+    }
+  }; */
+
+  const handleSaveIdnp = useCallback(async (newIdnp: string, shouldSave: boolean) => {
     // Don't proceed if already fetching
     if (fetchingRef.current) return;
-    
+
     // Set the IDNP first to show loading screen
     setIdnp(newIdnp);
-    
+
+    // Check if sync is enabled - Temporarily disabled
+    /* try {
+      const syncSetting = await AsyncStorage.getItem(IDNP_SYNC_KEY);
+      const isSyncEnabled = syncSetting !== 'false'; // Sync is enabled by default or if set to 'true'
+
+      if (isSyncEnabled) {
+        // Call the sync function *before* fetching student data
+        await syncIdnpToServer(newIdnp);
+      }
+    } catch (error) {
+      console.error('Error checking IDNP sync setting:', error);
+      // Proceed even if checking the setting fails? Or handle differently?
+      // For now, we'll log the error and continue.
+    } */
+
     // Then fetch the data
     fetchStudentData(newIdnp);
   }, [fetchStudentData]);
@@ -1087,7 +1859,9 @@ export default function Grades() {
         }
       });
     }
-  }, []);
+  // Intentionally omitting fetchStudentData from dependencies to prevent re-fetch on responseHtml change
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idnp, responseHtml, errorMessage]);
 
   if (isLoading && !responseHtml) {
     return <LoadingScreen message={t('schedule').loading} />;
@@ -1124,7 +1898,18 @@ export default function Grades() {
         lastUpdated={lastUpdated}
         onRefresh={async () => {
           if (idnp) {
-            await fetchStudentData(idnp);
+            // Check sync setting before refreshing - Temporarily disabled
+            /* try {
+              const syncSetting = await AsyncStorage.getItem(IDNP_SYNC_KEY);
+              const isSyncEnabled = syncSetting !== 'false';
+              if (isSyncEnabled) {
+                // Re-sync IDNP on manual refresh if needed
+                await syncIdnpToServer(idnp);
+              }
+            } catch (error) {
+              console.error('Error checking IDNP sync setting on refresh:', error);
+            } */
+            await fetchStudentData(idnp); // This sets state when fresh HTML arrives
           }
         }}
       />
@@ -1263,13 +2048,16 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'flex-end',
+    width: '100%',
   },
-  modalContent: {
+  calculatorModalContent: {
     backgroundColor: '#1A1A1A',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
-    maxHeight: '90%',
+    height: '70%',
+    width: '100%',
+    paddingBottom: Platform.OS === 'ios' ? 40 : 20, // Extra padding for iOS devices
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1292,9 +2080,13 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
+    marginBottom: 4,
+    marginTop: 8,
   },
   input: {
-    backgroundColor: '#232433',
+    backgroundColor: '#1A1A1A',
+    borderWidth: 1,
+    borderColor: '#232433',
     borderRadius: 12,
     padding: 16,
     color: 'white',
@@ -1804,6 +2596,37 @@ const styles = StyleSheet.create({
     marginTop: 12,
     textAlign: 'center',
   },
+  bottomRefreshBarContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+    alignItems: 'center',
+    justifyContent: 'flex-end'
+  },
+  bottomRefreshBarTrack: {
+    width: '60%',
+    height: 4,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 2,
+    overflow: 'hidden',
+    marginBottom: 6,
+  },
+  bottomRefreshBarFill: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: '40%',
+    backgroundColor: '#2C3DCD',
+    borderRadius: 2,
+  },
+  bottomRefreshBarText: {
+    fontSize: 12,
+    color: '#8A8A8D'
+  },
   examHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1832,5 +2655,204 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#141414',
     padding: 20,
+  },
+  pickerContainer: {
+    borderWidth: 1,
+    borderColor: '#232433',
+    borderRadius: 12,
+    padding: 8,
+  },
+  subjectOption: {
+    padding: 12,
+    borderRadius: 8,
+  },
+  subjectOptionSelected: {
+    backgroundColor: '#2C3DCD',
+  },
+  subjectOptionText: {
+    color: 'white',
+    fontSize: 16,
+  },
+  subjectOptionTextSelected: {
+    fontWeight: '600',
+  },
+  currentGradesContainer: {
+    backgroundColor: '#1A1A1A',
+    borderWidth: 1,
+    borderColor: '#232433',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
+  calculatorGradeItem: {
+    backgroundColor: 'rgba(44, 61, 205, 0.5)',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    minWidth: 40,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  currentAverageContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  currentAverageLabel: {
+    color: 'white',
+    fontSize: 16,
+  },
+  currentAverageValue: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  calculateButton: {
+    backgroundColor: '#2C3DCD',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    width: '100%',
+  },
+  calculateButtonDisabled: {
+    backgroundColor: '#8A8A8D',
+  },
+  calculateButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  resultsContainer: {
+    marginTop: 20,
+    padding: 12,
+    backgroundColor: '#1A1A1A',
+    borderWidth: 1,
+    borderColor: '#232433',
+    borderRadius: 12,
+  },
+  resultsTitle: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 12,
+  },
+  resultGradeItem: {
+    backgroundColor: 'rgba(75, 181, 67, 0.5)',
+  },
+  noGradesText: {
+    color: '#8A8A8D',
+    fontSize: 14,
+    textAlign: 'center',
+    padding: 10,
+  },
+  noSolutionText: {
+    color: 'white',
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  calculatorButton: {
+    backgroundColor: '#2C3DCD',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  subjectSeparator: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#232433',
+    marginHorizontal: 5,
+    alignSelf: 'center',
+  },
+  calculationTypeContainer: {
+    flexDirection: 'column',
+    marginBottom: 10,
+  },
+  calculationToggle: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#1A1A1A',
+    borderRadius: 12,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: '#232433',
+  },
+  toggleOption: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    flex: 1,
+    alignItems: 'center',
+  },
+  toggleOptionActive: {
+    backgroundColor: '#2C3DCD',
+  },
+  toggleOptionText: {
+    color: '#8A8A8D',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  toggleOptionTextActive: {
+    color: 'white',
+    fontWeight: '600',
+  },
+  toggleSeparator: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#232433',
+    marginHorizontal: 5,
+    alignSelf: 'center',
+  },
+  // Anonymous background refresh indicator
+  backgroundIndicatorWrapper: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 28,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  backgroundIndicatorPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    minWidth: 70,
+  },
+  dotsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#2C3DCD',
+    opacity: 0.25,
+  },
+  dotDelay1: {},
+  dotDelay2: {},
+  backgroundIndicatorUpdated: {
+    backgroundColor: 'rgba(44, 205, 93, 0.15)',
+  },
+  backgroundUpdatedText: {
+    color: '#ACEFBF',
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.5,
   },
 });

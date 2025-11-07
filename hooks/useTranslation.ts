@@ -32,7 +32,17 @@ export function useTranslation() {
   }, [currentLanguage]);
 
   const formatDate = useCallback((date: Date, options: Intl.DateTimeFormatOptions) => {
-    const locale = currentLanguage === 'en' ? 'en-US' : 'ro-RO';
+    let locale;
+    switch (currentLanguage) {
+      case 'en':
+        locale = 'en-US';
+        break;
+      case 'ru':
+        locale = 'ru-RU';
+        break;
+      default:
+        locale = 'ro-RO';
+    }
     return date.toLocaleDateString(locale, options);
   }, [currentLanguage]);
 

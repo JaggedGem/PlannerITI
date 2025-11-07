@@ -19,13 +19,17 @@ module.exports = () => {
       androidPackage: `${androidPackage}.dev`,
       iosBundleIdentifier: `${iosBundleIdentifier}.dev`,
     },
+    beta: {
+      androidPackage: `${androidPackage}.beta`,
+      iosBundleIdentifier: `${iosBundleIdentifier}.beta`,
+    },
   }[appVariant] || variantConfig.production;
 
   return {
     expo: {
       name: "PlannerITI",
       slug: "PlannerITI",
-      version: "1.0.0",
+      version: "1.0.1",
       orientation: "portrait",
       icon: "assets/images/icon.png",
       scheme: "myapp",
@@ -33,7 +37,8 @@ module.exports = () => {
       newArchEnabled: true,
       ios: {
         supportsTablet: true,
-        bundleIdentifier: variantConfig.iosBundleIdentifier
+        bundleIdentifier: variantConfig.iosBundleIdentifier,
+        buildNumber: "2"
       },
       android: {
         adaptiveIcon: {

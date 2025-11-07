@@ -47,7 +47,6 @@ export function useAuth() {
       }
     } catch (error) {
       // Silent error handling in background
-      console.log("Background user data load failed:", error);
     }
   };
 

@@ -151,6 +151,7 @@ export default function TabLayout() {
             </AnimatedTabBarLabel>
           ),
         }}
+        screenListeners={{}}
       >
         <Tabs.Screen
           name="schedule"

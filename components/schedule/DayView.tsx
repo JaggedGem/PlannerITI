@@ -1,4 +1,4 @@
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Dimensions, ViewStyle, TextStyle, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Dimensions, ViewStyle, TextStyle, ActivityIndicator, InteractionManager } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { scheduleService, DAYS_MAP, ApiResponse } from '@/services/scheduleService';
@@ -7,6 +7,61 @@ import { useTimeUpdate } from '@/hooks/useTimeUpdate';
 import Animated, { useAnimatedStyle, withTiming, withSpring, FadeIn, FadeOut, useSharedValue, withSequence, withDelay } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import ViewModeMenu from './ViewModeMenu';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
+import { getAssignmentsForPeriod, Assignment, AssignmentType, getAssignmentsForTimeRange, getAssignmentsForClass } from '@/utils/assignmentStorage';
+import { router } from 'expo-router';
+
+// Key for storing whether the tutorial has been shown
+const TUTORIAL_SHOWN_KEY = 'schedule_tutorial_shown';
+
+// Function to get assignment type icon name
+const getAssignmentTypeIcon = (type: AssignmentType): React.ComponentProps<typeof Ionicons>['name'] => {
+  switch (type) {
+    case AssignmentType.HOMEWORK:
+      return 'book-outline';
+    case AssignmentType.TEST:
+      return 'document-text-outline';
+    case AssignmentType.EXAM:
+      return 'school-outline';
+    case AssignmentType.PROJECT:
+      return 'construct-outline';
+    case AssignmentType.QUIZ:
+      return 'clipboard-outline';
+    case AssignmentType.LAB:
+      return 'flask-outline';
+    case AssignmentType.ESSAY:
+      return 'create-outline';
+    case AssignmentType.PRESENTATION:
+      return 'easel-outline';
+    default:
+      return 'ellipsis-horizontal-outline';
+  }
+};
+
+// Function to get assignment type color
+const getAssignmentTypeColor = (type: AssignmentType): string => {
+  switch (type) {
+    case AssignmentType.HOMEWORK:
+      return '#3478F6'; // iOS Blue
+    case AssignmentType.TEST:
+      return '#FF9500'; // iOS Orange
+    case AssignmentType.EXAM:
+      return '#FF3B30'; // iOS Red
+    case AssignmentType.PROJECT:
+      return '#5E5CE6'; // iOS Purple
+    case AssignmentType.QUIZ:
+      return '#FF375F'; // iOS Pink
+    case AssignmentType.LAB:
+      return '#64D2FF'; // iOS Light Blue
+    case AssignmentType.ESSAY:
+      return '#30D158'; // iOS Green
+    case AssignmentType.PRESENTATION:
+      return '#FFD60A'; // iOS Yellow
+    default:
+      return '#8E8E93'; // iOS Gray
+  }
+};
 
 const formatTimeByLocale = (time: string, isEnglish: boolean) => {
   if (!isEnglish) return time;
@@ -46,6 +101,9 @@ type ScheduleItem = {
   roomNumber: string;
   _height?: number;
   hasNextItem?: boolean;
+  period?: string;
+  assignmentCount: number;
+  subjectId?: string;
 };
 
 interface RecoveryDayInfoProps {
@@ -129,6 +187,16 @@ const RecoveryDayInfo = ({ reason }: RecoveryDayInfoProps) => {
   );
 };
 
+// Add this interface near the top of the file with other interfaces
+interface WeekDateInfo {
+  date: Date;
+  day: string;
+  dateNum: number;
+  isToday: boolean;
+  isRecoveryDay: boolean;
+  totalAssignments: number;
+}
+
 export default function DayView() {
   const [scheduleData, setScheduleData] = useState<ApiResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -150,6 +218,29 @@ export default function DayView() {
   const [showFirstTimeIndicator, setShowFirstTimeIndicator] = useState(false);
   const firstTimeAnimValue = useSharedValue(0);
   const hasShownFirstTimeIndicator = useRef(false);
+  const [tutorialShown, setTutorialShown] = useState(true); // Assume shown by default, will be updated
+  const [expandedPeriods, setExpandedPeriods] = useState<{[key: string]: boolean}>({});
+  const [periodAssignments, setPeriodAssignments] = useState<{[key: string]: Assignment[]}>({});
+  const [loadingAssignments, setLoadingAssignments] = useState<{[key: string]: boolean}>({});
+  const [periodAssignmentCounts, setPeriodAssignmentCounts] = useState<{[key: string]: number}>({});
+
+  // Check if tutorial has been shown before
+  useEffect(() => {
+    const checkTutorialShown = async () => {
+      try {
+        const value = await AsyncStorage.getItem(TUTORIAL_SHOWN_KEY);
+        if (value === null) {
+          // Tutorial has not been shown before
+          setTutorialShown(false);
+        }
+      } catch (e) {
+        // Error reading value, assume it hasn't been shown
+        setTutorialShown(false);
+      }
+    };
+    
+    checkTutorialShown();
+  }, []);
 
   // Generate current week dates (Monday to Friday, plus Saturday if it's a recovery day)
   const weekDates = useMemo(() => {
@@ -191,12 +282,23 @@ export default function DayView() {
     const dates = Array.from({ length: 5 }, (_, i) => {
       const date = new Date(monday);
       date.setDate(monday.getDate() + i);
+      
+      // Calculate total assignments for this day
+      let totalAssignments = 0;
+      if (scheduleData) {
+        const dayKey = DAYS_MAP[date.getDay() as keyof typeof DAYS_MAP];
+        const daySchedule = scheduleService.getScheduleForDay(scheduleData, dayKey, date);
+        // Since we're in a useMemo, we can't use await, so we'll default to 0 and update later
+        totalAssignments = 0;
+      }
+      
       return {
         date,
         day: t('weekdays').short[date.getDay()],
         dateNum: date.getDate(),
         isToday: date.toDateString() === currentDate.toDateString(),
-        isRecoveryDay: scheduleService.isRecoveryDay(date) !== null
+        isRecoveryDay: scheduleService.isRecoveryDay(date) !== null,
+        totalAssignments
       };
     });
 
@@ -207,17 +309,65 @@ export default function DayView() {
     const saturdayIsRecovery = scheduleService.isRecoveryDay(saturday) !== null;
 
     if (saturdayIsRecovery) {
+      // Calculate Saturday's assignments if it's a recovery day
+      let totalAssignments = 0;
+      if (scheduleData) {
+        const dateString = saturday.toISOString().split('T')[0];
+        const dayKey = `weekend_${dateString}`;
+        // Since we're in a useMemo, we can't use await, so we'll default to 0 and update later
+        totalAssignments = 0;
+      }
+      
       dates.push({
         date: saturday,
         day: t('weekdays').short[saturday.getDay()],
         dateNum: saturday.getDate(),
         isToday: saturday.toDateString() === currentDate.toDateString(),
-        isRecoveryDay: true
+        isRecoveryDay: true,
+        totalAssignments
       });
     }
 
     return dates;
-  }, [currentDate, t]);
+  }, [currentDate, t, scheduleData]);
+
+  // Update the useEffect for assignment counts
+  useEffect(() => {
+    const updateAssignmentCounts = async () => {
+      if (!scheduleData) return;
+
+      const updatedDates = await Promise.all(weekDates.map(async (dateInfo) => {
+        let totalAssignments = 0;
+        if (dateInfo.isRecoveryDay) {
+          const dateString = dateInfo.date.toISOString().split('T')[0];
+          const dayKey = `weekend_${dateString}`;
+          const daySchedule = await scheduleService.getScheduleForDay(scheduleData, dayKey, dateInfo.date);
+          if (Array.isArray(daySchedule)) { // Check if daySchedule is an array
+            // Instead of using periodIds from schedule, get actual assignments for the day
+            const dayAssignments = await getAssignmentsForTimeRange(dateInfo.date);
+            totalAssignments = dayAssignments.length;
+          }
+        } else {
+          const dayKey = DAYS_MAP[dateInfo.date.getDay() as keyof typeof DAYS_MAP];
+          const daySchedule = await scheduleService.getScheduleForDay(scheduleData, dayKey, dateInfo.date);
+          if (Array.isArray(daySchedule)) { // Check if daySchedule is an array
+            // Get all assignments for this day
+            const dayAssignments = await getAssignmentsForTimeRange(dateInfo.date);
+            totalAssignments = dayAssignments.length;
+          }
+        }
+        return { ...dateInfo, totalAssignments };
+      }));
+
+      // Force a re-render with updated assignment counts
+      setWeekDates(updatedDates);
+    };
+
+    updateAssignmentCounts();
+  }, [scheduleData, weekDates]);
+
+  // Update the state declaration with proper typing
+  const [weekDatesWithAssignments, setWeekDates] = useState<WeekDateInfo[]>(weekDates);
 
   // Add these functions after the main hook declarations, before updateSchedule
   const scrollToDate = useCallback((date: Date) => {
@@ -236,15 +386,19 @@ export default function DayView() {
   }, [weekDates]);
 
   const handleDatePress = useCallback((date: Date) => {
-    // Only allow selecting dates within the range of available weekDates
+    // Immediately set the selected date for better responsiveness
+    setSelectedDate(date);
+    
+    // Only scroll if within the range of available weekDates
     const dateTime = date.getTime();
     const minDate = weekDates[0].date.getTime();
-    // Use the last element of weekDates array instead of hardcoding index 5
     const maxDate = weekDates[weekDates.length - 1].date.getTime();
 
     if (dateTime >= minDate && dateTime <= maxDate) {
-      setSelectedDate(date);
-      scrollToDate(date);
+      // Use requestAnimationFrame for smoother UI updates
+      requestAnimationFrame(() => {
+        scrollToDate(date);
+      });
     }
   }, [scrollToDate, weekDates]);
 
@@ -389,18 +543,26 @@ export default function DayView() {
 
   // Schedule data fetching effect
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        // Check if we need to fetch data
-        await fetchSchedule();
-      } catch (err) {
-        console.error('Failed to load schedule:', err);
-        setError('Unable to load schedule. Please try again later.');
-        setIsLoading(false);
-      }
+    const settings = scheduleService.getSettings();
+    const run = () => {
+      const loadData = async () => {
+        try {
+          await fetchSchedule();
+        } catch (err) {
+          console.error('Failed to load schedule:', err);
+          setError('Unable to load schedule. Please try again later.');
+          setIsLoading(false);
+        }
+      };
+      loadData();
     };
-    
-    loadData();
+    // If Day view not currently active, defer heavy fetch until interactions settle
+    if (settings.scheduleView !== 'day') {
+      const handle = InteractionManager.runAfterInteractions(run);
+      return () => handle.cancel && handle.cancel();
+    } else {
+      run();
+    }
   }, [fetchSchedule]);
 
   // Initial scroll to today, only once on mount
@@ -586,10 +748,10 @@ export default function DayView() {
   }, []);
 
   useEffect(() => {
-    // Skip animation if data isn't loaded yet
-    if (isLoading || !scheduleData) return;
+    // Skip animation if data isn't loaded yet or if tutorial has been shown before
+    if (isLoading || !scheduleData || tutorialShown) return;
     
-    // Only show the first-time indicator once
+    // Only show the first-time indicator once and save the state
     if (!hasShownFirstTimeIndicator.current) {
       hasShownFirstTimeIndicator.current = true;
       
@@ -606,10 +768,15 @@ export default function DayView() {
         // Hide the component after animation completes
         setTimeout(() => {
           setShowFirstTimeIndicator(false);
+          
+          // Save that tutorial has been shown
+          AsyncStorage.setItem(TUTORIAL_SHOWN_KEY, 'true').catch(err => {
+            console.error('Error saving tutorial state:', err);
+          });
         }, 2800);
       }, 800);
     }
-  }, [isLoading, scheduleData]);
+  }, [isLoading, scheduleData, tutorialShown]);
 
   const firstTimeAnimStyle = useAnimatedStyle(() => {
     return {
@@ -619,6 +786,106 @@ export default function DayView() {
       ]
     };
   }, []);
+
+  // Function to toggle period expansion
+  const togglePeriodExpansion = async (periodId: string, startTime?: string, endTime?: string, subjectId?: string, className?: string) => {
+    // If not already expanded, fetch the assignments
+    if (!expandedPeriods[periodId]) {
+      // Set loading state for this period
+      setLoadingAssignments(prev => ({
+        ...prev,
+        [periodId]: true
+      }));
+      
+      try {
+        // Use the dedicated class/subject filtering function
+        if (className && (subjectId || startTime)) {
+          const assignments = await getAssignmentsForClass(
+            selectedDate,
+            subjectId || '',
+            className,
+            startTime,
+            endTime
+          );
+          setPeriodAssignments(prev => ({
+            ...prev,
+            [periodId]: assignments
+          }));
+        } 
+        // Fall back to time range filtering if we don't have class name
+        else if (startTime && endTime) {
+          const assignments = await getAssignmentsForTimeRange(selectedDate, startTime, endTime, subjectId);
+          setPeriodAssignments(prev => ({
+            ...prev,
+            [periodId]: assignments
+          }));
+        } 
+        // Fall back to the standard period-based filtering if we don't have any filtering info
+        else {
+          const assignments = await getAssignmentsForPeriod(periodId, selectedDate);
+          setPeriodAssignments(prev => ({
+            ...prev,
+            [periodId]: assignments
+          }));
+        }
+      } catch (error) {
+        console.error('Error loading assignments:', error);
+        // In case of error, set empty array
+        setPeriodAssignments(prev => ({
+          ...prev,
+          [periodId]: []
+        }));
+      } finally {
+        // Clear loading state
+        setLoadingAssignments(prev => ({
+          ...prev,
+          [periodId]: false
+        }));
+      }
+    }
+    
+    setExpandedPeriods(prev => ({
+      ...prev,
+      [periodId]: !prev[periodId]
+    }));
+  };
+
+  // Add a useEffect to update period assignment counts
+  useEffect(() => {
+    // Skip if no schedule data
+    if (!scheduleData || !todaySchedule || todaySchedule.length === 0) return;
+
+    const updatePeriodAssignmentCounts = async () => {
+      const newCounts: {[key: string]: number} = {};
+      
+      // Process each period in today's schedule
+      for (const period of todaySchedule) {
+        if (!period.period) continue;
+        
+        try {
+          // Use the dedicated class/subject filtering function
+          const assignments = await getAssignmentsForClass(
+            selectedDate,
+            period.subjectId || '',
+            period.className,
+            period.startTime,
+            period.endTime
+          );
+          
+          // Store the count for this period
+          newCounts[period.period] = assignments.length;
+        } catch (error) {
+          console.error('Error counting assignments for period:', error);
+          newCounts[period.period] = 0;
+        }
+      }
+      
+      // Update the state with all counts at once to minimize renders
+      setPeriodAssignmentCounts(newCounts);
+    };
+    
+    updatePeriodAssignmentCounts();
+  }, [scheduleData, todaySchedule, selectedDate]);
 
   if (isLoading && !scheduleData) {
     return (
@@ -752,7 +1019,7 @@ export default function DayView() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.dateListScrollContent}
             >
-              {weekDates.map((date, index) => (
+              {weekDatesWithAssignments.map((date, index) => (
                 <TouchableOpacity
                   key={index}
                   onPress={() => handleDatePress(date.date)}
@@ -764,6 +1031,19 @@ export default function DayView() {
                     date.isRecoveryDay && date.date.getDate() !== selectedDate.getDate() && styles.recoveryDayItem
                   ]}
                 >
+                  {date.totalAssignments > 0 && (
+                    <View style={[
+                      index === weekDatesWithAssignments.length - 1 ? styles.lastDateAssignmentBadge : styles.dateAssignmentBadge,
+                      date.date.getDate() === selectedDate.getDate() && styles.selectedDateAssignmentBadge
+                    ]}>
+                      <Text style={[
+                        styles.dateAssignmentBadgeText,
+                        date.date.getDate() === selectedDate.getDate() && styles.selectedDateAssignmentBadgeText
+                      ]}>
+                        {date.totalAssignments}
+                      </Text>
+                    </View>
+                  )}
                   <Text style={[
                     styles.dateDay,
                     date.date.getDate() === selectedDate.getDate() && !date.isRecoveryDay && styles.selectedDayText,
@@ -819,7 +1099,7 @@ export default function DayView() {
             </View>
           ) : (
               todaySchedule.map((item, index) => {
-                // Keep the recovery-info item but just use it to display the banner
+                // Skip the recovery-info item but just use it to display the banner
                 if (item.period === 'recovery-info') {
                   // We're already showing the recovery day banner separately
                   return null;
@@ -831,6 +1111,9 @@ export default function DayView() {
 
                 const nextItem = todaySchedule[index + 1];
                 const showTimeIndicator = isCurrentTimeInSchedule(item);
+                const hasAssignments = item.period ? periodAssignmentCounts[item.period] > 0 : false;
+                const isPeriodExpanded = item.period ? expandedPeriods[item.period] : false;
+                const periodAssignmentsList = item.period ? periodAssignments[item.period] || [] : [];
 
                 return (
                   <View
@@ -840,102 +1123,224 @@ export default function DayView() {
                       item._height = event.nativeEvent.layout.height;
                     }}
                   >
-                    <View style={[styles.classCard, {
-                      borderLeftColor: getSubjectColor(item.className),
-                      backgroundColor: '#1A1A1A',
-                      shadowOpacity: 0.1,
-                      minHeight: 100,
-                    }]}
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      disabled={!hasAssignments}
+                      onPress={() => item.period && hasAssignments ? 
+                        togglePeriodExpansion(
+                          item.period, 
+                          item.startTime, 
+                          item.endTime,
+                          item.subjectId,
+                          item.className
+                        ) : null}
                     >
-                      <View style={[styles.timeContainer, {
-                        borderRightColor: 'rgba(138, 138, 141, 0.2)'
+                      <View style={[styles.classCard, {
+                        borderLeftColor: getSubjectColor(item.className),
+                        backgroundColor: '#1A1A1A',
+                        shadowOpacity: 0.1,
+                        minHeight: 100,
                       }]}
                       >
-                        <Text style={[styles.time, { marginBottom: 'auto' }]}>
-                          {formatTimeByLocale(item.startTime, settings.language === 'en')}
-                        </Text>
-
-                        {/* Dot positioned in the middle */}
-                        <View style={styles.timeDotContainer}>
-                          <View style={[styles.timeDot, { backgroundColor: getSubjectColor(item.className) }]} />
-                        </View>
-
-                        <Text style={[styles.time, { marginTop: 'auto' }]}>
-                          {formatTimeByLocale(item.endTime, settings.language === 'en')}
-                        </Text>
-                      </View>
-
-                      <View style={styles.classContent}>
-                        <View style={styles.classHeaderRow}>
-                          <Text style={styles.className}>{item.className}</Text>
-                          <Text style={[styles.statusText, showTimeIndicator && styles.activeStatusText]}>
-                            {showTimeIndicator ? 'Now' :
-                              (() => {
-                                const currentTimeMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
-                                const [startHours, startMinutes] = item.startTime.split(':').map(Number);
-                                const startTimeMinutes = startHours * 60 + startMinutes;
-
-                                if (currentTimeMinutes < startTimeMinutes) {
-                                  const previousItem = index > 0 ? todaySchedule[index - 1] : null;
-                                  if (previousItem && isCurrentTimeInSchedule(previousItem)) {
-                                    // Calculate minutes until start and round up (so 59 seconds = 1 minute)
-                                    const now = new Date();
-                                    const target = new Date(
-                                      now.getFullYear(),
-                                      now.getMonth(),
-                                      now.getDate(),
-                                      startHours,
-                                      startMinutes
-                                    );
-                                    const diffInMs = target.getTime() - now.getTime();
-                                    const minutesUntilStart = Math.ceil(diffInMs / (1000 * 60));
-                                    // Only show if less than 60 minutes
-                                    return minutesUntilStart <= 60 ? `In ${minutesUntilStart}m` : '';
-                                  } else if (!previousItem && currentTimeMinutes < startTimeMinutes) {
-                                    // If this is the first class and it hasn't started yet
-                                    const now = new Date();
-                                    const target = new Date(
-                                      now.getFullYear(),
-                                      now.getMonth(),
-                                      now.getDate(),
-                                      startHours,
-                                      startMinutes
-                                    );
-                                    const diffInMs = target.getTime() - now.getTime();
-                                    const minutesUntilStart = Math.ceil(diffInMs / (1000 * 60));
-                                    // Only show if less than 60 minutes
-                                    return minutesUntilStart <= 60 ? `${t('schedule').in} ${minutesUntilStart}m` : '';
-                                  }
-                                }
-                                return '';
-                              })()
-                            }
+                        <View style={[styles.timeContainer, {
+                          borderRightColor: 'rgba(138, 138, 141, 0.2)'
+                        }]}
+                        >
+                          <Text style={[styles.time, { marginBottom: 'auto' }]}>
+                            {formatTimeByLocale(item.startTime, settings.language === 'en')}
                           </Text>
-                        </View>
-                        <View style={styles.detailsContainer}>
-                          <View style={styles.teacherContainer}>
-                            <Text style={styles.teacherName}>{item.teacherName}</Text>
-                            {item.group && (item.group === 'Subgroup 1' || item.group === 'Subgroup 2') && (
-                              <Text style={styles.groupName}>
-                                {item.group === 'Subgroup 1' ? t('subgroup').group1 : t('subgroup').group2}
-                              </Text>
+
+                          {/* Time separator - show chevron if has assignments, otherwise show dot */}
+                          <View style={styles.timeDotContainer}>
+                            {hasAssignments ? (
+                              <Animated.View style={[
+                                styles.timeChevronContainer,
+                                { transform: [{ rotate: isPeriodExpanded ? '180deg' : '0deg' }] }
+                              ]}>
+                                <Ionicons 
+                                  name="chevron-down" 
+                                  size={14} 
+                                  color={getSubjectColor(item.className)} 
+                                />
+                              </Animated.View>
+                            ) : (
+                              <View style={[styles.timeDot, { backgroundColor: getSubjectColor(item.className) }]} />
                             )}
                           </View>
-                          <View style={styles.roomContainer}>
-                            <Text style={styles.roomNumber}>{t('schedule').room} {item.roomNumber}</Text>
-                          </View>
+
+                          <Text style={[styles.time, { marginTop: 'auto' }]}>
+                            {formatTimeByLocale(item.endTime, settings.language === 'en')}
+                          </Text>
                         </View>
+
+                        <View style={styles.classContent}>
+                          <View style={styles.classHeaderRow}>
+                            <Text style={styles.className} numberOfLines={1}>
+                              {item.className}
+                            </Text>
+                            
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                              {/* Assignment count badge */}
+                              {periodAssignmentCounts[item.period || ''] > 0 && (
+                                <View style={styles.assignmentBadge}>
+                                  <Text style={styles.assignmentBadgeText}>
+                                    {periodAssignmentCounts[item.period || '']}
+                                  </Text>
+                                </View>
+                              )}
+                              
+                              {/* Status text */}
+                              <Text style={[styles.statusText, showTimeIndicator && styles.activeStatusText]}>
+                                {showTimeIndicator ? 'Now' :
+                                  (() => {
+                                    const currentTimeMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
+                                    const [startHours, startMinutes] = item.startTime.split(':').map(Number);
+                                    const startTimeMinutes = startHours * 60 + startMinutes;
+
+                                    if (currentTimeMinutes < startTimeMinutes) {
+                                      const previousItem = index > 0 ? todaySchedule[index - 1] : null;
+                                      if (previousItem && isCurrentTimeInSchedule(previousItem)) {
+                                        // Calculate minutes until start and round up (so 59 seconds = 1 minute)
+                                        const now = new Date();
+                                        const target = new Date(
+                                          now.getFullYear(),
+                                          now.getMonth(),
+                                          now.getDate(),
+                                          startHours,
+                                          startMinutes
+                                        );
+                                        const diffInMs = target.getTime() - now.getTime();
+                                        const minutesUntilStart = Math.ceil(diffInMs / (1000 * 60));
+                                        // Only show if less than 60 minutes
+                                        return minutesUntilStart <= 60 ? `In ${minutesUntilStart}m` : '';
+                                      } else if (!previousItem && currentTimeMinutes < startTimeMinutes) {
+                                        // If this is the first class and it hasn't started yet
+                                        const now = new Date();
+                                        const target = new Date(
+                                          now.getFullYear(),
+                                          now.getMonth(),
+                                          now.getDate(),
+                                          startHours,
+                                          startMinutes
+                                        );
+                                        const diffInMs = target.getTime() - now.getTime();
+                                        const minutesUntilStart = Math.ceil(diffInMs / (1000 * 60));
+                                        // Only show if less than 60 minutes
+                                        return minutesUntilStart <= 60 ? `${t('schedule').in} ${minutesUntilStart}m` : '';
+                                      }
+                                    }
+                                    return '';
+                                  })()
+                                }
+                              </Text>
+                            </View>
+                          </View>
+                          <View style={styles.detailsContainer}>
+                            <View style={styles.teacherContainer}>
+                              <Text style={styles.teacherName}>{item.teacherName}</Text>
+                              {item.group && (item.group === 'Subgroup 1' || item.group === 'Subgroup 2') && (
+                                <Text style={styles.groupName}>
+                                  {item.group === 'Subgroup 1' ? t('subgroup').group1 : t('subgroup').group2}
+                                </Text>
+                              )}
+                            </View>
+                            <View style={styles.roomContainer}>
+                              <Text style={styles.roomNumber}>{t('schedule').room} {item.roomNumber}</Text>
+                            </View>
+                          </View>
+                          
+                          {/* Assignments expandable section */}
+                          {hasAssignments && isPeriodExpanded && (
+                            <Animated.View 
+                              style={styles.assignmentsContainer}
+                              entering={FadeIn.duration(200)}
+                              exiting={FadeOut.duration(150)}
+                            >
+                              <View style={styles.assignmentsSeparator} />
+                              <Text style={styles.assignmentsSectionTitle}>
+                                {'Assignments'}
+                              </Text>
+                              
+                              {loadingAssignments[item.period || ''] ? (
+                                <View style={styles.loadingAssignments}>
+                                  <ActivityIndicator size="small" color="#3478F6" />
+                                  <Text style={styles.loadingAssignmentsText}>
+                                    {'Loading assignments...'}
+                                  </Text>
+                                </View>
+                              ) : periodAssignmentsList.length > 0 ? (
+                                periodAssignmentsList.map((assignment, idx) => (
+                                  <TouchableOpacity 
+                                    key={assignment.id} 
+                                    style={styles.assignmentItem}
+                                    activeOpacity={0.7}
+                                    onPress={() => {
+                                      // Save selected date and assignment ID to AsyncStorage
+                                      // for the assignments page to know which day to expand
+                                      const assignmentDate = new Date(assignment.dueDate);
+                                      
+                                      // Store the info needed to auto-expand the day
+                                      const navigationData = {
+                                        assignmentId: assignment.id,
+                                        date: assignmentDate.toISOString(),
+                                        autoExpand: true
+                                      };
+                                      
+                                      // Store in AsyncStorage for the assignments tab to read
+                                      AsyncStorage.setItem('assignment_navigation_data', 
+                                        JSON.stringify(navigationData))
+                                        .then(() => {
+                                          // Navigate to assignments tab
+                                          router.navigate('/(tabs)/assignments');
+                                        })
+                                        .catch(error => {
+                                          console.error('Error saving navigation data:', error);
+                                          // Navigate anyway even if saving fails
+                                          router.navigate('/(tabs)/assignments');
+                                        });
+                                    }}
+                                  >
+                                    <View style={[
+                                      styles.assignmentTypeIndicator, 
+                                      { backgroundColor: getAssignmentTypeColor(assignment.assignmentType) }
+                                    ]}>
+                                      <Ionicons 
+                                        name={getAssignmentTypeIcon(assignment.assignmentType)} 
+                                        size={12} 
+                                        color="#FFFFFF" 
+                                      />
+                                    </View>
+                                    <View style={styles.assignmentDetails}>
+                                      <Text style={styles.assignmentTitle}>{assignment.title}</Text>
+                                      {assignment.description ? (
+                                        <Text style={styles.assignmentDescription} numberOfLines={2}>
+                                          {assignment.description}
+                                        </Text>
+                                      ) : null}
+                                    </View>
+                                  </TouchableOpacity>
+                                ))
+                              ) : (
+                                <View style={styles.noAssignments}>
+                                  <Text style={styles.noAssignmentsText}>
+                                    {'No assignments for this period'}
+                                  </Text>
+                                </View>
+                              )}
+                            </Animated.View>
+                          )}
+                        </View>
+                        {showTimeIndicator && (
+                          <TimeIndicator
+                            startTime={item.startTime}
+                            endTime={item.endTime} // Use item's end time for the period indicator
+                            containerHeight={item._height || 100}
+                            hasNextItem={item.hasNextItem}
+                            timestamp={currentTimestamp}
+                          />
+                        )}
                       </View>
-                      {showTimeIndicator && (
-                        <TimeIndicator
-                          startTime={item.startTime}
-                          endTime={item.endTime} // Use item's end time for the period indicator
-                          containerHeight={item._height || 100}
-                          hasNextItem={item.hasNextItem}
-                          timestamp={currentTimestamp}
-                        />
-                      )}
-                    </View>
+                    </TouchableOpacity>
                   </View>
                 );
               })
@@ -1073,6 +1478,26 @@ type Styles = {
   firstTimeIndicator: ViewStyle;
   firstTimeIndicatorText: TextStyle;
   firstTimeIndicatorArrow: TextStyle;
+  assignmentBadge: ViewStyle;
+  assignmentBadgeText: TextStyle;
+  dateAssignmentBadge: ViewStyle;
+  selectedDateAssignmentBadge: ViewStyle;
+  dateAssignmentBadgeText: TextStyle;
+  selectedDateAssignmentBadgeText: TextStyle;
+  lastDateAssignmentBadge: ViewStyle;
+  timeChevronContainer: ViewStyle;
+  assignmentsContainer: ViewStyle;
+  assignmentsSeparator: ViewStyle;
+  assignmentsSectionTitle: TextStyle;
+  assignmentItem: ViewStyle;
+  assignmentTypeIndicator: ViewStyle;
+  assignmentDetails: ViewStyle;
+  assignmentTitle: TextStyle;
+  assignmentDescription: TextStyle;
+  loadingAssignments: ViewStyle;
+  loadingAssignmentsText: TextStyle;
+  noAssignments: ViewStyle;
+  noAssignmentsText: TextStyle;
 };
 
 const styles = StyleSheet.create<Styles>({
@@ -1369,6 +1794,7 @@ const styles = StyleSheet.create<Styles>({
   timeDotContainer: {
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 8, // Add padding to make it more tappable
   },
   classHeaderRow: {
     flexDirection: 'row',
@@ -1611,5 +2037,127 @@ const styles = StyleSheet.create<Styles>({
     color: '#3478F6',
     fontSize: 24,
     fontWeight: 'bold',
+  },
+  assignmentBadge: {
+    backgroundColor: '#FF3B30',
+    borderRadius: 12,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginLeft: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  assignmentBadgeText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  dateAssignmentBadge: {
+    position: 'absolute',
+    bottom: 6,
+    right: 6,
+    backgroundColor: '#FF3B30',
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    zIndex: 1,
+  },
+  selectedDateAssignmentBadge: {
+    backgroundColor: '#FF3B30',
+  },
+  dateAssignmentBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  selectedDateAssignmentBadgeText: {
+    color: '#FFFFFF',
+  },
+  lastDateAssignmentBadge: {
+    position: 'absolute',
+    bottom: 6,
+    left: 6,
+    backgroundColor: '#FF3B30',
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    zIndex: 1,
+  },
+  timeChevronContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 20,
+    height: 20,
+  },
+  assignmentsContainer: {
+    marginTop: 8, 
+    paddingTop: 8,
+  },
+  assignmentsSeparator: {
+    height: 1,
+    backgroundColor: 'rgba(138, 138, 141, 0.2)',
+    marginBottom: 8,
+  },
+  assignmentsSectionTitle: {
+    color: '#8A8A8D',
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  assignmentItem: {
+    flexDirection: 'row',
+    marginBottom: 8,
+    alignItems: 'flex-start',
+    backgroundColor: 'rgba(60, 60, 60, 0.3)',
+    borderRadius: 8,
+    padding: 8,
+  },
+  assignmentTypeIndicator: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  assignmentDetails: {
+    flex: 1,
+  },
+  assignmentTitle: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  assignmentDescription: {
+    color: '#8A8A8D',
+    fontSize: 12,
+  },
+  loadingAssignments: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+  },
+  loadingAssignmentsText: {
+    color: '#8A8A8D',
+    fontSize: 14,
+    marginLeft: 8,
+  },
+  noAssignments: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+  },
+  noAssignmentsText: {
+    color: '#8A8A8D',
+    fontSize: 14,
+    fontStyle: 'italic',
   },
 });

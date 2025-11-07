@@ -10,6 +10,9 @@ import LoginNotification from '@/components/LoginNotification';
 import { scheduleService } from '@/services/scheduleService';
 import { AuthProvider } from '@/components/auth/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { initializeNotifications } from '@/utils/notificationUtils';
+import { getAssignments } from '@/utils/assignmentStorage';
+import { scheduleAllNotifications } from '@/utils/notificationUtils';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -55,6 +58,26 @@ export default function RootLayout() {
     
     preloadAuthState();
   }, []);
+
+  // Initialize notifications
+  useEffect(() => {
+    if (loaded) {
+      const setupNotifications = async () => {
+        try {
+          // Initialize notification system
+          await initializeNotifications();
+          
+          // Schedule notifications for existing assignments
+          const assignments = await getAssignments();
+          await scheduleAllNotifications(assignments);
+        } catch (error) {
+          console.error('Error setting up notifications:', error);
+        }
+      };
+      
+      setupNotifications();
+    }
+  }, [loaded]);
 
   // Setup period times sync interval at a random offset to avoid server stress
   useEffect(() => {
@@ -139,6 +162,18 @@ function RootLayoutNav() {
           />
           <Stack.Screen 
             name="privacy-policy" 
+            options={{ 
+              headerShown: false,
+            }} 
+          />
+          <Stack.Screen 
+            name="new-assignment" 
+            options={{ 
+              headerShown: false,
+            }} 
+          />
+          <Stack.Screen 
+            name="edit-assignment" 
             options={{ 
               headerShown: false,
             }} 

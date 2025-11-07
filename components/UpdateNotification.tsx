@@ -24,12 +24,10 @@ export default function UpdateNotification() {
           await Updates.reloadAsync();
         } catch (error) {
           // Silently fail - user doesn't need to know about update failures
-          console.log('Update application failed:', error);
         }
       }
     } catch (error) {
       // Silently fail - user doesn't need to know about update check failures
-      console.log('Update check failed:', error);
     }
   };
 

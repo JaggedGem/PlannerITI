@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform, DeviceEventEmitter } from 'react-native';
 import * as crypto from 'crypto-js';
 import Constants from "expo-constants";
+import * as SecureStore from 'expo-secure-store';
 
 const API_URL = 'https://papi.jagged.me';
 const GRAVATAR_API_URL = 'https://api.gravatar.com/v3';
@@ -28,6 +29,9 @@ const SKIP_LOGIN_KEY = '@planner_skip_login';
 const AUTH_TOKEN_KEY = '@auth_token';
 const LOGIN_DISMISSED_KEY = '@login_notification_dismissed';
 const GRAVATAR_CACHE_KEY = '@gravatar_cache';
+const USER_CREDENTIALS_KEY = 'user_credentials';
+const AUTH_VERSION_KEY = '@auth_version';
+const CURRENT_AUTH_VERSION = '3'; // Increment this when auth system changes
 
 // Add timeout constants for network requests
 const REQUEST_TIMEOUT = 8000; // 8 seconds timeout
@@ -55,6 +59,11 @@ interface GravatarProfile {
 interface GravatarCache {
   timestamp: number;
   profile: GravatarProfile;
+}
+
+interface UserCredentials {
+  email: string;
+  password: string;
 }
 
 const CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
@@ -121,14 +130,49 @@ class AuthService {
   private userData: UserData | null = null;
   private skippedLogin: boolean = false;
   private isLoading: boolean = false;
+  private isReloginInProgress: boolean = false;
 
   private constructor() {}
 
   static getInstance(): AuthService {
     if (!AuthService.instance) {
       AuthService.instance = new AuthService();
+      // Initialize auth check on first getInstance call
+      AuthService.instance.init();
     }
     return AuthService.instance;
+  }
+
+  // Initialize and check auth version
+  private init(): void {
+    // Run async initialization in background
+    this.checkAuthVersion().catch(error => {
+      console.error('Error during auth initialization:', error);
+    });
+  }
+
+  // Add method to check and update auth version
+  async checkAuthVersion(): Promise<boolean> {
+    try {
+      const storedVersion = await AsyncStorage.getItem(AUTH_VERSION_KEY);
+      
+      if (storedVersion !== CURRENT_AUTH_VERSION) {
+        // Version mismatch - need to reset auth state
+        await this.logout();
+        await AsyncStorage.setItem(AUTH_VERSION_KEY, CURRENT_AUTH_VERSION);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error checking auth version:', error);
+      return false;
+    }
+  }
+
+  // Public method to force auth reset
+  async forceAuthReset(): Promise<void> {
+    await this.logout();
+    await AsyncStorage.setItem(AUTH_VERSION_KEY, CURRENT_AUTH_VERSION);
   }
 
   // Add getGravatarProfile as a public method
@@ -136,7 +180,39 @@ class AuthService {
     return getGravatarProfile(email);
   }
 
-  private async makeAuthRequest(endpoint: string, method: string, body?: any): Promise<any> {
+  private async storeCredentials(email: string, password: string): Promise<void> {
+    try {
+      const credentials: UserCredentials = { email, password };
+      // Use SecureStore instead of AsyncStorage + crypto
+      await SecureStore.setItemAsync(
+        USER_CREDENTIALS_KEY, 
+        JSON.stringify(credentials)
+      );
+    } catch (error) {
+      console.error('Error storing credentials:', error);
+    }
+  }
+
+  private async getStoredCredentials(): Promise<UserCredentials | null> {
+    try {
+      const credentialsJson = await SecureStore.getItemAsync(USER_CREDENTIALS_KEY);
+      if (!credentialsJson) {
+        return null;
+      }
+      
+      const credentials = JSON.parse(credentialsJson) as UserCredentials;
+      return credentials;
+    } catch (error) {
+      console.error('Error retrieving credentials:', error);
+      return null;
+    }
+  }
+
+  private async clearStoredCredentials(): Promise<void> {
+    await SecureStore.deleteItemAsync(USER_CREDENTIALS_KEY);
+  }
+
+  private async makeAuthRequest(endpoint: string, method: string, body?: any, retry: boolean = true): Promise<any> {
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       'api-key': envVars.API_KEY
@@ -148,7 +224,9 @@ class AuthService {
 
     // Create an AbortController to handle request timeouts
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, REQUEST_TIMEOUT);
     
     try {
       const response = await fetch(`${API_URL}${endpoint}`, {
@@ -161,11 +239,28 @@ class AuthService {
       clearTimeout(timeoutId);
   
       if (!response.ok) {
+        // Handle 401 Unauthorized - expired token
+        if (response.status === 401 && retry && !this.isReloginInProgress) {
+          // Try to relogin and retry the request
+          const success = await this.attemptRelogin();
+          if (success) {
+            // Retry the original request with new token
+            return this.makeAuthRequest(endpoint, method, body, false);
+          }
+        }
+        
         const error = await response.json();
         throw new Error(error.detail || 'Request failed');
       }
   
-      return await response.json();
+      // Check if response has content before parsing JSON
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.indexOf("application/json") !== -1) {
+          return await response.json();
+      } else {
+          // Return empty object or handle non-JSON response as needed
+          return {};
+      }
     } catch (error) {
       clearTimeout(timeoutId);
       if (error instanceof Error) {
@@ -177,59 +272,79 @@ class AuthService {
     }
   }
 
-  async getSalt(email: string): Promise<string> {
-    const response = await this.makeAuthRequest('/auth/get-salt/' + email, 'GET');
-    return response.salt;
-  }
-
   async signup(email: string, password: string, confirmPassword: string): Promise<AuthResponse> {
-    // Generate a secure random salt using React Native's crypto
-    const randomBytes = new Uint8Array(16);
-    const getRandomValues = (global as any).crypto?.getRandomValues;
-    if (getRandomValues) {
-      getRandomValues(randomBytes);
-    } else {
-      // Fallback for older React Native versions
-      for (let i = 0; i < randomBytes.length; i++) {
-        randomBytes[i] = Math.floor(Math.random() * 256);
-      }
+    try {
+      const response = await this.makeAuthRequest('/auth/signup', 'POST', {
+        email,
+        password,
+        confirm_password: confirmPassword
+      });
+      return response;
+    } catch (error) {
+      throw error;
     }
-    const salt = Array.from(randomBytes, byte => byte.toString(16).padStart(2, '0')).join('');
-    
-    const passwordHash = crypto.SHA256(password + salt).toString();
-    const confirmPasswordHash = crypto.SHA256(confirmPassword + salt).toString();
-
-    return await this.makeAuthRequest('/auth/signup', 'POST', {
-      email,
-      password_hash: passwordHash,
-      confirm_password_hash: confirmPasswordHash,
-      salt
-    });
   }
 
   async login(email: string, password: string): Promise<AuthResponse> {
-    const salt = await this.getSalt(email);
-    const passwordHash = crypto.SHA256(password + salt).toString();
-
-    const response = await this.makeAuthRequest('/auth/login', 'POST', {
-      email: email,
-      password: passwordHash
-    });
-
-    if (response.access_token) {
-      this.token = response.access_token;
-      await AsyncStorage.setItem(AUTH_TOKEN_KEY, response.access_token);
-      // Clear skip login flag when user explicitly logs in
-      await AsyncStorage.removeItem(SKIP_LOGIN_KEY);
-      this.skippedLogin = false;
-      await this.loadUserData();
-      DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, { 
-        isAuthenticated: true,
-        skipped: false 
+    try {
+      const response = await this.makeAuthRequest('/auth/login', 'POST', {
+        email,
+        password
       });
-    }
 
-    return response;
+      if (response.access_token) {
+        this.token = response.access_token;
+        await AsyncStorage.setItem(AUTH_TOKEN_KEY, response.access_token);
+        await this.storeCredentials(email, password);
+        // Clear skip login flag when user explicitly logs in
+        await AsyncStorage.removeItem(SKIP_LOGIN_KEY);
+        this.skippedLogin = false;
+        await this.loadUserData();
+        DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, { 
+          isAuthenticated: true,
+          skipped: false,
+          freshLogin: true
+        });
+      }
+
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  private async attemptRelogin(): Promise<boolean> {
+    if (this.isReloginInProgress) {
+      return false;
+    }
+    
+    this.isReloginInProgress = true;
+    try {
+      const credentials = await this.getStoredCredentials();
+      if (!credentials) {
+        this.isReloginInProgress = false;
+        return false;
+      }
+      
+      const response = await this.makeAuthRequest('/auth/login', 'POST', {
+        email: credentials.email,
+        password: credentials.password
+      }, false); // Don't retry on this login attempt
+      
+      if (response.access_token) {
+        this.token = response.access_token;
+        await AsyncStorage.setItem(AUTH_TOKEN_KEY, response.access_token);
+        await this.loadUserData();
+        this.isReloginInProgress = false;
+        return true;
+      }
+      
+      this.isReloginInProgress = false;
+      return false;
+    } catch (error) {
+      this.isReloginInProgress = false;
+      return false;
+    }
   }
 
   async verifyEmail(token: string): Promise<boolean> {
@@ -243,30 +358,18 @@ class AuthService {
   }
 
   async requestPasswordReset(email: string): Promise<void> {
-    await this.makeAuthRequest('/auth/forgot-password', 'POST', { email });
+    try {
+      await this.makeAuthRequest('/auth/forgot-password', 'POST', { email });
+    } catch (error) {
+      throw error;
+    }
   }
 
   async resetPassword(token: string, newPassword: string): Promise<boolean> {
-    // Generate a secure random salt using React Native's crypto
-    const randomBytes = new Uint8Array(16);
-    const getRandomValues = (global as any).crypto?.getRandomValues;
-    if (getRandomValues) {
-      getRandomValues(randomBytes);
-    } else {
-      // Fallback for older React Native versions
-      for (let i = 0; i < randomBytes.length; i++) {
-        randomBytes[i] = Math.floor(Math.random() * 256);
-      }
-    }
-    const salt = Array.from(randomBytes, byte => byte.toString(16).padStart(2, '0')).join('');
-    
-    const passwordHash = crypto.SHA256(newPassword + salt).toString();
-
     try {
       await this.makeAuthRequest(`/auth/reset-password?token=${token}`, 'POST', {
-        password_hash: passwordHash,
-        confirm_password_hash: passwordHash,
-        salt
+        password: newPassword,
+        confirm_password: newPassword
       });
       return true;
     } catch (error) {
@@ -276,17 +379,12 @@ class AuthService {
 
   async deleteAccount(password: string): Promise<void> {
     try {
-      // Get the salt for the current user
-      const email = this.userData?.email;
-      if (!email) {
+      if (!this.userData?.email) {
         throw new Error('User not authenticated');
       }
       
-      const salt = await this.getSalt(email);
-      const passwordHash = crypto.SHA256(password + salt).toString();
-      
       await this.makeAuthRequest('/auth/delete-account/initiate', 'POST', {
-        password_hash: passwordHash
+        password
       });
       
       await this.logout();
@@ -299,16 +397,31 @@ class AuthService {
     this.token = null;
     this.userData = null;
     this.skippedLogin = false;
-    await AsyncStorage.removeItem(AUTH_TOKEN_KEY);
-    await AsyncStorage.removeItem(SKIP_LOGIN_KEY);
-    await AsyncStorage.removeItem(LOGIN_DISMISSED_KEY);
-    DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, { 
-      isAuthenticated: false,
-      skipped: false 
-    });
+    try {
+      // Clear auth tokens and credentials
+      await AsyncStorage.removeItem(AUTH_TOKEN_KEY);
+      await AsyncStorage.removeItem(SKIP_LOGIN_KEY);
+      await AsyncStorage.removeItem(LOGIN_DISMISSED_KEY);
+      await this.clearStoredCredentials();
+      
+      // Reset settings sync state keys directly
+      await AsyncStorage.removeItem('@initial_settings_download_done');
+      await AsyncStorage.removeItem('@last_settings_sync');
+      
+      DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, { 
+        isAuthenticated: false,
+        skipped: false,
+        freshLogin: false
+      });
+    } catch (error) {
+      console.error('Error during logout:', error);
+    }
   }
 
   async loadUserData(): Promise<UserData | null> {
+    // Check auth version first before loading user data
+    await this.checkAuthVersion();
+    
     // Prevent multiple concurrent loading operations
     if (this.isLoading) {
       return this.userData;
@@ -324,7 +437,8 @@ class AuthService {
         // Emit auth state with skipped = true
         DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, { 
           isAuthenticated: false,
-          skipped: true 
+          skipped: true,
+          freshLogin: false // Not a fresh login
         });
         this.isLoading = false;
         return null;
@@ -354,7 +468,8 @@ class AuthService {
       this.userData = userData;
       DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, { 
         isAuthenticated: true,
-        skipped: false 
+        skipped: false,
+        freshLogin: false // Not a fresh login, just loading existing auth
       });
       this.isLoading = false;
       return userData;
@@ -369,7 +484,8 @@ class AuthService {
   }
 
   isAuthenticated(): boolean {
-    return !!this.token;
+    const auth = !!this.token;
+    return auth;
   }
 
   hasSkippedLogin(): boolean {
@@ -382,6 +498,73 @@ class AuthService {
 
   isLoadingUserData(): boolean {
     return this.isLoading;
+  }
+
+  // Add a public method to get stored credentials for encryption
+  async getCredentialsForEncryption(): Promise<string | null> {
+    try {
+      const credentials = await this.getStoredCredentials();
+      if (!credentials) {
+        return null;
+      }
+      return credentials.password;
+    } catch (error) {
+      console.error('Error getting credentials for encryption:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Sends plaintext data and the user's password to the server for encryption and storage.
+   * @param key The key identifying the data type (e.g., 'idnp').
+   * @param data The string data to encrypt and sync.
+   */
+  async encryptAndSyncData(key: string, data: string): Promise<void> {
+    if (!this.isAuthenticated()) {
+      console.warn('User not authenticated. Cannot sync encrypted data.');
+      // Optionally throw an error or return early
+      return;
+      // throw new Error('User not authenticated');
+    }
+
+    try {
+      const credentials = await this.getStoredCredentials();
+      if (!credentials || !credentials.password) {
+        console.error('Could not retrieve credentials for encryption.');
+        throw new Error('Credentials not found for encryption.');
+      }
+
+      // Send the plaintext data and password to the server endpoint
+      // The server will handle the encryption using the provided password
+      await this.makeAuthRequest('/secure/encrypt-data', 'POST', {
+        data_label: key, // Changed from 'key' to 'data_label' to match settingsService pattern
+        plaintext: data,
+        password: credentials.password
+      });
+
+    } catch (error) {
+      console.error(`Error sending data for server-side encryption (key: '${key}'):`, error);
+      // Optionally re-throw or handle the error (e.g., show a notification)
+      throw error; // Re-throwing to allow the caller to handle it
+    }
+  }
+
+  /**
+   * Deletes encrypted data from the server.
+   * @param key The key identifying the data type to delete (e.g., 'idnp').
+   */
+  async deleteEncryptedData(key: string): Promise<void> {
+    if (!this.isAuthenticated()) {
+      console.warn('User not authenticated. Cannot delete encrypted data.');
+      return;
+    }
+
+    try {
+      await this.makeAuthRequest(`/secure/delete-encrypted-data/${key}`, 'DELETE');
+    } catch (error) {
+      console.error(`Error deleting encrypted data (key: '${key}'):`, error);
+      throw error;
+    }
   }
 }
 

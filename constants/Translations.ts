@@ -4,6 +4,11 @@ type TranslationType = {
     long: string[];
   };
   months: string[];
+  general: {
+    more: string;
+    less: string;
+    found: string;
+  };
   settings: {
     language: string;
     subGroup: string;
@@ -31,6 +36,13 @@ type TranslationType = {
       };
     };
     idnp: {
+      syncToggle: string;
+      syncTitle: string;
+      syncEnabledInfo: string;
+      syncDisabledInfo: string;
+      syncedStatus: string;
+      noIdnpSaved: string;
+      loginRequired: string;
       title: string;
       clearButton: string;
       clearConfirmTitle: string;
@@ -64,6 +76,46 @@ type TranslationType = {
       deleteConfirmMessage: string;
       delete: string;
     };
+    notifications: {
+      title: string;
+      enabled: string;
+      enabledDescription: string;
+      disabledDescription: string;
+      time: string;
+      timeSettings: string;
+      timeDescription: string;
+      selectTime: string;
+      reminderDays: string;
+      reminderDaysDescription: string;
+      importantAssignments: string;
+      otherAssignments: string;
+      exams: string;
+      tests: string;
+      quizzes: string;
+      homework: string;
+      projects: string;
+      other: string;
+      dailyReminders: string;
+      dailyRemindersDescription: string;
+      dailyExams: string;
+      dailyTests: string;
+      dailyQuizzes: string;
+      testNotification: string;
+      days: string;
+      sendDigestNow: string;
+      digestSentTitle: string;
+      digestSentMessage: string;
+      errorTitle: string;
+      digestErrorMessage: string;
+    };
+    schedule: {
+      title: string;
+      refresh: string;
+      refreshing: string;
+      group: string;
+      lastUpdated: string;
+      noRecentRefresh: string;
+    };
   };
   schedule: {
     noClassesWeekend: string;
@@ -79,6 +131,8 @@ type TranslationType = {
     in: string;
     dayView: string;
     weekView: string;
+    assignments: string;
+    loadingAssignments: string;
   };
   subgroup: {
     group1: string;
@@ -90,6 +144,132 @@ type TranslationType = {
     assignments: string;
     settings: string;
     grades: string;
+  };
+  assignments: {
+    title: string;
+    loading: string;
+    empty: string;
+    addNew: string;
+    save: string;
+    edit: string;
+    delete: string;
+    update: string;
+    updating: string;
+    editTitle: string;
+    segments: {
+      dueDate: string;
+      classes: string;
+      priority: string;
+    };
+    saving: string;
+    common: {
+      uncategorized: string;
+      period: string;
+      due: string;
+      orphaned: string;
+      orphanedAssignments: string;
+      orphanedReason: string;
+    };
+    types: {
+      homework: string;
+      test: string;
+      exam: string;
+      project: string;
+      quiz: string;
+      lab: string;
+      essay: string;
+      presentation: string;
+      other: string;
+    };
+    days: {
+      today: string;
+      tomorrow: string;
+      monday: string;
+      tuesday: string;
+      wednesday: string;
+      thursday: string;
+      friday: string;
+      saturday: string;
+      sunday: string;
+      nextWeek: string;
+      inTwoWeeks: string;
+      thisWeek: string;
+      in: string;
+      weeks: string;
+    };
+    titlePlaceholder: string;
+    description: string;
+    descriptionPlaceholder: string;
+    optional: string;
+    type: string;
+    autoDetectedType: string;
+    dueDate: string;
+    dueTime: string;
+    markAsPriority: string;
+    selectSubject: string;
+    periods: {
+      first: string;
+      second: string;
+      third: string;
+      fourth: string;
+      fifth: string;
+    };
+    useNextPeriod: string;
+    noUpcomingClasses: string;
+    inNextTwoWeeks: string;
+    findingNextClass: string;
+    assignmentDueText: string;
+    on: string;
+    at: string;
+    thisSubject: string;
+    noUpcomingClassesFound: string;
+    recent: string;
+    all: string;
+    custom: string;
+    loadingSubjects: string;
+    noSubjects: string;
+    noCustomSubjects: string;
+    enterSubjectName: string;
+    add: string;
+    subtasks: {
+      title: string;
+      add: string;
+      addFirst: string;
+      placeholder: string;
+      progress: string;
+      loading: string;
+      hint: string;
+    };
+    status: {
+      overdue: string;
+      completedIn: string;
+      dueIn: string;
+      dueTomorrow: string;
+      dueToday: string;
+      in: string;
+      inMinute: string;
+      inMinutes: string;
+      inHour: string;
+      inHours: string;
+      inDay: string;
+      inDays: string;
+      inWeek: string;
+      inWeeks: string;
+    };
+    archive: {
+      title: string;
+      pastDue: string;
+      completed: string;
+      noItems: string;
+      archiveAll: string; 
+      archiveConfirmation: string;
+    };
+    errors: {
+      recoveringTitle: string;
+      recovering: string;
+      tip: string;
+      somethingWrong: string;
+    };
   };
   grades: {
     title: string;
@@ -114,6 +294,25 @@ type TranslationType = {
       grade: string;
       category: string;
     };
+    calculator: {
+      title: string;
+      selectSubject: string;
+      currentGrades: string;
+      noGrades: string;
+      currentAverage: string;
+      targetAverage: string;
+      targetGrade: string;
+      minimumGradesNeeded: string;
+      calculate: string;
+      clear: string;
+      noSolution: string;
+      resultsTitle: string;
+      alreadyAchieved: string;
+      calculationType: string;
+      semesterOnly: string;
+      annualAverage: string;
+      allGrades: string;
+    }
     add: string;
     edit: string;
     form: {
@@ -281,6 +480,11 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       long: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
     },
     months: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+    general: {
+      more: 'More',
+      less: 'Less',
+      found: 'Found',
+    },
     settings: {
       language: 'Language',
       subGroup: 'Subgroup',
@@ -308,6 +512,13 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         },
       },
       idnp: {
+        syncToggle: 'Sync IDNP to server',
+        syncTitle: 'IDNP Sync Settings',
+        syncEnabledInfo: 'Your IDNP is securely stored on our server. This allows you to access your grades on any device without re-entering it.',
+        syncDisabledInfo: 'Your IDNP is only stored locally on this device. If you disable syncing, it will be removed from our server.',
+        syncedStatus: 'IDNP is synced',
+        noIdnpSaved: 'No IDNP saved',
+        loginRequired: 'Sign in to your account to enable IDNP syncing across devices',
         title: 'IDNP Settings',
         clearButton: 'Clear Saved IDNP',
         clearConfirmTitle: 'Clear Saved IDNP',
@@ -341,6 +552,46 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         deleteConfirmMessage: 'Are you sure you want to delete this period?',
         delete: 'Delete',
       },
+      notifications: {
+        title: 'Notifications',
+        enabled: 'Enable Notifications',
+        enabledDescription: 'You will receive reminders for upcoming assignments',
+        disabledDescription: 'You will not receive any assignment notifications',
+        time: 'Notification Time',
+        timeSettings: 'Time Settings',
+        timeDescription: 'When notifications will be sent each day',
+        selectTime: 'Select Time',
+        reminderDays: 'Reminder Days',
+        reminderDaysDescription: 'How many days before the due date to send notifications',
+        importantAssignments: 'Important Assignments',
+        otherAssignments: 'Other Assignments',
+        exams: 'Exams',
+        tests: 'Tests',
+        quizzes: 'Quizzes',
+        homework: 'Homework',
+        projects: 'Projects',
+        other: 'Other',
+        dailyReminders: 'Daily Reminders',
+        dailyRemindersDescription: 'Send additional reminders every day until the due date',
+        dailyExams: 'For Exams',
+        dailyTests: 'For Tests',
+        dailyQuizzes: 'For Quizzes',
+        testNotification: 'Send Test Notification',
+        days: 'days',
+        sendDigestNow: 'Send Daily Digest Now',
+        digestSentTitle: 'Daily Digest Sent',
+        digestSentMessage: 'Check your notifications to see your daily assignment summary',
+        errorTitle: 'Error',
+        digestErrorMessage: 'Failed to send daily digest'
+      },
+      schedule: {
+        title: 'Schedule',
+        refresh: 'Refresh Schedule',
+        refreshing: 'Refreshing...',
+        group: 'Group',
+        lastUpdated: 'Last updated',
+        noRecentRefresh: 'No recent refresh'
+      }
     },
     schedule: {
       noClassesWeekend: 'No classes on weekends',
@@ -356,6 +607,8 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       in: 'in',
       dayView: 'Day View',
       weekView: 'Week View',
+      assignments: 'Assignments',
+      loadingAssignments: 'Loading assignments...',
     },
     subgroup: {
       group1: 'Subgroup 1',
@@ -367,6 +620,132 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       assignments: 'Assignments',
       settings: 'Settings',
       grades: 'Grades',
+    },
+    assignments: {
+      title: 'Assignments',
+      loading: 'Loading assignments...',
+      empty: 'No assignments found',
+      addNew: 'New Assignment',
+      save: 'Save',
+      edit: 'Edit',
+      delete: 'Delete',
+      update: 'Update',
+      updating: 'Updating...',
+      editTitle: 'Edit Assignment',
+      segments: {
+        dueDate: 'Due date',
+        classes: 'Classes',
+        priority: 'Priority',
+      },
+      saving: 'Saving...',
+      common: {
+        uncategorized: 'Uncategorized',
+        period: 'Period',
+        due: 'Due',
+        orphaned: 'Orphaned',
+        orphanedAssignments: 'Orphaned assignments (from different group)',
+        orphanedReason: 'Orphaned: Group changed',
+      },
+      types: {
+        homework: 'Homework',
+        test: 'Test',
+        exam: 'Exam',
+        project: 'Project',
+        quiz: 'Quiz',
+        lab: 'Lab',
+        essay: 'Essay',
+        presentation: 'Presentation',
+        other: 'Other',
+      },
+      days: {
+        today: 'Today',
+        tomorrow: 'Tomorrow',
+        monday: 'Monday',
+        tuesday: 'Tuesday',
+        wednesday: 'Wednesday',
+        thursday: 'Thursday',
+        friday: 'Friday',
+        saturday: 'Saturday',
+        sunday: 'Sunday',
+        nextWeek: 'Next Week',
+        inTwoWeeks: 'In 2 Weeks',
+        thisWeek: 'this week',
+        in: 'in',
+        weeks: 'weeks',
+      },
+      titlePlaceholder: 'Assignment title',
+      description: 'Description',
+      descriptionPlaceholder: 'Add details about the assignment',
+      optional: 'Optional',
+      type: 'Assignment Type',
+      autoDetectedType: 'Assignment type automatically detected',
+      dueDate: 'Due Date',
+      dueTime: 'Due Time',
+      markAsPriority: 'Mark as Priority',
+      selectSubject: 'Select Subject',
+      periods: {
+        first: '1st Period',
+        second: '2nd Period',
+        third: '3rd Period',
+        fourth: '4th Period',
+        fifth: '5th Period',
+      },
+      useNextPeriod: 'Use Next Period',
+      noUpcomingClasses: 'No upcoming classes found for',
+      inNextTwoWeeks: 'in the next two weeks',
+      findingNextClass: 'Finding next class period...',
+      assignmentDueText: 'This assignment will be due',
+      on: 'on',
+      at: 'at',
+      thisSubject: 'this subject',
+      noUpcomingClassesFound: 'No upcoming classes found. Please set a custom due date below.',
+      recent: 'Recent',
+      all: 'All',
+      custom: 'Custom',
+      loadingSubjects: 'Loading subjects...',
+      noSubjects: 'No subjects found',
+      noCustomSubjects: 'No custom subjects found',
+      enterSubjectName: 'Enter subject name',
+      add: 'Add',
+      subtasks: {
+        title: 'Subtasks',
+        add: 'Add subtask',
+        addFirst: 'Add subtasks',
+        placeholder: 'Enter subtask...',
+        progress: 'Subtask progress',
+        loading: 'Loading subtasks...',
+        hint: 'Breaking tasks into steps improves progress tracking.',
+      },
+      status: {
+        overdue: 'Overdue',
+        completedIn: 'Completed in',
+        dueIn: 'Due in',
+        dueTomorrow: 'Due tomorrow',
+        dueToday: 'Due today',
+        in: 'in',
+        inMinute: 'minute',
+        inMinutes: 'minutes',
+        inHour: 'hour',
+        inHours: 'hours',
+        inDay: 'day',
+        inDays: 'days',
+        inWeek: 'week',
+        inWeeks: 'weeks',
+      },
+      archive: {
+        title: 'Archive',
+        pastDue: 'Past due',
+        completed: 'Completed',
+        noItems: 'No items',
+        archiveAll: 'Archive all',
+        archiveConfirmation: 'Are you sure you want to archive all completed assignments?',
+      },
+      errors: {
+        recoveringTitle: 'Recovering',
+        recovering: 'Recovering',
+        tip: 'Tip',
+        somethingWrong: 'Something went wrong',
+      },
     },
     grades: {
       title: 'Grades',
@@ -390,6 +769,25 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         date: 'Date',
         grade: 'Grade',
         category: 'Category',
+      },
+      calculator: {
+        title: 'Grade Calculator',
+        selectSubject: 'Select Subject',
+        currentGrades: 'Current Grades',
+        noGrades: 'No grades recorded yet',
+        currentAverage: 'Current Average',
+        targetAverage: 'Target Average',
+        targetGrade: 'Target Grade',
+        minimumGradesNeeded: 'Minimum Grades Needed',
+        calculate: 'Calculate',
+        clear: 'Clear',
+        noSolution: 'No solution found',
+        resultsTitle: 'Results',
+        alreadyAchieved: 'You have already achieved this target average.',
+        calculationType: 'Calculation Type',
+        semesterOnly: 'Semester Only',
+        annualAverage: 'Annual Average',
+        allGrades: 'All Grades',
       },
       add: 'Add Grade',
       edit: 'Edit Grade',
@@ -576,6 +974,11 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       long: ['Duminică', 'Luni', 'Marți', 'Miercuri', 'Joi', 'Vineri', 'Sâmbătă'],
     },
     months: ['Ianuarie', 'Februarie', 'Martie', 'Aprilie', 'Mai', 'Iunie', 'Iulie', 'August', 'Septembrie', 'Octombrie', 'Noiembrie', 'Decembrie'],
+    general: {
+      more: 'Mai mult',
+      less: 'Mai puțin',
+      found: 'Găsite',
+    },
     settings: {
       language: 'Limbă',
       subGroup: 'Subgrupă',
@@ -603,6 +1006,13 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         },
       },
       idnp: {
+        syncToggle: 'Sincronizează IDNP pe server',
+        syncTitle: 'Setări sincronizare IDNP',
+        syncEnabledInfo: 'IDNP-ul dvs. este stocat în siguranță pe serverul nostru. Acest lucru vă permite să accesați notele pe orice dispozitiv fără a-l reintroduce.',
+        syncDisabledInfo: 'IDNP-ul dvs. este stocat doar local pe acest dispozitiv. Dacă dezactivați sincronizarea, acesta va fi eliminat de pe serverul nostru.',
+        syncedStatus: 'IDNP este sincronizat',
+        noIdnpSaved: 'Niciun IDNP salvat',
+        loginRequired: 'Conectați-vă la contul dvs. pentru a activa sincronizarea IDNP între dispozitive',
         title: 'Setări IDNP',
         clearButton: 'Șterge IDNP salvat',
         clearConfirmTitle: 'Șterge IDNP salvat',
@@ -636,6 +1046,46 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         deleteConfirmMessage: 'Sigur doriți să ștergeți această lecție?',
         delete: 'Șterge',
       },
+      notifications: {
+        title: 'Notificări',
+        enabled: 'Activează Notificările',
+        enabledDescription: 'Vei primi notificări pentru temele viitoare',
+        disabledDescription: 'Nu vei primi nicio notificare despre teme',
+        time: 'Ora Notificării',
+        timeSettings: 'Setări Oră',
+        timeDescription: 'Când vor fi trimise notificările în fiecare zi',
+        selectTime: 'Selectează Ora',
+        reminderDays: 'Zile de Reamintire',
+        reminderDaysDescription: 'Cu câte zile înainte de data scadentă să se trimită notificări',
+        importantAssignments: 'Teme Importante',
+        otherAssignments: 'Alte Teme',
+        exams: 'Examene',
+        tests: 'Teste',
+        quizzes: 'Quizuri',
+        homework: 'Teme',
+        projects: 'Proiecte',
+        other: 'Altele',
+        dailyReminders: 'Reamintiri Zilnice',
+        dailyRemindersDescription: 'Trimite notificări suplimentare în fiecare zi până la data scadentă',
+        dailyExams: 'Pentru Examene',
+        dailyTests: 'Pentru Teste',
+        dailyQuizzes: 'Pentru Quizuri',
+        testNotification: 'Trimite Notificare de Test',
+        days: 'zile',
+        sendDigestNow: 'Trimite Digest Zilnic Acum',
+        digestSentTitle: 'Digest Zilnic Trimis',
+        digestSentMessage: 'Verificați notificările pentru a vedea rezumatul temelor viitoare',
+        errorTitle: 'Eroare',
+        digestErrorMessage: 'Nu s-a putut trimite digestul zilnic'
+      },
+      schedule: {
+        title: 'Orar',
+        refresh: 'Reîmprospătează Orarul',
+        refreshing: 'Se reîmprospătează...',
+        group: 'Grupă',
+        lastUpdated: 'Ultima actualizare',
+        noRecentRefresh: 'Nicio actualizare recentă'
+      }
     },
     schedule: {
       noClassesWeekend: 'Nu sunt lecții în weekend',
@@ -651,6 +1101,8 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       in: 'în',
       dayView: 'Vizualizare pe zi',
       weekView: 'Vizualizare pe săptămână',
+      assignments: 'Teme',
+      loadingAssignments: 'Se încarcă temele...',
     },
     subgroup: {
       group1: 'Subgrupa 1',
@@ -662,6 +1114,132 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       assignments: 'Teme',
       settings: 'Setări',
       grades: 'Note'
+    },
+    assignments: {
+      title: 'Teme',
+      loading: 'Se încarcă temele...',
+      empty: 'Nu există teme',
+      save: 'Salvează',
+      addNew: 'Temă Nouă',
+      edit: 'Editează',
+      delete: 'Șterge',
+      update: 'Actualizează',
+      updating: 'Se actualizează...',
+      editTitle: 'Editează Tema',
+      segments: {
+        dueDate: 'Data scadentă',
+        classes: 'Clase',
+        priority: 'Prioritate',
+      },
+      saving: 'Se salvează...',
+      common: {
+        uncategorized: 'Necategorizat',
+        period: 'Perioada',
+        due: 'Scadent',
+        orphaned: 'Orfan',
+        orphanedAssignments: 'Teme orfane (din alt grup)',
+        orphanedReason: 'Orfan: Grup schimbat',
+      },
+      types: {
+        homework: 'Temă',
+        test: 'Test',
+        exam: 'Examen',
+        project: 'Proiect',
+        quiz: 'Quiz',
+        lab: 'Laborator',
+        essay: 'Eseu',
+        presentation: 'Prezentare',
+        other: 'Altele',
+      },
+      days: {
+        today: 'Astăzi',
+        tomorrow: 'Mâine',
+        monday: 'Luni',
+        tuesday: 'Marți',
+        wednesday: 'Miercuri',
+        thursday: 'Joi',
+        friday: 'Vineri',
+        saturday: 'Sâmbătă',
+        sunday: 'Duminică',
+        nextWeek: 'Săptămâna Viitoare',
+        inTwoWeeks: 'În 2 Săptămâni',
+        thisWeek: 'această săptămână',
+        in: 'în',
+        weeks: 'săptămâni',
+      },
+      titlePlaceholder: 'Titlul temei',
+      description: 'Descriere',
+      descriptionPlaceholder: 'Adaugă detalii despre temă',
+      optional: 'Opțional',
+      type: 'Tipul Temei',
+      autoDetectedType: 'Tipul temei detectat automat',
+      dueDate: 'Data Scadentă',
+      dueTime: 'Ora Scadentă',
+      markAsPriority: 'Marchează ca Prioritate',
+      selectSubject: 'Selectează Materia',
+      periods: {
+        first: 'Perioada 1',
+        second: 'Perioada 2',
+        third: 'Perioada 3',
+        fourth: 'Perioada 4',
+        fifth: 'Perioada 5',
+      },
+      useNextPeriod: 'Folosește Următoarea Oră',
+      noUpcomingClasses: 'Nu s-au găsit ore viitoare pentru',
+      inNextTwoWeeks: 'în următoarele două săptămâni',
+      findingNextClass: 'Se caută următoarea oră...',
+      assignmentDueText: 'Această temă va fi scadentă',
+      on: 'pe',
+      at: 'la',
+      thisSubject: 'această materie',
+      noUpcomingClassesFound: 'Nu s-au găsit ore viitoare. Vă rugăm să setați o dată personalizată mai jos.',
+      recent: 'Recente',
+      all: 'Toate',
+      custom: 'Personalizate',
+      loadingSubjects: 'Se încarcă materiile...',
+      noSubjects: 'Nu s-au găsit materii',
+      noCustomSubjects: 'Nu s-au găsit materii personalizate',
+      enterSubjectName: 'Introduceți numele materiei',
+      add: 'Adaugă',
+      subtasks: {
+        title: 'Subtask-uri',
+        add: 'Adaugă subtask',
+        addFirst: 'Adaugă subtask-uri',
+        placeholder: 'Introduceți subtask...',
+        progress: 'Progresul subtask-ului',
+        loading: 'Loading subtasks...',
+        hint: 'Împărțirea sarcinilor în pași îmbunătățește urmărirea progresului.',
+      },
+      status: {
+        overdue: 'Târziu',
+        completedIn: 'Completat în',
+        dueIn: 'Scadent în',
+        dueTomorrow: 'Scadent mâine',
+        dueToday: 'Scadent astăzi',
+        in: 'în',
+        inMinute: 'minute',
+        inMinutes: 'minute',
+        inHour: 'oră',
+        inHours: 'ore',
+        inDay: 'zi',
+        inDays: 'zile',
+        inWeek: 'săptămână',
+        inWeeks: 'săptămâni',
+      },
+      archive: {
+        title: 'Arhivă',
+        pastDue: 'Târziu',
+        completed: 'Completat',
+        noItems: 'Niciun element',
+        archiveAll: 'Arhivează toate',
+        archiveConfirmation: 'Sunteți sigur că doriți să arhivezi toate temele îndeplinite?',
+      },
+      errors: {
+        recoveringTitle: 'Recuperare',
+        recovering: 'Recuperare',
+        tip: 'Sfat',
+        somethingWrong: 'Ceva nu a mers bine',
+      },
     },
     grades: {
       title: 'Note',
@@ -685,6 +1263,25 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         date: 'Data',
         grade: 'Nota',
         category: 'Categorie'
+      },
+      calculator: {
+        title: 'Calculator de Note',
+        selectSubject: 'Selectează Materie',
+        currentGrades: 'Note curente',
+        noGrades: 'Nicio notă înregistrată încă',
+        currentAverage: 'Media curentă',
+        targetAverage: 'Media țintă',
+        targetGrade: 'Nota țintă',
+        minimumGradesNeeded: 'Numărul minim de note necesare',
+        calculate: 'Calculează',
+        clear: 'Șterge',
+        noSolution: 'Nu există soluție',
+        resultsTitle: 'Rezultate',
+        alreadyAchieved: 'Ați atins deja această medie țintă.',
+        calculationType: 'Tipul de calcul',
+        semesterOnly: 'Doar Semestrul',
+        annualAverage: 'Media Anuală',
+        allGrades: 'Toate Notele',
       },
       add: 'Adaugă Notă',
       edit: 'Editează Nota',
@@ -808,37 +1405,37 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
           title: 'Colectarea Datelor',
           content: [
             'Colectăm date pentru a oferi servicii mai bune utilizatorilor noștri.',
-            'Datele pe care le colectăm includ informații personale precum numele, adresa de email și IDNP (opțional).'
+            'Datele pe care le colectăm includ informații personale precum numele, email address și IDNP (opțional).'
           ]
         },
         idnpSecurity: {
           title: 'Securitatea IDNP',
           content: [
-            'IDNP-ul dvs. este stocat în siguranță pe serverul nostru cu criptare înainte de transmitere și în timpul stocării, ceea ce face imposibilă decriptarea fără parola dvs. sau interceptarea de către persoane rău intenționate.',
-            'Puteți alege să stocați IDNP-ul local pe dispozitivul dvs. în loc să îl sincronizați cu serverul dacă considerați că nu este sigur și să îl păstrați doar pe dispozitiv.',
-            'Nu împărtășim IDNP-ul dvs. cu terțe părți.'
+            'Your IDNP is stored securely on our server with encryption before transit and at rest which makes it impossible to decrypt without your password or intercepted by malicious people.',
+            'You can choose to store your IDNP locally on your device instead of syncing it with the server if you feel that it\'s not secure and store it only on-device.',
+            'We do not share your IDNP with third parties.'
           ]
         },
         passwordSecurity: {
           title: 'Securitatea Parolei',
           content: [
-            'Folosim criptare puternică pentru a vă proteja parola, criptând-o înainte să ajungă pe serverul nostru, ceea ce înseamnă că nici dacă am vrea nu am putea să vă vedem parola.',
-            'Parola dvs. nu este niciodată stocată în text simplu și este folosită doar pentru a cripta IDNP-ul înainte să ajungă pe serverul nostru.',
-            'Nu împărtășiți niciodată parola cu nimeni.'
+            'We use strong encryption to protect your password, encrypting it even before it reaches our server which means that even if we wanted we wouldn\'t be able to see your password.',
+            'Your password is never stored in plain text and is only used to encrypt your IDNP before it reaches our server.',
+            'Never share your password with anyone.'
           ]
         },
         dataStorage: {
           title: 'Stocarea Datelor',
           content: [
-            'Datele dvs. sunt stocate în siguranță fie pe serverul nostru, fie local pe dispozitivul dvs.',
-            'Puteți opta să nu mai folosiți serviciile noastre în orice moment.'
+            'Your data is stored securely either on our server or locally on your device.',
+            'You can opt out from our services at any time.',
           ]
         },
         thirdParty: {
           title: 'Servicii Terțe',
           content: [
-            'Nu împărtășim datele dvs. cu terțe părți.',
-            'Putem folosi servicii terțe pentru a îmbunătăți aplicația noastră.'
+            'We do not share your data with third parties.',
+            'We may use third-party services to improve our app.'
           ]
         },
         rights: {
@@ -871,6 +1468,11 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       long: ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'],
     },
     months: ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'],
+    general: {
+      more: 'Больше',
+      less: 'Меньше',
+      found: 'Найдено',
+    },
     settings: {
       language: 'Язык',
       subGroup: 'Подгруппа',
@@ -898,6 +1500,13 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         },
       },
       idnp: {
+        syncToggle: 'Синхронизировать IDNP на сервере',
+        syncTitle: 'Настройки синхронизации IDNP',
+        syncEnabledInfo: 'Ваш IDNP надежно хранится на нашем сервере. Это позволяет вам получать доступ к оценкам на любом устройстве без повторного ввода.',
+        syncDisabledInfo: 'Ваш IDNP хранится только локально на этом устройстве. Если вы отключите синхронизацию, он будет удален с нашего сервера.',
+        syncedStatus: 'IDNP синхронизирован',
+        noIdnpSaved: 'Нет сохраненных IDNP',
+        loginRequired: 'Войдите в свой аккаунт, чтобы включить синхронизацию IDNP между устройствами',
         title: 'Настройки IDNP',
         clearButton: 'Очистить сохраненный IDNP',
         clearConfirmTitle: 'Очистить сохраненный IDNP',
@@ -931,6 +1540,46 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         deleteConfirmMessage: 'Вы уверены, что хотите удалить этот период?',
         delete: 'Удалить',
       },
+      notifications: {
+        title: 'Уведомления',
+        enabled: 'Включить уведомления',
+        enabledDescription: 'Вы будете получать напоминания о предстоящих заданиях',
+        disabledDescription: 'Вы не будете получать никаких уведомлений о заданиях',
+        time: 'Время уведомления',
+        timeSettings: 'Настройки времени',
+        timeDescription: 'Когда уведомления будут отправляться каждый день',
+        selectTime: 'Выбрать время',
+        reminderDays: 'Дни напоминания',
+        reminderDaysDescription: 'За сколько дней до срока отправлять уведомления',
+        importantAssignments: 'Важные задания',
+        otherAssignments: 'Другие задания',
+        exams: 'Экзамены',
+        tests: 'Тесты',
+        quizzes: 'Контрольные',
+        homework: 'Домашние задания',
+        projects: 'Проекты',
+        other: 'Другое',
+        dailyReminders: 'Ежедневные напоминания',
+        dailyRemindersDescription: 'Отправлять дополнительные напоминания каждый день до срока выполнения',
+        dailyExams: 'Для экзаменов',
+        dailyTests: 'Для тестов',
+        dailyQuizzes: 'Для контрольных',
+        testNotification: 'Отправить тестовое уведомление',
+        days: 'дней',
+        sendDigestNow: 'Отправить ежедневный дайджест сейчас',
+        digestSentTitle: 'Ежедневный дайджест отправлен',
+        digestSentMessage: 'Проверьте уведомления для просмотра сводного отчета по заданиям',
+        errorTitle: 'Ошибка',
+        digestErrorMessage: 'Не удалось отправить ежедневный дайджест'
+      },
+      schedule: {
+        title: 'Расписание',
+        refresh: 'Обновить расписание',
+        refreshing: 'Обновление...',
+        group: 'Группа',
+        lastUpdated: 'Последнее обновление',
+        noRecentRefresh: 'Нет недавних обновлений'
+      }
     },
     schedule: {
       noClassesWeekend: 'Нет занятий в выходные',
@@ -946,6 +1595,8 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       in: 'в',
       dayView: 'По дням',
       weekView: 'По неделям',
+      assignments: 'Задания',
+      loadingAssignments: 'Загрузка заданий...',
     },
     subgroup: {
       group1: 'Подгруппа 1',
@@ -957,6 +1608,132 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       assignments: 'Задания',
       settings: 'Настройки',
       grades: 'Оценки',
+    },
+    assignments: {
+      title: 'Задания',
+      loading: 'Загрузка заданий...',
+      empty: 'Заданий не найдено',
+      addNew: 'Новое Задание',
+      save: 'Сохранить',
+      edit: 'Редактировать',
+      delete: 'Удалить',
+      update: 'Обновить',
+      updating: 'Обновление...',
+      editTitle: 'Редактировать Задание',
+      segments: {
+        dueDate: 'Срок сдачи',
+        classes: 'Классы',
+        priority: 'Приоритет',
+      },
+      saving: 'Сохранение...',
+      common: {
+        uncategorized: 'Без категории',
+        period: 'Период',
+        due: 'Срок',
+        orphaned: 'Потерянные',
+        orphanedAssignments: 'Потерянные задания (из другой группы)',
+        orphanedReason: 'Потеряно: Группа изменена',
+      },
+      types: {
+        homework: 'Домашнее задание',
+        test: 'Тест',
+        exam: 'Экзамен',
+        project: 'Проект',
+        quiz: 'Опрос',
+        lab: 'Лабораторная',
+        essay: 'Эссе',
+        presentation: 'Презентация',
+        other: 'Другое',
+      },
+      days: {
+        today: 'Сегодня',
+        tomorrow: 'Завтра',
+        monday: 'Понедельник',
+        tuesday: 'Вторник',
+        wednesday: 'Среда',
+        thursday: 'Четверг',
+        friday: 'Пятница',
+        saturday: 'Суббота',
+        sunday: 'Воскресенье',
+        nextWeek: 'Следующая Неделя',
+        inTwoWeeks: 'Через 2 Недели',
+        thisWeek: 'на этой неделе',
+        in: 'через',
+        weeks: 'недели',
+      },
+      titlePlaceholder: 'Название задания',
+      description: 'Описание',
+      descriptionPlaceholder: 'Добавьте детали о задании',
+      optional: 'Необязательно',
+      type: 'Тип Задания',
+      autoDetectedType: 'Тип задания определен автоматически',
+      dueDate: 'Срок Сдачи',
+      dueTime: 'Время Сдачи',
+      markAsPriority: 'Отметить как Приоритетное',
+      selectSubject: 'Выбрать Предмет',
+      periods: {
+        first: '1-й Период',
+        second: '2-й Период',
+        third: '3-й Период',
+        fourth: '4-й Период',
+        fifth: '5-й Период',
+      },
+      useNextPeriod: 'Использовать Следующий Урок',
+      noUpcomingClasses: 'Не найдены предстоящие уроки для',
+      inNextTwoWeeks: 'в ближайшие две недели',
+      findingNextClass: 'Поиск следующего урока...',
+      assignmentDueText: 'Срок сдачи этого задания',
+      on: 'в',
+      at: 'в',
+      thisSubject: 'этот предмет',
+      noUpcomingClassesFound: 'Предстоящие уроки не найдены. Пожалуйста, установите пользовательскую дату ниже.',
+      recent: 'Недавние',
+      all: 'Все',
+      custom: 'Пользовательские',
+      loadingSubjects: 'Загрузка предметов...',
+      noSubjects: 'Предметы не найдены',
+      noCustomSubjects: 'Пользовательские предметы не найдены',
+      enterSubjectName: 'Введите название предмета',
+      add: 'Добавить',
+      subtasks: {
+        title: 'Подзадачи',
+        add: 'Добавить подзадачу',
+        addFirst: 'Добавить подзадачи',
+        placeholder: 'Введите подзадачу...',
+        progress: 'Прогресс подзадачи',
+        loading: 'Загрузка подзадач...',
+        hint: 'Разбиение задач на шаги улучшает отслеживание прогресса.',
+      },
+      status: {
+        overdue: 'Просрочено',
+        completedIn: 'Завершено в',
+        dueIn: 'Срок в',
+        dueTomorrow: 'Срок завтра',
+        dueToday: 'Срок сегодня',
+        in: 'в',
+        inMinute: 'минуту',
+        inMinutes: 'минуты',
+        inHour: 'час',
+        inHours: 'часа',
+        inDay: 'день',
+        inDays: 'дня',
+        inWeek: 'неделю',
+        inWeeks: 'недели',
+      },
+      archive: {
+        title: 'Архив',
+        pastDue: 'Просрочено',
+        completed: 'Завершено',
+        noItems: 'Нет элементов',
+        archiveAll: 'Архивировать все',
+        archiveConfirmation: 'Вы уверены, что хотите архивировать все выполненные задания?',
+      },
+      errors: {
+        recoveringTitle: 'Восстановление',
+        recovering: 'Восстановление',
+        tip: 'Совет',
+        somethingWrong: 'Что-то пошло не так',
+      },
     },
     grades: {
       title: 'Оценки',
@@ -980,6 +1757,25 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         date: 'Дата',
         grade: 'Оценка',
         category: 'Категория',
+      },
+      calculator: {
+        title: 'Калькулятор оценок',
+        selectSubject: 'Выберите Предмет',
+        currentGrades: 'Текущие оценки',
+        noGrades: 'Нет оценок в записи',
+        currentAverage: 'Текущая Средняя Оценка',
+        targetAverage: 'Целевая Средняя Оценка',
+        targetGrade: 'Целевая Оценка',
+        minimumGradesNeeded: 'Минимальное количество оценок',
+        calculate: 'Вычислить',
+        clear: 'Очистить',
+        noSolution: 'Нет решения',
+        resultsTitle: 'Результаты',
+        alreadyAchieved: 'Вы уже достигли этой целевой средней оценки.',
+        calculationType: 'Тип расчета',
+        semesterOnly: 'Только семестр',
+        annualAverage: 'Средняя оценка за год',
+        allGrades: 'Все оценки',
       },
       add: 'Добавить оценку',
       edit: 'Редактировать оценку',
