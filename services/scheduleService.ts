@@ -449,6 +449,8 @@ export const scheduleService = {
 
   transformScheduleData(data: ApiResponse): ApiResponse {
     // Create a proper deep copy of the data to avoid mutating the cache
+    // This fixes the bug where shallow copying caused cache corruption when
+    // recovery days were added, especially when switching groups
     const transformedData: ApiResponse = JSON.parse(JSON.stringify(data));
 
     // Process recovery days if we have them
