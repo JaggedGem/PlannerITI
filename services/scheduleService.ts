@@ -999,10 +999,13 @@ export const scheduleService = {
   updateCustomPeriod(periodId: string, updates: Partial<CustomPeriod>) {
     const index = this.settings.customPeriods.findIndex(p => p._id === periodId);
     if (index !== -1) {
-      this.settings.customPeriods[index] = {
-        ...this.settings.customPeriods[index],
+      // Create a new array with the updated period to avoid mutation
+      const updatedPeriods = [...this.settings.customPeriods];
+      updatedPeriods[index] = {
+        ...updatedPeriods[index],
         ...updates
       };
+      this.settings.customPeriods = updatedPeriods;
       this.saveSettings();
       this.notifyListeners();
       return true;
