@@ -274,6 +274,7 @@ export const scheduleService = {
       ]);
 
       if (cachedData) {
+        // Parse the cached data (this creates a new object, not a reference)
         const data = JSON.parse(cachedData);
         
         // Update cached recovery days in memory if available
@@ -287,9 +288,11 @@ export const scheduleService = {
         }
         
         // Include recovery days and assignment counts in the response
-        data.recoveryDays = this.cachedRecoveryDays;
-        data.assignmentCounts = this.cachedAssignmentCounts;
+        // Create new arrays to prevent mutation of in-memory caches
+        data.recoveryDays = [...this.cachedRecoveryDays];
+        data.assignmentCounts = [...this.cachedAssignmentCounts];
         
+        // Return the data (JSON.parse already created a new object tree)
         return data;
       }
       return null;
@@ -445,11 +448,8 @@ export const scheduleService = {
   },
 
   transformScheduleData(data: ApiResponse): ApiResponse {
-    // Create a deep copy of the data
-    const transformedData: ApiResponse = {
-      ...data,
-      data: { ...data.data }
-    };
+    // Create a proper deep copy of the data to avoid mutating the cache
+    const transformedData: ApiResponse = JSON.parse(JSON.stringify(data));
 
     // Process recovery days if we have them
     if (this.cachedRecoveryDays.length > 0) {
