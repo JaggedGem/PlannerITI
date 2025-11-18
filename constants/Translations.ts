@@ -471,6 +471,16 @@ type TranslationType = {
     getStarted: string;
     dismiss: string;
   };
+  githubUpdate: {
+    title: string;
+    newVersionAvailable: string;
+    currentVersion: string;
+    latestVersion: string;
+    betaVersion: string;
+    updateNow: string;
+    dismiss: string;
+    releaseNotes: string;
+  };
 };
 
 export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
@@ -967,6 +977,16 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       getStarted: 'Get Started',
       dismiss: 'Maybe Later',
     },
+    githubUpdate: {
+      title: 'Update Available',
+      newVersionAvailable: 'A new version of PlannerITI is available!',
+      currentVersion: 'Current',
+      latestVersion: 'Latest',
+      betaVersion: 'Beta Update',
+      updateNow: 'Download Update',
+      dismiss: 'Remind Me Later',
+      releaseNotes: 'What\'s New',
+    },
   },
   ro: {
     weekdays: {
@@ -1461,6 +1481,16 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       getStarted: 'Începe Acum',
       dismiss: 'Poate Mai Târziu',
     },
+    githubUpdate: {
+      title: 'Actualizare Disponibilă',
+      newVersionAvailable: 'O nouă versiune a PlannerITI este disponibilă!',
+      currentVersion: 'Curentă',
+      latestVersion: 'Ultima',
+      betaVersion: 'Actualizare Beta',
+      updateNow: 'Descarcă Actualizarea',
+      dismiss: 'Amintește-mi Mai Târziu',
+      releaseNotes: 'Ce este Nou',
+    },
   },
   ru: {
     weekdays: {
@@ -1954,6 +1984,16 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       stayConnected: 'Оставайтесь на связи',
       getStarted: 'Начать',
       dismiss: 'Может быть позже',
+    },
+    githubUpdate: {
+      title: 'Доступно обновление',
+      newVersionAvailable: 'Доступна новая версия PlannerITI!',
+      currentVersion: 'Текущая',
+      latestVersion: 'Последняя',
+      betaVersion: 'Бета-обновление',
+      updateNow: 'Скачать обновление',
+      dismiss: 'Напомнить позже',
+      releaseNotes: 'Что нового',
     },
   }
 

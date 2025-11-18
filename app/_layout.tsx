@@ -7,6 +7,7 @@ import { useColorScheme, StatusBar, View } from 'react-native';
 import authService from '../services/authService';
 import UpdateNotification from '@/components/UpdateNotification';
 import LoginNotification from '@/components/LoginNotification';
+import GitHubUpdateNotification from '@/components/GitHubUpdateNotification';
 import { scheduleService } from '@/services/scheduleService';
 import { AuthProvider } from '@/components/auth/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -180,6 +181,7 @@ function RootLayoutNav() {
           />
         </Stack>
         <UpdateNotification />
+        <GitHubUpdateNotification />
         <LoginNotification />
       </AuthProvider>
     </ThemeProvider>
