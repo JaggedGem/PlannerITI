@@ -8,6 +8,7 @@ import { scheduleService } from './services/scheduleService';
 import { gradesDataService } from './services/gradesService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAssignments } from './utils/assignmentStorage';
+import UpdateNotification from './components/UpdateNotification';
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
@@ -63,5 +64,10 @@ export default function App() {
     };
   }, []);
 
-  return <ExpoRoot context={require.context('./app')} />;
+  return (
+    <>
+      <ExpoRoot context={require.context('./app')} />
+      <UpdateNotification />
+    </>
+  );
 }

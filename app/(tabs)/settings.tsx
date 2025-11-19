@@ -27,6 +27,7 @@ import { StorageViewer } from '../../components/StorageViewer';
 import * as Notifications from 'expo-notifications';
 import { initializeNotifications } from '../../utils/notificationUtils';
 import { formatCompactDate } from '@/utils/dateLocalization';
+import { updateService } from '@/services/updateService';
 
 // Store keys
 const IDNP_KEY = '@planner_idnp';
@@ -523,6 +524,11 @@ export default function Settings() {
   // Schedule refresh state
   const [isRefreshingSchedule, setIsRefreshingSchedule] = useState(false);
   const [lastScheduleRefresh, setLastScheduleRefresh] = useState<Date | null>(null);
+  // Update check state
+  const [isCheckingForUpdate, setIsCheckingForUpdate] = useState(false);
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [showUpToDateModal, setShowUpToDateModal] = useState(false);
+  const [currentAppVersion, setCurrentAppVersion] = useState('');
 
   // Load last refresh time on mount
   useEffect(() => {
@@ -559,6 +565,34 @@ export default function Settings() {
     setLastScheduleRefresh(null);
     Alert.alert('Cache Cleared', 'Schedule cache removed. Refresh to fetch latest data.');
   }, []);
+
+  const handleCheckForUpdate = useCallback(async () => {
+    if (isCheckingForUpdate) return;
+    setIsCheckingForUpdate(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    
+    try {
+      const update = await updateService.manualCheckForUpdate();
+      if (update && update.isAvailable) {
+        setUpdateAvailable(true);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Alert.alert(
+          '🚀 Update Available!',
+          `Version ${update.latestVersion} is available.\n\nThe update notification will appear shortly.`,
+          [{ text: 'OK', style: 'default' }]
+        );
+      } else {
+        setCurrentAppVersion(updateService.getCurrentVersion());
+        setShowUpToDateModal(true);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    } catch (error) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Error', 'Failed to check for updates. Please try again later.');
+    } finally {
+      setIsCheckingForUpdate(false);
+    }
+  }, [isCheckingForUpdate]);
 
   // Add useEffect to load IDNP and listen for updates
   useEffect(() => {
@@ -1232,6 +1266,47 @@ export default function Settings() {
             <MaterialIcons name="storage" size={24} color="#42A5F5" />
             <Text style={styles.devToolText}>View AsyncStorage</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.devToolButton}
+            onPress={async () => {
+              try {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                const testUpdate = await updateService.getLatestReleaseForTesting();
+                
+                if (testUpdate) {
+                  // Clear any dismissed version to ensure the modal shows
+                  await updateService.clearDismissedVersion();
+                  
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  Alert.alert(
+                    '✓ Test Update Modal',
+                    `Fetched latest release info:\n\nVersion: ${testUpdate.latestVersion}\nCurrent: ${testUpdate.currentVersion}\n\nThe update notification will appear shortly.`,
+                    [{ text: 'OK', style: 'default' }]
+                  );
+                  
+                  // Trigger a check that will show the modal
+                  setTimeout(async () => {
+                    const update = await updateService.checkForUpdate(true);
+                    if (!update) {
+                      // If no real update, force show with test data
+                      DeviceEventEmitter.emit('TEST_UPDATE_AVAILABLE', testUpdate);
+                    }
+                  }, 500);
+                } else {
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                  Alert.alert('Error', 'Failed to fetch latest release from GitHub');
+                }
+              } catch (error) {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                Alert.alert('Error', 'Failed to test update modal');
+                console.error('Test update modal error:', error);
+              }
+            }}
+          >
+            <MaterialIcons name="new-releases" size={24} color="#FF9800" />
+            <Text style={styles.devToolText}>Test Update Modal</Text>
+          </TouchableOpacity>
         </View>
       </View>
     );
@@ -1874,6 +1949,70 @@ export default function Settings() {
           </View>
         </View>
 
+        {/* App Updates Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="system-update" size={24} color="#2C3DCD" style={styles.sectionIcon} />
+            <Text style={styles.sectionTitle}>App Updates</Text>
+          </View>
+          <View style={[styles.card, styles.updateCard]}>
+            <View style={styles.updateDetails}>
+              <View style={styles.updateDetailRow}>
+                <MaterialIcons
+                  name="info-outline"
+                  size={20}
+                  color="#8A8A8D"
+                  style={styles.scheduleDetailIcon}
+                />
+                <View style={styles.scheduleDetailTextGroup}>
+                  <Text style={styles.scheduleDetailLabel}>Current Version</Text>
+                  <Text style={styles.scheduleDetailValue}>
+                    {updateService.getCurrentVersion()}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={[styles.updateDetailRow, styles.scheduleDetailRowLast]}>
+                <MaterialIcons
+                  name="label-outline"
+                  size={20}
+                  color="#8A8A8D"
+                  style={styles.scheduleDetailIcon}
+                />
+                <View style={styles.scheduleDetailTextGroup}>
+                  <Text style={styles.scheduleDetailLabel}>Release Channel</Text>
+                  <Text style={[styles.scheduleDetailValue, styles.channelBadge]}>
+                    {updateService.getCurrentChannel()}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.refreshButton,
+                styles.updateCheckButton,
+                isCheckingForUpdate && { opacity: 0.7 }
+              ]}
+              onPress={handleCheckForUpdate}
+              disabled={isCheckingForUpdate}
+            >
+              {isCheckingForUpdate ? (
+                <ActivityIndicator size="small" color="#ffffff" />
+              ) : (
+                <MaterialIcons name="download" size={20} color="#ffffff" />
+              )}
+              <Text style={[styles.refreshButtonText, styles.updateCheckButtonText]}>
+                {isCheckingForUpdate ? 'Checking...' : 'Check for Updates'}
+              </Text>
+            </TouchableOpacity>
+
+            <Text style={styles.updateNote}>
+              Updates are checked automatically once per day when you open the app.
+            </Text>
+          </View>
+        </View>
+
         {/* Subgroup Selection Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('settings').subGroup}</Text>
@@ -2497,6 +2636,42 @@ export default function Settings() {
         onClose={() => setStorageModalVisible(false)}
         items={storageItems}
       />
+
+      {/* Up to Date Modal */}
+      <Modal
+        visible={showUpToDateModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowUpToDateModal(false)}
+      >
+        <View style={styles.confirmOverlay}>
+          <View style={styles.upToDateDialog}>
+            <View style={styles.upToDateIconContainer}>
+              <MaterialIcons name="check-circle" size={64} color="#2C3DCD" />
+            </View>
+            
+            <Text style={styles.upToDateTitle}>You're Up to Date!</Text>
+            <Text style={styles.upToDateMessage}>
+              You're running the latest version of PlannerITI.
+            </Text>
+            
+            <View style={styles.upToDateVersionContainer}>
+              <Text style={styles.upToDateVersionLabel}>Current Version</Text>
+              <Text style={styles.upToDateVersionNumber}>{currentAppVersion}</Text>
+            </View>
+            
+            <TouchableOpacity
+              style={styles.upToDateButton}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setShowUpToDateModal(false);
+              }}
+            >
+              <Text style={styles.upToDateButtonText}>Got it</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -3551,5 +3726,107 @@ const styles = StyleSheet.create({
   },
   scheduleRefreshButtonText: {
     flexShrink: 1,
+  },
+  // Update section styles
+  updateCard: {
+    paddingBottom: 12,
+  },
+  updateDetails: {
+    marginBottom: 16,
+  },
+  updateDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  channelBadge: {
+    textTransform: 'uppercase',
+    color: '#3478F6',
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  updateCheckButton: {
+    backgroundColor: '#2C3DCD',
+    marginTop: 4,
+    alignSelf: 'stretch',
+    justifyContent: 'center',
+  },
+  updateCheckButtonText: {
+    flexShrink: 1,
+  },
+  updateNote: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 12,
+    fontStyle: 'italic',
+  },
+  // Up to date modal styles
+  upToDateDialog: {
+    backgroundColor: '#141414',
+    borderRadius: 24,
+    padding: 32,
+    width: '85%',
+    maxWidth: 400,
+    alignItems: 'center',
+  },
+  upToDateIconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(44, 61, 205, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  upToDateTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: 'white',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  upToDateMessage: {
+    fontSize: 15,
+    color: '#8A8A8D',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 22,
+  },
+  upToDateVersionContainer: {
+    backgroundColor: '#1A1A1A',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    marginBottom: 24,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#2C3DCD',
+  },
+  upToDateVersionLabel: {
+    fontSize: 12,
+    color: '#8A8A8D',
+    fontWeight: '500',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  upToDateVersionNumber: {
+    fontSize: 20,
+    color: '#2C3DCD',
+    fontWeight: '700',
+  },
+  upToDateButton: {
+    backgroundColor: '#2C3DCD',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 48,
+    alignItems: 'center',
+    minWidth: 150,
+  },
+  upToDateButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
