@@ -47,11 +47,6 @@ module.exports = () => {
         },
         package: variantConfig.androidPackage
       },
-      web: {
-        bundler: "metro",
-        output: "static",
-        favicon: "assets/images/favicon.png"
-      },
       plugins: [
         "expo-router",
         [

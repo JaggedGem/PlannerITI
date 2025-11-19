@@ -276,14 +276,40 @@ export const scheduleService = {
       if (cachedData) {
         const data = JSON.parse(cachedData);
         
+        // Validate that the cached data has the expected structure
+        if (!data || typeof data !== 'object' || !data.data || !data.periods) {
+          this.log('Cached data is corrupted, clearing cache');
+          await this.clearScheduleCache(groupId);
+          return null;
+        }
+        
+        // Validate that data.data has the expected day properties
+        const hasValidDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].some(
+          day => data.data[day] && typeof data.data[day] === 'object'
+        );
+        
+        if (!hasValidDays) {
+          this.log('Cached data has no valid days, clearing cache');
+          await this.clearScheduleCache(groupId);
+          return null;
+        }
+        
         // Update cached recovery days in memory if available
         if (cachedRecoveryDays) {
-          this.cachedRecoveryDays = JSON.parse(cachedRecoveryDays);
+          try {
+            this.cachedRecoveryDays = JSON.parse(cachedRecoveryDays);
+          } catch (e) {
+            this.cachedRecoveryDays = [];
+          }
         }
         
         // Update cached assignment counts in memory if available
         if (cachedAssignmentCounts) {
-          this.cachedAssignmentCounts = JSON.parse(cachedAssignmentCounts);
+          try {
+            this.cachedAssignmentCounts = JSON.parse(cachedAssignmentCounts);
+          } catch (e) {
+            this.cachedAssignmentCounts = [];
+          }
         }
         
         // Include recovery days and assignment counts in the response
@@ -295,6 +321,7 @@ export const scheduleService = {
       return null;
     } catch (error) {
       // Silent error handling
+      this.log('Error reading cache:', error);
       return null;
     }
   },
@@ -445,6 +472,23 @@ export const scheduleService = {
   },
 
   transformScheduleData(data: ApiResponse): ApiResponse {
+    // Validate input data
+    if (!data || !data.data || !data.periods) {
+      this.log('Invalid data passed to transformScheduleData');
+      return {
+        data: {
+          monday: {},
+          tuesday: {},
+          wednesday: {},
+          thursday: {},
+          friday: {}
+        },
+        periods: [],
+        recoveryDays: [],
+        assignmentCounts: []
+      };
+    }
+    
     // Create a deep copy of the data
     const transformedData: ApiResponse = {
       ...data,
@@ -452,9 +496,14 @@ export const scheduleService = {
     };
 
     // Process recovery days if we have them
-    if (this.cachedRecoveryDays.length > 0) {
+    if (this.cachedRecoveryDays && Array.isArray(this.cachedRecoveryDays) && this.cachedRecoveryDays.length > 0) {
       this.cachedRecoveryDays.forEach(rd => {
-        if (!rd.isActive || (rd.groupId !== '' && rd.groupId !== this.settings.selectedGroupId)) {
+        // Validate recovery day object
+        if (!rd || !rd.date || !rd.replacedDay || !rd.isActive) {
+          return;
+        }
+        
+        if (rd.groupId !== '' && rd.groupId !== this.settings.selectedGroupId) {
           return;
         }
 
@@ -469,28 +518,38 @@ export const scheduleService = {
         const weekendKey = `weekend_${rd.date}`;
         const replacedDay = rd.replacedDay.toLowerCase() as keyof ApiResponse['data'];
         
-        if (replacedDay in data.data) {
-          // Copy the schedule from the replaced day
-          transformedData.data[weekendKey] = JSON.parse(JSON.stringify(data.data[replacedDay]));
-          
-          // Mark all periods as recovery day items
-          Object.values(transformedData.data[weekendKey]).forEach(schedules => {
-            ['both', 'par', 'impar'].forEach(weekType => {
-              (schedules as any)[weekType].forEach((item: any) => {
-                item.isRecoveryDay = true;
-                item.recoveryInfo = {
-                  reason: rd.reason,
-                  replacedDay: rd.replacedDay,
-                  date: rd.date
-                };
-              });
+        if (replacedDay in data.data && data.data[replacedDay]) {
+          try {
+            // Copy the schedule from the replaced day
+            transformedData.data[weekendKey] = JSON.parse(JSON.stringify(data.data[replacedDay]));
+            
+            // Mark all periods as recovery day items
+            Object.values(transformedData.data[weekendKey]).forEach(schedules => {
+              if (schedules && typeof schedules === 'object') {
+                ['both', 'par', 'impar'].forEach(weekType => {
+                  if ((schedules as any)[weekType] && Array.isArray((schedules as any)[weekType])) {
+                    (schedules as any)[weekType].forEach((item: any) => {
+                      if (item && typeof item === 'object') {
+                        item.isRecoveryDay = true;
+                        item.recoveryInfo = {
+                          reason: rd.reason || '',
+                          replacedDay: rd.replacedDay,
+                          date: rd.date
+                        };
+                      }
+                    });
+                  }
+                });
+              }
             });
-          });
+          } catch (e) {
+            this.log('Error processing recovery day:', e);
+          }
         }
       });
     }
 
-    transformedData.recoveryDays = this.cachedRecoveryDays;
+    transformedData.recoveryDays = this.cachedRecoveryDays || [];
     return transformedData;
   },
 
@@ -790,8 +849,14 @@ export const scheduleService = {
       assignmentCount: number;
     }> = [];
 
+    // Validate input data structure
+    if (!data || !data.data || typeof data.data !== 'object') {
+      this.log('Invalid data structure in getScheduleForDay');
+      return result;
+    }
+
     const daySchedule = data.data[dayName];
-    if (!daySchedule) return result;
+    if (!daySchedule || typeof daySchedule !== 'object') return result;
 
     // Convert the date to a dateKey for assignment filtering
     const dateKey = date ? format(date, 'yyyy-MM-dd') : '';
@@ -1108,7 +1173,13 @@ export const scheduleService = {
           this.syncPeriodTimes(true)
         ]);
         const fresh = await this.fetchAndCacheSchedule(groupId);
-        return this.transformScheduleData(fresh);
+        const transformed = this.transformScheduleData(fresh);
+        
+        // Notify all listeners that schedule has been refreshed
+        // This ensures UI components re-fetch and display updated data
+        this.notifyListeners();
+        
+        return transformed;
       } catch (err) {
         // On failure, fallback to cache
         const cached = await this.getCachedSchedule(groupId);

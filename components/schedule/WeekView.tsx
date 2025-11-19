@@ -583,12 +583,9 @@ export default function WeekView() {
       settingsRef.current = newSettings;
       setSettings(newSettings);
       
-      // Skip updates if we don't have schedule data yet
-      if (!currScheduleData) return;
-      
       // Handle group ID change (full refetch needed)
       if (newSettings.selectedGroupId !== prevSettings.selectedGroupId) {
-        currFetchSchedule(newSettings.selectedGroupId);
+        await currFetchSchedule(newSettings.selectedGroupId);
         return;
       }
       
@@ -602,15 +599,60 @@ export default function WeekView() {
         return;
       }
       
-      // For all other changes, also update week schedule
-      await currUpdateWeekSchedule();
+      // For all other changes including manual refresh, refetch fresh data and update
+      // This ensures that when schedule is refreshed in settings, the UI updates
+      if (!currScheduleData) {
+        await currFetchSchedule();
+        return;
+      }
+      
+      // Refetch to pick up any changes from manual refresh
+      const freshData = await scheduleService.getClassSchedule(newSettings.selectedGroupId);
+      if (freshData) {
+        setScheduleData(freshData);
+        
+        const recoveryDays = Array.isArray(freshData.recoveryDays) ? freshData.recoveryDays : [];
+        const weekendRecoveryDays = recoveryDays.filter(rd => {
+          const rdDate = new Date(rd.date);
+          const startOfWeek = new Date(weekStart);
+          const endOfWeek = new Date(weekStart);
+          endOfWeek.setDate(weekStart.getDate() + 6);
+          
+          return rdDate >= startOfWeek && 
+                 rdDate <= endOfWeek && 
+                 (rdDate.getDay() === 0 || rdDate.getDay() === 6) &&
+                 rd.isActive && 
+                 (rd.groupId === '' || rd.groupId === newSettings.selectedGroupId);
+        });
+
+        const newWeekSchedule: Record<string, ScheduleItem[]> = {
+          monday: await scheduleService.getScheduleForDay(freshData, 'monday', getDateForDay(weekStart, 0)),
+          tuesday: await scheduleService.getScheduleForDay(freshData, 'tuesday', getDateForDay(weekStart, 1)),
+          wednesday: await scheduleService.getScheduleForDay(freshData, 'wednesday', getDateForDay(weekStart, 2)),
+          thursday: await scheduleService.getScheduleForDay(freshData, 'thursday', getDateForDay(weekStart, 3)),
+          friday: await scheduleService.getScheduleForDay(freshData, 'friday', getDateForDay(weekStart, 4))
+        };
+        
+        if (weekendRecoveryDays.length > 0) {
+          for (const rd of weekendRecoveryDays) {
+            const dayKey = `weekend_${rd.date}`;
+            newWeekSchedule[dayKey] = await scheduleService.getScheduleForDay(
+              freshData, 
+              rd.replacedDay.toLowerCase() as keyof ApiResponse['data'], 
+              new Date(rd.date)
+            );
+          }
+        }
+        
+        setWeekSchedule(newWeekSchedule);
+      }
     };
     
     // Subscribe to settings changes
     const unsubscribe = scheduleService.subscribe(updateHandler);
     
     return () => unsubscribe();
-  }, [scheduleData, updateWeekSchedule, fetchSchedule]);
+  }, [scheduleData, updateWeekSchedule, fetchSchedule, weekStart, getDateForDay]);
 
   // Calculate day dates for the week, including weekend recovery days if they exist
   const normalDayCount = 5; // Monday-Friday
@@ -1069,10 +1111,10 @@ export default function WeekView() {
                 const isWeekend = day.isWeekend;
                 const isRecoveryDay = day.recoveryDay != null;
 
-                // Filter items based on current week (odd/even)
-                const filteredItems = dayItems.filter(item => 
-                  item.isEvenWeek === undefined || item.isEvenWeek === isEvenWeek
-                );
+                // Filter items based on current week (odd/even) with null check
+                const filteredItems = Array.isArray(dayItems) ? dayItems.filter(item => 
+                  item && (item.isEvenWeek === undefined || item.isEvenWeek === isEvenWeek)
+                ) : [];
 
                 return (
                   <Animated.View 
@@ -1097,7 +1139,10 @@ export default function WeekView() {
                     )}
 
                     {/* Render schedule items */}
-                    {filteredItems.map((item, itemIndex) => {                      
+                    {filteredItems.map((item, itemIndex) => {
+                      // Add null check for item
+                      if (!item || !item.startTime || !item.endTime) return null;
+                      
                       const { top, height } = calculateItemPosition(
                         item.startTime,
                         item.endTime,

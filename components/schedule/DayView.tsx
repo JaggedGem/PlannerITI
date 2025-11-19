@@ -476,7 +476,7 @@ export default function DayView() {
     const currentSelectedDate = selectedDate;
     const currentFetchSchedule = fetchSchedule;
     
-    const updateHandler = () => {
+    const updateHandler = async () => {
       // Get latest settings
       const newSettings = scheduleService.getSettings();
       const prevSettings = settingsRef.current;
@@ -484,9 +484,6 @@ export default function DayView() {
       // Update the ref and state
       settingsRef.current = newSettings;
       setSettings(newSettings);
-      
-      // Skip updates if we don't have schedule data yet
-      if (!currentScheduleData) return;
       
       // Handle group ID change (full refetch needed)
       if (newSettings.selectedGroupId !== prevSettings.selectedGroupId) {
@@ -509,30 +506,43 @@ export default function DayView() {
         updateCurrentSchedule();
         return;
       }
+      
+      // If we don't have schedule data yet, try fetching
+      if (!currentScheduleData) {
+        currentFetchSchedule();
+        return;
+      }
+      
+      // Otherwise, just update the current day schedule to pick up any changes
+      // This handles cases where the schedule was refreshed in settings
+      updateCurrentSchedule();
     };
     
     // Helper function to update the schedule with the correct day key
     const updateCurrentSchedule = async () => {
-      // Make sure scheduleData is not null
-      if (!currentScheduleData) return;
-      
-      let dayKey;
-      const dateString = currentSelectedDate.toISOString().split('T')[0];
-      const isRecDay = scheduleService.isRecoveryDay(currentSelectedDate);
-      
-      if (isRecDay) {
-        dayKey = `weekend_${dateString}`;
-      } else {
-        dayKey = DAYS_MAP[currentSelectedDate.getDay() as keyof typeof DAYS_MAP];
+      // Try to get fresh data first
+      const freshData = await scheduleService.getClassSchedule(scheduleService.getSettings().selectedGroupId);
+      if (freshData) {
+        setScheduleData(freshData);
+        
+        let dayKey;
+        const dateString = currentSelectedDate.toISOString().split('T')[0];
+        const isRecDay = scheduleService.isRecoveryDay(currentSelectedDate);
+        
+        if (isRecDay) {
+          dayKey = `weekend_${dateString}`;
+        } else {
+          dayKey = DAYS_MAP[currentSelectedDate.getDay() as keyof typeof DAYS_MAP];
+        }
+        
+        const daySchedule = await scheduleService.getScheduleForDay(
+          freshData,
+          dayKey,
+          currentSelectedDate
+        );
+        
+        setTodaySchedule(daySchedule);
       }
-      
-      const daySchedule = await scheduleService.getScheduleForDay(
-        currentScheduleData,
-        dayKey,
-        currentSelectedDate
-      );
-      
-      setTodaySchedule(daySchedule);
     };
     
     // Subscribe to settings changes
@@ -1097,8 +1107,15 @@ export default function DayView() {
             <View style={styles.noSchedule}>
               <Text style={styles.noScheduleText}>{t('schedule').noClassesWeekend}</Text>
             </View>
+          ) : !todaySchedule || todaySchedule.length === 0 ? (
+            <View style={styles.noSchedule}>
+              <Text style={styles.noScheduleText}>{t('schedule').noClassesDay}</Text>
+            </View>
           ) : (
               todaySchedule.map((item, index) => {
+                // Add null check for item
+                if (!item) return null;
+                
                 // Skip the recovery-info item but just use it to display the banner
                 if (item.period === 'recovery-info') {
                   // We're already showing the recovery day banner separately
