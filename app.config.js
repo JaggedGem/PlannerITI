@@ -38,7 +38,7 @@ module.exports = () => {
       ios: {
         supportsTablet: true,
         bundleIdentifier: variantConfig.iosBundleIdentifier,
-        buildNumber: "2"
+        buildNumber: "3"
       },
       android: {
         adaptiveIcon: {
@@ -74,7 +74,7 @@ module.exports = () => {
         apiKey: process.env.API_KEY
       },
       owner: "planneriti",
-      runtimeVersion: "appVersion",
+      runtimeVersion: "1.1.1",
       updates: {
         url: "https://u.expo.dev/fe01b043-f283-48db-a683-3c5f23546a96"
       }
