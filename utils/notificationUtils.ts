@@ -1,8 +1,34 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
-import type { Assignment } from './assignmentStorage';
-import { AssignmentType } from './assignmentStorage';
+// Types imported inline to avoid circular dependency
+export enum AssignmentType {
+  HOMEWORK = 'Homework',
+  TEST = 'Test',
+  EXAM = 'Exam',
+  PROJECT = 'Project',
+  QUIZ = 'Quiz',
+  LAB = 'Lab',
+  ESSAY = 'Essay',
+  PRESENTATION = 'Presentation',
+  OTHER = 'Other'
+}
+
+export interface Assignment {
+  id: string;
+  title: string;
+  description: string;
+  courseCode: string;
+  courseName: string;
+  dueDate: string;
+  isCompleted: boolean;
+  isPriority: boolean;
+  assignmentType: AssignmentType;
+  periodId?: string;
+  subjectId?: string;
+  isOrphaned?: boolean;
+  subtasks?: any[];
+}
 import { formatDistanceToNow, addHours, addDays, parseISO, format, startOfDay, isBefore, isAfter, differenceInDays } from 'date-fns';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 

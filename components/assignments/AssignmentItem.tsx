@@ -12,7 +12,8 @@ import Animated, {
   Layout,
   FadeOut,
   Easing,
-  withSequence
+  withSequence,
+  SharedValue
 } from 'react-native-reanimated';
 import { Period } from '../../services/scheduleService';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -20,7 +21,7 @@ import { getRemainingTimeText } from '../../utils/notificationUtils';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
-import { useAssignmentOptions } from '../../app/(tabs)/assignments';
+import { useAssignmentOptions } from './AssignmentOptionsContext';
 
 interface AssignmentItemProps {
   assignment: Assignment;
@@ -115,7 +116,7 @@ const getAssignmentTypeColor = (type: AssignmentType): string => {
 const useHighlightEffect = (
   isHighlighted: boolean,
   assignment: Assignment,
-  highlightOpacity: Animated.SharedValue<number>,
+  highlightOpacity: SharedValue<number>,
   setExpanded: React.Dispatch<React.SetStateAction<boolean>>,
   setHighlight: React.Dispatch<React.SetStateAction<boolean>>
 ) => {
@@ -593,9 +594,11 @@ export default function AssignmentItem({
             hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
           >
             <View style={[styles.checkbox, assignment.isCompleted && styles.checkboxChecked]}>
-              <Animated.View style={[styles.checkIcon, checkboxStyle]}>
-                <Ionicons name="checkmark" size={14} color="#FFFFFF" />
-              </Animated.View>
+              <View style={styles.checkIconWrapper}>
+                <Animated.View style={[styles.checkIcon, checkboxStyle]}>
+                  <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                </Animated.View>
+              </View>
             </View>
           </TouchableOpacity>
           
@@ -961,6 +964,10 @@ const styles = StyleSheet.create({
   checkboxChecked: {
     backgroundColor: '#3478F6',
     borderColor: '#3478F6',
+  },
+  checkIconWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   checkIcon: {
     alignItems: 'center',

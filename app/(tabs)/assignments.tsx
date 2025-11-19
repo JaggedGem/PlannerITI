@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, memo, useRef, useLayoutEffect, createContext, useContext } from 'react';
-import { StyleSheet, ScrollView, SafeAreaView, StatusBar, View, Text, ActivityIndicator, Platform, InteractionManager, AppState, TouchableOpacity, Modal, Pressable } from 'react-native';
+import { StyleSheet, ScrollView, StatusBar, View, Text, ActivityIndicator, Platform, InteractionManager, AppState, TouchableOpacity, Modal, Pressable } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 import { useColorScheme } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
@@ -598,19 +599,8 @@ const ModernDropdown = memo(({
   );
 });
 
-// Create context for the options menu
-interface AssignmentOptionsContextType {
-  showOptionsMenu: (assignmentId: string, position: { top: number; right: number }, deleteHandler?: () => void) => void;
-  hideOptionsMenu: () => void;
-}
-
-export const AssignmentOptionsContext = createContext<AssignmentOptionsContextType>({
-  showOptionsMenu: () => {},
-  hideOptionsMenu: () => {}
-});
-
-// Hook to use the options context
-export const useAssignmentOptions = () => useContext(AssignmentOptionsContext);
+// Import shared context to avoid circular dependencies
+import { AssignmentOptionsContext, useAssignmentOptions, AssignmentOptionsContextType } from '../../components/assignments/AssignmentOptionsContext';
 
 // Options menu provider component
 const AssignmentOptionsProvider = ({ children }: { children: React.ReactNode }) => {
