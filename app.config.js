@@ -29,7 +29,7 @@ module.exports = () => {
     expo: {
       name: "PlannerITI",
       slug: "PlannerITI",
-      version: "1.0.1",
+      version: "1.1.1-beta.1",
       orientation: "portrait",
       icon: "assets/images/icon.png",
       scheme: "myapp",
@@ -38,7 +38,7 @@ module.exports = () => {
       ios: {
         supportsTablet: true,
         bundleIdentifier: variantConfig.iosBundleIdentifier,
-        buildNumber: "3"
+        buildNumber: "4"
       },
       android: {
         adaptiveIcon: {
@@ -74,7 +74,7 @@ module.exports = () => {
         apiKey: process.env.API_KEY
       },
       owner: "planneriti",
-      runtimeVersion: "1.1.1",
+      runtimeVersion: "1.1.1-beta.1",
       updates: {
         url: "https://u.expo.dev/fe01b043-f283-48db-a683-3c5f23546a96"
       }

@@ -1,7 +1,7 @@
 {
   "name": "planneriti",
   "main": "node_modules/expo/AppEntry.js",
-  "version": "1.1.1",
+  "version": "1.1.1-beta.1",
   "scripts": {
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
