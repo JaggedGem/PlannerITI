@@ -156,12 +156,17 @@ interface PeriodTime {
   endtime: string;
 }
 
+interface DayPeriodTimes {
+  periods: PeriodTime[];
+  default: boolean;
+}
+
 interface PeriodTimes {
-  monday: PeriodTime[];
-  tuesday: PeriodTime[];
-  wednesday: PeriodTime[];
-  thursday: PeriodTime[];
-  friday: PeriodTime[];
+  monday: DayPeriodTimes;
+  tuesday: DayPeriodTimes;
+  wednesday: DayPeriodTimes;
+  thursday: DayPeriodTimes;
+  friday: DayPeriodTimes;
 }
 
 // Add platform-specific language detection
@@ -898,21 +903,35 @@ export const scheduleService = {
         let endTime = '';
         
         if (customPeriodTimes && customPeriodTimes[dayOfWeekStr as keyof PeriodTimes]) {
-          // Find the matching period in the custom period times
-          const periodsForDay = customPeriodTimes[dayOfWeekStr as keyof PeriodTimes];
-          const customPeriod = periodsForDay.find((p: PeriodTime) => p.period === parseInt(periodNum) - 1);
-          if (customPeriod) {
-            startTime = customPeriod.starttime;
-            endTime = customPeriod.endtime;
+          const dayPeriodData = customPeriodTimes[dayOfWeekStr as keyof PeriodTimes];
+          
+          // Check if we should use default times from the cached schedule
+          if (dayPeriodData.default) {
+            // Use the period times from the cached orar-api data
+            const periodIndex = parseInt(periodNum) - 1;
+            if (data.periods && data.periods[periodIndex]) {
+              const periodData = data.periods[periodIndex];
+              startTime = periodData.starttime;
+              endTime = periodData.endtime;
+            }
+          } else {
+            // Use the custom period times from papi
+            const customPeriod = dayPeriodData.periods.find((p: PeriodTime) => p.period === parseInt(periodNum) - 1);
+            if (customPeriod) {
+              startTime = customPeriod.starttime;
+              endTime = customPeriod.endtime;
+            }
           }
         }
         
         // Fall back to original period times if custom times not available
         if (!startTime || !endTime) {
           const periodIndex = parseInt(periodNum) - 1;
-          const periodData = data.periods[periodIndex];
-          startTime = periodData.starttime;
-          endTime = periodData.endtime;
+          if (data.periods && data.periods[periodIndex]) {
+            const periodData = data.periods[periodIndex];
+            startTime = periodData.starttime;
+            endTime = periodData.endtime;
+          }
         }
 
         // If this is a recovery day item and it's the first period, add the info banner
