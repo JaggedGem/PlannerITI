@@ -7,7 +7,7 @@ import { useTimeUpdate } from '@/hooks/useTimeUpdate';
 import Animated, { useAnimatedStyle, withTiming, withSpring, FadeIn, FadeOut, Layout, useSharedValue } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import ViewModeMenu from './ViewModeMenu';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, Edge } from 'react-native-safe-area-context';
 
 // Get week start (Monday) from current date
 const getWeekStart = (date: Date): Date => {
@@ -937,7 +937,7 @@ export default function WeekView() {
   // Show loading state
   if (isLoading && !scheduleData) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#3478F6" />
           <Text style={styles.loadingText}>{t('schedule').loading}</Text>
@@ -949,7 +949,7 @@ export default function WeekView() {
   // Show error state
   if (error && !scheduleData) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <View style={styles.header}>
           <Text style={styles.pageTitle}>{t('tabs').schedule}</Text>
           <View style={styles.weekInfo}>
@@ -966,7 +966,7 @@ export default function WeekView() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.headerContainer}>
         <View style={styles.header}>
           <Text style={styles.pageTitle}>{t('tabs').schedule}</Text>

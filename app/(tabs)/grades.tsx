@@ -1,5 +1,5 @@
 import { StyleSheet, View, Text, TouchableOpacity, FlatList, RefreshControl, Modal, TextInput, Platform, KeyboardAvoidingView, ActivityIndicator, DeviceEventEmitter, ScrollView, Keyboard } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, Edge } from 'react-native-safe-area-context';
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { MaterialIcons } from '@expo/vector-icons';
 import Animated, { FadeInUp, Layout, useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
@@ -1379,7 +1379,7 @@ const GradesScreen = ({
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       {/* Header with student info and buttons */}
       <View style={[styles.headerContainer, refreshing && { opacity: 0.7 }]}>
         <View style={styles.headerLeft}>

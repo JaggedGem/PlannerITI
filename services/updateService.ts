@@ -47,7 +47,7 @@ class UpdateService {
     this.isExpoGo = Constants.executionEnvironment === 'storeClient';
     
     // Get the variant from app.config.js
-    this.configuredVariant = Constants.expoConfig?.extra?.environment || 'development';
+    this.configuredVariant = 'beta';
     
     // If running in Expo Go, always use development channel
     if (this.isExpoGo) {

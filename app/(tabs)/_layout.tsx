@@ -98,16 +98,6 @@ export default function TabLayout() {
       {/* Full-screen background that extends under the tab bar */}
       <View style={[styles.fullScreenBackground, { backgroundColor }]} />
       
-      {/* Corner filler for Android */}
-      {Platform.OS === 'android' && (
-        <View 
-          style={[
-            styles.tabBarFiller, 
-            { backgroundColor: backgroundColor }
-          ]} 
-        />
-      )}
-      
       <Tabs
         initialRouteName="schedule"
         screenOptions={{
@@ -217,15 +207,6 @@ export default function TabLayout() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  // For Android, create a mask behind the tab bar to fill in the corners
-  tabBarFiller: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 16, // Match the border radius
-    backgroundColor: 'transparent',
   },
   fullScreenBackground: {
     position: 'absolute',
