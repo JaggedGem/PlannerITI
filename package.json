@@ -8,7 +8,11 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "test": "jest --watchAll",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "build": "eas build --profile production --platform android",
+    "build:ios": "eas build --profile production --platform ios",
+    "update": "eas update --channel production --platform android",
+    "update:ios": "eas update --channel production --platform ios"
   },
   "jest": {
     "preset": "jest-expo"
