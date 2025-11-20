@@ -1,33 +1,25 @@
 import "dotenv/config";
 
-const GRAVATAR_API_KEY = process.env.GRAVATAR_API_KEY;
-const API_KEY = process.env.API_KEY;
-
 // Read environment variables set in eas.json
 module.exports = () => {
   const appVariant = process.env.APP_VARIANT || 'production';
   const androidPackage = process.env.ANDROID_PACKAGE || 'me.jagged.planneriti';
   const iosBundleIdentifier = process.env.IOS_BUNDLE_IDENTIFIER || 'me.jagged.planneriti';
 
-  // Configure variant-specific settings
+  // Use the environment variables directly - they already have the variant suffix
   const variantConfig = {
-    production: {
-      androidPackage,
-      iosBundleIdentifier,
-    },
-    development: {
-      androidPackage: `${androidPackage}.dev`,
-      iosBundleIdentifier: `${iosBundleIdentifier}.dev`,
-    },
-    beta: {
-      androidPackage: `${androidPackage}.beta`,
-      iosBundleIdentifier: `${iosBundleIdentifier}.beta`,
-    },
-  }[appVariant] || variantConfig.production;
+    androidPackage,
+    iosBundleIdentifier,
+  };
+
+  // Set app name based on variant
+  const appName = appVariant === 'beta' ? 'PlannerITI Beta' : 
+                  appVariant === 'development' ? 'PlannerITI Dev' : 
+                  'PlannerITI';
 
   return {
     expo: {
-      name: "PlannerITI",
+      name: appName,
       slug: "PlannerITI",
       version: "1.1.1",
       orientation: "portrait",
@@ -37,8 +29,7 @@ module.exports = () => {
       newArchEnabled: true,
       ios: {
         supportsTablet: true,
-        bundleIdentifier: variantConfig.iosBundleIdentifier,
-        buildNumber: "3"
+        bundleIdentifier: variantConfig.iosBundleIdentifier
       },
       android: {
         adaptiveIcon: {
