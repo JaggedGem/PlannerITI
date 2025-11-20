@@ -1982,7 +1982,7 @@ export default function Settings() {
                 <View style={styles.scheduleDetailTextGroup}>
                   <Text style={styles.scheduleDetailLabel}>Release Channel</Text>
                   <Text style={[styles.scheduleDetailValue, styles.channelBadge]}>
-                    {updateService.getCurrentChannel()}
+                    {updateService.getChannelDisplay()}
                   </Text>
                 </View>
               </View>
