@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, memo, useRef, useLayoutEffect, createContext, useContext } from 'react';
 import { StyleSheet, ScrollView, StatusBar, View, Text, ActivityIndicator, Platform, InteractionManager, AppState, TouchableOpacity, Modal, Pressable } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, Edge } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 import { useColorScheme } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
@@ -1132,7 +1132,7 @@ const Assignments = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="light-content" />
       
       <View style={styles.headerContainer}>

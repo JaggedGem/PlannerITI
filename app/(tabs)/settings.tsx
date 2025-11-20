@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator, FlatList, Modal, TextInput, Switch, Platform, Alert, Animated, ScrollView, Linking, Image } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, Edge } from 'react-native-safe-area-context';
 import { useState, useEffect, useRef, useCallback, memo, useMemo } from 'react';
 import { scheduleService, SubGroupType, Language, Group, CustomPeriod } from '@/services/scheduleService';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -1785,8 +1785,8 @@ export default function Settings() {
   }, [savedIdnp, isAuthenticated, router]); */
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* Account Section */}
         {renderAccountSection()}
 
@@ -2680,7 +2680,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#141414',
+  },
+  scrollContent: {
     padding: 20,
+    paddingBottom: 100,
   },
   section: {
     marginBottom: 32,

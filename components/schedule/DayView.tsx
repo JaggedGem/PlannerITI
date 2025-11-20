@@ -1,5 +1,5 @@
 import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Dimensions, ViewStyle, TextStyle, ActivityIndicator, InteractionManager } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, Edge } from 'react-native-safe-area-context';
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { scheduleService, DAYS_MAP, ApiResponse } from '@/services/scheduleService';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -899,7 +899,7 @@ export default function DayView() {
 
   if (isLoading && !scheduleData) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <View style={styles.headerContainer}>
           <View style={styles.header}>
             <View style={styles.headerTop}>
@@ -939,7 +939,7 @@ export default function DayView() {
 
   if (error && !scheduleData) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <View style={styles.headerContainer}>
           <View style={styles.header}>
             <View style={styles.headerTop}>
@@ -993,7 +993,7 @@ export default function DayView() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.headerContainer}>
         <View style={styles.header}>
           <View style={styles.headerTop}>
