@@ -37,15 +37,11 @@ export interface UpdateInfo {
 }
 
 class UpdateService {
-  private currentChannel: 'beta' | 'production' | 'development' = 'development';
-  private currentVersion: string = '';
+  private currentChannel: 'beta' | 'production' | 'development';
+  private currentVersion: string;
 
   constructor() {
-    this.initialize();
-  }
-
-  private async initialize() {
-    // Determine the current channel based on the app variant
+    // Determine the current channel based on the app variant (synchronous)
     const variant = Constants.expoConfig?.extra?.environment || 'development';
     
     if (variant === 'production') {
@@ -58,6 +54,8 @@ class UpdateService {
 
     // Get current app version
     this.currentVersion = Application.nativeApplicationVersion || '1.0.0';
+    
+    console.log(`UpdateService initialized: channel=${this.currentChannel}, version=${this.currentVersion}, variant=${variant}`);
   }
 
   /**
