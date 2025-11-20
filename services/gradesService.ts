@@ -41,20 +41,8 @@ export const loginWithIdnp = async (idnp: string, signal?: AbortSignal): Promise
  */
 export const fetchStudentInfo = async (idnp: string, signal?: AbortSignal): Promise<string> => {
   try {
-    // First login with the IDNP
-    await loginWithIdnp(idnp, signal);
-    
-    // Then fetch the student info
-    const infoResponse = await fetch(`${INFO_URL}${idnp}`, {
-      method: 'GET',
-      signal,
-    });
-    
-    if (!infoResponse.ok) {
-      throw new Error(`Failed to get student info with status: ${infoResponse.status}`);
-    }
-    
-    return await infoResponse.text();
+    // POST request returns the HTML directly
+    return await loginWithIdnp(idnp, signal);
   } catch (error) {
     // Silently handle errors
     throw error;
