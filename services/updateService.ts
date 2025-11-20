@@ -37,7 +37,7 @@ export interface UpdateInfo {
 }
 
 class UpdateService {
-  private currentChannel: 'beta' | 'production' | 'development' = 'beta';
+  private currentChannel: 'beta' | 'production' | 'development' = 'development';
   private currentVersion: string = '';
 
   constructor() {
