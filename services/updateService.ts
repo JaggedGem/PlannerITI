@@ -39,23 +39,34 @@ export interface UpdateInfo {
 class UpdateService {
   private currentChannel: 'beta' | 'production' | 'development';
   private currentVersion: string;
+  private configuredVariant: string;
+  private isExpoGo: boolean;
 
   constructor() {
-    // Determine the current channel based on the app variant (synchronous)
-    const variant = Constants.expoConfig?.extra?.environment || 'development';
+    // Check if we're running in Expo Go (not a standalone build)
+    this.isExpoGo = Constants.executionEnvironment === 'storeClient';
     
-    if (variant === 'production') {
+    // Get the variant from app.config.js
+    this.configuredVariant = Constants.expoConfig?.extra?.environment || 'development';
+    
+    // If running in Expo Go, always use development channel
+    if (this.isExpoGo) {
+      this.currentChannel = 'development';
+      this.currentVersion = Constants.expoConfig?.version || '1.0.0';
+      return;
+    }
+
+    // For standalone builds, get the variant from Expo Constants (set in app.config.js)
+    if (this.configuredVariant === 'production') {
       this.currentChannel = 'production';
-    } else if (variant === 'beta') {
+    } else if (this.configuredVariant === 'beta') {
       this.currentChannel = 'beta';
     } else {
       this.currentChannel = 'development';
     }
 
-    // Get current app version
+    // Get current app version from native build
     this.currentVersion = Application.nativeApplicationVersion || '1.0.0';
-    
-    console.log(`UpdateService initialized: channel=${this.currentChannel}, version=${this.currentVersion}, variant=${variant}`);
   }
 
   /**
@@ -257,6 +268,16 @@ class UpdateService {
    * Get current channel
    */
   getCurrentChannel(): string {
+    return this.currentChannel;
+  }
+
+  /**
+   * Get channel display text (shows configured variant when in Expo Go)
+   */
+  getChannelDisplay(): string {
+    if (this.isExpoGo && this.configuredVariant !== 'development') {
+      return `development (${this.configuredVariant})`;
+    }
     return this.currentChannel;
   }
 
