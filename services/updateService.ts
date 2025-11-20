@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Application from 'expo-application';
+import Constants from 'expo-constants';
 
 const GITHUB_API_BASE = 'https://api.github.com';
 const REPO_OWNER = 'JaggedGem';
@@ -44,8 +45,8 @@ class UpdateService {
   }
 
   private async initialize() {
-    // Determine the current channel based on the app variant
-    const variant = process.env.APP_VARIANT || 'development';
+    // Get the variant from Expo Constants (set in app.config.js)
+    const variant = Constants.expoConfig?.extra?.environment || 'development';
     
     if (variant === 'production') {
       this.currentChannel = 'production';
