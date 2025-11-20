@@ -2825,6 +2825,7 @@ const styles = StyleSheet.create({
   backgroundIndicatorPill: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.08)',
     borderRadius: 20,
     paddingHorizontal: 14,
