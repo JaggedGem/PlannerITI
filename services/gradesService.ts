@@ -68,6 +68,13 @@ export interface GradeSubject {
   grades: string[];
   average?: number;
   displayedAverage?: string;
+  baseAverage?: number;
+  baseDisplayedAverage?: string;
+  finalAverage?: number;
+  finalDisplayedAverage?: string;
+  appliedExamType?: string;
+  appliedExamGrade?: number;
+  appliedExamName?: string;
 }
 
 export interface SemesterGrades {
@@ -453,15 +460,20 @@ const parseSubjectsFromTable = (tableContent: string, semester: SemesterGrades):
           .filter(g => g.length > 0 && /^\d+([.,]\d+)?$/.test(g))
       : [];
     
-    // Calculate average grade
-    const average = calculateAverage(grades);
+    // Calculate average grade (base)
+    const baseAverage = calculateAverage(grades);
+    const baseDisplayed = baseAverage ? baseAverage.toFixed(2) : '-';
     
-    // Add subject to the semester
+    // Add subject to the semester with base/final averages tracked
     semester.subjects.push({
       name: subjectName,
       grades,
-      average,
-      displayedAverage: average ? average.toFixed(2) : '-'
+      average: baseAverage,
+      displayedAverage: baseDisplayed,
+      baseAverage,
+      baseDisplayedAverage: baseDisplayed,
+      finalAverage: baseAverage,
+      finalDisplayedAverage: baseDisplayed
     });
   }
   
@@ -493,20 +505,25 @@ const parseSubjectsFromTable = (tableContent: string, semester: SemesterGrades):
       // Parse grades
       const grades = gradesText
         ? gradesText
-            .split(/[,\s]+/)
+            .split(/[\,\s]+/)
             .map(g => g.trim())
             .filter(g => g.length > 0 && /^\d+([.,]\d+)?$/.test(g))
         : [];
       
-      // Calculate average grade
-      const average = calculateAverage(grades);
+      // Calculate average grade (base)
+      const baseAverage = calculateAverage(grades);
+      const baseDisplayed = baseAverage ? baseAverage.toFixed(2) : '-';
       
-      // Add subject to the semester
+      // Add subject to the semester with base/final averages tracked
       semester.subjects.push({
         name: subjectName,
         grades,
-        average,
-        displayedAverage: average ? average.toFixed(2) : '-'
+        average: baseAverage,
+        displayedAverage: baseDisplayed,
+        baseAverage,
+        baseDisplayedAverage: baseDisplayed,
+        finalAverage: baseAverage,
+        finalDisplayedAverage: baseDisplayed
       });
     }
   }
@@ -803,58 +820,82 @@ export const parseStudentGradesData = (html: string): StudentGrades => {
  * @param studentInfo Student information containing yearNumber
  */
 const applyExamGradesToAverages = (semesters: SemesterGrades[], exams: Exam[], studentInfo: StudentInfo): void => {
-  // Determine the current year's semester range
-  const currentYear = studentInfo.yearNumber || 1; // Default to year 1 if not available
-  const currentYearFirstSemester = (currentYear - 1) * 2 + 1;
-  const currentYearLastSemester = currentYear * 2;
-  
-  // Filter exams to only include current year's exams
+  // Use only exams from the student's current academic year
+  const currentYear = studentInfo.yearNumber || 1;
+  const firstSemesterThisYear = (currentYear - 1) * 2 + 1;
+  const lastSemesterThisYear = currentYear * 2;
   const currentYearExams = exams.filter(exam => 
-    exam.semester >= currentYearFirstSemester && exam.semester <= currentYearLastSemester
+    exam.semester >= firstSemesterThisYear && exam.semester <= lastSemesterThisYear
   );
+
+  // Some grade tables label semesters as I/II each year (1/2), while exams come as absolute (3/4 for year 2)
+  const usesRelativeSemesterNumbers = currentYear > 1
+    && semesters.some(s => s.semester <= 2)
+    && exams.some(e => e.semester > 2);
   
   // Process each semester
   semesters.forEach(semester => {
-    // Skip if this semester is not in the current year
-    if (semester.semester < currentYearFirstSemester || semester.semester > currentYearLastSemester) {
-      return;
-    }
-    
+    const effectiveSemesterNumber = usesRelativeSemesterNumbers
+      ? (currentYear - 1) * 2 + semester.semester
+      : semester.semester;
+
     // Get exams for this specific semester
-    const semesterExams = currentYearExams.filter(exam => exam.semester === semester.semester);
+    const semesterExams = currentYearExams.filter(exam => exam.semester === effectiveSemesterNumber);
     
     // Process each subject in the semester
     semester.subjects.forEach(subject => {
-      // Find matching exam for this subject in this semester
-      const matchingExam = semesterExams.find(exam => {
-        // Check if the exam name contains the subject name or vice versa
-        return exam.name.toLowerCase().includes(subject.name.toLowerCase()) || 
-               subject.name.toLowerCase().includes(exam.name.toLowerCase());
-      });
+      // Ensure base/final placeholders exist so we can show both values in UI
+      if (subject.baseAverage === undefined) {
+        subject.baseAverage = subject.average;
+        subject.baseDisplayedAverage = subject.displayedAverage;
+      }
+      if (subject.finalAverage === undefined) {
+        subject.finalAverage = subject.average;
+        subject.finalDisplayedAverage = subject.displayedAverage;
+      }
+      
+      // Find best matching exam/thesis for this subject in this semester
+      const matchingExam = findBestExamForSubject(subject.name, semesterExams);
       
       // If we found a matching exam and the subject has an average
-      if (matchingExam && subject.average !== undefined) {
+      if (matchingExam && subject.baseAverage !== undefined) {
         const examGrade = parseGrade(matchingExam.grade);
         
         if (!isNaN(examGrade)) {
           let newAverage: number;
-          
-          // Apply different calculation based on exam type
-          if (matchingExam.type.toLowerCase() === 'teza') {
+
+          // Apply different calculation based on exam type (supports diacritics/variants)
+          const examTypeKey = normalizeText(matchingExam.type);
+          const isTeza = isTezaType(examTypeKey);
+          const isExamen = isExamenType(examTypeKey);
+
+          if (isTeza) {
             // For "Teza": (average + examGrade) / 2
-            newAverage = (subject.average + examGrade) / 2;
-          } else if (matchingExam.type.toLowerCase() === 'examen') {
+            newAverage = (subject.baseAverage + examGrade) / 2;
+          } else if (isExamen) {
             // For "Examen": average * 0.6 + examGrade * 0.4
-            newAverage = subject.average * 0.6 + examGrade * 0.4;
+            newAverage = subject.baseAverage * 0.6 + examGrade * 0.4;
           } else {
             // For other types, don't modify the average
             return;
           }
           
           // Round DOWN to 2 decimal places
-          subject.average = Math.floor(newAverage * 100) / 100;
-          subject.displayedAverage = subject.average.toFixed(2);
+          const roundedAverage = Math.floor(newAverage * 100) / 100;
+          subject.finalAverage = roundedAverage;
+          subject.finalDisplayedAverage = roundedAverage.toFixed(2);
+          subject.average = roundedAverage;
+          subject.displayedAverage = subject.finalDisplayedAverage;
+          subject.appliedExamType = isTeza ? 'teza' : isExamen ? 'examen' : matchingExam.type.toLowerCase();
+          subject.appliedExamGrade = examGrade;
+          subject.appliedExamName = matchingExam.name;
         }
+      } else {
+        // No matching exam; keep final aligned with base for consistency
+        subject.finalAverage = subject.finalAverage ?? subject.baseAverage ?? subject.average;
+        subject.finalDisplayedAverage = subject.finalDisplayedAverage 
+          ?? subject.baseDisplayedAverage 
+          ?? subject.displayedAverage;
       }
     });
   });
@@ -1016,4 +1057,65 @@ export const gradesDataService = {
 
     return { updated: false, html: cached?.html || null, timestamp: cached?.timestamp || null };
   }
+};
+
+// Normalize strings for resilient matching (remove diacritics, lowercase, strip punctuation)
+const normalizeText = (text: string): string => {
+  return text
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
+// Compute a loose similarity score between subject and exam names
+const examMatchScore = (subjectName: string, examName: string): number => {
+  const s = normalizeText(subjectName);
+  const e = normalizeText(examName);
+  if (!s || !e) return 0;
+  if (s === e) return 1;
+
+  const sTokens = s.split(' ');
+  const eTokens = e.split(' ');
+  const union = new Set<string>([...sTokens, ...eTokens]).size || 1;
+  const intersection = sTokens.filter(t => eTokens.includes(t)).length;
+
+  let score = intersection / union;
+
+  // Containment and prefix bonuses help with minor wording differences
+  if (s.includes(e) || e.includes(s)) score += 0.25;
+  if (sTokens[0] && eTokens[0] && sTokens[0] === eTokens[0]) score += 0.1;
+
+  // Light penalty for very different lengths to reduce wrong pairing
+  const lengthPenalty = Math.min(0.2, Math.abs(s.length - e.length) / 100);
+  score -= lengthPenalty;
+
+  return Math.max(0, Math.min(1, score));
+};
+
+const isTezaType = (type: string): boolean => {
+  const key = normalizeText(type);
+  return key.includes('teza') || key.includes('thesis');
+};
+
+const isExamenType = (type: string): boolean => {
+  const key = normalizeText(type);
+  return key.includes('examen') || key.includes('exam');
+};
+
+const findBestExamForSubject = (subjectName: string, exams: Exam[]): Exam | undefined => {
+  let best: Exam | undefined;
+  let bestScore = 0;
+
+  exams.forEach(exam => {
+    const score = examMatchScore(subjectName, exam.name);
+    if (score > bestScore && score >= 0.35) { // threshold to avoid mismatches
+      best = exam;
+      bestScore = score;
+    }
+  });
+
+  return best;
 };

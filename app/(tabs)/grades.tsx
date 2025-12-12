@@ -264,6 +264,11 @@ const SubjectCard = ({
   onToggle: () => void,
   semesterNumber: number 
 }) => {
+  const { t } = useTranslation();
+  const displayedAverage = subject.finalDisplayedAverage || subject.displayedAverage;
+  const baseAverage = subject.baseDisplayedAverage || subject.displayedAverage;
+  const hasExamAdjustment = displayedAverage && baseAverage && displayedAverage !== baseAverage;
+
   // Calculate grade quality color
   const getGradeColor = (grade: string): string => {
     const numGrade = parseFloat(grade.replace(',', '.'));
@@ -286,12 +291,12 @@ const SubjectCard = ({
       >
         <Text style={styles.subjectName}>{subject.name}</Text>
         <View style={styles.subjectHeaderRight}>
-          {subject.displayedAverage && (
+          {displayedAverage && (
             <Text style={[
               styles.averageGrade,
-              parseFloat(subject.displayedAverage) < 5 && styles.failingGrade
+              parseFloat(displayedAverage) < 5 && styles.failingGrade
             ]}>
-              {subject.displayedAverage}
+              {displayedAverage}
             </Text>
           )}
           {subject.grades.length > 0 && (
@@ -309,6 +314,33 @@ const SubjectCard = ({
           entering={FadeInUp.springify()}
           style={styles.gradesContainer}
         >
+          {hasExamAdjustment && (
+            <View style={styles.averageSummaryRow}>
+              <View style={styles.averagePillPrimary}>
+                <Text style={styles.averagePillLabel}>{t('grades').subjects.finalAverage}</Text>
+                <Text style={styles.averagePillValue}>
+                  {subject.finalDisplayedAverage || subject.displayedAverage || '-'}
+                </Text>
+                {subject.appliedExamType && typeof subject.appliedExamGrade === 'number' && !isNaN(subject.appliedExamGrade) && (
+                  <Text style={styles.averagePillMeta}>
+                    {(() => {
+                      const typeKey = subject.appliedExamType?.toLowerCase() || '';
+                      const isTeza = typeKey.includes('teza') || typeKey.includes('thesis');
+                      return isTeza ? t('grades').subjects.thesis : t('grades').subjects.exam;
+                    })()} • {subject.appliedExamGrade.toFixed(2)}
+                  </Text>
+                )}
+              </View>
+
+              {baseAverage && (
+                <View style={styles.averagePillSecondary}>
+                  <Text style={styles.averagePillLabel}>{t('grades').subjects.withoutExam}</Text>
+                  <Text style={styles.averagePillValue}>{baseAverage}</Text>
+                </View>
+              )}
+            </View>
+          )}
+
           <View style={styles.gradesGrid}>
             {subject.grades.map((grade, index) => {
               const gradeColor = getGradeColor(grade);
@@ -2855,5 +2887,41 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     letterSpacing: 0.5,
+  },
+  averageSummaryRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+    flexWrap: 'wrap',
+  },
+  averagePillPrimary: {
+    flexGrow: 1,
+    backgroundColor: 'rgba(44, 61, 205, 0.2)',
+    borderRadius: 12,
+    padding: 12,
+    minWidth: 140,
+  },
+  averagePillSecondary: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    padding: 12,
+    minWidth: 140,
+  },
+  averagePillLabel: {
+    color: '#8A8A8D',
+    fontSize: 12,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  averagePillValue: {
+    color: 'white',
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  averagePillMeta: {
+    color: '#B7C6FF',
+    fontSize: 12,
+    marginTop: 4,
   },
 });

@@ -343,6 +343,10 @@ type TranslationType = {
       noExams: string;
       upcoming: string;
       noSubjects: string;
+      finalAverage: string;
+      withoutExam: string;
+      thesis: string;
+      exam: string;
     };
   };
   recovery: {
@@ -819,6 +823,10 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         noExams: 'No exams available',
         upcoming: 'Upcoming',
         noSubjects: 'No subjects available for Semester {{semester}}',
+        finalAverage: 'Final avg',
+        withoutExam: 'Without exam',
+        thesis: 'Thesis',
+        exam: 'Exam',
       },
     },
     recovery: {
@@ -1313,6 +1321,10 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         noExams: 'Nu există examene disponibile',
         upcoming: 'În curând',
         noSubjects: 'Nu există materii disponibile pentru Semestrul {{semester}}',
+        finalAverage: 'Media finală',
+        withoutExam: 'Fără teză/examen',
+        thesis: 'Teză',
+        exam: 'Examen',
       },
     },
     recovery: {
@@ -1807,6 +1819,10 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         noExams: 'Нет доступных экзаменов',
         upcoming: 'Предстоящие',
         noSubjects: 'Нет предметов для Семестра {{semester}}',
+        finalAverage: 'Итоговая средняя',
+        withoutExam: 'Без экзамена/тезы',
+        thesis: 'Теза',
+        exam: 'Экзамен',
       },
     },
     recovery: {
