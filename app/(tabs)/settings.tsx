@@ -36,6 +36,8 @@ const AUTH_STATE_CHANGE_EVENT = 'auth_state_changed';
 const IDNP_UPDATE_EVENT = 'IDNP_UPDATE';
 const AUTH_TOKEN_KEY = '@auth_token';  // Adding this constant
 const IDNP_SYNC_KEY = '@planner_idnp_sync';
+const DEV_GRADE_TOGGLE_KEY = '@dev_grade_toggle_active';
+const DEV_GRADE_TOGGLE_EVENT = 'dev_grade_toggle_event';
 
 // Import CACHE_KEYS from scheduleService
 // We need to access this directly from scheduleService to use the same keys
@@ -529,6 +531,7 @@ export default function Settings() {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [showUpToDateModal, setShowUpToDateModal] = useState(false);
   const [currentAppVersion, setCurrentAppVersion] = useState('');
+  const [devGradeActive, setDevGradeActive] = useState<boolean>(false);
 
   // Load last refresh time on mount
   useEffect(() => {
@@ -536,6 +539,18 @@ export default function Settings() {
       const last = await scheduleService.getLastScheduleFetchTime();
       setLastScheduleRefresh(last);
     })();
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const storedToggle = await AsyncStorage.getItem(DEV_GRADE_TOGGLE_KEY);
+        if (storedToggle === 'true') setDevGradeActive(true);
+      } catch (err) {
+        // ignore
+      }
+    })();
+    return undefined;
   }, []);
 
   const handleManualScheduleRefresh = useCallback(async () => {
@@ -593,6 +608,25 @@ export default function Settings() {
       setIsCheckingForUpdate(false);
     }
   }, [isCheckingForUpdate]);
+
+  const handleDevInjectGrades = useCallback(async () => {
+    try {
+      const next = !devGradeActive;
+      await AsyncStorage.setItem(DEV_GRADE_TOGGLE_KEY, next ? 'true' : 'false');
+      setDevGradeActive(next);
+      DeviceEventEmitter.emit(DEV_GRADE_TOGGLE_EVENT, next);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert(
+        next ? 'Injected' : 'Removed',
+        next
+          ? 'Added 5 random grades immediately. Tap again to remove.'
+          : 'Removed injected grades. Tap again to add back.'
+      );
+    } catch (error) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Error', 'Could not toggle grade injection');
+    }
+  }, [devGradeActive]);
 
   // Add useEffect to load IDNP and listen for updates
   useEffect(() => {
@@ -1306,6 +1340,21 @@ export default function Settings() {
           >
             <MaterialIcons name="new-releases" size={24} color="#FF9800" />
             <Text style={styles.devToolText}>Test Update Modal</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.devToolButton, styles.devToolButtonRow]}
+            onPress={handleDevInjectGrades}
+          >
+            <MaterialIcons name="insert-chart" size={24} color={devGradeActive ? '#4CAF50' : '#FFD166'} />
+            <View style={styles.devToolTextGroup}>
+              <Text style={[styles.devToolText, styles.devToolTextLeft]}>
+                {devGradeActive ? 'Remove injected grades' : 'Inject 5 random grades'}
+              </Text>
+              <Text style={styles.devToolSubtext}>
+                {devGradeActive ? 'Injected now • tap to remove' : 'Tap to add instantly'}
+              </Text>
+            </View>
           </TouchableOpacity>
         </View>
       </View>
@@ -3418,6 +3467,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+    devToolButtonRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
   devToolText: {
     color: 'white',
     fontSize: 14,
@@ -3425,6 +3479,20 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
   },
+    devToolTextLeft: {
+      textAlign: 'left',
+      marginTop: 0,
+    },
+    devToolTextGroup: {
+      flex: 1,
+      alignItems: 'flex-start',
+      gap: 2,
+    },
+    devToolSubtext: {
+      color: '#8A8A8D',
+      fontSize: 12,
+      textAlign: 'left',
+    },
   avatarImage: {
     width: 40,
     height: 40,
