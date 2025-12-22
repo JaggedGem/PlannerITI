@@ -63,24 +63,25 @@ interface StoredGradesData {
 
 /**
  * Determine the current semester based on the date
- * 1st semester: September 1 - December 19
- * 2nd semester: December 20 - August 31
+ * 1st semester: September 1 - January 9
+ * 2nd semester: January 10 - August 31
  */
 const getCurrentSemester = (): number => {
   const currentDate = new Date();
   const month = currentDate.getMonth(); // 0-11 (Jan-Dec)
   const day = currentDate.getDate();
-  
-  // First semester: Sept 1 - Dec 19
+
+  // First semester: Sept 1 - Jan 9
   if ((month === 8 && day >= 1) || // September
       month === 9 || // October
       month === 10 || // November
-      (month === 11 && day < 20)) { // December 1-19
+      month === 11 || // December
+      (month === 0 && day < 10)) { // January 1-9
     return 1;
-  } else {
-    // Second semester: Dec 20 - Aug 31
-    return 2;
   }
+
+  // Second semester: Jan 10 - Aug 31
+  return 2;
 };
 
 // Lightweight grade parser for local calculations
