@@ -400,9 +400,42 @@ export const scheduleService = {
     }
   },
   
-  async findAndSetDefaultGroup(targetName: string = DEFAULT_GROUP_NAME) {
+  async refreshGroups(force: boolean = true): Promise<Group[]> {
     try {
-      const groups = await this.getGroups();
+      if (!force) {
+        return this.getGroups();
+      }
+
+      // Only attempt a network fetch when we have connectivity
+      if (!await this.hasInternetConnection()) {
+        return this.getGroups();
+      }
+
+      const response = await fetch(`${API_BASE_URL}/grupe`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch groups');
+      }
+
+      const groups: Group[] = await response.json();
+      this.cachedGroups = groups;
+      await AsyncStorage.setItem(CACHE_KEYS.GROUPS, JSON.stringify(groups));
+
+      // If we have a saved group name, realign the ID in case it changed upstream
+      if (this.settings.selectedGroupName) {
+        await this.findAndSetDefaultGroup(this.settings.selectedGroupName, groups);
+      }
+
+      return groups;
+    } catch (error) {
+      this.log('Group refresh failed', error);
+      // Fall back to cached or stored groups
+      return this.cachedGroups.length > 0 ? this.cachedGroups : await this.getGroups();
+    }
+  },
+  
+  async findAndSetDefaultGroup(targetName: string = DEFAULT_GROUP_NAME, groupsOverride?: Group[]) {
+    try {
+      const groups = groupsOverride ?? await this.getGroups();
       const targetGroup = groups.find(group => group.name === targetName);
       
       // Clear cached assignment counts when changing groups
@@ -1168,6 +1201,20 @@ export const scheduleService = {
     }
   },
   
+  isScheduleDataEmpty(data: ApiResponse | null): boolean {
+    if (!data || !data.data) return true;
+
+    return !Object.values(data.data).some(daySchedule => {
+      if (!daySchedule || typeof daySchedule !== 'object') return false;
+
+      return Object.values(daySchedule).some((periodSet: any) => {
+        if (!periodSet || typeof periodSet !== 'object') return false;
+
+        return ['both', 'par', 'impar'].some(key => Array.isArray(periodSet[key]) && periodSet[key].length > 0);
+      });
+    });
+  },
+  
   // Force refresh schedule regardless of cache age; fallback to cached when offline or failure
   async refreshSchedule(force: boolean = true): Promise<ApiResponse | null> {
     try {
@@ -1175,7 +1222,7 @@ export const scheduleService = {
       if (!this.settings.selectedGroupId) {
         await this.findAndSetDefaultGroup();
       }
-      const groupId = this.settings.selectedGroupId;
+      let groupId = this.settings.selectedGroupId;
       if (!groupId) return null;
 
       const hasInternet = await this.hasInternetConnection();
@@ -1191,8 +1238,26 @@ export const scheduleService = {
           this.syncRecoveryDays(true),
           this.syncPeriodTimes(true)
         ]);
-        const fresh = await this.fetchAndCacheSchedule(groupId);
-        const transformed = this.transformScheduleData(fresh);
+        let fresh = await this.fetchAndCacheSchedule(groupId);
+        let transformed = this.transformScheduleData(fresh);
+        const targetGroupName = this.settings.selectedGroupName;
+
+        // If the schedule comes back empty, try realigning group ID from a refreshed list and retry once
+        if (this.isScheduleDataEmpty(transformed) && targetGroupName) {
+          try {
+            const groups = await this.refreshGroups(true);
+            const matchingGroup = groups.find(g => g.name === targetGroupName);
+
+            if (matchingGroup && matchingGroup._id !== groupId) {
+              groupId = matchingGroup._id;
+              await this.findAndSetDefaultGroup(targetGroupName, groups);
+              fresh = await this.fetchAndCacheSchedule(groupId);
+              transformed = this.transformScheduleData(fresh);
+            }
+          } catch (retryError) {
+            this.log('Retry with refreshed group list failed', retryError);
+          }
+        }
         
         // Notify all listeners that schedule has been refreshed
         // This ensures UI components re-fetch and display updated data
