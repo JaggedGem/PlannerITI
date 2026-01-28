@@ -1,7 +1,7 @@
 {
   "name": "planneriti",
   "main": "node_modules/expo/AppEntry.js",
-  "version": "1.2.0",
+  "version": "1.2.0-beta.1",
   "scripts": {
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
@@ -9,10 +9,10 @@
     "ios": "expo start --ios",
     "test": "jest --watchAll",
     "lint": "expo lint",
-    "build": "eas build --profile production --platform android",
-    "build:ios": "eas build --profile production --platform ios",
-    "update": "eas update --channel production --platform android",
-    "update:ios": "eas update --channel production --platform ios"
+    "build": "eas build --profile beta --platform android",
+    "build:ios": "eas build --profile beta --platform ios",
+    "update": "eas update --channel beta --platform android",
+    "update:ios": "eas update --channel beta --platform ios"
   },
   "jest": {
     "preset": "jest-expo"
