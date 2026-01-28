@@ -21,7 +21,7 @@ module.exports = () => {
     expo: {
       name: appName,
       slug: "PlannerITI",
-      version: "1.1.1",
+      version: "1.2.0",
       orientation: "portrait",
       icon: "assets/images/icon.png",
       scheme: "myapp",
@@ -65,7 +65,7 @@ module.exports = () => {
         apiKey: process.env.API_KEY
       },
       owner: "planneriti",
-      runtimeVersion: "1.1.1",
+      runtimeVersion: "1.2.0",
       updates: {
         url: "https://u.expo.dev/fe01b043-f283-48db-a683-3c5f23546a96"
       }
