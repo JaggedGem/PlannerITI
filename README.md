@@ -284,7 +284,7 @@ Build profiles are defined in `eas.json`:
   - `/index.php/date/info/{idnp}` - Fetch student grades
 
 ### Custom Backend API
-- **Base URL**: `https://papi.jagged.me`
+- **Base URL**: `https://papi.jagged.site`
 - **Features**:
   - User authentication and management
   - Period time synchronization

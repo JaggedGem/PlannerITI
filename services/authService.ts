@@ -4,7 +4,7 @@ import * as crypto from 'crypto-js';
 import Constants from "expo-constants";
 import * as SecureStore from 'expo-secure-store';
 
-const API_URL = 'https://papi.jagged.me';
+const API_URL = 'https://papi.jagged.site';
 const GRAVATAR_API_URL = 'https://api.gravatar.com/v3';
 
 // Get environment variables from Expo Constants

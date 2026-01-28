@@ -784,7 +784,7 @@ export const scheduleService = {
           if (Date.now() - lastSyncTime < PERIOD_SYNC_INTERVAL) return;
         }
       }
-      const response = await fetch('https://papi.jagged.me/api/schedule');
+      const response = await fetch('https://papi.jagged.site/api/schedule');
       if (!response.ok) throw new Error('Failed to fetch period times');
       const periodTimes = await response.json();
       await AsyncStorage.setItem(PERIOD_TIMES_CACHE_KEY, JSON.stringify(periodTimes));
@@ -829,7 +829,7 @@ export const scheduleService = {
         }
       }
       if (!await this.hasInternetConnection()) return;
-      const response = await fetch('https://papi.jagged.me/api/recovery-days');
+      const response = await fetch('https://papi.jagged.site/api/recovery-days');
       if (!response.ok) throw new Error('Failed to fetch recovery days');
       const recoveryDays: RecoveryDay[] = await response.json();
       await AsyncStorage.setItem(CACHE_KEYS.RECOVERY_DAYS, JSON.stringify(recoveryDays));
