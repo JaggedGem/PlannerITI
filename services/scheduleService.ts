@@ -124,8 +124,8 @@ export const DAYS_MAP_INVERSE = {
   'friday': 5
 } as const;
 
-// Initial reference date for week calculation (September 1, 2025)
-const REFERENCE_DATE = new Date(2025, 8, 1); // Month 8 = September
+// Initial reference date for week calculation (January 12, 2026)
+const REFERENCE_DATE = new Date(2026, 0, 12); // Month 0 = January, day = 12 (DD.MM.YYYY)
 
 // Export the cache keys so they can be accessed from outside
 export const CACHE_KEYS = {
@@ -400,9 +400,42 @@ export const scheduleService = {
     }
   },
   
-  async findAndSetDefaultGroup(targetName: string = DEFAULT_GROUP_NAME) {
+  async refreshGroups(force: boolean = true): Promise<Group[]> {
     try {
-      const groups = await this.getGroups();
+      if (!force) {
+        return this.getGroups();
+      }
+
+      // Only attempt a network fetch when we have connectivity
+      if (!await this.hasInternetConnection()) {
+        return this.getGroups();
+      }
+
+      const response = await fetch(`${API_BASE_URL}/grupe`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch groups');
+      }
+
+      const groups: Group[] = await response.json();
+      this.cachedGroups = groups;
+      await AsyncStorage.setItem(CACHE_KEYS.GROUPS, JSON.stringify(groups));
+
+      // If we have a saved group name, realign the ID in case it changed upstream
+      if (this.settings.selectedGroupName) {
+        await this.findAndSetDefaultGroup(this.settings.selectedGroupName, groups);
+      }
+
+      return groups;
+    } catch (error) {
+      this.log('Group refresh failed', error);
+      // Fall back to cached or stored groups
+      return this.cachedGroups.length > 0 ? this.cachedGroups : await this.getGroups();
+    }
+  },
+  
+  async findAndSetDefaultGroup(targetName: string = DEFAULT_GROUP_NAME, groupsOverride?: Group[]) {
+    try {
+      const groups = groupsOverride ?? await this.getGroups();
       const targetGroup = groups.find(group => group.name === targetName);
       
       // Clear cached assignment counts when changing groups
@@ -751,7 +784,7 @@ export const scheduleService = {
           if (Date.now() - lastSyncTime < PERIOD_SYNC_INTERVAL) return;
         }
       }
-      const response = await fetch('https://papi.jagged.me/api/schedule');
+      const response = await fetch('https://papi.jagged.site/api/schedule');
       if (!response.ok) throw new Error('Failed to fetch period times');
       const periodTimes = await response.json();
       await AsyncStorage.setItem(PERIOD_TIMES_CACHE_KEY, JSON.stringify(periodTimes));
@@ -796,7 +829,7 @@ export const scheduleService = {
         }
       }
       if (!await this.hasInternetConnection()) return;
-      const response = await fetch('https://papi.jagged.me/api/recovery-days');
+      const response = await fetch('https://papi.jagged.site/api/recovery-days');
       if (!response.ok) throw new Error('Failed to fetch recovery days');
       const recoveryDays: RecoveryDay[] = await response.json();
       await AsyncStorage.setItem(CACHE_KEYS.RECOVERY_DAYS, JSON.stringify(recoveryDays));
@@ -1168,6 +1201,20 @@ export const scheduleService = {
     }
   },
   
+  isScheduleDataEmpty(data: ApiResponse | null): boolean {
+    if (!data || !data.data) return true;
+
+    return !Object.values(data.data).some(daySchedule => {
+      if (!daySchedule || typeof daySchedule !== 'object') return false;
+
+      return Object.values(daySchedule).some((periodSet: any) => {
+        if (!periodSet || typeof periodSet !== 'object') return false;
+
+        return ['both', 'par', 'impar'].some(key => Array.isArray(periodSet[key]) && periodSet[key].length > 0);
+      });
+    });
+  },
+  
   // Force refresh schedule regardless of cache age; fallback to cached when offline or failure
   async refreshSchedule(force: boolean = true): Promise<ApiResponse | null> {
     try {
@@ -1175,7 +1222,7 @@ export const scheduleService = {
       if (!this.settings.selectedGroupId) {
         await this.findAndSetDefaultGroup();
       }
-      const groupId = this.settings.selectedGroupId;
+      let groupId = this.settings.selectedGroupId;
       if (!groupId) return null;
 
       const hasInternet = await this.hasInternetConnection();
@@ -1191,8 +1238,26 @@ export const scheduleService = {
           this.syncRecoveryDays(true),
           this.syncPeriodTimes(true)
         ]);
-        const fresh = await this.fetchAndCacheSchedule(groupId);
-        const transformed = this.transformScheduleData(fresh);
+        let fresh = await this.fetchAndCacheSchedule(groupId);
+        let transformed = this.transformScheduleData(fresh);
+        const targetGroupName = this.settings.selectedGroupName;
+
+        // If the schedule comes back empty, try realigning group ID from a refreshed list and retry once
+        if (this.isScheduleDataEmpty(transformed) && targetGroupName) {
+          try {
+            const groups = await this.refreshGroups(true);
+            const matchingGroup = groups.find(g => g.name === targetGroupName);
+
+            if (matchingGroup && matchingGroup._id !== groupId) {
+              groupId = matchingGroup._id;
+              await this.findAndSetDefaultGroup(targetGroupName, groups);
+              fresh = await this.fetchAndCacheSchedule(groupId);
+              transformed = this.transformScheduleData(fresh);
+            }
+          } catch (retryError) {
+            this.log('Retry with refreshed group list failed', retryError);
+          }
+        }
         
         // Notify all listeners that schedule has been refreshed
         // This ensures UI components re-fetch and display updated data

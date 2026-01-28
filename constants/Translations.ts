@@ -276,8 +276,10 @@ type TranslationType = {
     average: string;
     noGrades: string;
     lastUpdated: string;
+    neverUpdated: string;
     dataStale: string;
     refreshing: string;
+    updatedLabel: string;
     absences: string;
     unexcused: string;
     networkError: string;
@@ -343,6 +345,11 @@ type TranslationType = {
       noExams: string;
       upcoming: string;
       noSubjects: string;
+      finalAverage: string;
+      withoutExam: string;
+      thesis: string;
+      exam: string;
+      newBadge: string;
     };
   };
   recovery: {
@@ -752,8 +759,10 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       average: 'Average',
       noGrades: 'No grades recorded yet',
       lastUpdated: 'Your data was last updated on',
+      neverUpdated: 'Never',
       dataStale: 'and might be outdated. Press the refresh button to update.',
       refreshing: 'Refreshing data...',
+      updatedLabel: 'Updated',
       absences: 'Absences',
       unexcused: 'Unexcused',
       networkError: 'Unable to retrieve data. Please check your IDNP and try again.',
@@ -819,6 +828,11 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         noExams: 'No exams available',
         upcoming: 'Upcoming',
         noSubjects: 'No subjects available for Semester {{semester}}',
+        finalAverage: 'Final avg',
+        withoutExam: 'Without exam',
+        thesis: 'Thesis',
+        exam: 'Exam',
+        newBadge: 'New',
       },
     },
     recovery: {
@@ -1246,8 +1260,10 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       average: 'Media',
       noGrades: 'Nicio notă înregistrată încă',
       lastUpdated: 'Datele dvs. au fost actualizate ultima dată pe',
+      neverUpdated: 'Niciodată',
       dataStale: 'și ar putea fi învechite. Apăsați butonul de reîmprospătare pentru a actualiza.',
       refreshing: 'Se actualizează datele...',
+      updatedLabel: 'Actualizat',
       absences: 'Absențe',
       unexcused: 'Nemotivate',
       networkError: 'Nu s-au putut recupera datele. Verificați IDNP-ul și încercați din nou.',
@@ -1313,6 +1329,11 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         noExams: 'Nu există examene disponibile',
         upcoming: 'În curând',
         noSubjects: 'Nu există materii disponibile pentru Semestrul {{semester}}',
+        finalAverage: 'Media finală',
+        withoutExam: 'Fără teză/examen',
+        thesis: 'Teză',
+        exam: 'Examen',
+        newBadge: 'Nou',
       },
     },
     recovery: {
@@ -1740,8 +1761,10 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       average: 'Средний балл',
       noGrades: 'Нет оценок',
       lastUpdated: 'Данные обновлены',
+      neverUpdated: 'Никогда',
       dataStale: 'и могут быть устаревшими. Нажмите кнопку обновления.',
       refreshing: 'Обновление данных...',
+      updatedLabel: 'Обновлено',
       absences: 'Пропуски',
       unexcused: 'Неуважительные',
       networkError: 'Не удалось получить данные. Проверьте IDNP и попробуйте снова.',
@@ -1807,6 +1830,11 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         noExams: 'Нет доступных экзаменов',
         upcoming: 'Предстоящие',
         noSubjects: 'Нет предметов для Семестра {{semester}}',
+        finalAverage: 'Итоговая средняя',
+        withoutExam: 'Без экзамена/тезы',
+        thesis: 'Теза',
+        exam: 'Экзамен',
+        newBadge: 'Новое',
       },
     },
     recovery: {

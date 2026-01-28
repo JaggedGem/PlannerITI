@@ -28,6 +28,10 @@ type GradeCategory = 'exam' | 'test' | 'homework' | 'project' | 'other';
 type SortOption = 'date' | 'grade' | 'category';
 type ViewMode = 'grades' | 'exams';
 
+// Map of newly detected grades/exams keyed by semester-subject
+type NewGradeHighlight = { gradeIndices: number[]; newExam?: boolean };
+type NewGradeHighlightsMap = Record<string, NewGradeHighlight>;
+
 interface Grade {
   id: string;
   subject: string;
@@ -44,6 +48,9 @@ const GRADES_TIMESTAMP_KEY = '@planner_grades_timestamp';
 const IDNP_UPDATE_EVENT = 'IDNP_UPDATE';
 // Define IDNP_SYNC_KEY locally or import if possible
 const IDNP_SYNC_KEY = '@planner_idnp_sync';
+const DEV_GRADE_TOGGLE_KEY = '@dev_grade_toggle_active';
+const DEV_GRADE_TOGGLE_EVENT = 'dev_grade_toggle_event';
+const GRADES_MANUAL_REFRESH_NUDGE = 'grades_manual_refresh_nudge';
 
 // Number of days before data is considered stale
 const STALE_DATA_DAYS = 7;
@@ -56,24 +63,155 @@ interface StoredGradesData {
 
 /**
  * Determine the current semester based on the date
- * 1st semester: September 1 - December 19
- * 2nd semester: December 20 - August 31
+ * 1st semester: September 1 - January 9
+ * 2nd semester: January 10 - August 31
  */
 const getCurrentSemester = (): number => {
   const currentDate = new Date();
   const month = currentDate.getMonth(); // 0-11 (Jan-Dec)
   const day = currentDate.getDate();
-  
-  // First semester: Sept 1 - Dec 19
+
+  // First semester: Sept 1 - Jan 9
   if ((month === 8 && day >= 1) || // September
       month === 9 || // October
       month === 10 || // November
-      (month === 11 && day < 20)) { // December 1-19
+      month === 11 || // December
+      (month === 0 && day < 10)) { // January 1-9
     return 1;
-  } else {
-    // Second semester: Dec 20 - Aug 31
-    return 2;
   }
+
+  // Second semester: Jan 10 - Aug 31
+  return 2;
+};
+
+// Lightweight grade parser for local calculations
+const parseNumericGrade = (grade: string): number => {
+  const normalized = grade.replace(',', '.').trim();
+  const value = parseFloat(normalized);
+  return Number.isFinite(value) ? value : NaN;
+};
+
+const cloneStudentGrades = (data: StudentGrades): StudentGrades => ({
+  studentInfo: { ...data.studentInfo },
+  currentGrades: data.currentGrades.map(semester => ({
+    ...semester,
+    subjects: semester.subjects.map(subject => ({
+      ...subject,
+      grades: [...subject.grades]
+    }))
+  })),
+  exams: data.exams.map(exam => ({ ...exam })),
+  annualGrades: data.annualGrades.map(grade => ({ ...grade })),
+  currentSemester: data.currentSemester
+});
+
+const recalculateSubjectAverages = (subject: GradeSubject) => {
+  const numericGrades = subject.grades
+    .map(parseNumericGrade)
+    .filter(g => !isNaN(g));
+
+  if (numericGrades.length === 0) {
+    subject.baseAverage = undefined;
+    subject.baseDisplayedAverage = '-';
+    subject.finalAverage = undefined;
+    subject.finalDisplayedAverage = '-';
+    subject.average = undefined;
+    subject.displayedAverage = '-';
+    return;
+  }
+
+  const baseAvg = numericGrades.reduce((sum, g) => sum + g, 0) / numericGrades.length;
+  const roundedBase = Math.floor(baseAvg * 100) / 100;
+  subject.baseAverage = roundedBase;
+  subject.baseDisplayedAverage = roundedBase.toFixed(2);
+
+  const examGrade = subject.appliedExamGrade;
+  const typeKey = subject.appliedExamType?.toLowerCase() || '';
+  let finalAvg = roundedBase;
+
+  if (examGrade !== undefined && !isNaN(examGrade)) {
+    if (typeKey.includes('teza') || typeKey.includes('thesis')) {
+      finalAvg = (roundedBase + examGrade) / 2;
+    } else if (typeKey.includes('examen') || typeKey.includes('exam')) {
+      finalAvg = roundedBase * 0.6 + examGrade * 0.4;
+    }
+  }
+
+  const roundedFinal = Math.floor(finalAvg * 100) / 100;
+  subject.finalAverage = roundedFinal;
+  subject.finalDisplayedAverage = roundedFinal.toFixed(2);
+  subject.average = roundedFinal;
+  subject.displayedAverage = subject.finalDisplayedAverage;
+};
+
+const injectRandomGrades = (data: StudentGrades, count = 5): StudentGrades => {
+  const clone = cloneStudentGrades(data);
+  const subjectRefs = clone.currentGrades.flatMap(semester =>
+    semester.subjects.map(subject => ({ semester: semester.semester, subject }))
+  );
+
+  if (subjectRefs.length === 0) return clone;
+
+  const targetCount = Math.min(count, subjectRefs.length);
+  const selected = new Set<number>();
+  while (selected.size < targetCount) {
+    selected.add(Math.floor(Math.random() * subjectRefs.length));
+  }
+
+  selected.forEach(index => {
+    const { subject } = subjectRefs[index];
+    const randomGrade = (Math.floor(Math.random() * 10) + 1).toString();
+    subject.grades = [...subject.grades, randomGrade];
+    recalculateSubjectAverages(subject);
+  });
+
+  return clone;
+};
+
+const buildGradeCountMap = (grades: string[]): Record<string, number> => {
+  return grades.reduce<Record<string, number>>((acc, grade) => {
+    acc[grade] = (acc[grade] || 0) + 1;
+    return acc;
+  }, {});
+};
+
+const computeNewGradeHighlights = (
+  prevData: StudentGrades | null,
+  nextData: StudentGrades | null
+): NewGradeHighlightsMap => {
+  if (!nextData) return {};
+  const highlights: NewGradeHighlightsMap = {};
+
+  nextData.currentGrades.forEach(nextSemester => {
+    const prevSemester = prevData?.currentGrades.find(s => s.semester === nextSemester.semester);
+
+    nextSemester.subjects.forEach(nextSubject => {
+      const prevSubject = prevSemester?.subjects.find(s => s.name === nextSubject.name);
+      const prevCounts = buildGradeCountMap(prevSubject?.grades || []);
+      const remaining = { ...prevCounts };
+      const newIndices: number[] = [];
+
+      nextSubject.grades.forEach((grade, index) => {
+        if (remaining[grade] && remaining[grade] > 0) {
+          remaining[grade] -= 1;
+        } else {
+          newIndices.push(index);
+        }
+      });
+
+      const examBecameAvailable =
+        nextSubject.appliedExamGrade !== undefined &&
+        (prevSubject?.appliedExamGrade === undefined ||
+          prevSubject.appliedExamGrade !== nextSubject.appliedExamGrade);
+
+      if (newIndices.length || examBecameAvailable) {
+        const key = `${nextSemester.semester}::${nextSubject.name}`;
+        highlights[key] = { gradeIndices: newIndices, newExam: examBecameAvailable };
+      }
+    });
+  });
+
+  return highlights;
 };
 
 // Separate the IDNPScreen into its own component to avoid conditional hook rendering
@@ -257,13 +395,25 @@ const SubjectCard = ({
   subject, 
   expanded, 
   onToggle,
-  semesterNumber // Add semester number to make subjects unique across semesters
+  semesterNumber, // Add semester number to make subjects unique across semesters
+  newGradeIndices,
+  hasNewExam
 }: { 
   subject: GradeSubject, 
   expanded: boolean,
   onToggle: () => void,
-  semesterNumber: number 
+  semesterNumber: number,
+  newGradeIndices?: number[],
+  hasNewExam?: boolean
 }) => {
+  const { t } = useTranslation();
+  const displayedAverage = subject.finalDisplayedAverage || subject.displayedAverage;
+  const baseAverage = subject.baseDisplayedAverage || subject.displayedAverage;
+  const hasExamAdjustment = displayedAverage && baseAverage && displayedAverage !== baseAverage;
+
+  // Determine if this subject received any fresh data
+  const isRecentlyUpdated = (newGradeIndices && newGradeIndices.length > 0) || hasNewExam;
+
   // Calculate grade quality color
   const getGradeColor = (grade: string): string => {
     const numGrade = parseFloat(grade.replace(',', '.'));
@@ -284,14 +434,21 @@ const SubjectCard = ({
         onPress={subject.grades.length > 0 ? onToggle : undefined}
         activeOpacity={subject.grades.length > 0 ? 0.7 : 1}
       >
-        <Text style={styles.subjectName}>{subject.name}</Text>
+        <View style={styles.subjectNameRow}>
+          <Text style={styles.subjectName}>{subject.name}</Text>
+        </View>
         <View style={styles.subjectHeaderRight}>
-          {subject.displayedAverage && (
+          {isRecentlyUpdated && (
+            <View style={styles.newBadge}>
+              <Text style={styles.newBadgeText}>{t('grades').subjects.newBadge}</Text>
+            </View>
+          )}
+          {displayedAverage && (
             <Text style={[
               styles.averageGrade,
-              parseFloat(subject.displayedAverage) < 5 && styles.failingGrade
+              parseFloat(displayedAverage) < 5 && styles.failingGrade
             ]}>
-              {subject.displayedAverage}
+              {displayedAverage}
             </Text>
           )}
           {subject.grades.length > 0 && (
@@ -309,18 +466,48 @@ const SubjectCard = ({
           entering={FadeInUp.springify()}
           style={styles.gradesContainer}
         >
+          {hasExamAdjustment && (
+            <View style={styles.averageSummaryRow}>
+              <View style={styles.averagePillPrimary}>
+                <Text style={styles.averagePillLabel}>{t('grades').subjects.finalAverage}</Text>
+                <Text style={styles.averagePillValue}>
+                  {subject.finalDisplayedAverage || subject.displayedAverage || '-'}
+                </Text>
+                {subject.appliedExamType && typeof subject.appliedExamGrade === 'number' && !isNaN(subject.appliedExamGrade) && (
+                  <Text style={styles.averagePillMeta}>
+                    {(() => {
+                      const typeKey = subject.appliedExamType?.toLowerCase() || '';
+                      const isTeza = typeKey.includes('teza') || typeKey.includes('thesis');
+                      return isTeza ? t('grades').subjects.thesis : t('grades').subjects.exam;
+                    })()} • {subject.appliedExamGrade.toFixed(2)}
+                  </Text>
+                )}
+              </View>
+
+              {baseAverage && (
+                <View style={styles.averagePillSecondary}>
+                  <Text style={styles.averagePillLabel}>{t('grades').subjects.withoutExam}</Text>
+                  <Text style={styles.averagePillValue}>{baseAverage}</Text>
+                </View>
+              )}
+            </View>
+          )}
+
           <View style={styles.gradesGrid}>
             {subject.grades.map((grade, index) => {
               const gradeColor = getGradeColor(grade);
+              const isNewGrade = newGradeIndices?.includes(index);
               return (
                 <View 
                   key={index} 
                   style={[
                     styles.gradeItem, 
-                    { backgroundColor: gradeColor }
+                    { backgroundColor: gradeColor },
+                    isNewGrade ? styles.newGradeItem : null
                   ]}
                 >
                   <Text style={styles.gradeText}>{grade}</Text>
+                  {isNewGrade && <Text style={styles.gradePip}>*</Text>}
                 </View>
               );
             })}
@@ -1107,14 +1294,16 @@ const GradeCalculatorModal = ({
 // Main Grades component
 const GradesScreen = ({ 
   idnp, 
-  responseHtml, 
+  studentGrades,
   lastUpdated,
-  onRefresh 
+  onRefresh,
+  newHighlights
 }: { 
   idnp: string, 
-  responseHtml: string,
+  studentGrades: StudentGrades | null,
   lastUpdated: number | null,
-  onRefresh: () => Promise<void>
+  onRefresh: () => Promise<void>,
+  newHighlights: NewGradeHighlightsMap
 }) => {
   const { t, currentLanguage } = useTranslation();
   const [isBackgroundRefreshing, setIsBackgroundRefreshing] = useState(false);
@@ -1162,16 +1351,6 @@ const GradesScreen = ({
       .replace('{{semester}}', semesterInYear.toString());
   };
 
-  // Parse HTML data
-  const studentGrades = useMemo(() => {
-    try {
-      const result = parseStudentGradesData(responseHtml);
-      return result;
-    } catch (error) {
-      return null;
-    }
-  }, [responseHtml]);
-  
   // Get current semester number based on date
   const currentSemesterNumber = useMemo(() => getCurrentSemester(), []);
 
@@ -1337,7 +1516,7 @@ const GradesScreen = ({
   
   // Format last updated date
   const lastUpdatedFormatted = useMemo(() => {
-    if (!lastUpdated) return 'Never';
+    if (!lastUpdated) return t('grades').neverUpdated;
     
     const date = new Date(lastUpdated);
     return formatLocalizedDate(date, currentLanguage, true);
@@ -1519,15 +1698,21 @@ const GradesScreen = ({
                   )}
 
                   {/* Subject list for this semester */}
-                  {semester.subjects.map((subject, subjectIndex) => (
-                    <SubjectCard
-                      key={`subject-${semester.semester}-${subject.name}-${subjectIndex}`}
-                      subject={subject}
-                      expanded={!!expandedSubjects[`${semester.semester}-${subject.name}`]}
-                      onToggle={() => toggleSubject(subject.name, semester.semester)}
-                      semesterNumber={semester.semester}
-                    />
-                  ))}
+                  {semester.subjects.map((subject, subjectIndex) => {
+                    const subjectKey = `${semester.semester}::${subject.name}`;
+                    const highlight = newHighlights[subjectKey];
+                    return (
+                      <SubjectCard
+                        key={`subject-${semester.semester}-${subject.name}-${subjectIndex}`}
+                        subject={subject}
+                        expanded={!!expandedSubjects[`${semester.semester}-${subject.name}`]}
+                        onToggle={() => toggleSubject(subject.name, semester.semester)}
+                        semesterNumber={semester.semester}
+                        newGradeIndices={highlight?.gradeIndices}
+                        hasNewExam={highlight?.newExam}
+                      />
+                    );
+                  })}
                   
                   {/* Empty state if no subjects */}
                   {semester.subjects.length === 0 && (
@@ -1583,7 +1768,7 @@ const GradesScreen = ({
                 <Animated.View style={[styles.dot, dotStyle3]} />
               </View>
             ) : (
-              <Text style={styles.backgroundUpdatedText}>{'Updated'}</Text>
+              <Text style={styles.backgroundUpdatedText}>{t('grades').updatedLabel}</Text>
             )}
           </View>
         </View>
@@ -1606,6 +1791,15 @@ export default function Grades() {
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   // Prevent multiple initial cache hydrations overwriting fresh data
   const initialLoadDoneRef = useRef(false);
+  const [displayGrades, setDisplayGrades] = useState<StudentGrades | null>(null);
+  const [newHighlights, setNewHighlights] = useState<NewGradeHighlightsMap>({});
+  const [devInjected, setDevInjected] = useState<boolean>(false);
+  const [refreshNonce, setRefreshNonce] = useState(0);
+  const initialHydratedRef = useRef(false);
+  const prevParsedRef = useRef<StudentGrades | null>(null);
+  const lastHandledRefreshRef = useRef(-1);
+  const prevResponseRef = useRef<string | null>(null);
+  const baseParsedRef = useRef<StudentGrades | null>(null);
 
   // Helper function to format semester label - added to fix reference error
   const formatSemesterLabel = (semesterNumber: number) => {
@@ -1615,6 +1809,9 @@ export default function Grades() {
       .replace('{{year}}', year.toString())
       .replace('{{semester}}', semesterInYear.toString());
   };
+
+  // Load dev injection stage and listen for updates
+  // Moved below after recomputeDisplayFromToggle definition
 
   useEffect(() => {
     // Load stored IDNP and cached grades data
@@ -1704,6 +1901,12 @@ export default function Grades() {
         setResponseHtml('');
         setLastUpdated(null);
         setErrorMessage(null);
+        setDisplayGrades(null);
+        setNewHighlights({});
+        prevParsedRef.current = null;
+        prevResponseRef.current = null;
+        initialHydratedRef.current = false;
+        lastHandledRefreshRef.current = -1;
       }
     });
 
@@ -1733,6 +1936,7 @@ export default function Grades() {
       if (updated.timestamp && updated.timestamp !== lastUpdated) {
         setLastUpdated(updated.timestamp);
       }
+      setRefreshNonce(n => n + 1);
       // Persist new unified cache to legacy keys so future single-source loads don't revert
       try {
         await AsyncStorage.setItem(GRADES_DATA_KEY, JSON.stringify({ html: updated.html, timestamp: updated.timestamp || Date.now() }));
@@ -1747,6 +1951,44 @@ export default function Grades() {
       unsubscribeGrades();
     };
   }, [idnp]);
+
+  // Re-parse grades when data or refresh marker changes and capture new items
+  useEffect(() => {
+    if (!responseHtml) return;
+
+    const refreshChanged = responseHtml !== prevResponseRef.current || refreshNonce !== lastHandledRefreshRef.current;
+    if (!refreshChanged) return;
+
+    const baseParsed = parseStudentGradesData(responseHtml);
+    baseParsedRef.current = baseParsed;
+
+    const displayData = devInjected ? injectRandomGrades(baseParsed) : baseParsed;
+
+    const prevParsed = prevParsedRef.current;
+
+    // First hydration: avoid marking everything new unless devInjected adds items
+    if (!initialHydratedRef.current) {
+      const initialHighlights = devInjected
+        ? computeNewGradeHighlights(baseParsed, displayData)
+        : {};
+
+      setDisplayGrades(displayData);
+      setNewHighlights(initialHighlights);
+      prevParsedRef.current = displayData;
+      prevResponseRef.current = responseHtml;
+      initialHydratedRef.current = true;
+      lastHandledRefreshRef.current = refreshNonce;
+      return;
+    }
+
+    setDisplayGrades(displayData);
+    setNewHighlights(computeNewGradeHighlights(prevParsed, displayData));
+
+    prevParsedRef.current = displayData;
+    prevResponseRef.current = responseHtml;
+    initialHydratedRef.current = true;
+    lastHandledRefreshRef.current = refreshNonce;
+  }, [responseHtml, refreshNonce, devInjected]);
 
   const fetchStudentData = useCallback(async (studentIdnp: string) => {
     // Prevent duplicate requests using ref
@@ -1779,6 +2021,8 @@ export default function Grades() {
       await AsyncStorage.setItem(GRADES_DATA_KEY, JSON.stringify({ html: htmlResponse, timestamp }));
       // Also store via new caching layer for consistency & event emission (dedup automatic)
       try { await gradesDataService.store(studentIdnp, htmlResponse); } catch (_) {}
+
+      setRefreshNonce(n => n + 1);
       
       // Notify other components of the IDNP update
       DeviceEventEmitter.emit(IDNP_UPDATE_EVENT, studentIdnp);
@@ -1848,6 +2092,49 @@ export default function Grades() {
     fetchStudentData(newIdnp);
   }, [fetchStudentData]);
 
+  const effectiveGrades = useMemo(() => {
+    if (displayGrades) return displayGrades;
+    if (!responseHtml) return null;
+    try {
+      return parseStudentGradesData(responseHtml);
+    } catch (err) {
+      return null;
+    }
+  }, [displayGrades, responseHtml]);
+
+  const recomputeDisplayFromToggle = useCallback((active: boolean) => {
+    const base = baseParsedRef.current || (responseHtml ? parseStudentGradesData(responseHtml) : null);
+    if (!base) return;
+    const nextDisplay = active ? injectRandomGrades(base) : base;
+    const prev = prevParsedRef.current;
+    setDisplayGrades(nextDisplay);
+    setNewHighlights(prev ? computeNewGradeHighlights(prev, nextDisplay) : {});
+    prevParsedRef.current = nextDisplay;
+  }, [responseHtml]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const stored = await AsyncStorage.getItem(DEV_GRADE_TOGGLE_KEY);
+        if (stored === 'true') {
+          setDevInjected(true);
+          recomputeDisplayFromToggle(true);
+        }
+      } catch (err) {
+        // ignore
+      }
+    })();
+
+    const toggleListener = DeviceEventEmitter.addListener(DEV_GRADE_TOGGLE_EVENT, (active: boolean) => {
+      setDevInjected(active);
+      recomputeDisplayFromToggle(active);
+    });
+
+    return () => {
+      toggleListener.remove();
+    };
+  }, [recomputeDisplayFromToggle]);
+
   // Handle initial fetch of data if IDNP is already set but no cached data
   useEffect(() => {
     // When IDNP is set but no data is loaded yet, and we're not already fetching
@@ -1894,8 +2181,9 @@ export default function Grades() {
       )}
       <GradesScreen 
         idnp={idnp!}
-        responseHtml={responseHtml} 
+        studentGrades={effectiveGrades}
         lastUpdated={lastUpdated}
+        newHighlights={newHighlights}
         onRefresh={async () => {
           if (idnp) {
             // Check sync setting before refreshing - Temporarily disabled
@@ -2310,6 +2598,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
   },
+  subjectNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
   subjectName: {
     color: 'white',
     fontSize: 16,
@@ -2317,15 +2611,33 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingRight: 8,
   },
+  newBadge: {
+    backgroundColor: 'rgba(255, 209, 102, 0.15)',
+    borderColor: '#FFD166',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginLeft: 0,
+    marginRight: 8,
+    alignSelf: 'center',
+  },
+  newBadgeText: {
+    color: '#FFD166',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   subjectHeaderRight: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
   averageGrade: {
     color: 'white',
     fontSize: 18,
     fontWeight: '600',
-    marginRight: 8,
   },
   gradesContainer: {
     borderTopWidth: 1,
@@ -2344,11 +2656,30 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     minWidth: 40,
     alignItems: 'center',
+    position: 'relative',
+  },
+  newGradeItem: {
+    borderWidth: 1.5,
+    borderColor: '#FFD166',
+    backgroundColor: 'rgba(255, 209, 102, 0.18)',
+    shadowColor: '#FFD166',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 0,
   },
   gradeText: {
     color: 'white',
     fontSize: 14,
     fontWeight: '500',
+  },
+  gradePip: {
+    position: 'absolute',
+    top: 4,
+    right: 6,
+    color: '#FFD166',
+    fontSize: 12,
+    fontWeight: '700',
   },
   // New styles for exams view
   examsList: {
@@ -2855,5 +3186,41 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     letterSpacing: 0.5,
+  },
+  averageSummaryRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+    flexWrap: 'wrap',
+  },
+  averagePillPrimary: {
+    flexGrow: 1,
+    backgroundColor: 'rgba(44, 61, 205, 0.2)',
+    borderRadius: 12,
+    padding: 12,
+    minWidth: 140,
+  },
+  averagePillSecondary: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    padding: 12,
+    minWidth: 140,
+  },
+  averagePillLabel: {
+    color: '#8A8A8D',
+    fontSize: 12,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  averagePillValue: {
+    color: 'white',
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  averagePillMeta: {
+    color: '#B7C6FF',
+    fontSize: 12,
+    marginTop: 4,
   },
 });

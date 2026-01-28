@@ -20,6 +20,7 @@ export default function App() {
         // Always attempt to refresh schedule on app open (online -> fetch, offline -> cached)
         try {
           await scheduleService.ready();
+          await scheduleService.refreshGroups(true);
           await scheduleService.ensureSelectedGroup();
           await scheduleService.refreshSchedule(true);
           // Silent grades refresh (if IDNP stored)

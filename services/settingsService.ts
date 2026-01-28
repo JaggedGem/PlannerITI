@@ -8,7 +8,7 @@ import Constants from "expo-constants";
 let scheduleService = scheduleServiceImport;
 
 // API endpoint
-const API_URL = 'https://papi.jagged.me';
+const API_URL = 'https://papi.jagged.site';
 
 // Get environment variables from Expo Constants
 const getEnvVars = () => {
