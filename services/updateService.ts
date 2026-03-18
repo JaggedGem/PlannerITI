@@ -1,14 +1,16 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Application from 'expo-application';
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
 const GITHUB_API_BASE = 'https://api.github.com';
 const REPO_OWNER = 'JaggedGem';
 const REPO_NAME = 'PlannerITI';
-const LAST_UPDATE_CHECK_KEY = '@last_update_check';
 const DISMISSED_VERSION_KEY = '@dismissed_update_version';
 const LAST_CHECK_DATE_KEY = '@last_check_date';
-const CHECK_INTERVAL = 1000 * 60 * 60 * 24; // Check once per day
+const REMIND_LATER_DAYS = 7;
+
+export const UPDATE_AVAILABLE_EVENT = 'UPDATE_AVAILABLE';
 
 export interface GitHubRelease {
   id: number;
@@ -36,6 +38,11 @@ export interface UpdateInfo {
   publishedAt: string;
 }
 
+interface RemindLaterData {
+  version: string;
+  remindUntil: string;
+}
+
 class UpdateService {
   private currentChannel: 'beta' | 'production' | 'development';
   private currentVersion: string;
@@ -46,8 +53,8 @@ class UpdateService {
     // Check if we're running in Expo Go (not a standalone build)
     this.isExpoGo = Constants.executionEnvironment === 'storeClient';
     
-    // Get the variant from app.config.js
-    this.configuredVariant = 'production';
+    // Get variant from app.config.js (expo.extra.environment)
+    this.configuredVariant = Constants.expoConfig?.extra?.environment || 'production';
     
     // If running in Expo Go, always use development channel
     if (this.isExpoGo) {
@@ -67,6 +74,60 @@ class UpdateService {
 
     // Get current app version from native build
     this.currentVersion = Application.nativeApplicationVersion || '1.0.0';
+  }
+
+  /**
+   * In development (Expo Go), prefer the configured variant channel for release filtering.
+   */
+  private getReleaseChannelForFetch(): 'beta' | 'production' | 'development' {
+    if (this.currentChannel === 'development') {
+      if (this.configuredVariant === 'beta') return 'beta';
+      if (this.configuredVariant === 'production') return 'production';
+    }
+
+    return this.currentChannel;
+  }
+
+  /**
+   * Map a GitHub release to app update info.
+   */
+  private mapReleaseToUpdateInfo(release: GitHubRelease): UpdateInfo {
+    const downloadAsset = this.getPreferredDownloadAsset(release.assets);
+
+    return {
+      isAvailable: true,
+      currentVersion: this.currentVersion,
+      latestVersion: release.tag_name,
+      releaseNotes: release.body || 'No release notes available.',
+      downloadUrl: downloadAsset?.browser_download_url || '',
+      releaseUrl: release.html_url,
+      publishedAt: release.published_at,
+    };
+  }
+
+  /**
+   * Pick the best matching downloadable asset for the current platform.
+   */
+  private getPreferredDownloadAsset(
+    assets: GitHubRelease['assets']
+  ): GitHubRelease['assets'][number] | undefined {
+    const lowerCasedAssets = assets.map(asset => ({
+      ...asset,
+      name: asset.name.toLowerCase(),
+    }));
+
+    if (Platform.OS === 'android') {
+      return (
+        lowerCasedAssets.find(asset => asset.name.endsWith('.apk')) ||
+        lowerCasedAssets.find(asset => asset.name.endsWith('.aab'))
+      );
+    }
+
+    if (Platform.OS === 'ios') {
+      return lowerCasedAssets.find(asset => asset.name.endsWith('.ipa'));
+    }
+
+    return lowerCasedAssets[0];
   }
 
   /**
@@ -123,12 +184,14 @@ class UpdateService {
 
       const releases: GitHubRelease[] = await response.json();
 
+      const releaseChannel = this.getReleaseChannelForFetch();
+
       // Filter releases based on channel
       let filteredReleases = releases;
-      if (this.currentChannel === 'beta') {
+      if (releaseChannel === 'beta') {
         // For beta, get both prereleases and releases
         filteredReleases = releases.filter(r => r.prerelease === true);
-      } else if (this.currentChannel === 'production') {
+      } else if (releaseChannel === 'production') {
         // For production, get only stable releases
         filteredReleases = releases.filter(r => r.prerelease === false);
       }
@@ -169,7 +232,26 @@ class UpdateService {
   private async isVersionDismissed(version: string): Promise<boolean> {
     try {
       const dismissedVersion = await AsyncStorage.getItem(DISMISSED_VERSION_KEY);
-      return dismissedVersion === version;
+      if (!dismissedVersion) {
+        return false;
+      }
+
+      // Legacy values were stored as plain strings and acted like forever dismiss.
+      // Ignore them so behavior follows the new 7-day remind-later policy.
+      if (dismissedVersion === version) {
+        return false;
+      }
+
+      const parsedData = JSON.parse(dismissedVersion) as RemindLaterData;
+      if (!parsedData?.version || !parsedData?.remindUntil) {
+        return false;
+      }
+
+      if (parsedData.version !== version) {
+        return false;
+      }
+
+      return new Date(parsedData.remindUntil).getTime() > Date.now();
     } catch (error) {
       console.error('Error checking dismissed version:', error);
       return false;
@@ -181,7 +263,15 @@ class UpdateService {
    */
   async dismissVersion(version: string): Promise<void> {
     try {
-      await AsyncStorage.setItem(DISMISSED_VERSION_KEY, version);
+      const remindUntil = new Date();
+      remindUntil.setDate(remindUntil.getDate() + REMIND_LATER_DAYS);
+
+      const remindData: RemindLaterData = {
+        version,
+        remindUntil: remindUntil.toISOString(),
+      };
+
+      await AsyncStorage.setItem(DISMISSED_VERSION_KEY, JSON.stringify(remindData));
     } catch (error) {
       console.error('Error dismissing version:', error);
     }
@@ -237,20 +327,7 @@ class UpdateService {
         return null;
       }
 
-      // Find the appropriate download asset (APK for Android)
-      const apkAsset = latestRelease.assets.find(asset => 
-        asset.name.toLowerCase().endsWith('.apk')
-      );
-
-      return {
-        isAvailable: true,
-        currentVersion: this.currentVersion,
-        latestVersion: latestVersion,
-        releaseNotes: latestRelease.body || 'No release notes available.',
-        downloadUrl: apkAsset?.browser_download_url || '',
-        releaseUrl: latestRelease.html_url,
-        publishedAt: latestRelease.published_at,
-      };
+      return this.mapReleaseToUpdateInfo(latestRelease);
     } catch (error) {
       console.error('Error checking for update:', error);
       return null;
@@ -286,7 +363,19 @@ class UpdateService {
    */
   async manualCheckForUpdate(): Promise<UpdateInfo | null> {
     await this.clearDismissedVersion();
-    return this.checkForUpdate(true);
+
+    const regularUpdate = await this.checkForUpdate(true);
+    if (regularUpdate) {
+      return regularUpdate;
+    }
+
+    // Developer simulation path: in development builds, reuse the latest release info
+    // so the full update UX can be tested from Settings.
+    if (this.currentChannel === 'development') {
+      return this.getLatestReleaseForTesting();
+    }
+
+    return null;
   }
 
   /**
@@ -300,22 +389,7 @@ class UpdateService {
         return null;
       }
 
-      const latestVersion = latestRelease.tag_name;
-      
-      // Find the appropriate download asset (APK for Android)
-      const apkAsset = latestRelease.assets.find(asset => 
-        asset.name.toLowerCase().endsWith('.apk')
-      );
-
-      return {
-        isAvailable: true,
-        currentVersion: this.currentVersion,
-        latestVersion: latestVersion,
-        releaseNotes: latestRelease.body || 'No release notes available.',
-        downloadUrl: apkAsset?.browser_download_url || '',
-        releaseUrl: latestRelease.html_url,
-        publishedAt: latestRelease.published_at,
-      };
+      return this.mapReleaseToUpdateInfo(latestRelease);
     } catch (error) {
       console.error('Error fetching latest release for testing:', error);
       return null;

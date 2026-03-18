@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { 
   View, 
   Text, 
@@ -8,33 +8,31 @@ import {
   ScrollView,
   Linking,
   useColorScheme,
-  Platform,
+  ActivityIndicator,
   Alert,
   DeviceEventEmitter
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { updateService, UpdateInfo } from '@/services/updateService';
+import { updateService, UpdateInfo, UPDATE_AVAILABLE_EVENT } from '@/services/updateService';
 import { BlurView } from 'expo-blur';
 import Animated, { 
   FadeIn, 
   FadeOut, 
-  SlideInDown, 
-  SlideOutDown,
-  withSpring,
   useSharedValue,
   useAnimatedStyle,
-  withSequence,
   withTiming
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { format } from 'date-fns';
+import Markdown from 'react-native-markdown-display';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 export default function UpdateNotification() {
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [isVisible, setIsVisible] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
@@ -52,9 +50,9 @@ export default function UpdateNotification() {
       checkForUpdates();
     }, 1000 * 60 * 60 * 24);
 
-    // Listen for test update events (developer mode)
-    const testUpdateListener = DeviceEventEmitter.addListener(
-      'TEST_UPDATE_AVAILABLE',
+    // Listen for update events emitted by manual checks and developer tools
+    const updateListener = DeviceEventEmitter.addListener(
+      UPDATE_AVAILABLE_EVENT,
       (testUpdate: UpdateInfo) => {
         setUpdateInfo(testUpdate);
         setIsVisible(true);
@@ -67,7 +65,7 @@ export default function UpdateNotification() {
     return () => {
       clearTimeout(checkTimer);
       clearInterval(periodicCheck);
-      testUpdateListener.remove();
+      updateListener.remove();
     };
   }, []);
 
@@ -86,8 +84,33 @@ export default function UpdateNotification() {
     }
   };
 
+  const closeModal = () => {
+    setIsVisible(false);
+    setTimeout(() => {
+      setUpdateInfo(null);
+    }, 500);
+  };
+
+  const openUrlSafely = async (url: string): Promise<boolean> => {
+    try {
+      await Linking.openURL(url);
+      return true;
+    } catch (error) {
+      console.error('Error opening URL:', error);
+      return false;
+    }
+  };
+
   const handleDownload = async () => {
-    if (!updateInfo || !updateInfo.downloadUrl) {
+    if (!updateInfo || isDownloading) {
+      return;
+    }
+
+    const primaryDownloadUrl = updateInfo.downloadUrl;
+    const fallbackReleaseUrl = updateInfo.releaseUrl;
+    const targetUrl = primaryDownloadUrl || fallbackReleaseUrl;
+
+    if (!targetUrl) {
       Alert.alert(
         'Download Not Available',
         'Please visit the releases page to download the update manually.',
@@ -103,18 +126,29 @@ export default function UpdateNotification() {
     }
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setIsDownloading(true);
     
     try {
-      const supported = await Linking.canOpenURL(updateInfo.downloadUrl);
-      if (supported) {
-        await Linking.openURL(updateInfo.downloadUrl);
-        handleDismiss();
-      } else {
-        Alert.alert('Error', 'Unable to open download link');
+      const openedPrimary = await openUrlSafely(targetUrl);
+      if (openedPrimary) {
+        closeModal();
+        return;
       }
+
+      if (fallbackReleaseUrl && targetUrl !== fallbackReleaseUrl) {
+        const openedFallback = await openUrlSafely(fallbackReleaseUrl);
+        if (openedFallback) {
+          closeModal();
+          return;
+        }
+      }
+
+      Alert.alert('Error', 'Failed to open update link');
     } catch (error) {
       console.error('Error opening download link:', error);
-      Alert.alert('Error', 'Failed to open download link');
+      Alert.alert('Error', 'Failed to open update link');
+    } finally {
+      setIsDownloading(false);
     }
   };
 
@@ -134,18 +168,18 @@ export default function UpdateNotification() {
   };
 
   const handleDismiss = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    closeModal();
+  };
+
+  const handleRemindLater = async () => {
     if (!updateInfo) return;
     
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     
-    // Dismiss this version
+    // Snooze this update version for 7 days.
     await updateService.dismissVersion(updateInfo.latestVersion);
-    setIsVisible(false);
-    
-    // Clear update info after animation
-    setTimeout(() => {
-      setUpdateInfo(null);
-    }, 500);
+    closeModal();
   };
 
   const handlePressIn = () => {
@@ -159,22 +193,85 @@ export default function UpdateNotification() {
   const animatedButtonStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
   }));
+  const markdownStyles = useMemo(() => ({
+    body: {
+      color: isDark ? '#E5E5EA' : '#3C3C43',
+      fontSize: 14,
+      lineHeight: 20,
+    },
+    heading1: {
+      color: isDark ? '#FFFFFF' : '#111111',
+      fontSize: 22,
+      fontWeight: '700' as const,
+      marginTop: 10,
+      marginBottom: 8,
+    },
+    heading2: {
+      color: isDark ? '#FFFFFF' : '#111111',
+      fontSize: 19,
+      fontWeight: '700' as const,
+      marginTop: 8,
+      marginBottom: 6,
+    },
+    heading3: {
+      color: isDark ? '#FFFFFF' : '#111111',
+      fontSize: 16,
+      fontWeight: '600' as const,
+      marginTop: 8,
+      marginBottom: 4,
+    },
+    paragraph: {
+      marginTop: 0,
+      marginBottom: 8,
+    },
+    bullet_list: {
+      marginTop: 0,
+      marginBottom: 8,
+    },
+    ordered_list: {
+      marginTop: 0,
+      marginBottom: 8,
+    },
+    list_item: {
+      color: isDark ? '#E5E5EA' : '#3C3C43',
+    },
+    blockquote: {
+      borderLeftColor: isDark ? '#48484A' : '#D1D1D6',
+      borderLeftWidth: 3,
+      paddingLeft: 10,
+      marginLeft: 0,
+      opacity: 0.9,
+    },
+    code_inline: {
+      backgroundColor: isDark ? '#2C2C2E' : '#F2F2F7',
+      color: isDark ? '#D0D0D0' : '#333333',
+      borderRadius: 4,
+      paddingHorizontal: 4,
+      paddingVertical: 2,
+    },
+    code_block: {
+      backgroundColor: isDark ? '#2C2C2E' : '#F2F2F7',
+      color: isDark ? '#D0D0D0' : '#333333',
+      borderRadius: 8,
+      padding: 10,
+    },
+    fence: {
+      backgroundColor: isDark ? '#2C2C2E' : '#F2F2F7',
+      color: isDark ? '#D0D0D0' : '#333333',
+      borderRadius: 8,
+      padding: 10,
+    },
+    link: {
+      color: '#3478F6',
+      textDecorationLine: 'underline' as const,
+    },
+    hr: {
+      backgroundColor: isDark ? '#3A3A3C' : '#E5E5EA',
+    },
+  }), [isDark]);
 
   if (!updateInfo) return null;
 
-  // Simple markdown-like parsing for better readability
-  const formatReleaseNotes = (notes: string): string => {
-    return notes
-      .replace(/^### (.+)$/gm, '\n$1\n')  // Headers
-      .replace(/^## (.+)$/gm, '\n$1\n')
-      .replace(/^# (.+)$/gm, '\n$1\n')
-      .replace(/\*\*(.+?)\*\*/g, '$1')     // Bold
-      .replace(/\*(.+?)\*/g, '$1')          // Italic
-      .replace(/^[•\-\*] (.+)$/gm, '  • $1') // Bullets
-      .trim();
-  };
-
-  const formattedNotes = formatReleaseNotes(updateInfo.releaseNotes);
   const publishedDate = format(new Date(updateInfo.publishedAt), 'MMM d, yyyy');
 
   return (
@@ -183,7 +280,7 @@ export default function UpdateNotification() {
       transparent
       animationType="none"
       statusBarTranslucent
-      onRequestClose={handleDismiss}
+      onRequestClose={handleRemindLater}
     >
       <Animated.View 
         style={styles.overlay}
@@ -192,7 +289,7 @@ export default function UpdateNotification() {
       >
         <Pressable 
           style={styles.backdrop} 
-          onPress={handleDismiss}
+          onPress={handleRemindLater}
         >
           <BlurView 
             intensity={20} 
@@ -289,9 +386,9 @@ export default function UpdateNotification() {
               style={styles.releaseNotesScroll}
               showsVerticalScrollIndicator={false}
             >
-              <Text style={[styles.releaseNotes, { color: isDark ? '#E5E5EA' : '#3C3C43' }]}>
-                {formattedNotes}
-              </Text>
+              <Markdown style={markdownStyles}>
+                {updateInfo.releaseNotes || 'No release notes available.'}
+              </Markdown>
             </ScrollView>
           </View>
 
@@ -310,21 +407,28 @@ export default function UpdateNotification() {
             <AnimatedPressable
               style={[styles.button, styles.primaryButton, animatedButtonStyle]}
               onPress={handleDownload}
+              disabled={isDownloading}
               onPressIn={handlePressIn}
               onPressOut={handlePressOut}
             >
-              <Ionicons name="download" size={18} color="#FFFFFF" />
-              <Text style={styles.primaryButtonText}>Download Update</Text>
+              {isDownloading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Ionicons name="download" size={18} color="#FFFFFF" />
+              )}
+              <Text style={styles.primaryButtonText}>
+                {isDownloading ? 'Opening Link...' : 'Download Update'}
+              </Text>
             </AnimatedPressable>
           </View>
 
           {/* Dismiss Text */}
           <Pressable 
-            onPress={handleDismiss}
+            onPress={handleRemindLater}
             hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
             style={styles.dismissContainer}
           >
-            <Text style={styles.dismissText}>Remind Me Later</Text>
+            <Text style={styles.dismissText}>Remind Me In 7 Days</Text>
           </Pressable>
         </Animated.View>
       </SafeAreaView>
@@ -458,10 +562,6 @@ const styles = StyleSheet.create({
   },
   releaseNotesScroll: {
     flex: 1,
-  },
-  releaseNotes: {
-    fontSize: 14,
-    lineHeight: 20,
   },
   buttonContainer: {
     flexDirection: 'row',
