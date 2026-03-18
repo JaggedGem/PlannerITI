@@ -51,6 +51,7 @@ const IDNP_SYNC_KEY = '@planner_idnp_sync';
 const DEV_GRADE_TOGGLE_KEY = '@dev_grade_toggle_active';
 const DEV_GRADE_TOGGLE_EVENT = 'dev_grade_toggle_event';
 const GRADES_MANUAL_REFRESH_NUDGE = 'grades_manual_refresh_nudge';
+const GRADES_HIGHLIGHTS_KEY_PREFIX = '@planner_grades_new_highlights_';
 
 // Number of days before data is considered stale
 const STALE_DATA_DAYS = 7;
@@ -173,6 +174,63 @@ const buildGradeCountMap = (grades: string[]): Record<string, number> => {
     acc[grade] = (acc[grade] || 0) + 1;
     return acc;
   }, {});
+};
+
+const getHighlightsStorageKey = (idnp: string): string => `${GRADES_HIGHLIGHTS_KEY_PREFIX}${idnp}`;
+
+const mergeNewGradeHighlights = (
+  existing: NewGradeHighlightsMap,
+  fresh: NewGradeHighlightsMap
+): NewGradeHighlightsMap => {
+  const merged: NewGradeHighlightsMap = { ...existing };
+
+  Object.entries(fresh).forEach(([key, highlight]) => {
+    const prev = merged[key];
+    if (!prev) {
+      merged[key] = {
+        gradeIndices: [...highlight.gradeIndices],
+        newExam: !!highlight.newExam,
+      };
+      return;
+    }
+
+    const combinedIndices = Array.from(new Set([...(prev.gradeIndices || []), ...(highlight.gradeIndices || [])]))
+      .sort((a, b) => a - b);
+
+    merged[key] = {
+      gradeIndices: combinedIndices,
+      newExam: !!prev.newExam || !!highlight.newExam,
+    };
+  });
+
+  return merged;
+};
+
+const parseStoredHighlights = (raw: string | null): NewGradeHighlightsMap => {
+  if (!raw) return {};
+
+  try {
+    const parsed = JSON.parse(raw) as Record<string, { gradeIndices?: unknown; newExam?: unknown }>;
+    const normalized: NewGradeHighlightsMap = {};
+
+    Object.entries(parsed).forEach(([key, value]) => {
+      const indices = Array.isArray(value?.gradeIndices)
+        ? value.gradeIndices.filter((item): item is number => typeof item === 'number' && Number.isInteger(item) && item >= 0)
+        : [];
+      const hasExam = typeof value?.newExam === 'boolean' ? value.newExam : false;
+
+      if (indices.length > 0 || hasExam) {
+        normalized[key] = {
+          gradeIndices: Array.from(new Set(indices)).sort((a, b) => a - b),
+          newExam: hasExam,
+        };
+      }
+    });
+
+    return normalized;
+  } catch {
+    return {};
+  }
 };
 
 const computeNewGradeHighlights = (
@@ -416,6 +474,9 @@ const SubjectCard = ({
 
   // Calculate grade quality color
   const getGradeColor = (grade: string): string => {
+    const normalized = grade.trim().toLowerCase();
+    if (normalized === 'a') return 'rgba(255, 61, 113, 0.65)'; // Unexcused absence (dedicated pink-red)
+    if (normalized === 'm') return 'rgba(46, 196, 182, 0.65)'; // Excused absence (dedicated teal)
     const numGrade = parseFloat(grade.replace(',', '.'));
     if (isNaN(numGrade)) return 'rgba(44, 61, 205, 0.5)'; // Default blue for non-numeric
     if (numGrade < 5) return 'rgba(255, 107, 107, 0.5)'; // Red for failing
@@ -924,6 +985,9 @@ const GradeCalculatorModal = ({
   
   // Calculate grade quality color - same as used in SubjectCard
   const getGradeColor = (grade: string): string => {
+    const normalized = grade.trim().toLowerCase();
+    if (normalized === 'a') return 'rgba(255, 61, 113, 0.65)'; // Unexcused absence (dedicated pink-red)
+    if (normalized === 'm') return 'rgba(46, 196, 182, 0.65)'; // Excused absence (dedicated teal)
     const numGrade = parseFloat(grade.replace(',', '.'));
     if (isNaN(numGrade)) return 'rgba(44, 61, 205, 0.5)'; // Default blue for non-numeric
     if (numGrade < 5) return 'rgba(255, 107, 107, 0.5)'; // Red for failing
@@ -1297,13 +1361,15 @@ const GradesScreen = ({
   studentGrades,
   lastUpdated,
   onRefresh,
-  newHighlights
+  newHighlights,
+  onAcknowledgeHighlight
 }: { 
   idnp: string, 
   studentGrades: StudentGrades | null,
   lastUpdated: number | null,
   onRefresh: () => Promise<void>,
-  newHighlights: NewGradeHighlightsMap
+  newHighlights: NewGradeHighlightsMap,
+  onAcknowledgeHighlight: (semesterNumber: number, subjectName: string) => void
 }) => {
   const { t, currentLanguage } = useTranslation();
   const [isBackgroundRefreshing, setIsBackgroundRefreshing] = useState(false);
@@ -1525,14 +1591,20 @@ const GradesScreen = ({
   // Toggle subject expand/collapse
   const toggleSubject = useCallback((subjectName: string, semesterNumber: number) => {
     const key = `${semesterNumber}-${subjectName}`;
-    setExpandedSubjects(prev => ({
-      ...prev,
-      [key]: !prev[key]
-    }));
+    setExpandedSubjects(prev => {
+      const nextExpanded = !prev[key];
+      if (nextExpanded) {
+        onAcknowledgeHighlight(semesterNumber, subjectName);
+      }
+      return {
+        ...prev,
+        [key]: nextExpanded
+      };
+    });
     
     // Add haptic feedback when expanding/collapsing
     Haptics.selectionAsync();
-  }, []);
+  }, [onAcknowledgeHighlight]);
   
   // Toggle semester dropdown
   const toggleSemester = useCallback((semesterNumber: number) => {
@@ -1801,6 +1873,26 @@ export default function Grades() {
   const prevResponseRef = useRef<string | null>(null);
   const baseParsedRef = useRef<StudentGrades | null>(null);
 
+  const persistHighlights = useCallback(async (targetIdnp: string | null, highlights: NewGradeHighlightsMap) => {
+    if (!targetIdnp) return;
+    try {
+      await AsyncStorage.setItem(getHighlightsStorageKey(targetIdnp), JSON.stringify(highlights));
+    } catch {
+      // Silent storage failure; highlighting still works in-memory.
+    }
+  }, []);
+
+  const acknowledgeHighlight = useCallback((semesterNumber: number, subjectName: string) => {
+    const highlightKey = `${semesterNumber}::${subjectName}`;
+    setNewHighlights(prev => {
+      if (!prev[highlightKey]) return prev;
+      const next = { ...prev };
+      delete next[highlightKey];
+      void persistHighlights(idnp, next);
+      return next;
+    });
+  }, [idnp, persistHighlights]);
+
   // Helper function to format semester label - added to fix reference error
   const formatSemesterLabel = (semesterNumber: number) => {
     const year = Math.ceil(semesterNumber / 2);
@@ -1821,6 +1913,9 @@ export default function Grades() {
         
         if (savedIdnp) {
           setIdnp(savedIdnp);
+
+          const storedHighlightsRaw = await AsyncStorage.getItem(getHighlightsStorageKey(savedIdnp));
+          setNewHighlights(parseStoredHighlights(storedHighlightsRaw));
           
           // Try to load cached grades data (prefer the newer unified service cache if fresher)
           if (!responseHtml) { // Only hydrate if we don't already have data in state
@@ -1885,6 +1980,8 @@ export default function Grades() {
               }
             }
           }
+        } else {
+          setNewHighlights({});
         }
       } catch (error) {
         // Silently handle error
@@ -1973,7 +2070,11 @@ export default function Grades() {
         : {};
 
       setDisplayGrades(displayData);
-      setNewHighlights(initialHighlights);
+      setNewHighlights(prev => {
+        const merged = mergeNewGradeHighlights(prev, initialHighlights);
+        void persistHighlights(idnp, merged);
+        return merged;
+      });
       prevParsedRef.current = displayData;
       prevResponseRef.current = responseHtml;
       initialHydratedRef.current = true;
@@ -1982,13 +2083,18 @@ export default function Grades() {
     }
 
     setDisplayGrades(displayData);
-    setNewHighlights(computeNewGradeHighlights(prevParsed, displayData));
+    setNewHighlights(prev => {
+      const freshHighlights = computeNewGradeHighlights(prevParsed, displayData);
+      const merged = mergeNewGradeHighlights(prev, freshHighlights);
+      void persistHighlights(idnp, merged);
+      return merged;
+    });
 
     prevParsedRef.current = displayData;
     prevResponseRef.current = responseHtml;
     initialHydratedRef.current = true;
     lastHandledRefreshRef.current = refreshNonce;
-  }, [responseHtml, refreshNonce, devInjected]);
+  }, [responseHtml, refreshNonce, devInjected, idnp, persistHighlights]);
 
   const fetchStudentData = useCallback(async (studentIdnp: string) => {
     // Prevent duplicate requests using ref
@@ -2108,9 +2214,14 @@ export default function Grades() {
     const nextDisplay = active ? injectRandomGrades(base) : base;
     const prev = prevParsedRef.current;
     setDisplayGrades(nextDisplay);
-    setNewHighlights(prev ? computeNewGradeHighlights(prev, nextDisplay) : {});
+    setNewHighlights(previousHighlights => {
+      const freshHighlights = prev ? computeNewGradeHighlights(prev, nextDisplay) : {};
+      const merged = mergeNewGradeHighlights(previousHighlights, freshHighlights);
+      void persistHighlights(idnp, merged);
+      return merged;
+    });
     prevParsedRef.current = nextDisplay;
-  }, [responseHtml]);
+  }, [responseHtml, idnp, persistHighlights]);
 
   useEffect(() => {
     (async () => {
@@ -2184,6 +2295,7 @@ export default function Grades() {
         studentGrades={effectiveGrades}
         lastUpdated={lastUpdated}
         newHighlights={newHighlights}
+        onAcknowledgeHighlight={acknowledgeHighlight}
         onRefresh={async () => {
           if (idnp) {
             // Check sync setting before refreshing - Temporarily disabled
