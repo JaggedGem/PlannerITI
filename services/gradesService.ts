@@ -421,6 +421,14 @@ const parseCurrentGrades = (html: string): SemesterGrades[] => {
  * @param semester The semester object to populate
  */
 const parseSubjectsFromTable = (tableContent: string, semester: SemesterGrades): void => {
+  const isValidGradeToken = (token: string): boolean => {
+    return /^\d+([.,]\d+)?$/.test(token) || /^(a|m)$/i.test(token);
+  };
+
+  const normalizeGradeToken = (token: string): string => {
+    return /^(a|m)$/i.test(token) ? token.toLowerCase() : token;
+  };
+
   // Extract rows from the table, skipping the header row
   let rowPattern = /<tr>\s*<td>\s*<p>(.*?)<\/p>\s*<\/td>\s*<td>\s*<p>(.*?)<\/p>\s*<\/td>\s*<\/tr>/gs;
   let rowMatch;
@@ -457,7 +465,8 @@ const parseSubjectsFromTable = (tableContent: string, semester: SemesterGrades):
       ? gradesText
           .split(/[,\s]+/)
           .map(g => g.trim())
-          .filter(g => g.length > 0 && /^\d+([.,]\d+)?$/.test(g))
+          .filter(g => g.length > 0 && isValidGradeToken(g))
+          .map(normalizeGradeToken)
       : [];
     
     // Calculate average grade (base)
@@ -507,7 +516,8 @@ const parseSubjectsFromTable = (tableContent: string, semester: SemesterGrades):
         ? gradesText
             .split(/[\,\s]+/)
             .map(g => g.trim())
-            .filter(g => g.length > 0 && /^\d+([.,]\d+)?$/.test(g))
+            .filter(g => g.length > 0 && isValidGradeToken(g))
+            .map(normalizeGradeToken)
         : [];
       
       // Calculate average grade (base)
