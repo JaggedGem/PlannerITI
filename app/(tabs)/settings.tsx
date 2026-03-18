@@ -27,7 +27,7 @@ import { StorageViewer } from '../../components/StorageViewer';
 import * as Notifications from 'expo-notifications';
 import { initializeNotifications } from '../../utils/notificationUtils';
 import { formatCompactDate } from '@/utils/dateLocalization';
-import { updateService } from '@/services/updateService';
+import { updateService, UPDATE_AVAILABLE_EVENT } from '@/services/updateService';
 
 // Store keys
 const IDNP_KEY = '@planner_idnp';
@@ -528,7 +528,6 @@ export default function Settings() {
   const [lastScheduleRefresh, setLastScheduleRefresh] = useState<Date | null>(null);
   // Update check state
   const [isCheckingForUpdate, setIsCheckingForUpdate] = useState(false);
-  const [updateAvailable, setUpdateAvailable] = useState(false);
   const [showUpToDateModal, setShowUpToDateModal] = useState(false);
   const [currentAppVersion, setCurrentAppVersion] = useState('');
   const [devGradeActive, setDevGradeActive] = useState<boolean>(false);
@@ -589,13 +588,8 @@ export default function Settings() {
     try {
       const update = await updateService.manualCheckForUpdate();
       if (update && update.isAvailable) {
-        setUpdateAvailable(true);
+        DeviceEventEmitter.emit(UPDATE_AVAILABLE_EVENT, update);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        Alert.alert(
-          '🚀 Update Available!',
-          `Version ${update.latestVersion} is available.\n\nThe update notification will appear shortly.`,
-          [{ text: 'OK', style: 'default' }]
-        );
       } else {
         setCurrentAppVersion(updateService.getCurrentVersion());
         setShowUpToDateModal(true);
@@ -1324,7 +1318,7 @@ export default function Settings() {
                     const update = await updateService.checkForUpdate(true);
                     if (!update) {
                       // If no real update, force show with test data
-                      DeviceEventEmitter.emit('TEST_UPDATE_AVAILABLE', testUpdate);
+                      DeviceEventEmitter.emit(UPDATE_AVAILABLE_EVENT, testUpdate);
                     }
                   }, 500);
                 } else {
