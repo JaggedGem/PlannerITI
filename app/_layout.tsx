@@ -101,6 +101,24 @@ export default function RootLayout() {
     }
   }, [loaded]);
 
+  // Initialize schedule on app startup in Expo Router entrypoint
+  useEffect(() => {
+    if (!loaded) return;
+
+    const bootstrapSchedule = async () => {
+      try {
+        await scheduleService.ready();
+        await scheduleService.refreshGroups(true);
+        await scheduleService.ensureSelectedGroup();
+        await scheduleService.refreshSchedule(true);
+      } catch (error) {
+        // Silent fallback to cached data paths
+      }
+    };
+
+    bootstrapSchedule();
+  }, [loaded]);
+
   // Expo Router uses Error Boundaries to catch errors in the navigation tree.
   useEffect(() => {
     if (error) throw error;
