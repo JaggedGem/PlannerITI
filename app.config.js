@@ -65,7 +65,7 @@ module.exports = () => {
         apiKey: process.env.API_KEY
       },
       owner: "planneriti",
-      runtimeVersion: "1.2.0",
+      runtimeVersion: process.env.RUNTIME_VERSION || "1.2.0",
       updates: {
         url: "https://u.expo.dev/fe01b043-f283-48db-a683-3c5f23546a96"
       }
