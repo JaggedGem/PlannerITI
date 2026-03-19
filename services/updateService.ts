@@ -51,6 +51,39 @@ class UpdateService {
   private isExpoGo: boolean;
 
   /**
+   * Infer release track from semantic prerelease tags (e.g. 1.2.0-beta.1).
+   */
+  private inferTrackFromVersion(version: string | null | undefined): 'beta' | null {
+    if (!version) {
+      return null;
+    }
+
+    const normalized = version.trim().toLowerCase();
+    if (/[-.](beta|alpha|rc|preview|pre)\b/.test(normalized)) {
+      return 'beta';
+    }
+
+    return null;
+  }
+
+  /**
+   * Resolve the intended release track while running in development channel.
+   */
+  private getDevelopmentTrack(): 'beta' | 'production' | 'development' {
+    const versionTrack = this.inferTrackFromVersion(this.currentVersion);
+    if (versionTrack) {
+      return versionTrack;
+    }
+
+    const variantTrack = this.normalizeChannel(this.configuredVariant);
+    if (variantTrack) {
+      return variantTrack;
+    }
+
+    return 'development';
+  }
+
+  /**
    * Convert arbitrary channel/variant values to known app channels.
    */
   private normalizeChannel(
@@ -120,9 +153,9 @@ class UpdateService {
    */
   private getReleaseChannelForFetch(): 'beta' | 'production' | 'development' {
     if (this.currentChannel === 'development') {
-      const normalizedVariant = this.normalizeChannel(this.configuredVariant);
-      if (normalizedVariant === 'beta') return 'beta';
-      if (normalizedVariant === 'production') return 'production';
+      const developmentTrack = this.getDevelopmentTrack();
+      if (developmentTrack === 'beta') return 'beta';
+      if (developmentTrack === 'production') return 'production';
     }
 
     return this.currentChannel;
@@ -392,8 +425,11 @@ class UpdateService {
    * Get channel display text (shows configured variant when in Expo Go)
    */
   getChannelDisplay(): string {
-    if (this.isExpoGo && this.configuredVariant !== 'development') {
-      return `development (${this.configuredVariant})`;
+    if (this.isExpoGo) {
+      const developmentTrack = this.getDevelopmentTrack();
+      if (developmentTrack !== 'development') {
+        return `development (${developmentTrack})`;
+      }
     }
     return this.currentChannel;
   }
