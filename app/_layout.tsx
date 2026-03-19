@@ -14,6 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { initializeNotifications } from '@/utils/notificationUtils';
 import { getAssignments } from '@/utils/assignmentStorage';
 import { scheduleAllNotifications } from '@/utils/notificationUtils';
+import { gradesDataService } from '@/services/gradesService';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -111,6 +112,14 @@ export default function RootLayout() {
         await scheduleService.refreshGroups(true);
         await scheduleService.ensureSelectedGroup();
         await scheduleService.refreshSchedule(true);
+
+        // Trigger background grades refresh on app load when IDNP is available.
+        const idnp = await AsyncStorage.getItem('@planner_idnp');
+        if (idnp) {
+          gradesDataService.silentRefresh(idnp).catch(() => {
+            // Silent fallback to cached grades data
+          });
+        }
       } catch (error) {
         // Silent fallback to cached data paths
       }
