@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Application from 'expo-application';
 import Constants from 'expo-constants';
+import * as Updates from 'expo-updates';
 import { Platform } from 'react-native';
 
 const GITHUB_API_BASE = 'https://api.github.com';
@@ -49,12 +50,56 @@ class UpdateService {
   private configuredVariant: string;
   private isExpoGo: boolean;
 
+  /**
+   * Convert arbitrary channel/variant values to known app channels.
+   */
+  private normalizeChannel(
+    value: string | null | undefined
+  ): 'beta' | 'production' | 'development' | null {
+    if (!value) {
+      return null;
+    }
+
+    const normalized = value.trim().toLowerCase();
+
+    if (
+      normalized === 'beta' ||
+      normalized.includes('beta') ||
+      normalized.includes('preview')
+    ) {
+      return 'beta';
+    }
+
+    if (
+      normalized === 'production' ||
+      normalized === 'prod' ||
+      normalized.includes('production') ||
+      normalized.includes('release')
+    ) {
+      return 'production';
+    }
+
+    if (
+      normalized === 'development' ||
+      normalized === 'dev' ||
+      normalized.includes('development')
+    ) {
+      return 'development';
+    }
+
+    return null;
+  }
+
   constructor() {
     // Check if we're running in Expo Go (not a standalone build)
     this.isExpoGo = Constants.executionEnvironment === 'storeClient';
     
     // Get variant from app.config.js (expo.extra.environment)
     this.configuredVariant = Constants.expoConfig?.extra?.environment || 'production';
+
+    // Resolve release channel from multiple runtime sources.
+    const channelFromUpdates = this.normalizeChannel(Updates.channel);
+    const channelFromConfig = this.normalizeChannel(this.configuredVariant);
     
     // If running in Expo Go, always use development channel
     if (this.isExpoGo) {
@@ -63,14 +108,8 @@ class UpdateService {
       return;
     }
 
-    // For standalone builds, get the variant from Expo Constants (set in app.config.js)
-    if (this.configuredVariant === 'production') {
-      this.currentChannel = 'production';
-    } else if (this.configuredVariant === 'beta') {
-      this.currentChannel = 'beta';
-    } else {
-      this.currentChannel = 'development';
-    }
+    // For standalone builds, trust expo-updates channel first, then app variant.
+    this.currentChannel = channelFromUpdates || channelFromConfig || 'development';
 
     // Get current app version from native build
     this.currentVersion = Application.nativeApplicationVersion || '1.0.0';
@@ -81,8 +120,9 @@ class UpdateService {
    */
   private getReleaseChannelForFetch(): 'beta' | 'production' | 'development' {
     if (this.currentChannel === 'development') {
-      if (this.configuredVariant === 'beta') return 'beta';
-      if (this.configuredVariant === 'production') return 'production';
+      const normalizedVariant = this.normalizeChannel(this.configuredVariant);
+      if (normalizedVariant === 'beta') return 'beta';
+      if (normalizedVariant === 'production') return 'production';
     }
 
     return this.currentChannel;
