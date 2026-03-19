@@ -8,6 +8,7 @@ import authService from '../services/authService';
 import UpdateNotification from '@/components/UpdateNotification';
 import LoginNotification from '@/components/LoginNotification';
 import { scheduleService } from '@/services/scheduleService';
+import { updateService } from '@/services/updateService';
 import { AuthProvider } from '@/components/auth/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { initializeNotifications } from '@/utils/notificationUtils';
@@ -36,6 +37,7 @@ export default function RootLayout() {
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
     ...FontAwesome.font,
   });
+  const [startupReady, setStartupReady] = useState(false);
 
   // Pre-load auth state values for faster app startup
   useEffect(() => {
@@ -105,12 +107,48 @@ export default function RootLayout() {
   }, [error]);
 
   useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
+    if (!loaded) {
+      return;
     }
+
+    let isMounted = true;
+
+    const runStartupOtaFlow = async () => {
+      try {
+        const didTriggerReload = await updateService.applyPreparedOtaUpdateOnLaunch();
+
+        // If reload was triggered, this JS runtime will be replaced immediately.
+        if (didTriggerReload) {
+          return;
+        }
+
+        // Prepare the next OTA update without blocking app startup.
+        updateService.prepareOtaUpdateForNextLaunch().catch((otaError) => {
+          console.error('Error staging OTA update for next launch:', otaError);
+        });
+      } catch (otaError) {
+        console.error('Error during OTA startup flow:', otaError);
+      } finally {
+        if (isMounted) {
+          setStartupReady(true);
+        }
+      }
+    };
+
+    runStartupOtaFlow();
+
+    return () => {
+      isMounted = false;
+    };
   }, [loaded]);
 
-  if (!loaded) {
+  useEffect(() => {
+    if (loaded && startupReady) {
+      SplashScreen.hideAsync();
+    }
+  }, [loaded, startupReady]);
+
+  if (!loaded || !startupReady) {
     return null;
   }
 
