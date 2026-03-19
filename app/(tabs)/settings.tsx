@@ -2015,6 +2015,21 @@ export default function Settings() {
                 </View>
               </View>
 
+              <View style={styles.updateDetailRow}>
+                <MaterialIcons
+                  name="fingerprint"
+                  size={20}
+                  color="#8A8A8D"
+                  style={styles.scheduleDetailIcon}
+                />
+                <View style={styles.scheduleDetailTextGroup}>
+                  <Text style={styles.scheduleDetailLabel}>Current OTA Version</Text>
+                  <Text style={styles.scheduleDetailValue}>
+                    {updateService.getCurrentOtaVersionShort()}
+                  </Text>
+                </View>
+              </View>
+
               <View style={[styles.updateDetailRow, styles.scheduleDetailRowLast]}>
                 <MaterialIcons
                   name="label-outline"

@@ -421,6 +421,24 @@ class UpdateService {
   }
 
   /**
+   * Returns short OTA identifier (first 8 chars), preferring updateGroup from manifest metadata.
+   */
+  getCurrentOtaVersionShort(): string {
+    const manifestLike = Updates.manifest as any;
+    const updateGroupId = manifestLike?.metadata?.updateGroup;
+    if (typeof updateGroupId === 'string' && updateGroupId.length >= 8) {
+      return updateGroupId.slice(0, 8);
+    }
+
+    const updateId = Updates.updateId;
+    if (typeof updateId === 'string' && updateId.length >= 8) {
+      return updateId.slice(0, 8);
+    }
+
+    return 'N/A';
+  }
+
+  /**
    * Expo OTA is only available in native builds (not Expo Go).
    */
   private canUseOtaUpdates(): boolean {
