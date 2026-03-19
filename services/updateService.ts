@@ -442,7 +442,7 @@ class UpdateService {
    * Expo OTA is only available in native builds (not Expo Go).
    */
   private canUseOtaUpdates(): boolean {
-    return !this.isExpoGo;
+    return !this.isExpoGo && !__DEV__ && Updates.isEnabled;
   }
 
   /**
