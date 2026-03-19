@@ -8,11 +8,13 @@ import authService from '../services/authService';
 import UpdateNotification from '@/components/UpdateNotification';
 import LoginNotification from '@/components/LoginNotification';
 import { scheduleService } from '@/services/scheduleService';
+import { updateService } from '@/services/updateService';
 import { AuthProvider } from '@/components/auth/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { initializeNotifications } from '@/utils/notificationUtils';
 import { getAssignments } from '@/utils/assignmentStorage';
 import { scheduleAllNotifications } from '@/utils/notificationUtils';
+import { gradesDataService } from '@/services/gradesService';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -36,6 +38,7 @@ export default function RootLayout() {
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
     ...FontAwesome.font,
   });
+  const [startupReady, setStartupReady] = useState(false);
 
   // Pre-load auth state values for faster app startup
   useEffect(() => {
@@ -99,18 +102,80 @@ export default function RootLayout() {
     }
   }, [loaded]);
 
+  // Initialize schedule on app startup in Expo Router entrypoint
+  useEffect(() => {
+    if (!loaded) return;
+
+    const bootstrapSchedule = async () => {
+      try {
+        await scheduleService.ready();
+        await scheduleService.refreshGroups(true);
+        await scheduleService.ensureSelectedGroup();
+        await scheduleService.refreshSchedule(true);
+
+        // Trigger background grades refresh on app load when IDNP is available.
+        const idnp = await AsyncStorage.getItem('@planner_idnp');
+        if (idnp) {
+          gradesDataService.silentRefresh(idnp).catch(() => {
+            // Silent fallback to cached grades data
+          });
+        }
+      } catch (error) {
+        // Silent fallback to cached data paths
+      }
+    };
+
+    bootstrapSchedule();
+  }, [loaded]);
+
   // Expo Router uses Error Boundaries to catch errors in the navigation tree.
   useEffect(() => {
     if (error) throw error;
   }, [error]);
 
   useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
+    if (!loaded) {
+      return;
     }
+
+    let isMounted = true;
+
+    const runStartupOtaFlow = async () => {
+      try {
+        const didTriggerReload = await updateService.applyPreparedOtaUpdateOnLaunch();
+
+        // If reload was triggered, this JS runtime will be replaced immediately.
+        if (didTriggerReload) {
+          return;
+        }
+
+        // Prepare the next OTA update without blocking app startup.
+        updateService.prepareOtaUpdateForNextLaunch().catch((otaError) => {
+          console.error('Error staging OTA update for next launch:', otaError);
+        });
+      } catch (otaError) {
+        console.error('Error during OTA startup flow:', otaError);
+      } finally {
+        if (isMounted) {
+          setStartupReady(true);
+        }
+      }
+    };
+
+    runStartupOtaFlow();
+
+    return () => {
+      isMounted = false;
+    };
   }, [loaded]);
 
-  if (!loaded) {
+  useEffect(() => {
+    if (loaded && startupReady) {
+      SplashScreen.hideAsync();
+    }
+  }, [loaded, startupReady]);
+
+  if (!loaded || !startupReady) {
     return null;
   }
 

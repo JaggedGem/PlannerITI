@@ -467,7 +467,29 @@ export const scheduleService = {
   },
 
   async getClassSchedule(groupId: string = '', forceRefresh: boolean = false): Promise<ApiResponse> {
-    const id = groupId || this.settings.selectedGroupId;
+    await this.ready();
+    let id = groupId || this.settings.selectedGroupId;
+    
+    // Ensure a selected group exists before trying to read/fetch schedule
+    if (!id) {
+      await this.ensureSelectedGroup();
+      id = this.settings.selectedGroupId;
+    }
+    
+    if (!id) {
+      return this.transformScheduleData({
+        data: {
+          monday: {},
+          tuesday: {},
+          wednesday: {},
+          thursday: {},
+          friday: {}
+        },
+        periods: [],
+        recoveryDays: [],
+        assignmentCounts: []
+      });
+    }
     
     try {
       // Load recovery days into memory first if not already loaded
@@ -1218,6 +1240,8 @@ export const scheduleService = {
   // Force refresh schedule regardless of cache age; fallback to cached when offline or failure
   async refreshSchedule(force: boolean = true): Promise<ApiResponse | null> {
     try {
+      await this.ready();
+
       // Ensure we have a selected group; attempt to find default if missing
       if (!this.settings.selectedGroupId) {
         await this.findAndSetDefaultGroup();
@@ -1299,6 +1323,7 @@ export const scheduleService = {
 
   async getLastScheduleFetchTime(groupId?: string): Promise<Date | null> {
     try {
+      await this.ready();
       const gid = groupId || this.settings.selectedGroupId;
       if (!gid) return null;
       const lastFetch = await AsyncStorage.getItem(CACHE_KEYS.LAST_FETCH_PREFIX + gid);

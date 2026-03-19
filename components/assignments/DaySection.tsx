@@ -206,33 +206,33 @@ export default function DaySection({
       </AnimatedPressable>
       
       {!isCollapsed && (
-        <Animated.View 
-          style={styles.content}
-          entering={FadeIn.duration(150)}
-          exiting={FadeOut.duration(100)}
-          layout={Layout.springify().mass(0.5)}
-        >
-          {Object.entries(groupedByCourse).map(([courseKey, courseAssignments], index) => (
-            <Animated.View
-              key={courseKey}
-              entering={FadeIn.duration(150).delay(index * 50)}
-              layout={Layout.springify().mass(0.5)}
-              style={[
-                styles.courseSection,
-                index === Object.entries(groupedByCourse).length - 1 && styles.lastCourseSection
-              ]}
-            >
-              <CourseSection
-                courseCode={courseAssignments[0].courseCode || courseKey}
-                courseName={courseAssignments[0].courseName || t('assignments').common.uncategorized}
-                assignments={courseAssignments}
-                onToggleAssignment={onToggleAssignment}
-                onDeleteAssignment={onDeleteAssignment}
-                showDueDate={false}
-                assignmentToHighlight={memoizedHighlight}
-              />
-            </Animated.View>
-          ))}
+        <Animated.View layout={Layout.springify().mass(0.5)}>
+          <Animated.View 
+            style={styles.content}
+            entering={FadeIn.duration(150)}
+            exiting={FadeOut.duration(100)}
+          >
+            {Object.entries(groupedByCourse).map(([courseKey, courseAssignments], index) => (
+              <Animated.View
+                key={courseKey}
+                entering={FadeIn.duration(150).delay(index * 50)}
+                style={[
+                  styles.courseSection,
+                  index === Object.entries(groupedByCourse).length - 1 && styles.lastCourseSection
+                ]}
+              >
+                <CourseSection
+                  courseCode={courseAssignments[0].courseCode || courseKey}
+                  courseName={courseAssignments[0].courseName || t('assignments').common.uncategorized}
+                  assignments={courseAssignments}
+                  onToggleAssignment={onToggleAssignment}
+                  onDeleteAssignment={onDeleteAssignment}
+                  showDueDate={false}
+                  assignmentToHighlight={memoizedHighlight}
+                />
+              </Animated.View>
+            ))}
+          </Animated.View>
         </Animated.View>
       )}
     </Animated.View>

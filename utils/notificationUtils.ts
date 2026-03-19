@@ -1,5 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 // Types imported inline to avoid circular dependency
 export enum AssignmentType {
@@ -200,11 +201,28 @@ export async function registerForPushNotificationsAsync() {
     if (finalStatus !== 'granted') {
       return;
     }
+
+    // In Expo Go / dev client sessions, remote push registration may be unsupported
+    // (e.g. missing native Firebase initialization). Keep local notifications working.
+    const isExpoGo = Constants.executionEnvironment === 'storeClient';
+    if (isExpoGo || __DEV__) {
+      return;
+    }
     
-    // Get push token
-    token = (await Notifications.getExpoPushTokenAsync({
-      projectId: process.env.EXPO_PROJECT_ID,
-    })).data;
+    // Get push token (best effort; do not fail app initialization)
+    try {
+      const projectId =
+        process.env.EXPO_PROJECT_ID ||
+        Constants.expoConfig?.extra?.eas?.projectId ||
+        undefined;
+
+      token = (await Notifications.getExpoPushTokenAsync({
+        projectId,
+      })).data;
+    } catch (tokenError) {
+      console.warn('Push token registration unavailable in current runtime:', tokenError);
+      return;
+    }
   }
 
   return token;

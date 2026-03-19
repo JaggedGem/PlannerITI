@@ -355,10 +355,12 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
     return (
       <Animated.View 
         key={`category-${category.id}`}
-        style={styles.categoryContainer}
-        entering={FadeIn.delay(categoryIndex * 50).duration(200)}
         layout={Layout.springify()}
       >
+        <Animated.View
+          style={styles.categoryContainer}
+          entering={FadeIn.delay(categoryIndex * 50).duration(200)}
+        >
         {/* Category Header */}
         <View style={styles.categoryHeader}>
           <Text style={styles.categoryTitle}>{category.title}</Text>
@@ -381,6 +383,7 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
             </Text>
           </View>
         )}
+        </Animated.View>
       </Animated.View>
     );
   };

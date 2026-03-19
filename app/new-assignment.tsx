@@ -161,7 +161,6 @@ const QuickOption = React.memo(({
   return (
     <Animated.View
       entering={FadeIn.delay(index * 40).duration(150).withCallback((_finished) => {})}
-      layout={Layout.duration(300).springify().mass(0.8)}
     >
       <TouchableOpacity
         style={[

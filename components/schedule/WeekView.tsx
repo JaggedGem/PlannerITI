@@ -160,7 +160,6 @@ const TimetableItem = ({
         .springify()
         .delay(50)}
       exiting={FadeOut.duration(150)}
-      layout={Layout.springify()}
     >
       <LinearGradient
         colors={isActive 
@@ -990,7 +989,6 @@ export default function WeekView() {
             <Animated.View
               entering={FadeIn.duration(150)}
               exiting={FadeOut.duration(150)}
-              layout={Layout.springify()}
             >
               <Text style={styles.navButtonText}>
                 {weekDisplayText()}
@@ -1007,7 +1005,6 @@ export default function WeekView() {
         <Animated.View 
           style={styles.daysHeader}
           entering={FadeIn.duration(200)}
-          layout={Layout.springify()}
         >
           {/* Empty space for time column alignment */}
           <View style={{ width: timeColumnWidth }} />
@@ -1029,7 +1026,6 @@ export default function WeekView() {
                   day.isWeekend && styles.weekendColumn
                 ]}
                 entering={FadeIn.duration(200).delay(index * 50)}
-                layout={Layout.springify()}
               >
                 {totalAssignments > 0 && (
                   <View style={styles.dayAssignmentBadge}>
@@ -1055,7 +1051,6 @@ export default function WeekView() {
           <Animated.View 
             style={[styles.timetableContainer, containerStyle]}
             entering={FadeIn.duration(200)}
-            layout={Layout.springify()}
           >
             {/* Time slots column */}
             <View style={[styles.timeColumn, { width: timeColumnWidth }]}>
@@ -1130,7 +1125,6 @@ export default function WeekView() {
                       (isRecoveryDay || isWeekend) && { backgroundColor: 'rgba(255, 87, 51, 0.05)' }
                     ]}
                     entering={FadeIn.duration(150).delay(dayIndex * 30)}
-                    layout={Layout.springify()}
                   >
 
                     {/* Show recovery day info button when this is a recovery day */}

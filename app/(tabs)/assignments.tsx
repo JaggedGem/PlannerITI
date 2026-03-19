@@ -220,7 +220,6 @@ const CoursesView = memo(({
         <Animated.View
           key={`course-${courseCode}`}
           entering={FadeInDown.duration(200).delay(index * 30)}
-          layout={Layout.springify().mass(0.3)}
           style={styles.courseContainer}
         >
           <CourseSection
@@ -314,7 +313,6 @@ const DateGroupedView = memo(({
         <Animated.View 
           key={`${group.date}-${index}`}
           entering={shouldDelayAnimations ? undefined : FadeInDown.duration(150).delay(index * 20)}
-          layout={shouldDelayAnimations ? undefined : Layout.springify().mass(0.3)}
         >
           <DaySection
             title={group.title}
@@ -402,7 +400,6 @@ const ArchivedAssignmentsView = memo(({
         <Animated.View
           key={assignment.id}
           entering={FadeInDown.duration(150).delay(index % 10 * 30)}
-          layout={Layout.springify().mass(0.3)}
           style={styles.archivedItemContainer}
           exiting={FadeOut.duration(150)}
         >
@@ -1006,7 +1003,6 @@ const Assignments = () => {
               ) : (
                 <Animated.View 
                   entering={FadeInDown.duration(150).delay(index * 20)}
-                  layout={Layout.springify().mass(0.3)}
                 >
                   <DaySection
                     title={group.title}
@@ -1067,7 +1063,6 @@ const Assignments = () => {
             ) : (
               <Animated.View
                 entering={FadeInDown.duration(150).delay(index * 20)}
-                layout={Layout.springify().mass(0.3)}
               >
                 <CourseSection
                   courseCode={courseCode}

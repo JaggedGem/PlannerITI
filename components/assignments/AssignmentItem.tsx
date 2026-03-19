@@ -759,110 +759,110 @@ export default function AssignmentItem({
       
       {/* Subtasks dropdown section */}
       {expanded && hasSubtasks && (
-        <Animated.View 
-          style={styles.subtasksContainer}
-          entering={FadeIn.duration(200)}
-          exiting={FadeOut.duration(150)}
-          layout={Layout.springify().mass(0.3)}
-        >
-          {isLoadingSubtasks ? (
-            <Text style={styles.loadingText}>{t('assignments').subtasks.loading}</Text>
-          ) : (
-            subtasks.map((subtask) => (
+        <Animated.View layout={Layout.springify().mass(0.3)}>
+          <Animated.View 
+            style={styles.subtasksContainer}
+            entering={FadeIn.duration(200)}
+            exiting={FadeOut.duration(150)}
+          >
+            {isLoadingSubtasks ? (
+              <Text style={styles.loadingText}>{t('assignments').subtasks.loading}</Text>
+            ) : (
+              subtasks.map((subtask) => (
+                <Animated.View 
+                  key={subtask.id}
+                  style={styles.subtaskItem}
+                  entering={FadeIn.duration(200)}
+                >
+                  <Pressable
+                    style={styles.subtaskLeftSection}
+                    onPress={() => handleToggleSubtask(subtask.id)}
+                  >
+                    <View
+                      style={[
+                        styles.subtaskCheckbox,
+                        subtask.isCompleted && styles.subtaskCheckboxChecked
+                      ]}
+                    >
+                      {subtask.isCompleted && (
+                        <Ionicons name="checkmark" size={12} color="#FFFFFF" />
+                      )}
+                    </View>
+                    <Text 
+                      style={[
+                        styles.subtaskTitle,
+                        subtask.isCompleted && styles.subtaskTitleCompleted
+                      ]}
+                    >
+                      {subtask.title}
+                    </Text>
+                  </Pressable>
+                  
+                  <TouchableOpacity
+                    style={styles.subtaskDeleteButton}
+                    onPress={() => handleDeleteSubtask(subtask.id)}
+                    hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
+                  >
+                    <Ionicons name="close-circle" size={16} color="#8A8A8D" />
+                  </TouchableOpacity>
+                </Animated.View>
+              ))
+            )}
+            
+            {/* Add new subtask button */}
+            {showAddSubtask ? (
               <Animated.View 
-                key={subtask.id}
-                style={styles.subtaskItem}
+                style={styles.addSubtaskInputContainer}
                 entering={FadeIn.duration(200)}
                 layout={Layout.springify()}
               >
-                <Pressable
-                  style={styles.subtaskLeftSection}
-                  onPress={() => handleToggleSubtask(subtask.id)}
-                >
-                  <View
-                    style={[
-                      styles.subtaskCheckbox,
-                      subtask.isCompleted && styles.subtaskCheckboxChecked
-                    ]}
-                  >
-                    {subtask.isCompleted && (
-                      <Ionicons name="checkmark" size={12} color="#FFFFFF" />
-                    )}
-                  </View>
-                  <Text 
-                    style={[
-                      styles.subtaskTitle,
-                      subtask.isCompleted && styles.subtaskTitleCompleted
-                    ]}
-                  >
-                    {subtask.title}
-                  </Text>
-                </Pressable>
-                
                 <TouchableOpacity
-                  style={styles.subtaskDeleteButton}
-                  onPress={() => handleDeleteSubtask(subtask.id)}
-                  hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
+                  style={styles.subtaskCheckbox}
+                  onPress={() => setShowAddSubtask(false)}
                 >
-                  <Ionicons name="close-circle" size={16} color="#8A8A8D" />
+                  <Ionicons name="add" size={16} color="#3478F6" />
+                </TouchableOpacity>
+                <TextInput
+                  style={styles.subtaskInput}
+                  placeholder={t('assignments').subtasks.placeholder}
+                  placeholderTextColor="#8A8A8D"
+                  value={newSubtaskTitle}
+                  onChangeText={setNewSubtaskTitle}
+                  onSubmitEditing={handleAddSubtask}
+                  autoFocus
+                  onBlur={() => {
+                    setTimeout(() => {
+                      if (newSubtaskTitle.trim() === '') {
+                        setShowAddSubtask(false);
+                      }
+                    }, 200);
+                  }}
+                />
+                <TouchableOpacity
+                  style={[
+                    styles.subtaskAddButton,
+                    newSubtaskTitle.trim() === '' && styles.subtaskAddButtonDisabled
+                  ]}
+                  onPress={handleAddSubtask}
+                  disabled={newSubtaskTitle.trim() === ''}
+                >
+                  <Ionicons 
+                    name="checkmark" 
+                    size={16} 
+                    color={newSubtaskTitle.trim() === '' ? "#8A8A8D" : "#FFFFFF"} 
+                  />
                 </TouchableOpacity>
               </Animated.View>
-            ))
-          )}
-          
-          {/* Add new subtask button */}
-          {showAddSubtask ? (
-            <Animated.View 
-              style={styles.addSubtaskInputContainer}
-              entering={FadeIn.duration(200)}
-              layout={Layout.springify()}
-            >
+            ) : (
               <TouchableOpacity
-                style={styles.subtaskCheckbox}
-                onPress={() => setShowAddSubtask(false)}
+                style={styles.addSubtaskButton}
+                onPress={() => setShowAddSubtask(true)}
               >
-                <Ionicons name="add" size={16} color="#3478F6" />
+                <Ionicons name="add-circle-outline" size={16} color="#3478F6" />
+                <Text style={styles.addSubtaskText}>{t('assignments').subtasks.add}</Text>
               </TouchableOpacity>
-              <TextInput
-                style={styles.subtaskInput}
-                placeholder={t('assignments').subtasks.placeholder}
-                placeholderTextColor="#8A8A8D"
-                value={newSubtaskTitle}
-                onChangeText={setNewSubtaskTitle}
-                onSubmitEditing={handleAddSubtask}
-                autoFocus
-                onBlur={() => {
-                  setTimeout(() => {
-                    if (newSubtaskTitle.trim() === '') {
-                      setShowAddSubtask(false);
-                    }
-                  }, 200);
-                }}
-              />
-              <TouchableOpacity
-                style={[
-                  styles.subtaskAddButton,
-                  newSubtaskTitle.trim() === '' && styles.subtaskAddButtonDisabled
-                ]}
-                onPress={handleAddSubtask}
-                disabled={newSubtaskTitle.trim() === ''}
-              >
-                <Ionicons 
-                  name="checkmark" 
-                  size={16} 
-                  color={newSubtaskTitle.trim() === '' ? "#8A8A8D" : "#FFFFFF"} 
-                />
-              </TouchableOpacity>
-            </Animated.View>
-          ) : (
-            <TouchableOpacity
-              style={styles.addSubtaskButton}
-              onPress={() => setShowAddSubtask(true)}
-            >
-              <Ionicons name="add-circle-outline" size={16} color="#3478F6" />
-              <Text style={styles.addSubtaskText}>{t('assignments').subtasks.add}</Text>
-            </TouchableOpacity>
-          )}
+            )}
+          </Animated.View>
         </Animated.View>
       )}
       

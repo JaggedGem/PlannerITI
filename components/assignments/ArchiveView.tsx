@@ -8,9 +8,9 @@ import {
   ActivityIndicator,
   StatusBar,
   Dimensions,
-  Platform,
-  SafeAreaView
+  Platform
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Assignment } from '../../utils/assignmentStorage';
 import Animated, { FadeInDown, Layout, FadeOut } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
@@ -149,7 +149,6 @@ export default function ArchiveView({
                   <Animated.View
                     key={assignment.id}
                     entering={FadeInDown.duration(150)}
-                    layout={Layout.springify().mass(0.3)}
                     style={styles.assignmentCard}
                   >
                     <TouchableOpacity

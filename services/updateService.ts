@@ -9,6 +9,7 @@ const REPO_OWNER = 'JaggedGem';
 const REPO_NAME = 'PlannerITI';
 const DISMISSED_VERSION_KEY = '@dismissed_update_version';
 const LAST_CHECK_DATE_KEY = '@last_check_date';
+const OTA_PENDING_UPDATE_KEY = '@ota_pending_update';
 const REMIND_LATER_DAYS = 7;
 
 export const UPDATE_AVAILABLE_EVENT = 'UPDATE_AVAILABLE';
@@ -42,6 +43,11 @@ export interface UpdateInfo {
 interface RemindLaterData {
   version: string;
   remindUntil: string;
+}
+
+interface PendingOtaUpdateData {
+  updateId: string | null;
+  fetchedAt: string;
 }
 
 class UpdateService {
@@ -412,6 +418,133 @@ class UpdateService {
    */
   getCurrentVersion(): string {
     return this.currentVersion;
+  }
+
+  /**
+   * Returns short OTA identifier (first 8 chars), preferring updateGroup from manifest metadata.
+   */
+  getCurrentOtaVersionShort(): string {
+    const manifestLike = Updates.manifest as any;
+    const updateGroupId = manifestLike?.metadata?.updateGroup;
+    if (typeof updateGroupId === 'string' && updateGroupId.length >= 8) {
+      return updateGroupId.slice(0, 8);
+    }
+
+    const updateId = Updates.updateId;
+    if (typeof updateId === 'string' && updateId.length >= 8) {
+      return updateId.slice(0, 8);
+    }
+
+    return 'N/A';
+  }
+
+  /**
+   * Expo OTA is only available in native builds (not Expo Go).
+   */
+  private canUseOtaUpdates(): boolean {
+    return !this.isExpoGo && !__DEV__ && Updates.isEnabled;
+  }
+
+  /**
+   * Persist OTA metadata so we can apply it on next cold launch.
+   */
+  private async markOtaPending(updateId: string | null): Promise<void> {
+    try {
+      const payload: PendingOtaUpdateData = {
+        updateId,
+        fetchedAt: new Date().toISOString(),
+      };
+
+      await AsyncStorage.setItem(OTA_PENDING_UPDATE_KEY, JSON.stringify(payload));
+    } catch (error) {
+      console.error('Error saving pending OTA update:', error);
+    }
+  }
+
+  /**
+   * Read pending OTA metadata from storage.
+   */
+  private async getPendingOta(): Promise<PendingOtaUpdateData | null> {
+    try {
+      const raw = await AsyncStorage.getItem(OTA_PENDING_UPDATE_KEY);
+      if (!raw) {
+        return null;
+      }
+
+      const parsed = JSON.parse(raw) as PendingOtaUpdateData;
+      if (!parsed?.fetchedAt) {
+        return null;
+      }
+
+      return {
+        updateId: parsed.updateId || null,
+        fetchedAt: parsed.fetchedAt,
+      };
+    } catch (error) {
+      console.error('Error reading pending OTA update:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Clear pending OTA metadata.
+   */
+  private async clearPendingOta(): Promise<void> {
+    try {
+      await AsyncStorage.removeItem(OTA_PENDING_UPDATE_KEY);
+    } catch (error) {
+      console.error('Error clearing pending OTA update:', error);
+    }
+  }
+
+  /**
+   * Fetch OTA update in background and stage it for next launch.
+   */
+  async prepareOtaUpdateForNextLaunch(): Promise<boolean> {
+    if (!this.canUseOtaUpdates()) {
+      return false;
+    }
+
+    try {
+      const updateCheck = await Updates.checkForUpdateAsync();
+      if (!updateCheck.isAvailable) {
+        return false;
+      }
+
+      const fetchResult = await Updates.fetchUpdateAsync();
+      // Mark as pending even when the update was already cached by native code.
+      await this.markOtaPending(fetchResult.manifest?.id ?? null);
+      return true;
+    } catch (error) {
+      console.error('Error preparing OTA update:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Apply previously staged OTA update at app startup.
+   * Returns true if a reload was triggered.
+   */
+  async applyPreparedOtaUpdateOnLaunch(): Promise<boolean> {
+    if (!this.canUseOtaUpdates()) {
+      return false;
+    }
+
+    const pending = await this.getPendingOta();
+    if (!pending) {
+      return false;
+    }
+
+    try {
+      // Clear first to avoid reload loops if reload fails.
+      await this.clearPendingOta();
+      await Updates.reloadAsync();
+      return true;
+    } catch (error) {
+      console.error('Error applying staged OTA update:', error);
+      await this.markOtaPending(pending.updateId);
+      return false;
+    }
   }
 
   /**
