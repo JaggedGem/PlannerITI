@@ -194,39 +194,42 @@ const TimetableItem = ({
   );
 };
 
-const RecoveryDayInfo = ({ reason }: { reason: string }) => {
+const RecoveryDayInfo = ({
+  label,
+  title,
+  reason,
+  align = 'center',
+  details = []
+}: {
+  label: string;
+  title: string;
+  reason: string;
+  align?: 'left' | 'center' | 'right';
+  details?: string[];
+}) => {
   const [showInfo, setShowInfo] = useState(false);
+  const tooltipPositionStyle = {
+    left: align === 'left' ? 0 : align === 'right' ? 'auto' : '50%',
+    right: align === 'right' ? 0 : 'auto',
+    marginLeft: align === 'center' ? -90 : 0,
+  } as const;
   
-  // Add animated value for popup transitions
   const popupAnimation = useAnimatedStyle(() => {
     return {
-      opacity: withTiming(showInfo ? 1 : 0, { duration: 200 }),
+      opacity: withTiming(showInfo ? 1 : 0, { duration: 120 }),
       transform: [
         { 
-          scale: withSpring(showInfo ? 1 : 0.9, {
-            damping: 15,
-            stiffness: 150,
-          })
-        },
-        { 
-          translateY: withSpring(showInfo ? 0 : -10, {
-            damping: 15,
-            stiffness: 150,
-          })
+          translateY: withTiming(showInfo ? 0 : -6, { duration: 120 })
         }
       ],
     };
   }, [showInfo]);
 
-  // Add button animation
   const buttonAnimation = useAnimatedStyle(() => {
     return {
       transform: [
         {
-          scale: withSpring(showInfo ? 0.9 : 1, {
-            damping: 15,
-            stiffness: 150,
-          })
+          scale: withTiming(showInfo ? 0.98 : 1, { duration: 100 })
         }
       ]
     };
@@ -247,19 +250,19 @@ const RecoveryDayInfo = ({ reason }: { reason: string }) => {
             end={{ x: 1, y: 1 }}
             style={styles.recoveryDayInfoButtonGradient}
           >
-            <Text style={styles.recoveryDayInfoIcon}>ⓘ</Text>
+            <Text style={styles.recoveryDayInfoIcon}>{label}</Text>
           </LinearGradient>
         </TouchableOpacity>
       </Animated.View>
       
       {/* Reason tooltip that appears when info button is pressed */}
       <Animated.View 
-        style={[styles.recoveryDayTooltipContainer, popupAnimation]}
+        style={[styles.recoveryDayTooltipContainer, tooltipPositionStyle, popupAnimation]}
         pointerEvents={showInfo ? 'auto' : 'none'}
       >
         <View style={styles.recoveryDayTooltip}>
           <View style={styles.recoveryDayTooltipHeader}>
-            <Text style={styles.recoveryDayTooltipTitle}>Recovery Day</Text>
+            <Text style={styles.recoveryDayTooltipTitle}>{title}</Text>
             <TouchableOpacity 
               style={styles.closeTooltipButton}
               onPress={() => setShowInfo(false)}
@@ -271,6 +274,11 @@ const RecoveryDayInfo = ({ reason }: { reason: string }) => {
           <Text style={styles.recoveryDayTooltipReason}>
             {reason || 'No reason provided'}
           </Text>
+          {details.map((detail, idx) => (
+            <Text key={idx} style={styles.recoveryDayTooltipReason}>
+              {detail}
+            </Text>
+          ))}
         </View>
       </Animated.View>
     </>
@@ -361,6 +369,7 @@ type Styles = {
   currentHourHighlight: ViewStyle;
   recoveryDot: TextStyle;
   recoveryDayInfo: ViewStyle;
+  recoveryDayInfoHeader: ViewStyle;
   recoveryDayInfoIcon: TextStyle;
   recoveryDayInfoButton: ViewStyle;
   recoveryDayInfoButtonGradient: ViewStyle;
@@ -397,15 +406,17 @@ type ScheduleItem = {
   assignmentCount?: number;
 };
 
+const EMPTY_WEEK_SCHEDULE: Record<string, ScheduleItem[]> = {
+  monday: [],
+  tuesday: [],
+  wednesday: [],
+  thursday: [],
+  friday: [],
+};
+
 export default function WeekView() {
   const [scheduleData, setScheduleData] = useState<ApiResponse | null>(null);
-  const [weekSchedule, setWeekSchedule] = useState<Record<string, ScheduleItem[]>>({
-    monday: [],
-    tuesday: [],
-    wednesday: [],
-    thursday: [],
-    friday: [],
-  });
+  const [weekSchedule, setWeekSchedule] = useState<Record<string, ScheduleItem[]>>(EMPTY_WEEK_SCHEDULE);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [settings, setSettings] = useState(scheduleService.getSettings());
@@ -441,6 +452,7 @@ export default function WeekView() {
   
   // Initialize settings ref at the top level
   const settingsRef = useRef(scheduleService.getSettings());
+  const refreshVersionRef = useRef(scheduleService.getScheduleRefreshVersion());
 
   // Calculate current week start date (Monday)
   const weekStartDate = new Date();
@@ -458,10 +470,16 @@ export default function WeekView() {
   };
 
   // Make fetchSchedule and updateWeekSchedule use useCallback
-  const fetchSchedule = useCallback(async (groupId?: string) => {
+  const fetchSchedule = useCallback(async (groupId?: string, targetWeekOffset?: number, forceSync: boolean = false) => {
+    const resolvedWeekOffset = targetWeekOffset ?? weekOffset;
+    const targetWeekStartDate = new Date();
+    targetWeekStartDate.setDate(targetWeekStartDate.getDate() + (resolvedWeekOffset * 7));
+    const targetWeekStart = getWeekStart(targetWeekStartDate);
+
     try {
       setIsLoading(true);
       setError(null);
+      await scheduleService.syncPeriodTimesForWeek(new Date(), resolvedWeekOffset, forceSync);
       const data = await scheduleService.getClassSchedule(groupId);
       setScheduleData(data);
       
@@ -471,9 +489,9 @@ export default function WeekView() {
       // Get weekend recovery days for current week
       const weekendRecoveryDays = recoveryDays.filter(rd => {
         const rdDate = new Date(rd.date);
-        const startOfWeek = new Date(weekStart);
-        const endOfWeek = new Date(weekStart);
-        endOfWeek.setDate(weekStart.getDate() + 6);
+        const startOfWeek = new Date(targetWeekStart);
+        const endOfWeek = new Date(targetWeekStart);
+        endOfWeek.setDate(targetWeekStart.getDate() + 6);
         
         return rdDate >= startOfWeek && 
                rdDate <= endOfWeek && 
@@ -484,11 +502,11 @@ export default function WeekView() {
 
       // Build the schedule object with async/await
       const newWeekSchedule: Record<string, ScheduleItem[]> = {
-        monday: await scheduleService.getScheduleForDay(data, 'monday', getDateForDay(weekStart, 0)),
-        tuesday: await scheduleService.getScheduleForDay(data, 'tuesday', getDateForDay(weekStart, 1)),
-        wednesday: await scheduleService.getScheduleForDay(data, 'wednesday', getDateForDay(weekStart, 2)),
-        thursday: await scheduleService.getScheduleForDay(data, 'thursday', getDateForDay(weekStart, 3)),
-        friday: await scheduleService.getScheduleForDay(data, 'friday', getDateForDay(weekStart, 4))
+        monday: await scheduleService.getScheduleForDay(data, 'monday', getDateForDay(targetWeekStart, 0)),
+        tuesday: await scheduleService.getScheduleForDay(data, 'tuesday', getDateForDay(targetWeekStart, 1)),
+        wednesday: await scheduleService.getScheduleForDay(data, 'wednesday', getDateForDay(targetWeekStart, 2)),
+        thursday: await scheduleService.getScheduleForDay(data, 'thursday', getDateForDay(targetWeekStart, 3)),
+        friday: await scheduleService.getScheduleForDay(data, 'friday', getDateForDay(targetWeekStart, 4))
       };
       
       // Add recovery days if any
@@ -498,7 +516,7 @@ export default function WeekView() {
           const dayKey = `weekend_${rd.date}`;
           newWeekSchedule[dayKey] = await scheduleService.getScheduleForDay(
             data, 
-            rd.replacedDay.toLowerCase() as keyof ApiResponse['data'], 
+            undefined,
             new Date(rd.date)
           );
         }
@@ -510,7 +528,7 @@ export default function WeekView() {
       setError(t('schedule').error || 'Failed to load schedule');
       setIsLoading(false);
     }
-  }, [t, weekStart, settings.selectedGroupId]);
+  }, [t, settings.selectedGroupId, weekOffset]);
 
   // Schedule update function wrapped in useCallback
   const updateWeekSchedule = useCallback(async () => {
@@ -546,7 +564,7 @@ export default function WeekView() {
           const recoveryDate = new Date(rd.date);
           newWeekSchedule[dayKey] = await scheduleService.getScheduleForDay(
             scheduleData, 
-            rd.replacedDay.toLowerCase() as keyof ApiResponse['data'], 
+            undefined,
             recoveryDate
           );
         }
@@ -577,10 +595,20 @@ export default function WeekView() {
       // Get latest settings
       const newSettings = scheduleService.getSettings();
       const prevSettings = settingsRef.current;
+      const latestRefreshVersion = scheduleService.getScheduleRefreshVersion();
       
       // Update the ref and state
       settingsRef.current = newSettings;
       setSettings(newSettings);
+
+      // If a full schedule refresh was triggered, clear week state and reload current week.
+      if (latestRefreshVersion !== refreshVersionRef.current) {
+        refreshVersionRef.current = latestRefreshVersion;
+        setWeekOffset(0);
+        setWeekSchedule({ ...EMPTY_WEEK_SCHEDULE });
+        await currFetchSchedule(newSettings.selectedGroupId, 0, true);
+        return;
+      }
       
       // Handle group ID change (full refetch needed)
       if (newSettings.selectedGroupId !== prevSettings.selectedGroupId) {
@@ -606,6 +634,7 @@ export default function WeekView() {
       }
       
       // Refetch to pick up any changes from manual refresh
+      await scheduleService.syncPeriodTimesForWeek(new Date(), weekOffset);
       const freshData = await scheduleService.getClassSchedule(newSettings.selectedGroupId);
       if (freshData) {
         setScheduleData(freshData);
@@ -637,7 +666,7 @@ export default function WeekView() {
             const dayKey = `weekend_${rd.date}`;
             newWeekSchedule[dayKey] = await scheduleService.getScheduleForDay(
               freshData, 
-              rd.replacedDay.toLowerCase() as keyof ApiResponse['data'], 
+              undefined,
               new Date(rd.date)
             );
           }
@@ -651,7 +680,7 @@ export default function WeekView() {
     const unsubscribe = scheduleService.subscribe(updateHandler);
     
     return () => unsubscribe();
-  }, [scheduleData, updateWeekSchedule, fetchSchedule, weekStart, getDateForDay]);
+  }, [scheduleData, updateWeekSchedule, fetchSchedule, weekStart, getDateForDay, weekOffset]);
 
   // Calculate day dates for the week, including weekend recovery days if they exist
   const normalDayCount = 5; // Monday-Friday
@@ -761,6 +790,8 @@ export default function WeekView() {
       
       const updateScheduleForNewWeek = async () => {
         try {
+          const targetWeekOffset = weekOffset + direction;
+          await scheduleService.syncPeriodTimesForWeek(new Date(), targetWeekOffset);
           // Fetch fresh data for the new week
           const data = await scheduleService.getClassSchedule(settings.selectedGroupId);
           
@@ -794,7 +825,7 @@ export default function WeekView() {
               const dayKey = `weekend_${rd.date}`;
               newWeekSchedule[dayKey] = await scheduleService.getScheduleForDay(
                 data, 
-                rd.replacedDay.toLowerCase() as keyof ApiResponse['data'], 
+                undefined,
                 new Date(rd.date)
               );
             }
@@ -836,6 +867,7 @@ export default function WeekView() {
     if (scheduleData) {
       const updateCurrentWeek = async () => {
         try {
+          await scheduleService.syncPeriodTimesForWeek(new Date(), 0);
           // Fetch fresh data for the current week
           const data = await scheduleService.getClassSchedule(settings.selectedGroupId);
           
@@ -872,7 +904,7 @@ export default function WeekView() {
               const dayKey = `weekend_${rd.date}`;
               newWeekSchedule[dayKey] = await scheduleService.getScheduleForDay(
                 data, 
-                rd.replacedDay.toLowerCase() as keyof ApiResponse['data'], 
+                undefined,
                 new Date(rd.date)
               );
             }
@@ -1012,6 +1044,8 @@ export default function WeekView() {
           {dayDates.map((day, index) => {
             const dayKey = day.dayKey;
             const dayItems = weekSchedule[dayKey as keyof typeof weekSchedule] || [];
+            const dayReasonItem = dayItems.find(item => typeof item?.recoveryReason === 'string' && item.recoveryReason.trim().length > 0);
+            const dayReason = dayReasonItem?.recoveryReason?.trim() || day.recoveryDay?.reason || '';
             
             // Calculate total assignments for the day
             const totalAssignments = dayItems.reduce((total, item) => total + (item.assignmentCount || 0), 0);
@@ -1036,6 +1070,20 @@ export default function WeekView() {
                 )}
                 <Text style={styles.dayName}>{day.dayName}</Text>
                 <Text style={styles.dateText}>{day.dayNumber}</Text>
+                {Boolean(dayReason) && (
+                  <View style={styles.recoveryDayInfoHeader}>
+                    <RecoveryDayInfo
+                      label="Special"
+                      title={day.recoveryDay ? 'Recovery Day Schedule' : 'Special Schedule'}
+                      reason={dayReason}
+                      align={index <= 1 ? 'left' : index >= dayDates.length - 2 ? 'right' : 'center'}
+                      details={[
+                        `${day.dayName} ${day.dayNumber}`,
+                        dayReasonItem?.replacedDayName ? `Replaces ${dayReasonItem.replacedDayName}` : 'Temporary schedule override'
+                      ]}
+                    />
+                  </View>
+                )}
               </Animated.View>
             );
           })}
@@ -1126,12 +1174,6 @@ export default function WeekView() {
                     ]}
                     entering={FadeIn.duration(150).delay(dayIndex * 30)}
                   >
-
-                    {/* Show recovery day info button when this is a recovery day */}
-                    {isRecoveryDay && day.recoveryDay && (
-                      <RecoveryDayInfo reason={day.recoveryDay.reason || ''} />
-                    )}
-
                     {/* Render schedule items */}
                     {filteredItems.map((item, itemIndex) => {
                       // Add null check for item
@@ -1290,13 +1332,19 @@ const styles = StyleSheet.create<Styles>({
     right: 2,
     zIndex: 10,
   },
+  recoveryDayInfoHeader: {
+    marginTop: 4,
+    alignItems: 'center',
+    zIndex: 30,
+  },
   recoveryDayInfoButton: {
-    position: 'absolute',
-    top: 5,
-    right: 5,
-    width: 20,
+    position: 'relative',
+    top: 0,
+    right: 0,
+    minWidth: 56,
     height: 20,
     borderRadius: 10,
+    paddingHorizontal: 8,
     overflow: 'hidden',
     zIndex: 10,
     elevation: 3,
@@ -1307,20 +1355,24 @@ const styles = StyleSheet.create<Styles>({
   },
   recoveryDayInfoButtonGradient: {
     flex: 1,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   recoveryDayInfoIcon: {
     color: 'white',
-    fontSize: 14,
-    fontWeight: 'bold',
+    fontSize: 10,
+    fontWeight: '700',
     textAlign: 'center',
+    letterSpacing: 0.3,
   },
   recoveryDayTooltipContainer: {
     position: 'absolute',
-    top: 28,
-    right: 5,
-    width: 200,
+    top: 24,
+    right: 'auto',
+    left: '50%',
+    marginLeft: -90,
+    width: 180,
     zIndex: 100,
     elevation: 5,
     shadowColor: '#000',
@@ -1331,7 +1383,7 @@ const styles = StyleSheet.create<Styles>({
   recoveryDayTooltip: {
     backgroundColor: '#1C1C1E', // Dark background
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#2C2C2E',
   },
