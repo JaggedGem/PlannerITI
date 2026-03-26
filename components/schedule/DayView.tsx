@@ -106,38 +106,32 @@ type ScheduleItem = {
   subjectId?: string;
 };
 
-interface RecoveryDayInfoProps {
+interface ScheduleInfoBadgeProps {
+  label: string;
+  title: string;
   reason: string;
+  details?: string[];
 }
 
-const RecoveryDayInfo = ({ reason }: RecoveryDayInfoProps) => {
+const ScheduleInfoBadge = ({ label, title, reason, details = [] }: ScheduleInfoBadgeProps) => {
   const [showInfo, setShowInfo] = useState(false);
-  const { t } = useTranslation();
 
-  // Add animated value for popup transitions
   const popupAnimation = useAnimatedStyle(() => {
     return {
-      opacity: withTiming(showInfo ? 1 : 0, { duration: 200 }),
+      opacity: withTiming(showInfo ? 1 : 0, { duration: 120 }),
       transform: [
         {
-          scale: withSpring(showInfo ? 1 : 0.95, {
-            damping: 15,
-            stiffness: 150,
-          })
+          translateY: withTiming(showInfo ? 0 : -6, { duration: 120 })
         }
       ],
     };
   }, [showInfo]);
 
-  // Add button animation
   const buttonAnimation = useAnimatedStyle(() => {
     return {
       transform: [
         {
-          scale: withSpring(showInfo ? 0.95 : 1, {
-            damping: 15,
-            stiffness: 150,
-          })
+          scale: withTiming(showInfo ? 0.98 : 1, { duration: 100 })
         }
       ]
     };
@@ -158,7 +152,7 @@ const RecoveryDayInfo = ({ reason }: RecoveryDayInfoProps) => {
             end={{ x: 1, y: 1 }}
             style={styles.recoveryDayInfoButtonGradient}
           >
-            <Text style={styles.recoveryDayInfoIcon}>ⓘ</Text>
+            <Text style={styles.recoveryDayInfoBadgeText}>{label}</Text>
           </LinearGradient>
         </TouchableOpacity>
       </Animated.View>
@@ -169,7 +163,7 @@ const RecoveryDayInfo = ({ reason }: RecoveryDayInfoProps) => {
       >
         <View style={styles.recoveryDayTooltip}>
           <View style={styles.recoveryDayTooltipHeader}>
-            <Text style={styles.recoveryDayTooltipTitle}>{t('recovery').recoveryDay}</Text>
+            <Text style={styles.recoveryDayTooltipTitle}>{title}</Text>
             <TouchableOpacity
               style={styles.closeTooltipButton}
               onPress={() => setShowInfo(false)}
@@ -179,8 +173,13 @@ const RecoveryDayInfo = ({ reason }: RecoveryDayInfoProps) => {
             </TouchableOpacity>
           </View>
           <Text style={styles.recoveryDayTooltipReason}>
-            {reason || t('recovery').noReason}
+            {reason || 'No reason provided'}
           </Text>
+          {details.map((detail, idx) => (
+            <Text key={idx} style={styles.recoveryDayTooltipDetail}>
+              {detail}
+            </Text>
+          ))}
         </View>
       </Animated.View>
     </View>
@@ -210,6 +209,18 @@ export default function DayView() {
   const isEvenWeek = scheduleService.isEvenWeek(selectedDate);
   const { t, formatDate } = useTranslation();
   const recoveryDay = useMemo(() => scheduleService.isRecoveryDay(selectedDate), [selectedDate]);
+  const scheduleOverride = useMemo(() => {
+    if (!Array.isArray(todaySchedule)) return null;
+    const itemWithReason = todaySchedule.find(item => typeof item?.recoveryReason === 'string' && item.recoveryReason.trim().length > 0);
+    const reason = itemWithReason?.recoveryReason?.trim() || recoveryDay?.reason || '';
+    if (!reason) return null;
+
+    return {
+      reason,
+      replacedDayName: itemWithReason?.replacedDayName,
+      isRecoveryDay: Boolean(itemWithReason?.isRecoveryDay || recoveryDay),
+    };
+  }, [todaySchedule, recoveryDay]);
   const currentTime = useTimeUpdate();
   
   // Initialize refs at the top level
@@ -427,16 +438,7 @@ export default function DayView() {
       
       // Now that we have data, also update the day schedule
       if (data) {
-        let dayKey;
-        const dateString = selectedDate.toISOString().split('T')[0];
-        const isRecDay = scheduleService.isRecoveryDay(selectedDate);
-        
-        if (isRecDay) {
-          dayKey = `weekend_${dateString}`;
-        } else {
-          dayKey = DAYS_MAP[selectedDate.getDay() as keyof typeof DAYS_MAP];
-        }
-        
+        const dayKey = DAYS_MAP[selectedDate.getDay() as keyof typeof DAYS_MAP];
         const daySchedule = await scheduleService.getScheduleForDay(
           data,
           dayKey,
@@ -525,16 +527,7 @@ export default function DayView() {
       if (freshData) {
         setScheduleData(freshData);
         
-        let dayKey;
-        const dateString = currentSelectedDate.toISOString().split('T')[0];
-        const isRecDay = scheduleService.isRecoveryDay(currentSelectedDate);
-        
-        if (isRecDay) {
-          dayKey = `weekend_${dateString}`;
-        } else {
-          dayKey = DAYS_MAP[currentSelectedDate.getDay() as keyof typeof DAYS_MAP];
-        }
-        
+        const dayKey = DAYS_MAP[currentSelectedDate.getDay() as keyof typeof DAYS_MAP];
         const daySchedule = await scheduleService.getScheduleForDay(
           freshData,
           dayKey,
@@ -717,19 +710,7 @@ export default function DayView() {
   useEffect(() => {
     // Update schedule whenever selected date changes
     if (scheduleData) {
-      let dayKey;
-      const dateString = selectedDate.toISOString().split('T')[0]; // Format as YYYY-MM-DD
-
-      // Check if this is a recovery day
-      const isRecDay = scheduleService.isRecoveryDay(selectedDate);
-
-      if (isRecDay) {
-        // For recovery days, use the special weekend key format
-        dayKey = `weekend_${dateString}`;
-      } else {
-        // For regular days, use the standard day name
-        dayKey = DAYS_MAP[selectedDate.getDay() as keyof typeof DAYS_MAP];
-      }
+      const dayKey = DAYS_MAP[selectedDate.getDay() as keyof typeof DAYS_MAP];
 
       const fetchDaySchedule = async () => {
         const daySchedule = await scheduleService.getScheduleForDay(
@@ -1364,10 +1345,18 @@ export default function DayView() {
             )}
         </ScrollView>
 
-        {/* Position the recovery day info button at the top right corner */}
-        {recoveryDay && (
+        {/* Position special schedule badge at the top right corner */}
+        {scheduleOverride && (
           <View style={styles.fixedRecoveryInfoContainer}>
-            <RecoveryDayInfo reason={recoveryDay.reason || ''} />
+            <ScheduleInfoBadge
+              label="Special"
+              title={scheduleOverride.isRecoveryDay ? 'Recovery Day Schedule' : 'Special Schedule'}
+              reason={scheduleOverride.reason}
+              details={[
+                formatDate(selectedDate, { weekday: 'long', month: 'short', day: 'numeric' }),
+                scheduleOverride.replacedDayName ? `Replaces ${scheduleOverride.replacedDayName}` : 'Temporary schedule override'
+              ]}
+            />
           </View>
         )}
       </View>
@@ -1481,6 +1470,7 @@ type Styles = {
   recoveryDayInfoButton: ViewStyle;
   recoveryDayInfoButtonGradient: ViewStyle;
   recoveryDayInfoIcon: TextStyle;
+  recoveryDayInfoBadgeText: TextStyle;
   recoveryDayTooltipContainer: ViewStyle;
   recoveryDayTooltip: ViewStyle;
   recoveryDayTooltipHeader: ViewStyle;
@@ -1488,6 +1478,7 @@ type Styles = {
   closeTooltipButton: ViewStyle;
   closeTooltipText: TextStyle;
   recoveryDayTooltipReason: TextStyle;
+  recoveryDayTooltipDetail: TextStyle;
   recoveryDayInfoContainer: ViewStyle;
   recoveryDayInfoWrapper: ViewStyle;
   fixedRecoveryInfoContainer: ViewStyle;
@@ -1942,6 +1933,7 @@ const styles = StyleSheet.create<Styles>({
   },
   recoveryDayInfoButtonGradient: {
     flex: 1,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1950,6 +1942,13 @@ const styles = StyleSheet.create<Styles>({
     fontSize: 14,
     fontWeight: 'bold',
     textAlign: 'center',
+  },
+  recoveryDayInfoBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+    textAlign: 'center',
+    letterSpacing: 0.3,
   },
   recoveryDayTooltipContainer: {
     position: 'absolute',
@@ -1961,7 +1960,7 @@ const styles = StyleSheet.create<Styles>({
   recoveryDayTooltip: {
     backgroundColor: '#1C1C1E',
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#2C2C2E',
   },
@@ -1990,6 +1989,12 @@ const styles = StyleSheet.create<Styles>({
     lineHeight: 18,
     opacity: 0.8,
   },
+  recoveryDayTooltipDetail: {
+    color: '#AFAFB4',
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 4,
+  },
   recoveryDayInfoContainer: {
     position: 'absolute',
     top: 0,
@@ -2003,9 +2008,10 @@ const styles = StyleSheet.create<Styles>({
     width: '100%',
   },
   recoveryDayInfoButton: {
-    width: 24,
+    minWidth: 64,
     height: 24,
     borderRadius: 12,
+    paddingHorizontal: 10,
     overflow: 'hidden',
     zIndex: 100,
     elevation: 5,
