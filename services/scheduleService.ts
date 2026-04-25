@@ -1377,11 +1377,9 @@ export const scheduleService = {
   },
 
   isEvenWeek(date: Date): boolean {
-    const d1 = date;
-    const d2 = REFERENCE_DATE;
-    const perWeek = 7 * 24 * 60 * 60 * 1000;
-    const totalWeeks = Math.floor((d1.valueOf() - d2.valueOf()) / perWeek + 1);
-    return totalWeeks % 2 === 0;
+    const weekMs = 7 * 24 * 60 * 60 * 1000;
+    const diffWeeks = Math.floor((date.getTime() - REFERENCE_DATE.getTime()) / weekMs);
+    return diffWeeks % 2 === 0;
   },
 
   // Custom period management
