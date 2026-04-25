@@ -107,6 +107,52 @@ export interface Subject {
   isCustom?: boolean;
 }
 
+export type SpecialScheduleType = 'thesis' | 'exam';
+
+export interface SpecialScheduleDocument {
+  url: string;
+  filename: string;
+  semester: string | null;
+  academicYear: string | null;
+  examStudyYear: number | null;
+  source: string | null;
+}
+
+interface BaseSpecialScheduleEvent {
+  group: string;
+  date: string;
+  subject: string;
+  teacher: string;
+  room: string;
+  subgroup: string | null;
+  type: SpecialScheduleType;
+}
+
+export interface ThesisScheduleEvent extends BaseSpecialScheduleEvent {
+  type: 'thesis';
+  period: number | null;
+  startTime: string | null;
+  endTime: string | null;
+}
+
+export interface ExamScheduleEvent extends BaseSpecialScheduleEvent {
+  type: 'exam';
+  time: string | null;
+}
+
+export type SpecialScheduleEvent = ThesisScheduleEvent | ExamScheduleEvent;
+
+export interface SpecialScheduleResponse {
+  available: boolean;
+  type: SpecialScheduleType;
+  group: string | null;
+  document: SpecialScheduleDocument | null;
+  events: SpecialScheduleEvent[];
+  reasonCode: string | null;
+  reason: string | null;
+  warnings: string[];
+}
+
 const API_BASE_URL = 'https://orar-api.ceiti.md/v1';
 
 export const DAYS_MAP = {
@@ -133,6 +179,8 @@ export const CACHE_KEYS = {
   SCHEDULE_PREFIX: 'schedule_cache_',
   SETTINGS: 'user_settings',
   LAST_FETCH_PREFIX: 'last_schedule_fetch_',
+  SPECIAL_SCHEDULE_PREFIX: 'special_schedule_cache_',
+  LAST_SPECIAL_FETCH_PREFIX: 'last_special_schedule_fetch_',
   GROUPS: 'groups_cache',
   RECOVERY_DAYS: 'recovery_days_cache',
   LAST_RECOVERY_SYNC: 'last_recovery_days_sync',
@@ -141,6 +189,7 @@ export const CACHE_KEYS = {
 };
 
 const CACHE_EXPIRY = 3 * 24 * 60 * 60 * 1000; // 3 days in milliseconds
+const SPECIAL_SCHEDULE_CACHE_EXPIRY = 6 * 60 * 60 * 1000; // 6 hours
 const DEFAULT_GROUP_NAME = 'P-2422';
 
 const PERIOD_TIMES_CACHE_KEY = 'period_times_cache';
@@ -1153,6 +1202,299 @@ export const scheduleService = {
     } catch (error) {
       return false;
     }
+  },
+
+  normalizeSpecialScheduleGroupName(groupName?: string): string {
+    const rawGroup = String(groupName || '').trim();
+    if (!rawGroup) return '';
+
+    // Canonical thesis/exam group format: X-YYZA with optional trailing R.
+    // Some sources append extra suffixes (e.g. "P-2422c"), which should be removed.
+    const canonicalMatch = rawGroup.match(/^([A-Za-z]-\d{3}[A-Za-z0-9])/);
+    if (!canonicalMatch) return rawGroup;
+
+    const canonicalBase = canonicalMatch[1];
+    const keepTrailingR = /r$/i.test(rawGroup) && !canonicalBase.toUpperCase().endsWith('R');
+    return keepTrailingR ? `${canonicalBase}R` : canonicalBase;
+  },
+
+  getSpecialScheduleCacheScope(groupName?: string): string {
+    const normalizedGroup = this.normalizeSpecialScheduleGroupName(groupName);
+    return normalizedGroup.length > 0 ? normalizedGroup : '__meta__';
+  },
+
+  getSpecialScheduleCacheKey(type: SpecialScheduleType, groupName?: string): string {
+    return `${CACHE_KEYS.SPECIAL_SCHEDULE_PREFIX}${type}_${this.getSpecialScheduleCacheScope(groupName)}`;
+  },
+
+  getSpecialScheduleLastFetchKey(type: SpecialScheduleType, groupName?: string): string {
+    return `${CACHE_KEYS.LAST_SPECIAL_FETCH_PREFIX}${type}_${this.getSpecialScheduleCacheScope(groupName)}`;
+  },
+
+  buildUnavailableSpecialSchedule(
+    type: SpecialScheduleType,
+    groupName?: string | null,
+    reasonCode: string | null = 'unavailable',
+    reason: string | null = null
+  ): SpecialScheduleResponse {
+    return {
+      available: false,
+      type,
+      group: typeof groupName === 'string' && groupName.trim().length > 0 ? groupName.trim() : null,
+      document: null,
+      events: [],
+      reasonCode,
+      reason,
+      warnings: [],
+    };
+  },
+
+  normalizeSpecialScheduleDocument(document: any): SpecialScheduleDocument | null {
+    if (!document || typeof document !== 'object') {
+      return null;
+    }
+
+    const examStudyYearRaw = (document as { examStudyYear?: unknown }).examStudyYear;
+    const parsedExamStudyYear =
+      typeof examStudyYearRaw === 'number'
+        ? examStudyYearRaw
+        : typeof examStudyYearRaw === 'string' && examStudyYearRaw.trim().length > 0
+          ? Number(examStudyYearRaw)
+          : null;
+
+    return {
+      url: typeof (document as { url?: unknown }).url === 'string' ? (document as { url: string }).url : '',
+      filename:
+        typeof (document as { filename?: unknown }).filename === 'string'
+          ? (document as { filename: string }).filename
+          : '',
+      semester:
+        typeof (document as { semester?: unknown }).semester === 'string'
+          ? (document as { semester: string }).semester
+          : null,
+      academicYear:
+        typeof (document as { academicYear?: unknown }).academicYear === 'string'
+          ? (document as { academicYear: string }).academicYear
+          : null,
+      examStudyYear: Number.isFinite(parsedExamStudyYear) ? Number(parsedExamStudyYear) : null,
+      source:
+        typeof (document as { source?: unknown }).source === 'string'
+          ? (document as { source: string }).source
+          : null,
+    };
+  },
+
+  normalizeSpecialScheduleResponse(
+    type: SpecialScheduleType,
+    groupName: string | null,
+    payload: any
+  ): SpecialScheduleResponse {
+    const rawGroup = typeof payload?.group === 'string' && payload.group.trim().length > 0
+      ? payload.group.trim()
+      : groupName;
+    const resolvedType: SpecialScheduleType = payload?.type === 'exam' ? 'exam' : type;
+    const rawEvents = Array.isArray(payload?.events) ? payload.events : [];
+
+    const events: SpecialScheduleEvent[] = rawEvents
+      .map((event: any): SpecialScheduleEvent | null => {
+        if (!event || typeof event !== 'object') return null;
+
+        const base = {
+          group: typeof event.group === 'string' ? event.group : rawGroup || '',
+          date: typeof event.date === 'string' ? event.date : '',
+          subject: typeof event.subject === 'string' ? event.subject : '',
+          teacher: typeof event.teacher === 'string' ? event.teacher : '',
+          room: typeof event.room === 'string' ? event.room : '',
+          subgroup: typeof event.subgroup === 'string' && event.subgroup.trim().length > 0 ? event.subgroup.trim() : null,
+        };
+
+        if (!base.date || !base.subject) return null;
+
+        if (resolvedType === 'exam') {
+          return {
+            ...base,
+            type: 'exam',
+            time: typeof event.time === 'string' && event.time.trim().length > 0 ? event.time : null,
+          };
+        }
+
+        const rawPeriod = typeof event.period === 'number'
+          ? event.period
+          : typeof event.period === 'string' && event.period.trim().length > 0
+            ? Number(event.period)
+            : null;
+
+        return {
+          ...base,
+          type: 'thesis',
+          period: Number.isFinite(rawPeriod) ? Number(rawPeriod) : null,
+          startTime: typeof event.startTime === 'string' && event.startTime.trim().length > 0 ? event.startTime : null,
+          endTime: typeof event.endTime === 'string' && event.endTime.trim().length > 0 ? event.endTime : null,
+        };
+      })
+      .filter((event: SpecialScheduleEvent | null): event is SpecialScheduleEvent => Boolean(event));
+
+    const warnings = Array.isArray(payload?.warnings)
+      ? payload.warnings.filter((warning: unknown): warning is string => typeof warning === 'string')
+      : [];
+
+    return {
+      available: Boolean(payload?.available),
+      type: resolvedType,
+      group: rawGroup,
+      document: this.normalizeSpecialScheduleDocument(payload?.document),
+      events,
+      reasonCode: typeof payload?.reasonCode === 'string' ? payload.reasonCode : null,
+      reason: typeof payload?.reason === 'string' ? payload.reason : null,
+      warnings,
+    };
+  },
+
+  async readSpecialScheduleCache(
+    type: SpecialScheduleType,
+    groupName?: string,
+    enforceExpiry: boolean = true
+  ): Promise<SpecialScheduleResponse | null> {
+    try {
+      const normalizedGroup = this.normalizeSpecialScheduleGroupName(groupName);
+      const cacheKey = this.getSpecialScheduleCacheKey(type, groupName);
+      const lastFetchKey = this.getSpecialScheduleLastFetchKey(type, groupName);
+      const [cachedRaw, lastFetchRaw] = await Promise.all([
+        AsyncStorage.getItem(cacheKey),
+        AsyncStorage.getItem(lastFetchKey),
+      ]);
+
+      if (!cachedRaw) return null;
+
+      if (enforceExpiry) {
+        if (!lastFetchRaw) return null;
+        const lastFetchMs = new Date(lastFetchRaw).getTime();
+        if (!Number.isFinite(lastFetchMs)) return null;
+        if (Date.now() - lastFetchMs > SPECIAL_SCHEDULE_CACHE_EXPIRY) {
+          return null;
+        }
+      }
+
+      const parsed = JSON.parse(cachedRaw);
+      return this.normalizeSpecialScheduleResponse(type, normalizedGroup || null, parsed);
+    } catch (error) {
+      this.log('Failed to read special schedule cache', error);
+      return null;
+    }
+  },
+
+  async cacheSpecialSchedule(type: SpecialScheduleType, groupName: string | undefined, data: SpecialScheduleResponse): Promise<void> {
+    try {
+      const cacheKey = this.getSpecialScheduleCacheKey(type, groupName);
+      const lastFetchKey = this.getSpecialScheduleLastFetchKey(type, groupName);
+      await Promise.all([
+        AsyncStorage.setItem(cacheKey, JSON.stringify(data)),
+        AsyncStorage.setItem(lastFetchKey, new Date().toISOString()),
+      ]);
+    } catch (error) {
+      this.log('Failed to cache special schedule', error);
+    }
+  },
+
+  async getSpecialSchedule(
+    type: SpecialScheduleType,
+    groupName?: string,
+    forceRefresh: boolean = false
+  ): Promise<SpecialScheduleResponse> {
+    await this.ready();
+    const normalizedGroup = this.normalizeSpecialScheduleGroupName(
+      groupName || this.settings.selectedGroupName
+    );
+
+    if (!forceRefresh) {
+      const freshCached = await this.readSpecialScheduleCache(type, normalizedGroup, true);
+      if (freshCached) {
+        return freshCached;
+      }
+    }
+
+    const endpoint = type === 'exam' ? '/api/schedule/exams' : '/api/schedule/theses';
+    const params = new URLSearchParams();
+    if (normalizedGroup) {
+      params.append('group', normalizedGroup);
+    }
+
+    const requestPath = params.toString() ? `${endpoint}?${params.toString()}` : endpoint;
+
+    try {
+      const response = await fetchCustomApi(requestPath);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch ${type} schedule: ${response.status}`);
+      }
+
+      const payload = await response.json();
+      const normalized = this.normalizeSpecialScheduleResponse(type, normalizedGroup || null, payload);
+      await this.cacheSpecialSchedule(type, normalizedGroup, normalized);
+      return normalized;
+    } catch (error) {
+      const staleCached = await this.readSpecialScheduleCache(type, normalizedGroup, false);
+      if (staleCached) {
+        return staleCached;
+      }
+
+      const message = error instanceof Error ? error.message : `Unable to fetch ${type} schedule`;
+      return this.buildUnavailableSpecialSchedule(type, normalizedGroup || null, 'fetch_failed', message);
+    }
+  },
+
+  async getExamAndThesisSchedule(groupName?: string, forceRefresh: boolean = false): Promise<{
+    thesis: SpecialScheduleResponse;
+    exam: SpecialScheduleResponse;
+  }> {
+    const [thesis, exam] = await Promise.all([
+      this.getSpecialSchedule('thesis', groupName, forceRefresh),
+      this.getSpecialSchedule('exam', groupName, forceRefresh),
+    ]);
+
+    return { thesis, exam };
+  },
+
+  async getCachedSpecialSchedule(type: SpecialScheduleType, groupName?: string): Promise<SpecialScheduleResponse> {
+    await this.ready();
+    const normalizedGroup = this.normalizeSpecialScheduleGroupName(
+      groupName || this.settings.selectedGroupName
+    );
+    const cached = await this.readSpecialScheduleCache(type, normalizedGroup, false);
+    if (cached) return cached;
+    return this.buildUnavailableSpecialSchedule(
+      type,
+      normalizedGroup || null,
+      'cache_miss',
+      'Special schedule is not cached yet'
+    );
+  },
+
+  async getCachedExamAndThesisSchedule(groupName?: string): Promise<{
+    thesis: SpecialScheduleResponse;
+    exam: SpecialScheduleResponse;
+  }> {
+    const [thesis, exam] = await Promise.all([
+      this.getCachedSpecialSchedule('thesis', groupName),
+      this.getCachedSpecialSchedule('exam', groupName),
+    ]);
+    return { thesis, exam };
+  },
+
+  async prewarmSpecialSchedules(forceRefresh: boolean = true, groupName?: string): Promise<{
+    thesis: SpecialScheduleResponse;
+    exam: SpecialScheduleResponse;
+  }> {
+    await this.ready();
+    const resolvedGroup = this.normalizeSpecialScheduleGroupName(
+      groupName || this.settings.selectedGroupName
+    );
+    if (!resolvedGroup) {
+      return {
+        thesis: this.buildUnavailableSpecialSchedule('thesis', null, 'group_missing', 'No group selected'),
+        exam: this.buildUnavailableSpecialSchedule('exam', null, 'group_missing', 'No group selected'),
+      };
+    }
+    return this.getExamAndThesisSchedule(resolvedGroup, forceRefresh);
   },
 
   async getPeriodTimes(): Promise<DatePeriodTimesEntry | null> {

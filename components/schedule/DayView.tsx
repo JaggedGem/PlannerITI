@@ -1,7 +1,15 @@
 import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Dimensions, ViewStyle, TextStyle, ActivityIndicator, InteractionManager } from 'react-native';
 import { SafeAreaView, Edge } from 'react-native-safe-area-context';
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { scheduleService, DAYS_MAP, ApiResponse } from '@/services/scheduleService';
+import {
+  scheduleService,
+  DAYS_MAP,
+  ApiResponse,
+  ThesisScheduleEvent,
+  ExamScheduleEvent,
+  SpecialScheduleResponse,
+  SubGroupType,
+} from '@/services/scheduleService';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useTimeUpdate } from '@/hooks/useTimeUpdate';
 import Animated, { useAnimatedStyle, withTiming, withSpring, FadeIn, FadeOut, useSharedValue, withSequence, withDelay } from 'react-native-reanimated';
@@ -11,9 +19,23 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { getAssignmentsForPeriod, Assignment, AssignmentType, getAssignmentsForTimeRange, getAssignmentsForClass } from '@/utils/assignmentStorage';
 import { router } from 'expo-router';
+import {
+  buildSpecialEventKey,
+  filterExamEventsForDate,
+  filterThesisEventsForDate,
+  thesisMatchesScheduleSlot,
+} from '@/utils/specialScheduleUtils';
 
 // Key for storing whether the tutorial has been shown
 const TUTORIAL_SHOWN_KEY = 'schedule_tutorial_shown';
+const DAY_DISPLAY_SNAPSHOT_PREFIX = '@day_display_snapshot_';
+
+interface DayDisplaySnapshot {
+  generatedAt: number;
+  groupId: string;
+  subgroup: SubGroupType;
+  dateMap: Record<string, ScheduleItem[]>;
+}
 
 // Function to get assignment type icon name
 const getAssignmentTypeIcon = (type: AssignmentType): React.ComponentProps<typeof Ionicons>['name'] => {
@@ -104,6 +126,13 @@ type ScheduleItem = {
   period?: string;
   assignmentCount: number;
   subjectId?: string;
+  group?: string;
+  isEvenWeek?: boolean;
+  isCustom?: boolean;
+  color?: string;
+  isRecoveryDay?: boolean;
+  recoveryReason?: string;
+  replacedDayName?: string;
 };
 
 interface ScheduleInfoBadgeProps {
@@ -203,9 +232,11 @@ export default function DayView() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [settings, setSettings] = useState(scheduleService.getSettings());
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [todaySchedule, setTodaySchedule] = useState<any[]>([]);
+  const [todaySchedule, setTodaySchedule] = useState<ScheduleItem[]>([]);
+  const [thesisSchedule, setThesisSchedule] = useState<SpecialScheduleResponse | null>(null);
+  const [examSchedule, setExamSchedule] = useState<SpecialScheduleResponse | null>(null);
   const [initialLoadAttempted, setInitialLoadAttempted] = useState(false);
-  const currentDate = new Date();
+  const currentDate = useRef(new Date()).current;
   const isEvenWeek = scheduleService.isEvenWeek(selectedDate);
   const { t, formatDate } = useTranslation();
   const recoveryDay = useMemo(() => scheduleService.isRecoveryDay(selectedDate), [selectedDate]);
@@ -229,10 +260,54 @@ export default function DayView() {
       (item.isEvenWeek === undefined || item.isEvenWeek === isEvenWeek)
     );
   }, [todaySchedule, isEvenWeek]);
+  const thesisEvents = useMemo(
+    () => (thesisSchedule?.events || []).filter((event): event is ThesisScheduleEvent => event.type === 'thesis'),
+    [thesisSchedule]
+  );
+  const examEvents = useMemo(
+    () => (examSchedule?.events || []).filter((event): event is ExamScheduleEvent => event.type === 'exam'),
+    [examSchedule]
+  );
+  const selectedDateThesisEvents = useMemo(
+    () => filterThesisEventsForDate(thesisEvents, selectedDate, settings.group),
+    [thesisEvents, selectedDate, settings.group]
+  );
+  const selectedDateExamEvents = useMemo(
+    () => filterExamEventsForDate(examEvents, selectedDate, settings.group),
+    [examEvents, selectedDate, settings.group]
+  );
+  const getThesisEventsForItem = useCallback(
+    (item: ScheduleItem) =>
+      selectedDateThesisEvents.filter((thesisEvent) =>
+        thesisMatchesScheduleSlot(thesisEvent, item, settings.group)
+      ),
+    [selectedDateThesisEvents, settings.group]
+  );
+  const matchedThesisEventKeys = useMemo(() => {
+    const keys = new Set<string>();
+    visibleTodaySchedule.forEach((scheduleItem) => {
+      getThesisEventsForItem(scheduleItem).forEach((event) => {
+        keys.add(buildSpecialEventKey(event));
+      });
+    });
+    return keys;
+  }, [visibleTodaySchedule, getThesisEventsForItem]);
+  const standaloneThesisEvents = useMemo(
+    () =>
+      selectedDateThesisEvents.filter(
+        (event) => !matchedThesisEventKeys.has(buildSpecialEventKey(event))
+      ),
+    [selectedDateThesisEvents, matchedThesisEventKeys]
+  );
+  const hasStandaloneAssessments = selectedDateExamEvents.length > 0 || standaloneThesisEvents.length > 0;
   const currentTime = useTimeUpdate();
   
   // Initialize refs at the top level
   const settingsRef = useRef(scheduleService.getSettings());
+  const refreshVersionRef = useRef(scheduleService.getScheduleRefreshVersion());
+  const displayedScheduleMapRef = useRef<Record<string, ScheduleItem[]>>({});
+  const selectedDateRef = useRef<Date>(selectedDate);
+  const initialLoadAttemptedRef = useRef(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const [showFirstTimeIndicator, setShowFirstTimeIndicator] = useState(false);
   const firstTimeAnimValue = useSharedValue(0);
@@ -242,6 +317,10 @@ export default function DayView() {
   const [periodAssignments, setPeriodAssignments] = useState<{[key: string]: Assignment[]}>({});
   const [loadingAssignments, setLoadingAssignments] = useState<{[key: string]: boolean}>({});
   const [periodAssignmentCounts, setPeriodAssignmentCounts] = useState<{[key: string]: number}>({});
+
+  useEffect(() => {
+    selectedDateRef.current = selectedDate;
+  }, [selectedDate]);
 
   // Check if tutorial has been shown before
   useEffect(() => {
@@ -302,22 +381,13 @@ export default function DayView() {
       const date = new Date(monday);
       date.setDate(monday.getDate() + i);
       
-      // Calculate total assignments for this day
-      let totalAssignments = 0;
-      if (scheduleData) {
-        const dayKey = DAYS_MAP[date.getDay() as keyof typeof DAYS_MAP];
-        const daySchedule = scheduleService.getScheduleForDay(scheduleData, dayKey, date);
-        // Since we're in a useMemo, we can't use await, so we'll default to 0 and update later
-        totalAssignments = 0;
-      }
-      
       return {
         date,
         day: t('weekdays').short[date.getDay()],
         dateNum: date.getDate(),
         isToday: date.toDateString() === currentDate.toDateString(),
         isRecoveryDay: scheduleService.isRecoveryDay(date) !== null,
-        totalAssignments
+        totalAssignments: 0
       };
     });
 
@@ -328,27 +398,18 @@ export default function DayView() {
     const saturdayIsRecovery = scheduleService.isRecoveryDay(saturday) !== null;
 
     if (saturdayIsRecovery) {
-      // Calculate Saturday's assignments if it's a recovery day
-      let totalAssignments = 0;
-      if (scheduleData) {
-        const dateString = saturday.toISOString().split('T')[0];
-        const dayKey = `weekend_${dateString}`;
-        // Since we're in a useMemo, we can't use await, so we'll default to 0 and update later
-        totalAssignments = 0;
-      }
-      
       dates.push({
         date: saturday,
         day: t('weekdays').short[saturday.getDay()],
         dateNum: saturday.getDate(),
         isToday: saturday.toDateString() === currentDate.toDateString(),
         isRecoveryDay: true,
-        totalAssignments
+        totalAssignments: 0
       });
     }
 
     return dates;
-  }, [currentDate, t, scheduleData]);
+  }, [currentDate, t]);
 
   // Update the useEffect for assignment counts
   useEffect(() => {
@@ -421,6 +482,139 @@ export default function DayView() {
     }
   }, [scrollToDate, weekDates]);
 
+  const toDateKey = useCallback((date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }, []);
+
+  const getDisplaySnapshotKey = useCallback((groupId: string, subgroup: SubGroupType): string => {
+    return `${DAY_DISPLAY_SNAPSHOT_PREFIX}${groupId || 'nogroup'}_${subgroup}`;
+  }, []);
+
+  const normalizeDayScheduleForDisplay = useCallback(
+    (items: ScheduleItem[], targetDate: Date): ScheduleItem[] => {
+      const targetEvenWeek = scheduleService.isEvenWeek(targetDate);
+      const safeItems = Array.isArray(items) ? items : [];
+      const reasonItem = safeItems.find(
+        item => item && (item.period === 'recovery-info' || (item.recoveryReason && item.recoveryReason.trim().length > 0))
+      );
+      const visibleItems = safeItems.filter(item =>
+        item &&
+        item.period !== 'recovery-info' &&
+        (item.isEvenWeek === undefined || item.isEvenWeek === targetEvenWeek)
+      );
+      return reasonItem ? [reasonItem, ...visibleItems] : visibleItems;
+    },
+    []
+  );
+
+  const loadDisplaySnapshot = useCallback(
+    async (groupId: string, subgroup: SubGroupType): Promise<Record<string, ScheduleItem[]> | null> => {
+      try {
+        const key = getDisplaySnapshotKey(groupId, subgroup);
+        const raw = await AsyncStorage.getItem(key);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as DayDisplaySnapshot;
+        if (!parsed || typeof parsed !== 'object' || !parsed.dateMap || typeof parsed.dateMap !== 'object') {
+          return null;
+        }
+        return parsed.dateMap;
+      } catch {
+        return null;
+      }
+    },
+    [getDisplaySnapshotKey]
+  );
+
+  const saveDisplaySnapshot = useCallback(
+    async (groupId: string, subgroup: SubGroupType, dateMap: Record<string, ScheduleItem[]>) => {
+      try {
+        const key = getDisplaySnapshotKey(groupId, subgroup);
+        const payload: DayDisplaySnapshot = {
+          generatedAt: Date.now(),
+          groupId,
+          subgroup,
+          dateMap,
+        };
+        await AsyncStorage.setItem(key, JSON.stringify(payload));
+      } catch {
+        // ignore cache write errors
+      }
+    },
+    [getDisplaySnapshotKey]
+  );
+
+  const buildDisplayMapForDates = useCallback(
+    async (data: ApiResponse, dates: Date[]): Promise<Record<string, ScheduleItem[]>> => {
+      const result: Record<string, ScheduleItem[]> = {};
+
+      for (const date of dates) {
+        const dateKey = toDateKey(date);
+        const weekday = DAYS_MAP[date.getDay() as keyof typeof DAYS_MAP];
+        const dayKey = weekday || `weekend_${dateKey}`;
+        const daySchedule = await scheduleService.getScheduleForDay(data, dayKey, date) as ScheduleItem[];
+        result[dateKey] = normalizeDayScheduleForDisplay(daySchedule, date);
+      }
+
+      return result;
+    },
+    [normalizeDayScheduleForDisplay, toDateKey]
+  );
+
+  const rebuildDisplayCache = useCallback(
+    async (data: ApiResponse, targetDates?: Date[]) => {
+      const dates = targetDates && targetDates.length > 0
+        ? targetDates
+        : weekDates.map(dayInfo => dayInfo.date);
+      const map = await buildDisplayMapForDates(data, dates);
+      displayedScheduleMapRef.current = map;
+
+      const currentSettings = scheduleService.getSettings();
+      await saveDisplaySnapshot(currentSettings.selectedGroupId, currentSettings.group, map);
+
+      const selectedKey = toDateKey(selectedDate);
+      setTodaySchedule(map[selectedKey] || []);
+    },
+    [buildDisplayMapForDates, saveDisplaySnapshot, selectedDate, toDateKey, weekDates]
+  );
+
+  const loadCachedSpecialSchedules = useCallback(
+    async (groupName?: string) => {
+      const resolvedGroupName = String(groupName || scheduleService.getSettings().selectedGroupName || '').trim();
+
+      if (!resolvedGroupName) {
+        setThesisSchedule(null);
+        setExamSchedule(null);
+        return;
+      }
+      try {
+        const { thesis, exam } = await scheduleService.getCachedExamAndThesisSchedule(resolvedGroupName);
+        setThesisSchedule(thesis);
+        setExamSchedule(exam);
+      } catch (specialError) {
+        setThesisSchedule(
+          scheduleService.buildUnavailableSpecialSchedule(
+            'thesis',
+            resolvedGroupName,
+            'cache_read_failed',
+            'Unable to load cached thesis schedule'
+          )
+        );
+        setExamSchedule(
+          scheduleService.buildUnavailableSpecialSchedule(
+            'exam',
+            resolvedGroupName,
+            'cache_read_failed',
+            'Unable to load cached exam schedule'
+          )
+        );
+      }
+    },
+    []
+  );
+
   // Schedule data fetching function using useCallback
   const fetchSchedule = useCallback(async (groupId?: string) => {
     try {
@@ -430,127 +624,79 @@ export default function DayView() {
       // Check for internet connection before attempting to fetch
       const hasInternet = await scheduleService.hasInternetConnection();
       
-      // If no internet and this is the initial load (no cached data)
-      if (!hasInternet && !initialLoadAttempted) {
-        setError('No internet connection. Please connect to the internet for the initial load.');
-        setIsLoading(false);
-        setInitialLoadAttempted(true);
-        return;
-      }
-      
       const data = await scheduleService.getClassSchedule(groupId);
       
       // If we got here successfully, update state
       setScheduleData(data);
+      initialLoadAttemptedRef.current = true;
       setInitialLoadAttempted(true);
-      
-      // Now that we have data, also update the day schedule
+
       if (data) {
-        const dayKey = DAYS_MAP[selectedDate.getDay() as keyof typeof DAYS_MAP];
-        const daySchedule = await scheduleService.getScheduleForDay(
-          data,
-          dayKey,
-          selectedDate
-        );
-        
-        setTodaySchedule(daySchedule);
+        await rebuildDisplayCache(data);
       }
+
+      await loadCachedSpecialSchedules(scheduleService.getSettings().selectedGroupName);
     } catch (error) {
       setError(t('schedule').error || 'Unable to load schedule. Please try again later.');
     } finally {
       setIsLoading(false);
     }
-  }, [selectedDate, initialLoadAttempted, t]);
+  }, [t, loadCachedSpecialSchedules, rebuildDisplayCache]);
 
-  // Schedule update function using useCallback
-  const updateSchedule = useCallback(async () => {
-    if (!scheduleData) {
-      // If we don't have schedule data yet, try to fetch it
-      await fetchSchedule();
-      return;
-    }
-    
-    // If we have data, update the day schedule
-    const daySchedule = await scheduleService.getScheduleForDay(
-      scheduleData,
-      DAYS_MAP[selectedDate.getDay() as keyof typeof DAYS_MAP],
-      selectedDate // Pass the selected date to handle recovery days
-    );
-    setTodaySchedule(daySchedule);
-  }, [scheduleData, selectedDate, fetchSchedule]);
-
-  // Settings subscription effect to check for any kind of settings changes
+  // Settings subscription effect. Rebuild displayed periods only on explicit schedule refresh or group change.
   useEffect(() => {
-    // Capture current references to avoid stale closures
-    const currentScheduleData = scheduleData;
-    const currentSelectedDate = selectedDate;
     const currentFetchSchedule = fetchSchedule;
-    
+
     const updateHandler = async () => {
-      // Get latest settings
       const newSettings = scheduleService.getSettings();
       const prevSettings = settingsRef.current;
-      
-      // Update the ref and state
+      const latestRefreshVersion = scheduleService.getScheduleRefreshVersion();
+
       settingsRef.current = newSettings;
       setSettings(newSettings);
-      
-      // Handle group ID change (full refetch needed)
+
+      if (latestRefreshVersion !== refreshVersionRef.current) {
+        refreshVersionRef.current = latestRefreshVersion;
+        await currentFetchSchedule(newSettings.selectedGroupId);
+        await loadCachedSpecialSchedules(newSettings.selectedGroupName);
+        return;
+      }
+
       if (newSettings.selectedGroupId !== prevSettings.selectedGroupId) {
-        currentFetchSchedule(newSettings.selectedGroupId);
+        await currentFetchSchedule(newSettings.selectedGroupId);
+        await loadCachedSpecialSchedules(newSettings.selectedGroupName);
         return;
       }
-      
-      // Check explicitly if custom periods have changed using JSON comparison
-      const oldCustomPeriods = JSON.stringify(prevSettings.customPeriods);
-      const newCustomPeriods = JSON.stringify(newSettings.customPeriods);
-      
-      if (oldCustomPeriods !== newCustomPeriods) {
-        // Force update the current schedule for custom period changes
-        updateCurrentSchedule();
-        return;
-      }
-      
-      // For group/subgroup changes
+
       if (newSettings.group !== prevSettings.group) {
-        updateCurrentSchedule();
+        const cachedMap = await loadDisplaySnapshot(newSettings.selectedGroupId, newSettings.group);
+        if (cachedMap) {
+          displayedScheduleMapRef.current = cachedMap;
+          const selectedKey = toDateKey(selectedDate);
+          setTodaySchedule(cachedMap[selectedKey] || []);
+        } else if (scheduleData) {
+          await rebuildDisplayCache(scheduleData);
+        }
+        await loadCachedSpecialSchedules(newSettings.selectedGroupName);
         return;
       }
-      
-      // If we don't have schedule data yet, try fetching
-      if (!currentScheduleData) {
-        currentFetchSchedule();
-        return;
-      }
-      
-      // Otherwise, just update the current day schedule to pick up any changes
-      // This handles cases where the schedule was refreshed in settings
-      updateCurrentSchedule();
-    };
-    
-    // Helper function to update the schedule with the correct day key
-    const updateCurrentSchedule = async () => {
-      // Try to get fresh data first
-      const freshData = await scheduleService.getClassSchedule(scheduleService.getSettings().selectedGroupId);
-      if (freshData) {
-        setScheduleData(freshData);
-        
-        const dayKey = DAYS_MAP[currentSelectedDate.getDay() as keyof typeof DAYS_MAP];
-        const daySchedule = await scheduleService.getScheduleForDay(
-          freshData,
-          dayKey,
-          currentSelectedDate
-        );
-        
-        setTodaySchedule(daySchedule);
+
+      if (newSettings.selectedGroupName !== prevSettings.selectedGroupName) {
+        await loadCachedSpecialSchedules(newSettings.selectedGroupName);
       }
     };
-    
-    // Subscribe to settings changes
+
     const unsubscribe = scheduleService.subscribe(updateHandler);
-    
     return () => unsubscribe();
-  }, [scheduleData, selectedDate, fetchSchedule, updateSchedule]);
+  }, [
+    fetchSchedule,
+    loadCachedSpecialSchedules,
+    loadDisplaySnapshot,
+    rebuildDisplayCache,
+    scheduleData,
+    selectedDate,
+    toDateKey,
+  ]);
 
   // Schedule data fetching effect
   useEffect(() => {
@@ -575,6 +721,22 @@ export default function DayView() {
       run();
     }
   }, [fetchSchedule]);
+
+  useEffect(() => {
+    void loadCachedSpecialSchedules(settings.selectedGroupName);
+  }, [settings.selectedGroupName, loadCachedSpecialSchedules]);
+
+  useEffect(() => {
+    const restoreDisplaySnapshot = async () => {
+      const cachedMap = await loadDisplaySnapshot(settings.selectedGroupId, settings.group);
+      if (!cachedMap) return;
+      displayedScheduleMapRef.current = cachedMap;
+      const selectedKey = toDateKey(selectedDateRef.current);
+      setTodaySchedule(cachedMap[selectedKey] || []);
+    };
+
+    void restoreDisplaySnapshot();
+  }, [settings.selectedGroupId, settings.group, loadDisplaySnapshot, toDateKey]);
 
   // Initial scroll to today, only once on mount
   useEffect(() => {
@@ -714,24 +876,38 @@ export default function DayView() {
     return currentTimeInMinutes >= startTimeInMinutes && currentTimeInMinutes < endTimeInMinutes;
   };
 
-  // Add back the useEffect for date changes
+  // Update displayed periods from precomputed map when date changes.
   useEffect(() => {
-    // Update schedule whenever selected date changes
-    if (scheduleData) {
-      const dayKey = DAYS_MAP[selectedDate.getDay() as keyof typeof DAYS_MAP];
-
-      const fetchDaySchedule = async () => {
-        const daySchedule = await scheduleService.getScheduleForDay(
-          scheduleData,
-          dayKey,
-          selectedDate // Pass the actual date to check for recovery days
-        );
-        setTodaySchedule(daySchedule);
-      };
-      
-      fetchDaySchedule();
+    const selectedKey = toDateKey(selectedDate);
+    const mapped = displayedScheduleMapRef.current[selectedKey];
+    if (mapped) {
+      setTodaySchedule(mapped);
+      return;
     }
-  }, [selectedDate, scheduleData]);
+
+    // Lazy-fill one missing day from current schedule data without full recompute.
+    if (!scheduleData) {
+      setTodaySchedule([]);
+      return;
+    }
+
+    const fillMissingDate = async () => {
+      const oneDayMap = await buildDisplayMapForDates(scheduleData, [selectedDate]);
+      displayedScheduleMapRef.current = {
+        ...displayedScheduleMapRef.current,
+        ...oneDayMap,
+      };
+      const currentSettings = scheduleService.getSettings();
+      await saveDisplaySnapshot(
+        currentSettings.selectedGroupId,
+        currentSettings.group,
+        displayedScheduleMapRef.current
+      );
+      setTodaySchedule(oneDayMap[selectedKey] || []);
+    };
+
+    void fillMissingDate();
+  }, [buildDisplayMapForDates, saveDisplaySnapshot, scheduleData, selectedDate, toDateKey]);
 
   // Initial selected date setup - if weekend, select next Monday
   useEffect(() => {
@@ -885,6 +1061,59 @@ export default function DayView() {
     
     updatePeriodAssignmentCounts();
   }, [scheduleData, todaySchedule, selectedDate]);
+
+  const formatDisplayTime = useCallback(
+    (time?: string | null): string => {
+      if (!time) return '';
+      return formatTimeByLocale(time, settings.language === 'en');
+    },
+    [settings.language]
+  );
+
+  const formatDisplayTimeRange = useCallback(
+    (start?: string | null, end?: string | null): string => {
+      if (start && end) return `${formatDisplayTime(start)} - ${formatDisplayTime(end)}`;
+      if (start) return formatDisplayTime(start);
+      if (end) return formatDisplayTime(end);
+      return '';
+    },
+    [formatDisplayTime]
+  );
+
+  const normalizeComparable = useCallback((value?: string | null): string => {
+    if (!value) return '';
+    return value.toLowerCase().replace(/\s+/g, ' ').trim();
+  }, []);
+
+  const getInlineThesisMeta = useCallback(
+    (thesisEvent: ThesisScheduleEvent, item: ScheduleItem): { isFullyRedundant: boolean; text: string } => {
+      const eventSubject = normalizeComparable(thesisEvent.subject);
+      const itemSubject = normalizeComparable(item.className);
+      const eventRoom = normalizeComparable(thesisEvent.room);
+      const itemRoom = normalizeComparable(item.roomNumber);
+
+      const sameSubject = Boolean(eventSubject && itemSubject && eventSubject === itemSubject);
+      const sameRoom = Boolean(eventRoom && itemRoom && eventRoom === itemRoom);
+      const sameTime = Boolean(
+        thesisEvent.startTime &&
+        thesisEvent.endTime &&
+        thesisEvent.startTime === item.startTime &&
+        thesisEvent.endTime === item.endTime
+      );
+
+      const parts = [
+        sameSubject ? '' : thesisEvent.subject,
+        sameTime ? '' : formatDisplayTimeRange(thesisEvent.startTime, thesisEvent.endTime),
+        sameRoom || !thesisEvent.room ? '' : `${t('schedule').room} ${thesisEvent.room}`,
+      ].filter(Boolean);
+
+      return {
+        isFullyRedundant: sameTime && sameRoom && (sameSubject || !eventSubject),
+        text: parts.join(' • '),
+      };
+    },
+    [formatDisplayTimeRange, normalizeComparable, t]
+  );
 
   if (isLoading && !scheduleData) {
     return (
@@ -1092,6 +1321,62 @@ export default function DayView() {
 
       <View style={styles.contentContainer}>
         <ScrollView style={styles.scheduleContainer}>
+          {hasStandaloneAssessments && (
+            <View style={styles.assessmentSection}>
+              <Text style={styles.assessmentSectionTitle}>Assessments</Text>
+
+              {selectedDateExamEvents.map((examEvent) => (
+                <View key={buildSpecialEventKey(examEvent)} style={[styles.assessmentCard, styles.assessmentCardExam]}>
+                  <View style={styles.assessmentCardHeader}>
+                    <View style={[styles.assessmentTypeBadge, styles.assessmentTypeBadgeExam]}>
+                      <Ionicons name="school-outline" size={12} color="#FFD8A8" />
+                      <Text style={styles.assessmentTypeText}>{t('grades').subjects.exam}</Text>
+                    </View>
+                    {examEvent.subgroup ? (
+                      <Text style={styles.assessmentSubgroupText}>SG {examEvent.subgroup}</Text>
+                    ) : null}
+                  </View>
+
+                  <Text style={styles.assessmentSubjectText}>{examEvent.subject}</Text>
+                  <Text style={styles.assessmentMetaText} numberOfLines={2}>
+                    {[
+                      formatDisplayTime(examEvent.time),
+                      examEvent.room ? `${t('schedule').room} ${examEvent.room}` : '',
+                      examEvent.teacher || '',
+                    ]
+                      .filter(Boolean)
+                      .join(' • ')}
+                  </Text>
+                </View>
+              ))}
+
+              {standaloneThesisEvents.map((thesisEvent) => (
+                <View key={buildSpecialEventKey(thesisEvent)} style={[styles.assessmentCard, styles.assessmentCardThesis]}>
+                  <View style={styles.assessmentCardHeader}>
+                    <View style={[styles.assessmentTypeBadge, styles.assessmentTypeBadgeThesis]}>
+                      <Ionicons name="document-text-outline" size={12} color="#CFE6FF" />
+                      <Text style={styles.assessmentTypeText}>{t('grades').subjects.thesis}</Text>
+                    </View>
+                    {thesisEvent.subgroup ? (
+                      <Text style={styles.assessmentSubgroupText}>SG {thesisEvent.subgroup}</Text>
+                    ) : null}
+                  </View>
+
+                  <Text style={styles.assessmentSubjectText}>{thesisEvent.subject}</Text>
+                  <Text style={styles.assessmentMetaText} numberOfLines={2}>
+                    {[
+                      formatDisplayTimeRange(thesisEvent.startTime, thesisEvent.endTime),
+                      thesisEvent.room ? `${t('schedule').room} ${thesisEvent.room}` : '',
+                      thesisEvent.teacher || '',
+                    ]
+                      .filter(Boolean)
+                      .join(' • ')}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
+
           {isWeekend && !recoveryDay ? (
             <View style={styles.noSchedule}>
               <Text style={styles.noScheduleText}>{t('schedule').noClassesWeekend}</Text>
@@ -1109,6 +1394,8 @@ export default function DayView() {
                 const hasAssignments = item.period ? periodAssignmentCounts[item.period] > 0 : false;
                 const isPeriodExpanded = item.period ? expandedPeriods[item.period] : false;
                 const periodAssignmentsList = item.period ? periodAssignments[item.period] || [] : [];
+                const thesisMatches = getThesisEventsForItem(item);
+                const periodColor = getSubjectColor(item.className);
 
                 return (
                   <View
@@ -1129,9 +1416,9 @@ export default function DayView() {
                           item.subjectId,
                           item.className
                         ) : null}
-                    >
-                      <View style={[styles.classCard, {
-                        borderLeftColor: getSubjectColor(item.className),
+                      >
+                        <View style={[styles.classCard, {
+                        borderLeftColor: periodColor,
                         backgroundColor: '#1A1A1A',
                         shadowOpacity: 0.1,
                         minHeight: 100,
@@ -1243,6 +1530,40 @@ export default function DayView() {
                               <Text style={styles.roomNumber}>{t('schedule').room} {item.roomNumber}</Text>
                             </View>
                           </View>
+
+                          {thesisMatches.length > 0 && (
+                            <View style={styles.thesisInlineContainer}>
+                              {thesisMatches.map((thesisEvent) => {
+                                const inlineMeta = getInlineThesisMeta(thesisEvent, item);
+                                return (
+                                  <View
+                                    key={`${buildSpecialEventKey(thesisEvent)}-${item.period || thesisEvent.period || 'n'}`}
+                                    style={[
+                                      styles.thesisInlineCard,
+                                      {
+                                        backgroundColor: withAlpha(periodColor, 0.18),
+                                        borderColor: withAlpha(periodColor, 0.45),
+                                      },
+                                      inlineMeta.isFullyRedundant && styles.thesisInlineCardCompact,
+                                    ]}
+                                  >
+                                    <View style={styles.thesisInlineHeader}>
+                                      <Ionicons name="document-text-outline" size={12} color={withAlpha(periodColor, 0.95)} />
+                                      <Text style={styles.thesisInlineTitle}>{t('grades').subjects.thesis}</Text>
+                                      {thesisEvent.subgroup ? (
+                                        <Text style={styles.thesisInlineSubgroup}>SG {thesisEvent.subgroup}</Text>
+                                      ) : null}
+                                    </View>
+                                    {!inlineMeta.isFullyRedundant && Boolean(inlineMeta.text) && (
+                                      <Text style={styles.thesisInlineMeta} numberOfLines={2}>
+                                        {inlineMeta.text}
+                                      </Text>
+                                    )}
+                                  </View>
+                                );
+                              })}
+                            </View>
+                          )}
                           
                           {/* Assignments expandable section */}
                           {hasAssignments && isPeriodExpanded && (
@@ -1397,6 +1718,14 @@ function getSubjectColor(subjectName: string): string {
   return colors[index];
 }
 
+function withAlpha(hexColor: string, alpha: number): string {
+  const normalized = hexColor.replace('#', '');
+  if (normalized.length !== 6) return hexColor;
+  const numericAlpha = Math.max(0, Math.min(1, alpha));
+  const alphaHex = Math.round(numericAlpha * 255).toString(16).padStart(2, '0');
+  return `#${normalized}${alphaHex}`;
+}
+
 type Styles = {
   container: ViewStyle;
   header: ViewStyle;
@@ -1503,6 +1832,28 @@ type Styles = {
   loadingAssignmentsText: TextStyle;
   noAssignments: ViewStyle;
   noAssignmentsText: TextStyle;
+  assessmentSection: ViewStyle;
+  assessmentSectionTitle: TextStyle;
+  assessmentCard: ViewStyle;
+  assessmentCardExam: ViewStyle;
+  assessmentCardThesis: ViewStyle;
+  assessmentCardHeader: ViewStyle;
+  assessmentTypeBadge: ViewStyle;
+  assessmentTypeBadgeExam: ViewStyle;
+  assessmentTypeBadgeThesis: ViewStyle;
+  assessmentTypeText: TextStyle;
+  assessmentSubgroupText: TextStyle;
+  assessmentSubjectText: TextStyle;
+  assessmentMetaText: TextStyle;
+  specialLoadingRow: ViewStyle;
+  specialLoadingText: TextStyle;
+  thesisInlineContainer: ViewStyle;
+  thesisInlineCard: ViewStyle;
+  thesisInlineCardCompact: ViewStyle;
+  thesisInlineHeader: ViewStyle;
+  thesisInlineTitle: TextStyle;
+  thesisInlineSubgroup: TextStyle;
+  thesisInlineMeta: TextStyle;
 };
 
 const styles = StyleSheet.create<Styles>({
@@ -2179,5 +2530,122 @@ const styles = StyleSheet.create<Styles>({
     color: '#8A8A8D',
     fontSize: 14,
     fontStyle: 'italic',
+  },
+  assessmentSection: {
+    marginBottom: 16,
+    gap: 10,
+  },
+  assessmentSectionTitle: {
+    color: '#D8E2FF',
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+    marginBottom: 2,
+  },
+  assessmentCard: {
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    gap: 6,
+  },
+  assessmentCardExam: {
+    backgroundColor: 'rgba(255, 149, 0, 0.08)',
+    borderColor: 'rgba(255, 149, 0, 0.26)',
+  },
+  assessmentCardThesis: {
+    backgroundColor: 'rgba(52, 120, 246, 0.1)',
+    borderColor: 'rgba(52, 120, 246, 0.3)',
+  },
+  assessmentCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  assessmentTypeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  assessmentTypeBadgeExam: {
+    backgroundColor: 'rgba(255, 149, 0, 0.2)',
+  },
+  assessmentTypeBadgeThesis: {
+    backgroundColor: 'rgba(52, 120, 246, 0.22)',
+  },
+  assessmentTypeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+  },
+  assessmentSubgroupText: {
+    color: '#AFAFB4',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  assessmentSubjectText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  assessmentMetaText: {
+    color: '#AFAFB4',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  specialLoadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 16,
+  },
+  specialLoadingText: {
+    color: '#8A8A8D',
+    fontSize: 13,
+  },
+  thesisInlineContainer: {
+    marginTop: 10,
+    gap: 8,
+  },
+  thesisInlineCard: {
+    backgroundColor: 'rgba(52, 120, 246, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(52, 120, 246, 0.25)',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 6,
+  },
+  thesisInlineCardCompact: {
+    paddingVertical: 6,
+  },
+  thesisInlineHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  thesisInlineTitle: {
+    color: '#E9F4FF',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  thesisInlineSubgroup: {
+    color: '#B9D9FF',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  thesisInlineMeta: {
+    color: '#D2E7FF',
+    fontSize: 12,
+    lineHeight: 17,
   },
 });

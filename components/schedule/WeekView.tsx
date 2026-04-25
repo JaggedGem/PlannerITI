@@ -1,13 +1,25 @@
 import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Dimensions, ViewStyle, TextStyle, ActivityIndicator } from 'react-native';
 import React from 'react';
-import { useEffect, useState, useRef, useCallback } from 'react';
-import { scheduleService, DAYS_MAP, ApiResponse, RecoveryDay } from '@/services/scheduleService';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import {
+  scheduleService,
+  DAYS_MAP,
+  ApiResponse,
+  RecoveryDay,
+  ThesisScheduleEvent,
+  ExamScheduleEvent,
+  SpecialScheduleResponse,
+} from '@/services/scheduleService';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useTimeUpdate } from '@/hooks/useTimeUpdate';
 import Animated, { useAnimatedStyle, withTiming, withSpring, FadeIn, FadeOut, Layout, useSharedValue } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import ViewModeMenu from './ViewModeMenu';
 import { SafeAreaView, Edge } from 'react-native-safe-area-context';
+import {
+  filterExamEventsForDate,
+  filterThesisEventsForDate,
+} from '@/utils/specialScheduleUtils';
 
 // Get week start (Monday) from current date
 const getWeekStart = (date: Date): Date => {
@@ -127,7 +139,6 @@ interface TimetableItemProps {
   height: number;
   color: string;
   isActive: boolean;
-  timeFormat: string;
 }
 
 const TimetableItem = ({ 
@@ -135,14 +146,8 @@ const TimetableItem = ({
   top, 
   height, 
   color, 
-  isActive, 
-  timeFormat
+  isActive,
 }: TimetableItemProps) => {
-  // Create time display with just hours (no minutes)
-  const startHour = parseInt(item.startTime.split(':')[0]);
-  const endHour = parseInt(item.endTime.split(':')[0]);
-  const timeDisplay = `${startHour}–${endHour}`;
-  
   // Safely handle assignment count
   const assignmentCount = item.assignmentCount || 0;
   
@@ -169,7 +174,7 @@ const TimetableItem = ({
         end={{ x: 1, y: 1 }}
         style={styles.itemGradient}
       >
-        <View style={{ flex: 1 }}>
+        <View style={styles.itemHeader}>
           <Text style={styles.className} numberOfLines={1}>
             {item.className}
           </Text>
@@ -342,6 +347,13 @@ type Styles = {
   dateContainer: ViewStyle;
   dayAssignmentBadge: ViewStyle;
   dayAssignmentBadgeText: TextStyle;
+  daySpecialBadges: ViewStyle;
+  daySpecialBadge: ViewStyle;
+  daySpecialBadgeExam: ViewStyle;
+  daySpecialBadgeThesis: ViewStyle;
+  daySpecialBadgeLoading: ViewStyle;
+  daySpecialBadgeText: TextStyle;
+  dayColumnThesis: ViewStyle;
   timetableContainer: ViewStyle;
   timeColumn: ViewStyle;
   timeSlot: ViewStyle;
@@ -351,6 +363,7 @@ type Styles = {
   dayContent: ViewStyle;
   timetableItem: ViewStyle;
   itemGradient: ViewStyle;
+  itemHeader: ViewStyle;
   className: TextStyle;
   roomNumber: TextStyle;
   itemFooter: ViewStyle;
@@ -381,6 +394,7 @@ type Styles = {
   closeTooltipText: TextStyle;
   recoveryDayTooltipReason: TextStyle;
   weekendColumn: ViewStyle;
+  dayContentThesis: ViewStyle;
   gridLine: ViewStyle;
   assignmentBadge: ViewStyle;
   assignmentBadgeText: TextStyle;
@@ -417,6 +431,9 @@ const EMPTY_WEEK_SCHEDULE: Record<string, ScheduleItem[]> = {
 export default function WeekView() {
   const [scheduleData, setScheduleData] = useState<ApiResponse | null>(null);
   const [weekSchedule, setWeekSchedule] = useState<Record<string, ScheduleItem[]>>(EMPTY_WEEK_SCHEDULE);
+  const [thesisSchedule, setThesisSchedule] = useState<SpecialScheduleResponse | null>(null);
+  const [examSchedule, setExamSchedule] = useState<SpecialScheduleResponse | null>(null);
+  const [isSpecialScheduleLoading, setIsSpecialScheduleLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [settings, setSettings] = useState(scheduleService.getSettings());
@@ -453,6 +470,14 @@ export default function WeekView() {
   // Initialize settings ref at the top level
   const settingsRef = useRef(scheduleService.getSettings());
   const refreshVersionRef = useRef(scheduleService.getScheduleRefreshVersion());
+  const thesisEvents = useMemo(
+    () => (thesisSchedule?.events || []).filter((event): event is ThesisScheduleEvent => event.type === 'thesis'),
+    [thesisSchedule]
+  );
+  const examEvents = useMemo(
+    () => (examSchedule?.events || []).filter((event): event is ExamScheduleEvent => event.type === 'exam'),
+    [examSchedule]
+  );
 
   // Calculate current week start date (Monday)
   const weekStartDate = new Date();
@@ -468,6 +493,45 @@ export default function WeekView() {
     date.setDate(weekStartDate.getDate() + dayOffset);
     return date;
   };
+
+  const loadCachedSpecialSchedules = useCallback(
+    async (groupName?: string) => {
+      const resolvedGroupName = String(groupName || scheduleService.getSettings().selectedGroupName || '').trim();
+
+      if (!resolvedGroupName) {
+        setThesisSchedule(null);
+        setExamSchedule(null);
+        return;
+      }
+
+      setIsSpecialScheduleLoading(true);
+      try {
+        const { thesis, exam } = await scheduleService.getCachedExamAndThesisSchedule(resolvedGroupName);
+        setThesisSchedule(thesis);
+        setExamSchedule(exam);
+      } catch (specialError) {
+        setThesisSchedule(
+          scheduleService.buildUnavailableSpecialSchedule(
+            'thesis',
+            resolvedGroupName,
+            'cache_read_failed',
+            'Unable to load cached thesis schedule'
+          )
+        );
+        setExamSchedule(
+          scheduleService.buildUnavailableSpecialSchedule(
+            'exam',
+            resolvedGroupName,
+            'cache_read_failed',
+            'Unable to load cached exam schedule'
+          )
+        );
+      } finally {
+        setIsSpecialScheduleLoading(false);
+      }
+    },
+    []
+  );
 
   // Make fetchSchedule and updateWeekSchedule use useCallback
   const fetchSchedule = useCallback(async (groupId?: string, targetWeekOffset?: number, forceSync: boolean = false) => {
@@ -523,12 +587,13 @@ export default function WeekView() {
       }
       
       setWeekSchedule(newWeekSchedule);
+      await loadCachedSpecialSchedules(scheduleService.getSettings().selectedGroupName);
       setIsLoading(false);
     } catch (error) {
       setError(t('schedule').error || 'Failed to load schedule');
       setIsLoading(false);
     }
-  }, [t, settings.selectedGroupId, weekOffset]);
+  }, [t, settings.selectedGroupId, weekOffset, loadCachedSpecialSchedules]);
 
   // Schedule update function wrapped in useCallback
   const updateWeekSchedule = useCallback(async () => {
@@ -571,8 +636,9 @@ export default function WeekView() {
       }
       
       setWeekSchedule(newWeekSchedule);
+      await loadCachedSpecialSchedules(scheduleService.getSettings().selectedGroupName);
     }
-  }, [scheduleData, weekStart, settings.selectedGroupId, getDateForDay]);
+  }, [scheduleData, weekStart, settings.selectedGroupId, getDateForDay, loadCachedSpecialSchedules]);
 
   // Add useEffect for initial schedule load
   useEffect(() => {
@@ -583,6 +649,10 @@ export default function WeekView() {
     
     initializeSchedule();
   }, []);
+
+  useEffect(() => {
+    void loadCachedSpecialSchedules(settings.selectedGroupName);
+  }, [settings.selectedGroupName, loadCachedSpecialSchedules]);
 
   // Settings subscription effect for updates when settings change
   useEffect(() => {
@@ -607,12 +677,14 @@ export default function WeekView() {
         setWeekOffset(0);
         setWeekSchedule({ ...EMPTY_WEEK_SCHEDULE });
         await currFetchSchedule(newSettings.selectedGroupId, 0, true);
+        await loadCachedSpecialSchedules(newSettings.selectedGroupName);
         return;
       }
       
       // Handle group ID change (full refetch needed)
       if (newSettings.selectedGroupId !== prevSettings.selectedGroupId) {
         await currFetchSchedule(newSettings.selectedGroupId);
+        await loadCachedSpecialSchedules(newSettings.selectedGroupName);
         return;
       }
       
@@ -680,7 +752,7 @@ export default function WeekView() {
     const unsubscribe = scheduleService.subscribe(updateHandler);
     
     return () => unsubscribe();
-  }, [scheduleData, updateWeekSchedule, fetchSchedule, weekStart, getDateForDay, weekOffset]);
+  }, [scheduleData, updateWeekSchedule, fetchSchedule, weekStart, getDateForDay, weekOffset, loadCachedSpecialSchedules]);
 
   // Calculate day dates for the week, including weekend recovery days if they exist
   const normalDayCount = 5; // Monday-Friday
@@ -1047,6 +1119,8 @@ export default function WeekView() {
             const dayReasonItem = dayItems.find(item => typeof item?.recoveryReason === 'string' && item.recoveryReason.trim().length > 0);
             const dayReason = dayReasonItem?.recoveryReason?.trim() || day.recoveryDay?.reason || '';
             const visibleDayItems = dayItems.filter(item => item && item.period !== 'recovery-info');
+            const dayThesisEvents = filterThesisEventsForDate(thesisEvents, day.date, settings.group);
+            const dayExamEvents = filterExamEventsForDate(examEvents, day.date, settings.group);
             
             // Calculate total assignments for the day
             const totalAssignments = visibleDayItems.reduce((total, item) => total + (item.assignmentCount || 0), 0);
@@ -1058,6 +1132,7 @@ export default function WeekView() {
                   styles.dayColumn,
                   { width: dayColumnWidth }, 
                   day.isToday && styles.todayColumn,
+                  dayThesisEvents.length > 0 && styles.dayColumnThesis,
                   day.isWeekend && styles.weekendColumn
                 ]}
                 entering={FadeIn.duration(200).delay(index * 50)}
@@ -1071,6 +1146,25 @@ export default function WeekView() {
                 )}
                 <Text style={styles.dayName}>{day.dayName}</Text>
                 <Text style={styles.dateText}>{day.dayNumber}</Text>
+                {(dayExamEvents.length > 0 || dayThesisEvents.length > 0 || (isSpecialScheduleLoading && index === 0)) && (
+                  <View style={styles.daySpecialBadges}>
+                    {dayExamEvents.length > 0 && (
+                      <View style={[styles.daySpecialBadge, styles.daySpecialBadgeExam]}>
+                        <Text style={styles.daySpecialBadgeText}>E {dayExamEvents.length}</Text>
+                      </View>
+                    )}
+                    {dayThesisEvents.length > 0 && (
+                      <View style={[styles.daySpecialBadge, styles.daySpecialBadgeThesis]}>
+                        <Text style={styles.daySpecialBadgeText}>T {dayThesisEvents.length}</Text>
+                      </View>
+                    )}
+                    {isSpecialScheduleLoading && index === 0 && (
+                      <View style={[styles.daySpecialBadge, styles.daySpecialBadgeLoading]}>
+                        <Text style={styles.daySpecialBadgeText}>...</Text>
+                      </View>
+                    )}
+                  </View>
+                )}
                 {Boolean(dayReason) && (
                   <View style={styles.recoveryDayInfoHeader}>
                     <RecoveryDayInfo
@@ -1154,6 +1248,7 @@ export default function WeekView() {
                 const isToday = day.isToday;
                 const isWeekend = day.isWeekend;
                 const isRecoveryDay = day.recoveryDay != null;
+                const dayThesisEvents = filterThesisEventsForDate(thesisEvents, day.date, settings.group);
 
                 // Filter items based on current week (odd/even) with null check
                 const filteredItems = Array.isArray(dayItems) ? dayItems.filter(item => 
@@ -1173,6 +1268,7 @@ export default function WeekView() {
                         left: dayIndex * dayColumnWidth,
                       },
                       isToday && { backgroundColor: 'rgba(52, 120, 246, 0.03)' },
+                      dayThesisEvents.length > 0 && styles.dayContentThesis,
                       (isRecoveryDay || isWeekend) && { backgroundColor: 'rgba(255, 87, 51, 0.05)' }
                     ]}
                     entering={FadeIn.duration(150).delay(dayIndex * 30)}
@@ -1201,7 +1297,6 @@ export default function WeekView() {
                           height={height}
                           color={color}
                           isActive={isActive}
-                          timeFormat={settings.language}
                         />
                       );
                     })}
@@ -1452,6 +1547,40 @@ const styles = StyleSheet.create<Styles>({
     fontWeight: 'bold',
     textAlign: 'center',
   },
+  daySpecialBadges: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  daySpecialBadge: {
+    borderRadius: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    minWidth: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  daySpecialBadgeExam: {
+    backgroundColor: 'rgba(255, 149, 0, 0.3)',
+  },
+  daySpecialBadgeThesis: {
+    backgroundColor: 'rgba(52, 120, 246, 0.35)',
+  },
+  daySpecialBadgeLoading: {
+    backgroundColor: 'rgba(138, 138, 141, 0.35)',
+  },
+  daySpecialBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  dayColumnThesis: {
+    backgroundColor: 'rgba(77, 150, 255, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(77, 150, 255, 0.28)',
+  },
   timetableContainer: {
     flexDirection: 'row',
     paddingTop: 8,
@@ -1494,6 +1623,9 @@ const styles = StyleSheet.create<Styles>({
     marginHorizontal: 2,
     borderRadius: 8,
   },
+  dayContentThesis: {
+    backgroundColor: 'rgba(77, 150, 255, 0.08)',
+  },
   timetableItem: {
     position: 'absolute',
     left: 2,
@@ -1506,6 +1638,11 @@ const styles = StyleSheet.create<Styles>({
     padding: 6,
     justifyContent: 'space-between',
   },
+  itemHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
   className: {
     color: '#FFFFFF',
     fontSize: 11,
@@ -1513,6 +1650,8 @@ const styles = StyleSheet.create<Styles>({
     textShadowColor: 'rgba(0, 0, 0, 0.5)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
+    flex: 1,
+    marginRight: 4,
   },
   itemFooter: {
     flexDirection: 'row',
@@ -1529,7 +1668,7 @@ const styles = StyleSheet.create<Styles>({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
     flex: 1,
-    marginRight: 4,
+    marginRight: 6,
   },
   currentTimeIndicator: {
 		position: 'absolute',
