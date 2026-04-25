@@ -698,7 +698,7 @@ export default function WeekView() {
            (rd.groupId === '' || rd.groupId === settings.selectedGroupId);
   });
 
-  const totalDays = weekSchedule.monday.length > 0 ? normalDayCount + weekendRecoveryDays.length : normalDayCount;
+  const totalDays = normalDayCount + weekendRecoveryDays.length;
   
   const dayDates = Array.from({ length: totalDays }, (_, i) => {
     // First 5 days are the normal weekdays
@@ -1046,13 +1046,14 @@ export default function WeekView() {
             const dayItems = weekSchedule[dayKey as keyof typeof weekSchedule] || [];
             const dayReasonItem = dayItems.find(item => typeof item?.recoveryReason === 'string' && item.recoveryReason.trim().length > 0);
             const dayReason = dayReasonItem?.recoveryReason?.trim() || day.recoveryDay?.reason || '';
+            const visibleDayItems = dayItems.filter(item => item && item.period !== 'recovery-info');
             
             // Calculate total assignments for the day
-            const totalAssignments = dayItems.reduce((total, item) => total + (item.assignmentCount || 0), 0);
+            const totalAssignments = visibleDayItems.reduce((total, item) => total + (item.assignmentCount || 0), 0);
             
             return (
               <Animated.View 
-                key={index} 
+                key={day.dayKey}
                 style={[
                   styles.dayColumn,
                   { width: dayColumnWidth }, 
@@ -1156,12 +1157,14 @@ export default function WeekView() {
 
                 // Filter items based on current week (odd/even) with null check
                 const filteredItems = Array.isArray(dayItems) ? dayItems.filter(item => 
-                  item && (item.isEvenWeek === undefined || item.isEvenWeek === isEvenWeek)
+                  item &&
+                  item.period !== 'recovery-info' &&
+                  (item.isEvenWeek === undefined || item.isEvenWeek === isEvenWeek)
                 ) : [];
 
                 return (
                   <Animated.View 
-                    key={`day_${dayIndex}`} 
+                    key={`day_${day.dayKey}`}
                     style={[
                       styles.dayContent, 
                       { 
@@ -1192,7 +1195,7 @@ export default function WeekView() {
 
                       return (
                         <TimetableItem 
-                          key={itemIndex}
+                          key={`${item.period || itemIndex}-${item.startTime}-${item.endTime}-${item.className}`}
                           item={item}
                           top={top}
                           height={height}

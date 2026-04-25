@@ -284,7 +284,11 @@ Build profiles are defined in `eas.json`:
   - `/index.php/date/info/{idnp}` - Fetch student grades
 
 ### Custom Backend API
-- **Base URL**: `https://papi.jagged.site`
+- **Development resolution order**:
+  - `CUSTOM_API_LOCAL_URL` (full URL)
+  - `CUSTOM_API_LOCAL_HOST` + `CUSTOM_API_LOCAL_PORT` (defaults to `5000`)
+  - Expo host-derived local URLs (plus Android/iOS emulator fallbacks)
+- **Production fallback URL**: `https://papi.jagged.site`
 - **Features**:
   - User authentication and management
   - Period time synchronization

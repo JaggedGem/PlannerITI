@@ -3,12 +3,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import authService from './authService';
 import { scheduleService as scheduleServiceImport, UserSettings } from './scheduleService';
 import Constants from "expo-constants";
+import { fetchCustomApi } from '../utils/customApi';
 
 // To avoid circular dependency, we'll set this after initialization
 let scheduleService = scheduleServiceImport;
-
-// API endpoint
-const API_URL = 'https://papi.jagged.site';
 
 // Get environment variables from Expo Constants
 const getEnvVars = () => {
@@ -245,7 +243,7 @@ class SettingsService {
     }
 
     try {
-      const response = await fetch(`${API_URL}${endpoint}`, {
+      const response = await fetchCustomApi(endpoint, {
         method,
         headers,
         body: body ? JSON.stringify(body) : undefined,

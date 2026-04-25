@@ -3,8 +3,8 @@ import { Platform, DeviceEventEmitter } from 'react-native';
 import * as crypto from 'crypto-js';
 import Constants from "expo-constants";
 import * as SecureStore from 'expo-secure-store';
+import { fetchCustomApi } from '../utils/customApi';
 
-const API_URL = 'https://papi.jagged.site';
 const GRAVATAR_API_URL = 'https://api.gravatar.com/v3';
 
 // Get environment variables from Expo Constants
@@ -222,21 +222,13 @@ class AuthService {
       headers['Authorization'] = `Bearer ${this.token}`;
     }
 
-    // Create an AbortController to handle request timeouts
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => {
-      controller.abort();
-    }, REQUEST_TIMEOUT);
-    
     try {
-      const response = await fetch(`${API_URL}${endpoint}`, {
+      const response = await fetchCustomApi(endpoint, {
         method,
         headers,
         body: body ? JSON.stringify(body) : undefined,
-        signal: controller.signal
+        timeoutMs: REQUEST_TIMEOUT
       });
-  
-      clearTimeout(timeoutId);
   
       if (!response.ok) {
         // Handle 401 Unauthorized - expired token
@@ -262,7 +254,6 @@ class AuthService {
           return {};
       }
     } catch (error) {
-      clearTimeout(timeoutId);
       if (error instanceof Error) {
         if (error.name === 'AbortError') {
           throw new Error('Request timeout');

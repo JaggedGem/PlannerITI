@@ -221,6 +221,14 @@ export default function DayView() {
       isRecoveryDay: Boolean(itemWithReason?.isRecoveryDay || recoveryDay),
     };
   }, [todaySchedule, recoveryDay]);
+  const visibleTodaySchedule = useMemo(() => {
+    if (!Array.isArray(todaySchedule)) return [];
+    return todaySchedule.filter(item =>
+      item &&
+      item.period !== 'recovery-info' &&
+      (item.isEvenWeek === undefined || item.isEvenWeek === isEvenWeek)
+    );
+  }, [todaySchedule, isEvenWeek]);
   const currentTime = useTimeUpdate();
   
   // Initialize refs at the top level
@@ -1088,26 +1096,15 @@ export default function DayView() {
             <View style={styles.noSchedule}>
               <Text style={styles.noScheduleText}>{t('schedule').noClassesWeekend}</Text>
             </View>
-          ) : !todaySchedule || todaySchedule.length === 0 ? (
+          ) : visibleTodaySchedule.length === 0 ? (
             <View style={styles.noSchedule}>
               <Text style={styles.noScheduleText}>{t('schedule').noClassesDay}</Text>
             </View>
           ) : (
-              todaySchedule.map((item, index) => {
+              visibleTodaySchedule.map((item, index) => {
                 // Add null check for item
                 if (!item) return null;
-                
-                // Skip the recovery-info item but just use it to display the banner
-                if (item.period === 'recovery-info') {
-                  // We're already showing the recovery day banner separately
-                  return null;
-                }
 
-                if (item.isEvenWeek !== undefined && item.isEvenWeek !== isEvenWeek) {
-                  return null;
-                }
-
-                const nextItem = todaySchedule[index + 1];
                 const showTimeIndicator = isCurrentTimeInSchedule(item);
                 const hasAssignments = item.period ? periodAssignmentCounts[item.period] > 0 : false;
                 const isPeriodExpanded = item.period ? expandedPeriods[item.period] : false;
@@ -1115,7 +1112,7 @@ export default function DayView() {
 
                 return (
                   <View
-                    key={index}
+                    key={`${item.period || 'period'}-${item.startTime}-${item.endTime}-${item.className}`}
                     style={[styles.scheduleItem]}
                     onLayout={(event) => {
                       item._height = event.nativeEvent.layout.height;
@@ -1196,7 +1193,7 @@ export default function DayView() {
                                     const startTimeMinutes = startHours * 60 + startMinutes;
 
                                     if (currentTimeMinutes < startTimeMinutes) {
-                                      const previousItem = index > 0 ? todaySchedule[index - 1] : null;
+                                      const previousItem = index > 0 ? visibleTodaySchedule[index - 1] : null;
                                       if (previousItem && isCurrentTimeInSchedule(previousItem)) {
                                         // Calculate minutes until start and round up (so 59 seconds = 1 minute)
                                         const now = new Date();
