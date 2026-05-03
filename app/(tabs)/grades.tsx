@@ -417,7 +417,7 @@ const IDNPScreen = ({ onSave, errorMessage, isSubmitting }: {
 }) => {
   const [idnp, setIdnp] = useState('');
   const [error, setError] = useState(errorMessage || '');
-  const { t } = useTranslation();
+  const { t, currentLanguage } = useTranslation();
 
   useEffect(() => {
     if (errorMessage) {
@@ -498,7 +498,7 @@ const IDNPScreen = ({ onSave, errorMessage, isSubmitting }: {
 
 // Loading screen component
 const LoadingScreen = ({ message }: { message?: string }) => {
-  const { t } = useTranslation();
+  const { t, currentLanguage } = useTranslation();
   
   return (
     <View style={styles.loadingContainer}>
@@ -519,7 +519,7 @@ const SemesterDropdown = ({
   onSemesterChange: (index: number) => void 
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const { t } = useTranslation();
+  const { t, currentLanguage } = useTranslation();
 
   const toggleDropdown = () => {
     setIsOpen(prev => !prev);
@@ -728,7 +728,7 @@ const ExamsView = ({
   officialSchedule: OfficialScheduleState;
   selectedSubgroup: 'Subgroup 1' | 'Subgroup 2';
 }) => {
-  const { t } = useTranslation();
+  const { t, currentLanguage } = useTranslation();
   
   const safeExams = exams || [];
 
@@ -893,78 +893,164 @@ const ExamsView = ({
       </View>
 
       {/* Exams list */}
-      <ScrollView style={styles.examsList}>
-        <Text style={styles.sectionTitle}>Portal Exams</Text>
-        {Object.entries(examsByType).map(([type, examList]) => (
-          <View key={type} style={styles.examTypeSection}>
-            <Text style={styles.examTypeTitle}>{type}</Text>
-            {examList.map((exam, index) => (
-              (() => {
-                const officialMatch = findMatchingOfficialEvent(exam, officialEvents);
-                const officialSummary = officialMatch
-                  ? formatOfficialEventSummary(officialMatch, t('schedule').room)
-                  : '';
+      <ScrollView style={styles.examsList} contentContainerStyle={styles.examsListContent}>
+              {Object.entries(examsByType).map(([type, examList]) => (
+                <View key={type} style={styles.examTypeSection}>
+                  {examList.map((exam, index) => {
+                    const normalizedType = normalizeExamType(exam.type);
+                    const officialMatch = findMatchingOfficialEvent(exam, officialEvents);
+                    const officialSummary = officialMatch
+                      ? formatOfficialEventSummary(officialMatch, t('schedule').room)
+                      : '';
 
-                return (
-                  <Animated.View
-                    key={`${type}-${index}`}
-                    entering={FadeInUp.delay(index * 100).springify()}
-                    style={styles.examCard}
-                  >
-                    <View style={styles.examHeaderRow}>
-                      <Text style={styles.examSubject}>{exam.name}</Text>
-                    </View>
-                    <View style={styles.examDetails}>
-                      <Text style={styles.examSemester}>
-                        {formatSemesterLabel(exam.semester)}
-                      </Text>
-                      {!exam.isUpcoming && (
-                        <Text style={styles.examGrade}>{exam.grade}</Text>
-                      )}
-                    </View>
-                    {exam.isUpcoming && (
-                      <View
+                    return (
+                      <Animated.View
+                        key={`${type}-${index}`}
+                        entering={FadeInUp.delay(index * 80).springify()}
                         style={[
-                          styles.upcomingIndicatorContainer,
-                          officialSummary && styles.upcomingIndicatorContainerInfo,
+                          styles.examCard,
+                          normalizedType === 'thesis' && styles.examCardThesis,
+                          normalizedType === 'exam' && styles.examCardExamVariant,
                         ]}
                       >
-                        <MaterialIcons
-                          name={officialSummary ? 'event-note' : 'schedule'}
-                          size={16}
-                          color={officialSummary ? '#1D3E72' : '#5B4200'}
-                        />
-                        <Text
-                          style={[
-                            styles.upcomingIndicatorText,
-                            officialSummary
-                              ? styles.upcomingIndicatorInfoText
-                              : styles.upcomingIndicatorDefaultText,
-                          ]}
-                        >
-                          {officialSummary || t('grades').subjects.upcoming}
-                        </Text>
-                      </View>
-                    )}
-                    {officialSummary && !exam.isUpcoming && (
-                      <Text style={styles.examOfficialMeta}>
-                        {officialSummary}
-                      </Text>
-                    )}
-                  </Animated.View>
-                );
-              })()
-            ))}
-          </View>
-        ))}
-        
-        {Object.keys(examsByType).length === 0 && (
-          <Text style={styles.emptyText}>
-            {selectedSemester !== null 
-              ? t('grades').semesters.noDataSemester.replace('{{semester}}', selectedSemester.toString())
-              : t('grades').semesters.noData}
-          </Text>
-        )}
+                        <View style={styles.examHeaderRow}>
+                          <Text style={styles.examSubject} numberOfLines={2}>{exam.name}</Text>
+                          <View style={[
+                            styles.examTypePill,
+                            normalizedType === 'thesis' && styles.examTypePillThesis,
+                            normalizedType === 'exam' && styles.examTypePillExamVariant,
+                            normalizedType === 'other' && styles.examTypePillOther,
+                          ]}>
+                            <Text style={styles.examTypePillText}>{exam.type}</Text>
+                          </View>
+                        </View>
+                        <View style={styles.examDetails}>
+                          <Text style={styles.examSemester}>
+                            {formatSemesterLabel(exam.semester)}
+                          </Text>
+                          {!exam.isUpcoming ? (
+                            <Text style={[
+                              styles.examGrade,
+                              normalizedType === 'thesis' && styles.examGradeThesis,
+                              normalizedType === 'exam' && styles.examGradeExam,
+                            ]}>{exam.grade}</Text>
+                          ) : (
+                            <Text style={styles.upcomingExamGrade}>TBD</Text>
+                          )}
+                        </View>
+                        {exam.isUpcoming && (
+                          <View
+                            style={[
+                              styles.upcomingIndicatorContainer,
+                              officialSummary && styles.upcomingIndicatorContainerInfo,
+                            ]}
+                          >
+                            <MaterialIcons
+                              name={officialSummary ? 'event-note' : 'schedule'}
+                              size={16}
+                              color={officialSummary ? '#A8C8FF' : '#FFBC5E'}
+                            />
+                            <Text
+                              style={[
+                                styles.upcomingIndicatorText,
+                                officialSummary
+                                  ? styles.upcomingIndicatorInfoText
+                                  : styles.upcomingIndicatorDefaultText,
+                              ]}
+                            >
+                              {officialSummary || t('grades').subjects.upcoming}
+                            </Text>
+                          </View>
+                        )}
+                        {officialSummary && !exam.isUpcoming && (
+                          <Text style={styles.examOfficialMeta}>
+                            {officialSummary}
+                          </Text>
+                        )}
+                      </Animated.View>
+                    );
+                  })}
+                </View>
+              ))}
+
+              {Object.keys(examsByType).length === 0 && (
+                <Text style={styles.emptyText}>
+                  {selectedSemester !== null
+                    ? t('grades').semesters.noDataSemester.replace('{{semester}}', selectedSemester.toString())
+                    : t('grades').semesters.noData}
+                </Text>
+              )}
+
+              {/* Official schedule section */}
+              {officialEvents.length > 0 && (
+                <View style={styles.officialSectionContainer}>
+                  <View style={styles.officialSectionHeader}>
+                    <Text style={styles.sectionTitle}>{t('grades').subjects.officialSchedule}</Text>
+                  </View>
+                  {(() => {
+                    const sortedByDate: Record<string, OfficialAssessmentEvent[]> = {};
+                    officialEvents.forEach(event => {
+                      if (!sortedByDate[event.date]) sortedByDate[event.date] = [];
+                      sortedByDate[event.date].push(event);
+                    });
+
+                    return Object.entries(sortedByDate).sort(([a], [b]) => a.localeCompare(b)).map(([date, events], dateIdx) => {
+                      const eventDate = parseEventDate(date);
+                      const dateLabel = Number.isFinite(eventDate.getTime())
+                        ? formatLocalizedDate(eventDate, currentLanguage, false)
+                        : date;
+
+                      return (
+                        <View key={`official-${date}`} style={styles.officialDateGroup}>
+                          <Text style={styles.officialDateTitle}>{dateLabel}</Text>
+                          {events.map((event, eventIdx) => {
+                            const timeLabel = event.type === 'exam'
+                              ? formatExamTimeLabel(event)
+                              : formatThesisTimeLabel(event);
+                            const room = event.room ? `${t('schedule').room} ${event.room}` : '';
+                            const subgroup = event.subgroup ? `SG ${event.subgroup}` : '';
+                            const meta = [timeLabel, room, subgroup, event.teacher].filter(Boolean).join(' \u2022 ');
+
+                            return (
+                              <Animated.View
+                                key={`official-${date}-${eventIdx}`}
+                                entering={FadeInUp.delay((dateIdx * 3 + eventIdx) * 60).springify()}
+                                style={[
+                                  styles.officialEventCard,
+                                  event.type === 'exam' ? styles.officialEventCardExam : styles.officialEventCardThesis,
+                                ]}
+                              >
+                                <View style={styles.officialEventHeader}>
+                                  <View style={[
+                                    styles.officialEventTypePill,
+                                    event.type === 'exam' ? styles.officialEventTypePillExam : styles.officialEventTypePillThesis,
+                                  ]}>
+                                    <Text style={styles.officialEventTypeText}>
+                                      {event.type === 'exam' ? t('grades').subjects.exam : t('grades').subjects.thesis}
+                                    </Text>
+                                  </View>
+                                  {event.subgroup ? (
+                                    <Text style={styles.officialEventSubgroup}>SG {event.subgroup}</Text>
+                                  ) : null}
+                                </View>
+                                <Text style={styles.officialEventSubject}>{event.subject}</Text>
+                                {meta ? <Text style={styles.officialEventMeta} numberOfLines={2}>{meta}</Text> : null}
+                              </Animated.View>
+                            );
+                          })}
+                        </View>
+                      );
+                    });
+                  })()}
+                </View>
+              )}
+
+              {officialEvents.length === 0 && Object.keys(examsByType).length > 0 && officialSchedule.thesis !== null && officialSchedule.exam !== null && (
+                <View style={styles.officialSectionContainer}>
+                  <Text style={styles.sectionTitle}>{t('grades').subjects.officialSchedule}</Text>
+                  <Text style={styles.noOfficialDataText}>{t('grades').subjects.noOfficialExams}</Text>
+                </View>
+              )}
       </ScrollView>
     </View>
   );
@@ -1742,9 +1828,24 @@ const GradesScreen = ({
   }, [studentGrades?.studentInfo.group]);
 
   useEffect(() => {
-    if (viewMode !== 'exams') return;
     void loadCachedOfficialSchedule();
-  }, [viewMode, loadCachedOfficialSchedule]);
+  }, [loadCachedOfficialSchedule]);
+
+  useEffect(() => {
+    void loadCachedOfficialSchedule();
+    // Also trigger a background network refresh when viewing exams
+    if (viewMode === 'exams') {
+      const groupName = String(studentGrades?.studentInfo.group || scheduleService.getSettings().selectedGroupName || '').trim();
+      if (groupName) {
+        scheduleService
+          .getExamAndThesisSchedule(groupName)
+          .then(({ thesis, exam }) => {
+            setOfficialSchedule({ thesis, exam, loading: false });
+          })
+          .catch(() => {});
+      }
+    }
+  }, [viewMode, loadCachedOfficialSchedule, studentGrades?.studentInfo.group]);
 
   const handleRefresh = useCallback(async () => {
     if (refreshing) return;
@@ -3049,7 +3150,6 @@ const styles = StyleSheet.create({
   examsList: {
     flex: 1,
     padding: 20,
-    paddingBottom: 100,
   },
   sectionTitle: {
     color: '#E9EEFF',
@@ -3060,14 +3160,10 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   examTypeSection: {
-    marginBottom: 24,
+    marginBottom: 8,
   },
   examTypeTitle: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 12,
-    paddingHorizontal: 4,
+    display: 'none',
   },
   examCard: {
     backgroundColor: '#1A1A1A',
@@ -3094,6 +3190,55 @@ const styles = StyleSheet.create({
     color: '#4D96FF',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  examCardThesis: {
+    borderLeftWidth: 3,
+    borderLeftColor: 'rgba(77, 150, 255, 0.6)',
+  },
+  examCardExamVariant: {
+    borderLeftWidth: 3,
+    borderLeftColor: 'rgba(255, 149, 0, 0.6)',
+  },
+  examTypePill: {
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    backgroundColor: 'rgba(138, 138, 141, 0.2)',
+    marginLeft: 8,
+  },
+  examTypePillThesis: {
+    backgroundColor: 'rgba(77, 150, 255, 0.2)',
+  },
+  examTypePillExamVariant: {
+    backgroundColor: 'rgba(255, 149, 0, 0.2)',
+  },
+  examTypePillOther: {
+    backgroundColor: 'rgba(138, 138, 141, 0.15)',
+  },
+  examTypePillText: {
+    color: '#C8D0E0',
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+  examGradeThesis: {
+    color: '#6EB0FF',
+  },
+  examGradeExam: {
+    color: '#FFA94D',
+  },
+  examsListContent: {
+    paddingBottom: 100,
+  },
+  officialSectionContainer: {
+    marginTop: 16,
+  },
+  noOfficialDataText: {
+    color: '#8A8A8D',
+    fontSize: 13,
+    fontStyle: 'italic',
+    marginTop: 4,
+    paddingHorizontal: 4,
   },
   officialSectionHeader: {
     marginTop: 8,
@@ -3434,7 +3579,9 @@ const styles = StyleSheet.create({
   upcomingIndicatorContainer: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: 'rgba(255, 214, 10, 0.28)',
+    backgroundColor: 'rgba(255, 149, 0, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 149, 0, 0.3)',
     paddingHorizontal: 8,
     paddingVertical: 6,
     borderRadius: 8,
@@ -3442,7 +3589,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   upcomingIndicatorContainerInfo: {
-    backgroundColor: 'rgba(77, 150, 255, 0.24)',
+    backgroundColor: 'rgba(77, 150, 255, 0.12)',
+    borderColor: 'rgba(77, 150, 255, 0.3)',
   },
   upcomingIndicatorText: {
     fontSize: 12,
@@ -3451,10 +3599,10 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   upcomingIndicatorDefaultText: {
-    color: '#5B4200',
+    color: '#FFBC5E',
   },
   upcomingIndicatorInfoText: {
-    color: '#1D3E72',
+    color: '#A8C8FF',
   },
   examOfficialMeta: {
     marginTop: 8,
@@ -3463,7 +3611,7 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   upcomingExamGrade: {
-    color: '#FFD700',
+    color: '#FFBC5E',
   },
   emptyContainer: {
     flex: 1,

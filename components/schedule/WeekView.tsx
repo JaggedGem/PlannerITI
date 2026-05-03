@@ -353,6 +353,7 @@ type Styles = {
   daySpecialBadgeThesis: ViewStyle;
   daySpecialBadgeLoading: ViewStyle;
   daySpecialBadgeText: TextStyle;
+  dayColumnExam: ViewStyle;
   dayColumnThesis: ViewStyle;
   timetableContainer: ViewStyle;
   timeColumn: ViewStyle;
@@ -394,6 +395,7 @@ type Styles = {
   closeTooltipText: TextStyle;
   recoveryDayTooltipReason: TextStyle;
   weekendColumn: ViewStyle;
+  dayContentExam: ViewStyle;
   dayContentThesis: ViewStyle;
   gridLine: ViewStyle;
   assignmentBadge: ViewStyle;
@@ -1132,6 +1134,7 @@ export default function WeekView() {
                   styles.dayColumn,
                   { width: dayColumnWidth }, 
                   day.isToday && styles.todayColumn,
+                  dayExamEvents.length > 0 && styles.dayColumnExam,
                   dayThesisEvents.length > 0 && styles.dayColumnThesis,
                   day.isWeekend && styles.weekendColumn
                 ]}
@@ -1249,6 +1252,7 @@ export default function WeekView() {
                 const isWeekend = day.isWeekend;
                 const isRecoveryDay = day.recoveryDay != null;
                 const dayThesisEvents = filterThesisEventsForDate(thesisEvents, day.date, settings.group);
+                const dayExamEvents = filterExamEventsForDate(examEvents, day.date, settings.group);
 
                 // Filter items based on current week (odd/even) with null check
                 const filteredItems = Array.isArray(dayItems) ? dayItems.filter(item => 
@@ -1268,6 +1272,7 @@ export default function WeekView() {
                         left: dayIndex * dayColumnWidth,
                       },
                       isToday && { backgroundColor: 'rgba(52, 120, 246, 0.03)' },
+                      dayExamEvents.length > 0 && dayThesisEvents.length === 0 && styles.dayContentExam,
                       dayThesisEvents.length > 0 && styles.dayContentThesis,
                       (isRecoveryDay || isWeekend) && { backgroundColor: 'rgba(255, 87, 51, 0.05)' }
                     ]}
@@ -1576,6 +1581,11 @@ const styles = StyleSheet.create<Styles>({
     fontWeight: '700',
     letterSpacing: 0.2,
   },
+  dayColumnExam: {
+    backgroundColor: 'rgba(255, 149, 0, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 149, 0, 0.2)',
+  },
   dayColumnThesis: {
     backgroundColor: 'rgba(77, 150, 255, 0.14)',
     borderWidth: 1,
@@ -1622,6 +1632,9 @@ const styles = StyleSheet.create<Styles>({
     top: 0,
     marginHorizontal: 2,
     borderRadius: 8,
+  },
+  dayContentExam: {
+    backgroundColor: 'rgba(255, 149, 0, 0.06)',
   },
   dayContentThesis: {
     backgroundColor: 'rgba(77, 150, 255, 0.08)',

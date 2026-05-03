@@ -1323,7 +1323,7 @@ export default function DayView() {
         <ScrollView style={styles.scheduleContainer}>
           {hasStandaloneAssessments && (
             <View style={styles.assessmentSection}>
-              <Text style={styles.assessmentSectionTitle}>Assessments</Text>
+              <Text style={styles.assessmentSectionTitle}>{t('schedule').assessments}</Text>
 
               {selectedDateExamEvents.map((examEvent) => (
                 <View key={buildSpecialEventKey(examEvent)} style={[styles.assessmentCard, styles.assessmentCardExam]}>
@@ -2575,7 +2575,7 @@ const styles = StyleSheet.create<Styles>({
     backgroundColor: 'rgba(255, 149, 0, 0.2)',
   },
   assessmentTypeBadgeThesis: {
-    backgroundColor: 'rgba(52, 120, 246, 0.22)',
+    backgroundColor: 'rgba(77, 150, 255, 0.25)',
   },
   assessmentTypeText: {
     color: '#FFFFFF',

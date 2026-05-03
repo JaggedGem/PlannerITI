@@ -319,6 +319,7 @@ export const scheduleService = {
   cachedDatePeriodTimes: {} as DatePeriodTimesMap,
   cachedSubjects: [] as Subject[],
   cachedAssignmentCounts: [] as PeriodAssignmentCount[],
+  specialScheduleFetchedThisSession: new Set<string>(),
   // Debug controls
   _debug: false,
   _ready: false,
@@ -1223,6 +1224,10 @@ export const scheduleService = {
     return normalizedGroup.length > 0 ? normalizedGroup : '__meta__';
   },
 
+  getSpecialScheduleSessionKey(type: SpecialScheduleType, groupName?: string): string {
+    return `${type}_${this.getSpecialScheduleCacheScope(groupName)}`;
+  },
+
   getSpecialScheduleCacheKey(type: SpecialScheduleType, groupName?: string): string {
     return `${CACHE_KEYS.SPECIAL_SCHEDULE_PREFIX}${type}_${this.getSpecialScheduleCacheScope(groupName)}`;
   },
@@ -1405,6 +1410,14 @@ export const scheduleService = {
     const normalizedGroup = this.normalizeSpecialScheduleGroupName(
       groupName || this.settings.selectedGroupName
     );
+    const sessionKey = this.getSpecialScheduleSessionKey(type, normalizedGroup);
+
+    if (this.specialScheduleFetchedThisSession.has(sessionKey)) {
+      const cached = await this.readSpecialScheduleCache(type, normalizedGroup, false);
+      if (cached) {
+        return cached;
+      }
+    }
 
     if (!forceRefresh) {
       const freshCached = await this.readSpecialScheduleCache(type, normalizedGroup, true);
@@ -1430,6 +1443,7 @@ export const scheduleService = {
       const payload = await response.json();
       const normalized = this.normalizeSpecialScheduleResponse(type, normalizedGroup || null, payload);
       await this.cacheSpecialSchedule(type, normalizedGroup, normalized);
+      this.specialScheduleFetchedThisSession.add(sessionKey);
       return normalized;
     } catch (error) {
       const staleCached = await this.readSpecialScheduleCache(type, normalizedGroup, false);
@@ -1996,6 +2010,7 @@ export const scheduleService = {
     // Also clear assignment counts when resetting
     this.cachedAssignmentCounts = [];
     AsyncStorage.removeItem(CACHE_KEYS.ASSIGNMENT_COUNTS);
+    this.specialScheduleFetchedThisSession.clear();
     
     this.saveSettings();
     this.notifyListeners();
