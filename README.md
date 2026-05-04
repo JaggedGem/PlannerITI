@@ -13,9 +13,9 @@
 
 ## 📖 Overview
 
-PlannerITI is a modern, feature-rich mobile application designed specifically for students at the College of Excellence in IT (CEITI). It combines schedule management, assignment tracking, grade monitoring, and intelligent notifications into one seamless experience.
+PlannerITI is a modern, feature-rich mobile application designed specifically for students at the College of Excellence in IT (CEITI). It combines schedule management, assignment tracking, grade monitoring, official exam/thesis schedules, and intelligent notifications into one seamless experience.
 
-Built with React Native and Expo, PlannerITI offers a native-like experience on both iOS and Android platforms with a beautiful, intuitive interface optimized for student productivity.
+Built with React Native, Expo, and Expo Router, PlannerITI offers an offline-first experience on iOS and Android with OTA update support and a polished, responsive UI optimized for student productivity.
 
 ## ✨ Key Features
 
@@ -24,10 +24,12 @@ Built with React Native and Expo, PlannerITI offers a native-like experience on 
 - **Day & Week Views**: Toggle between detailed daily view and comprehensive weekly overview
 - **Even/Odd Week Detection**: Automatically determines the current week type
 - **Recovery Day Support**: Special handling for weekend recovery classes
+- **Official Thesis/Exam Schedule**: Pulls official assessments with subgroup-aware matching
 - **Custom Periods**: Create and manage custom time blocks for extracurricular activities
 - **Subgroup Filtering**: Display classes specific to your subgroup (Subgroup 1 or 2)
 - **Offline Support**: Cached schedules available even without internet connection
 - **Assignment Integration**: See assignment counts directly on each class period
+- **Daily Period Sync**: Period times and overrides sync automatically
 
 ### 📝 Assignment Tracking
 - **Multiple Views**: Organize assignments by due date, class, or priority
@@ -44,6 +46,7 @@ Built with React Native and Expo, PlannerITI offers a native-like experience on 
 - **Real-time Grade Display**: View current semester grades and averages
 - **Semester Overview**: Access grades for all semesters (Semester I & II)
 - **Exam Tracking**: Monitor upcoming and completed exams (Examen, Teza, Practică)
+- **Official Schedule Matching**: Cross-references official exam/thesis schedules when available
 - **Automatic Average Calculation**: Real-time computation of subject and semester averages
 - **Exam Grade Integration**: Automatically applies exam grades to semester averages using proper weighting
 - **Absence Tracking**: Monitor total, sick, excused, and unexcused absences
@@ -57,26 +60,27 @@ Built with React Native and Expo, PlannerITI offers a native-like experience on 
 
 ### 🔔 Intelligent Notifications
 - **Smart Reminders**: Customizable reminder schedules based on assignment type
-  - Exams: Default 3 days before
-  - Tests: Default 2 days before
-  - Quizzes: Default 2 days before
-  - Projects: Default 3 days before
-  - Homework: Default 1 day before
+  - Exams: Default 7 days before
+  - Tests: Default 5 days before
+  - Quizzes: Default 3 days before
+  - Projects: Default 5 days before
+  - Homework: Default 2 days before
   - Other: Default 1 day before
-- **Daily Digest**: Optional morning summary of upcoming assignments
+- **Daily Digest**: Optional daily summary of upcoming assignments
 - **Type-Specific Daily Reminders**: Enable daily reminders for specific assignment types (exams, tests, quizzes)
 - **Customizable Timing**: Set your preferred notification time
 - **Completion Awareness**: Automatically cancels notifications for completed assignments
 - **Priority Alerts**: Enhanced notifications for priority assignments
 
 ### 🔐 Account & Sync (Authentication System)
-- **Secure Authentication**: Email-based login with password encryption
+- **Secure Authentication**: Email-based login with token auth and secure credential storage
 - **Email Verification**: Verify your account via email
 - **Password Reset**: Secure password recovery system
 - **Gravatar Integration**: Automatic profile pictures from Gravatar
 - **Account Management**: View profile, manage settings, delete account
 - **Skip Login Option**: Use the app without creating an account
 - **Session Management**: Automatic token refresh and secure session handling
+- **Settings Sync**: Uploads user settings and notification preferences when logged in
 
 ### 🌍 Localization
 - **Multi-Language Support**: 
@@ -88,7 +92,7 @@ Built with React Native and Expo, PlannerITI offers a native-like experience on 
 - **Translation Coverage**: Complete UI translation including all features
 
 ### ⚙️ Customization
-- **Theme Support**: Optimized dark theme for comfortable viewing
+- **Theme Support**: Automatic light/dark mode with custom styling
 - **Schedule Views**: Switch between day and week views
 - **Group Selection**: Choose from all CEITI groups (e.g., P-2422, M-2422, etc.)
 - **Custom Period Management**: Create, edit, and delete custom time blocks
@@ -98,6 +102,12 @@ Built with React Native and Expo, PlannerITI offers a native-like experience on 
   - Enable/disable periods as needed
 - **Notification Preferences**: Fine-tune all notification settings
 - **IDNP Management**: Securely store and manage your student ID
+
+### 🔄 Updates & Release Channels
+- **OTA Updates**: Staged over-the-air updates via Expo Updates
+- **Release Notifications**: In-app update prompts from GitHub releases
+- **Channel Awareness**: Beta/production filtering based on app variant
+- **Remind Later**: Snooze update prompts for a week
 
 ## 🚀 Getting Started
 
@@ -155,14 +165,21 @@ Built with React Native and Expo, PlannerITI offers a native-like experience on 
    ```
 
 3. **Build for Android**
-   ```bash
-   eas build --platform android
-   ```
+  ```bash
+  npm run build
+  ```
 
 4. **Build for iOS**
-   ```bash
-   eas build --platform ios
-   ```
+  ```bash
+  npm run build:ios
+  ```
+
+### OTA Updates
+
+```bash
+npm run update       # Android (beta channel)
+npm run update:ios   # iOS (beta channel)
+```
 
 ### Local Builds
 
@@ -187,6 +204,10 @@ PlannerITI/
 │   │   ├── grades.tsx            # Grade tracking
 │   │   └── settings.tsx          # App settings
 │   ├── auth.tsx                  # Authentication screen
+│   ├── forgot-password.tsx       # Forgot password flow
+│   ├── reset-password.tsx        # Reset password flow
+│   ├── signup.tsx                # Sign-up flow
+│   ├── privacy-policy.tsx        # Privacy policy screen
 │   ├── new-assignment.tsx        # Create assignment
 │   ├── edit-assignment.tsx       # Edit assignment
 │   ├── archive.tsx               # Archived assignments
@@ -195,17 +216,21 @@ PlannerITI/
 │   ├── assignments/              # Assignment-related components
 │   ├── auth/                     # Authentication components
 │   ├── schedule/                 # Schedule view components
-│   └── ui/                       # UI primitives
+│   ├── ui/                       # UI primitives
+│   ├── LoginNotification.tsx     # Login prompt banner
+│   └── UpdateNotification.tsx    # Update prompt modal
 ├── services/                     # Business logic & API
 │   ├── authService.ts            # Authentication service
 │   ├── scheduleService.ts        # Schedule management
 │   ├── gradesService.ts          # Grades API integration
-│   └── settingsService.ts        # Settings persistence
+│   ├── settingsService.ts        # Settings persistence
+│   └── updateService.ts          # Update checks + OTA staging
 ├── utils/                        # Utility functions
 │   ├── assignmentStorage.ts     # Assignment data management
 │   ├── notificationHelper.ts    # Notification scheduling
 │   ├── notificationUtils.ts     # Notification configuration
-│   └── dateLocalization.ts      # Date formatting
+│   ├── dateLocalization.ts      # Date formatting
+│   └── specialScheduleUtils.ts   # Thesis/exam filtering helpers
 ├── constants/                    # App constants
 │   ├── Colors.ts                 # Color definitions
 │   └── Translations.ts           # Translation strings
@@ -226,17 +251,19 @@ The app uses `app.config.js` for configuration. Key settings:
 
 - **App Name**: PlannerITI
 - **Slug**: planneriti
-- **Version**: 1.0.1
+- **Version**: 1.2.0-beta.1
 - **Orientation**: Portrait (locked)
 - **Splash Screen**: Custom splash with icon
-- **Status Bar**: Light content style
+- **Theme**: Automatic light/dark
 - **Permissions**: Notifications
+- **Runtime Version**: Configurable via `RUNTIME_VERSION`
+- **New Architecture**: Enabled
 
 ### EAS Configuration
 
 Build profiles are defined in `eas.json`:
 - **Development**: Development builds with dev client
-- **Preview**: Internal testing builds
+- **Beta**: Internal testing builds and OTA updates
 - **Production**: Release builds for stores
 
 ## 🛠️ Technologies Used
@@ -254,6 +281,7 @@ Build profiles are defined in `eas.json`:
 ### Data & Storage
 - **AsyncStorage** 2.2.0 - Local data persistence
 - **Expo SecureStore** ~15.0.7 - Secure credential storage
+- **Expo Updates** ~29.0.12 - OTA updates
 
 ### UI & Animation
 - **React Native Reanimated** ~4.1.1 - Smooth animations
@@ -261,6 +289,7 @@ Build profiles are defined in `eas.json`:
 - **Expo Blur** ~15.0.7 - Blur effects
 - **Expo Linear Gradient** ~15.0.7 - Gradient backgrounds
 - **Expo Haptics** ~15.0.7 - Haptic feedback
+- **React Native Markdown Display** ^7.0.2 - Release notes rendering
 
 ### Utilities
 - **date-fns** 4.1.0 - Date manipulation
@@ -294,6 +323,7 @@ Build profiles are defined in `eas.json`:
   - Period time synchronization
   - Recovery day scheduling
   - Encrypted data storage
+  - Official thesis/exam schedules
 
 ## 🔒 Security & Privacy
 
@@ -307,6 +337,7 @@ Build profiles are defined in `eas.json`:
 ## 🐛 Known Issues & Limitations
 
 - **iOS Simulator**: Some notification features may not work in iOS Simulator (test on device)
+- **Expo Go Limitations**: Push token registration may be unavailable; local notifications still work
 - **Network Dependency**: Schedule and grade sync require internet connection
 - **Group Changes**: When switching groups, some assignments may become "orphaned" (can be restored)
 - **IDNP Requirement**: Grade features require a valid CEITI IDNP number
@@ -335,7 +366,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 👥 Authors
 
-- **Orlet** - *Initial work* - [JaggedGem](https://github.com/JaggedGem)
+- **Bogdan** - *Main developer for the app* - [JaggedGem](https://github.com/JaggedGem)
 
 ## 🙏 Acknowledgments
 
