@@ -170,6 +170,16 @@ export default function RootLayout() {
   }, [loaded]);
 
   useEffect(() => {
+    if (!loaded) {
+      return;
+    }
+
+    updateService.initializeUpdateStorage().catch((error) => {
+      console.error('Error preparing update storage:', error);
+    });
+  }, [loaded]);
+
+  useEffect(() => {
     if (loaded && startupReady) {
       SplashScreen.hideAsync();
     }

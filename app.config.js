@@ -26,6 +26,7 @@ module.exports = () => {
       icon: "assets/images/icon.png",
       scheme: "myapp",
       userInterfaceStyle: "automatic",
+      jsEngine: "hermes",
       newArchEnabled: true,
       ios: {
         supportsTablet: true,

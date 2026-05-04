@@ -10,7 +10,8 @@ import {
   useColorScheme,
   ActivityIndicator,
   Alert,
-  DeviceEventEmitter
+  DeviceEventEmitter,
+  Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -69,6 +70,38 @@ export default function UpdateNotification() {
     };
   }, []);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    const syncDownloadedState = async () => {
+      if (!updateInfo) return;
+
+      const downloaded = await updateService.getDownloadedUpdateForVersion(
+        updateInfo.latestVersion,
+        updateInfo.downloadAssetName
+      );
+
+      if (!isMounted) return;
+
+      setUpdateInfo(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          isDownloaded: Boolean(downloaded),
+          downloadedFilePath: downloaded?.fileUri || null,
+        };
+      });
+    };
+
+    syncDownloadedState().catch(error => {
+      console.error('Error syncing downloaded update state:', error);
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [updateInfo?.latestVersion, updateInfo?.downloadAssetName]);
+
   const checkForUpdates = async () => {
     try {
       const update = await updateService.checkForUpdate();
@@ -106,47 +139,79 @@ export default function UpdateNotification() {
       return;
     }
 
-    const primaryDownloadUrl = updateInfo.downloadUrl;
-    const fallbackReleaseUrl = updateInfo.releaseUrl;
-    const targetUrl = primaryDownloadUrl || fallbackReleaseUrl;
-
-    if (!targetUrl) {
-      Alert.alert(
-        'Download Not Available',
-        'Please visit the releases page to download the update manually.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { 
-            text: 'Open Releases', 
-            onPress: () => Linking.openURL(updateInfo?.releaseUrl || '')
-          }
-        ]
-      );
-      return;
-    }
-
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setIsDownloading(true);
     
     try {
+      const primaryDownloadUrl = updateInfo.downloadUrl;
+      const fallbackReleaseUrl = updateInfo.releaseUrl;
+      const targetUrl = primaryDownloadUrl || fallbackReleaseUrl;
+
+      if (!targetUrl) {
+        Alert.alert(
+          'Download Not Available',
+          'Please visit the releases page to download the update manually.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Open Releases', 
+              onPress: () => Linking.openURL(updateInfo?.releaseUrl || '')
+            }
+          ]
+        );
+        return;
+      }
+
+      if (Platform.OS !== 'android') {
+        const opened = await openUrlSafely(targetUrl);
+        if (opened) {
+          closeModal();
+          return;
+        }
+        Alert.alert('Error', 'Failed to open update link');
+        return;
+      }
+
+      if (hasDownloadedUpdate) {
+        const installed = await updateService.installDownloadedUpdate(updateInfo.latestVersion);
+        if (installed) {
+          closeModal();
+          return;
+        }
+        Alert.alert('Install Failed', 'Could not start the installer for this update.');
+        return;
+      }
+
+      if (!updateInfo.downloadUrl) {
+        const openedFallback = await openUrlSafely(fallbackReleaseUrl);
+        if (openedFallback) {
+          closeModal();
+          return;
+        }
+        Alert.alert('Error', 'Failed to open update link');
+        return;
+      }
+
+      const downloaded = await updateService.downloadUpdate(updateInfo);
+      if (downloaded?.downloadedFilePath) {
+        setUpdateInfo(downloaded);
+        const installed = await updateService.installDownloadedUpdate(downloaded.latestVersion);
+        if (installed) {
+          closeModal();
+          return;
+        }
+      }
+
       const openedPrimary = await openUrlSafely(targetUrl);
       if (openedPrimary) {
         closeModal();
         return;
       }
 
-      if (fallbackReleaseUrl && targetUrl !== fallbackReleaseUrl) {
-        const openedFallback = await openUrlSafely(fallbackReleaseUrl);
-        if (openedFallback) {
-          closeModal();
-          return;
-        }
-      }
-
-      Alert.alert('Error', 'Failed to open update link');
+      Alert.alert('Error', 'Failed to download update');
     } catch (error) {
       console.error('Error opening download link:', error);
-      Alert.alert('Error', 'Failed to open update link');
+      Alert.alert('Error', 'Failed to download update');
     } finally {
       setIsDownloading(false);
     }
@@ -271,6 +336,10 @@ export default function UpdateNotification() {
   }), [isDark]);
 
   if (!updateInfo) return null;
+
+  const hasDownloadedUpdate = Boolean(
+    updateInfo.downloadedFilePath || updateInfo.isDownloaded
+  );
 
   const publishedDate = format(new Date(updateInfo.publishedAt), 'MMM d, yyyy');
 
@@ -414,10 +483,16 @@ export default function UpdateNotification() {
               {isDownloading ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
-                <Ionicons name="download" size={18} color="#FFFFFF" />
+                <Ionicons
+                  name={hasDownloadedUpdate ? 'flash' : 'download'}
+                  size={18}
+                  color="#FFFFFF"
+                />
               )}
               <Text style={styles.primaryButtonText}>
-                {isDownloading ? 'Opening Link...' : 'Download Update'}
+                {isDownloading
+                  ? (hasDownloadedUpdate ? 'Launching Installer...' : 'Downloading...')
+                  : (hasDownloadedUpdate ? 'Install Update' : 'Download Update')}
               </Text>
             </AnimatedPressable>
           </View>

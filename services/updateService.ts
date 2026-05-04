@@ -1,6 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Application from 'expo-application';
 import Constants from 'expo-constants';
+import * as Device from 'expo-device';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as IntentLauncher from 'expo-intent-launcher';
+import * as Network from 'expo-network';
 import * as Updates from 'expo-updates';
 import { Platform } from 'react-native';
 
@@ -10,6 +14,10 @@ const REPO_NAME = 'PlannerITI';
 const DISMISSED_VERSION_KEY = '@dismissed_update_version';
 const LAST_CHECK_DATE_KEY = '@last_check_date';
 const OTA_PENDING_UPDATE_KEY = '@ota_pending_update';
+const UPDATE_SETTINGS_KEY = '@update_settings';
+const DOWNLOADED_UPDATE_KEY = '@downloaded_update_info';
+const UPDATE_DOWNLOAD_ROOT = FileSystem.documentDirectory ?? FileSystem.cacheDirectory ?? '';
+const UPDATE_DOWNLOAD_DIR = UPDATE_DOWNLOAD_ROOT ? `${UPDATE_DOWNLOAD_ROOT}updates` : '';
 const REMIND_LATER_DAYS = 7;
 
 export const UPDATE_AVAILABLE_EVENT = 'UPDATE_AVAILABLE';
@@ -36,8 +44,26 @@ export interface UpdateInfo {
   latestVersion: string;
   releaseNotes: string;
   downloadUrl: string;
+  downloadAssetName: string;
+  downloadSize: number;
   releaseUrl: string;
   publishedAt: string;
+  downloadedFilePath?: string | null;
+  isDownloaded?: boolean;
+  targetAbi?: string | null;
+}
+
+interface UpdateSettings {
+  autoDownloadOnWifi: boolean;
+}
+
+interface DownloadedUpdateInfo {
+  version: string;
+  assetName: string;
+  fileUri: string;
+  downloadedAt: string;
+  size: number;
+  abi: string | null;
 }
 
 interface RemindLaterData {
@@ -50,11 +76,17 @@ interface PendingOtaUpdateData {
   fetchedAt: string;
 }
 
+const DEFAULT_UPDATE_SETTINGS: UpdateSettings = {
+  autoDownloadOnWifi: true,
+};
+
 class UpdateService {
   private currentChannel: 'beta' | 'production' | 'development';
   private currentVersion: string;
   private configuredVariant: string;
   private isExpoGo: boolean;
+  private updateSettingsCache: UpdateSettings | null = null;
+  private activeDownloadVersion: string | null = null;
 
   /**
    * Infer release track from semantic prerelease tags (e.g. 1.2.0-beta.1).
@@ -129,6 +161,351 @@ class UpdateService {
     return null;
   }
 
+  private sanitizeFileName(value: string): string {
+    return value.replace(/[^a-zA-Z0-9._-]+/g, '-');
+  }
+
+  private getAndroidTargetAbi(): string | null {
+    if (Platform.OS !== 'android') {
+      return null;
+    }
+
+    const supported = Device.supportedCpuArchitectures;
+    if (!supported || supported.length === 0) {
+      return null;
+    }
+
+    const normalized = supported.map(abi => abi.toLowerCase());
+    const matches = (tokens: string[]) =>
+      normalized.some(item => tokens.some(token => item.includes(token)));
+
+    if (matches(['arm64', 'aarch64'])) return 'arm64-v8a';
+    if (matches(['armeabi', 'armv7', 'armv7a', 'armv7-a'])) return 'armeabi-v7a';
+    if (matches(['x86_64', 'x86-64', 'amd64'])) return 'x86_64';
+    if (matches(['x86'])) return 'x86';
+
+    return null;
+  }
+
+  private getAbiMatchTokens(abi: string): string[] {
+    switch (abi) {
+      case 'arm64-v8a':
+        return ['arm64-v8a', 'arm64_v8a', 'arm64', 'aarch64'];
+      case 'armeabi-v7a':
+        return ['armeabi-v7a', 'armeabi_v7a', 'armv7', 'armeabi'];
+      case 'x86_64':
+        return ['x86_64', 'x86-64', 'amd64'];
+      case 'x86':
+        return ['x86'];
+      default:
+        return [abi.toLowerCase()];
+    }
+  }
+
+  private assetNameMatchesAbiToken(assetName: string, token: string): boolean {
+    if (token === 'x86') {
+      if (assetName.includes('x86_64') || assetName.includes('x86-64')) {
+        return false;
+      }
+
+      return /(^|[^a-z0-9])x86([^a-z0-9]|$)/.test(assetName);
+    }
+
+    return assetName.includes(token);
+  }
+
+  private async getUpdateSettings(): Promise<UpdateSettings> {
+    if (this.updateSettingsCache) {
+      return this.updateSettingsCache;
+    }
+
+    try {
+      const raw = await AsyncStorage.getItem(UPDATE_SETTINGS_KEY);
+      const parsed = raw ? (JSON.parse(raw) as Partial<UpdateSettings>) : null;
+      this.updateSettingsCache = {
+        ...DEFAULT_UPDATE_SETTINGS,
+        ...(parsed || {}),
+      };
+    } catch (error) {
+      console.error('Error loading update settings:', error);
+      this.updateSettingsCache = { ...DEFAULT_UPDATE_SETTINGS };
+    }
+
+    return this.updateSettingsCache;
+  }
+
+  async getAutoDownloadOnWifiSetting(): Promise<boolean> {
+    const settings = await this.getUpdateSettings();
+    return settings.autoDownloadOnWifi;
+  }
+
+  async setAutoDownloadOnWifiSetting(enabled: boolean): Promise<void> {
+    const settings = await this.getUpdateSettings();
+    this.updateSettingsCache = { ...settings, autoDownloadOnWifi: enabled };
+
+    try {
+      await AsyncStorage.setItem(
+        UPDATE_SETTINGS_KEY,
+        JSON.stringify(this.updateSettingsCache)
+      );
+    } catch (error) {
+      console.error('Error saving update settings:', error);
+    }
+  }
+
+  async initializeUpdateStorage(): Promise<void> {
+    await this.cleanupDownloadedUpdateIfStale();
+  }
+
+  private async ensureUpdateDirectory(): Promise<string | null> {
+    if (!UPDATE_DOWNLOAD_ROOT || !UPDATE_DOWNLOAD_DIR) {
+      return null;
+    }
+
+    try {
+      const info = await FileSystem.getInfoAsync(UPDATE_DOWNLOAD_DIR);
+      if (!info.exists) {
+        await FileSystem.makeDirectoryAsync(UPDATE_DOWNLOAD_DIR, { intermediates: true });
+      }
+      return UPDATE_DOWNLOAD_DIR;
+    } catch (error) {
+      console.error('Error preparing update directory:', error);
+      return null;
+    }
+  }
+
+  private async getDownloadedUpdateInfo(): Promise<DownloadedUpdateInfo | null> {
+    try {
+      const raw = await AsyncStorage.getItem(DOWNLOADED_UPDATE_KEY);
+      if (!raw) {
+        return null;
+      }
+
+      const parsed = JSON.parse(raw) as DownloadedUpdateInfo;
+      if (!parsed?.fileUri || !parsed?.version) {
+        return null;
+      }
+
+      const fileInfo = await FileSystem.getInfoAsync(parsed.fileUri);
+      if (!fileInfo.exists) {
+        await AsyncStorage.removeItem(DOWNLOADED_UPDATE_KEY);
+        return null;
+      }
+
+      return parsed;
+    } catch (error) {
+      console.error('Error reading downloaded update info:', error);
+      return null;
+    }
+  }
+
+  async getDownloadedUpdateForVersion(
+    version: string,
+    assetName?: string
+  ): Promise<DownloadedUpdateInfo | null> {
+    const downloaded = await this.getDownloadedUpdateInfo();
+    if (!downloaded || downloaded.version !== version) {
+      return null;
+    }
+
+    if (assetName) {
+      const assetMatch = downloaded.assetName
+        ? downloaded.assetName.toLowerCase() === assetName.toLowerCase()
+        : true;
+      if (!assetMatch) {
+        return null;
+      }
+    }
+
+    return downloaded;
+  }
+
+  private async saveDownloadedUpdateInfo(info: DownloadedUpdateInfo): Promise<void> {
+    try {
+      await AsyncStorage.setItem(DOWNLOADED_UPDATE_KEY, JSON.stringify(info));
+    } catch (error) {
+      console.error('Error saving downloaded update info:', error);
+    }
+  }
+
+  private async removeDownloadedUpdate(info?: DownloadedUpdateInfo | null): Promise<void> {
+    const target = info || await this.getDownloadedUpdateInfo();
+    if (!target) {
+      return;
+    }
+
+    try {
+      await FileSystem.deleteAsync(target.fileUri, { idempotent: true });
+    } catch (error) {
+      console.warn('Error removing downloaded update file:', error);
+    }
+
+    try {
+      await AsyncStorage.removeItem(DOWNLOADED_UPDATE_KEY);
+    } catch (error) {
+      console.error('Error clearing downloaded update metadata:', error);
+    }
+  }
+
+  private async cleanupDownloadedUpdateIfStale(): Promise<void> {
+    const downloaded = await this.getDownloadedUpdateInfo();
+    if (!downloaded) {
+      return;
+    }
+
+    const comparison = this.compareVersions(this.currentVersion, downloaded.version);
+    if (comparison !== 1) {
+      await this.removeDownloadedUpdate(downloaded);
+    }
+  }
+
+  private async isWifiConnection(): Promise<boolean> {
+    try {
+      const state = await Network.getNetworkStateAsync();
+      return Boolean(state.isConnected) && state.type === Network.NetworkStateType.WIFI;
+    } catch (error) {
+      console.error('Error checking network state:', error);
+      return false;
+    }
+  }
+
+  private async withLocalDownloadState(updateInfo: UpdateInfo): Promise<UpdateInfo> {
+    const downloaded = await this.getDownloadedUpdateForVersion(
+      updateInfo.latestVersion,
+      updateInfo.downloadAssetName
+    );
+
+    if (!downloaded) {
+      return updateInfo;
+    }
+
+    return {
+      ...updateInfo,
+      isDownloaded: true,
+      downloadedFilePath: downloaded.fileUri,
+    };
+  }
+
+  private async maybeAutoDownloadUpdate(updateInfo: UpdateInfo): Promise<UpdateInfo> {
+    if (Platform.OS !== 'android') {
+      return updateInfo;
+    }
+
+    if (updateInfo.isDownloaded || !updateInfo.downloadUrl) {
+      return updateInfo;
+    }
+
+    const autoDownload = await this.getAutoDownloadOnWifiSetting();
+    if (!autoDownload) {
+      return updateInfo;
+    }
+
+    const onWifi = await this.isWifiConnection();
+    if (!onWifi) {
+      return updateInfo;
+    }
+
+    const downloaded = await this.downloadUpdate(updateInfo);
+    return downloaded || updateInfo;
+  }
+
+  async downloadUpdate(updateInfo: UpdateInfo): Promise<UpdateInfo | null> {
+    if (!updateInfo.downloadUrl) {
+      return null;
+    }
+
+    if (this.activeDownloadVersion === updateInfo.latestVersion) {
+      return updateInfo;
+    }
+
+    const existing = await this.withLocalDownloadState(updateInfo);
+    if (existing.isDownloaded) {
+      return existing;
+    }
+
+    const downloadDir = await this.ensureUpdateDirectory();
+    if (!downloadDir) {
+      return null;
+    }
+
+    const prior = await this.getDownloadedUpdateInfo();
+    if (prior && prior.version !== updateInfo.latestVersion) {
+      await this.removeDownloadedUpdate(prior);
+    }
+
+    const assetName = updateInfo.downloadAssetName || `${REPO_NAME}-${updateInfo.latestVersion}.apk`;
+    const fileName = this.sanitizeFileName(assetName);
+    const fileUri = `${downloadDir}/${fileName}`;
+
+    this.activeDownloadVersion = updateInfo.latestVersion;
+
+    try {
+      const fileInfo = await FileSystem.getInfoAsync(fileUri);
+      if (!fileInfo.exists) {
+        const result = await FileSystem.downloadAsync(updateInfo.downloadUrl, fileUri);
+        const downloadedFileInfo = await FileSystem.getInfoAsync(result.uri);
+        const resolvedSize =
+          'size' in downloadedFileInfo && typeof downloadedFileInfo.size === 'number'
+            ? downloadedFileInfo.size
+            : 0;
+        const meta: DownloadedUpdateInfo = {
+          version: updateInfo.latestVersion,
+          assetName,
+          fileUri: result.uri,
+          downloadedAt: new Date().toISOString(),
+          size: updateInfo.downloadSize || resolvedSize,
+          abi: updateInfo.targetAbi || null,
+        };
+        await this.saveDownloadedUpdateInfo(meta);
+        return { ...updateInfo, isDownloaded: true, downloadedFilePath: result.uri };
+      }
+
+      const meta: DownloadedUpdateInfo = {
+        version: updateInfo.latestVersion,
+        assetName,
+        fileUri,
+        downloadedAt: new Date().toISOString(),
+        size: updateInfo.downloadSize || 0,
+        abi: updateInfo.targetAbi || null,
+      };
+      await this.saveDownloadedUpdateInfo(meta);
+      return { ...updateInfo, isDownloaded: true, downloadedFilePath: fileUri };
+    } catch (error) {
+      console.error('Error downloading update:', error);
+      return null;
+    } finally {
+      this.activeDownloadVersion = null;
+    }
+  }
+
+  async installDownloadedUpdate(version?: string): Promise<boolean> {
+    if (Platform.OS !== 'android') {
+      return false;
+    }
+
+    const downloaded = await this.getDownloadedUpdateInfo();
+    if (!downloaded) {
+      return false;
+    }
+
+    if (version && downloaded.version !== version) {
+      return false;
+    }
+
+    try {
+      const contentUri = await FileSystem.getContentUriAsync(downloaded.fileUri);
+      await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
+        data: contentUri,
+        flags: 1,
+        type: 'application/vnd.android.package-archive',
+      });
+      return true;
+    } catch (error) {
+      console.error('Error launching update installer:', error);
+      return false;
+    }
+  }
+
   constructor() {
     // Check if we're running in Expo Go (not a standalone build)
     this.isExpoGo = Constants.executionEnvironment === 'storeClient';
@@ -179,8 +556,11 @@ class UpdateService {
       latestVersion: release.tag_name,
       releaseNotes: release.body || 'No release notes available.',
       downloadUrl: downloadAsset?.browser_download_url || '',
+      downloadAssetName: downloadAsset?.name || '',
+      downloadSize: downloadAsset?.size || 0,
       releaseUrl: release.html_url,
       publishedAt: release.published_at,
+      targetAbi: this.getAndroidTargetAbi(),
     };
   }
 
@@ -190,23 +570,43 @@ class UpdateService {
   private getPreferredDownloadAsset(
     assets: GitHubRelease['assets']
   ): GitHubRelease['assets'][number] | undefined {
-    const lowerCasedAssets = assets.map(asset => ({
-      ...asset,
+    const normalizedAssets = assets.map(asset => ({
+      asset,
       name: asset.name.toLowerCase(),
     }));
 
     if (Platform.OS === 'android') {
-      return (
-        lowerCasedAssets.find(asset => asset.name.endsWith('.apk')) ||
-        lowerCasedAssets.find(asset => asset.name.endsWith('.aab'))
-      );
+      const abi = this.getAndroidTargetAbi();
+      const apkAssets = normalizedAssets.filter(item => item.name.endsWith('.apk'));
+
+      if (abi) {
+        const tokens = this.getAbiMatchTokens(abi);
+        const abiMatch = apkAssets.find(item =>
+          tokens.some(token => this.assetNameMatchesAbiToken(item.name, token))
+        );
+
+        if (abiMatch) {
+          return abiMatch.asset;
+        }
+      }
+
+      const universalMatch = apkAssets.find(item => item.name.includes('universal'));
+      if (universalMatch) {
+        return universalMatch.asset;
+      }
+
+      if (apkAssets.length > 0) {
+        return apkAssets[0].asset;
+      }
+
+      return undefined;
     }
 
     if (Platform.OS === 'ios') {
-      return lowerCasedAssets.find(asset => asset.name.endsWith('.ipa'));
+      return normalizedAssets.find(item => item.name.endsWith('.ipa'))?.asset;
     }
 
-    return lowerCasedAssets[0];
+    return normalizedAssets[0]?.asset;
   }
 
   /**
@@ -377,6 +777,8 @@ class UpdateService {
         return null;
       }
 
+      await this.cleanupDownloadedUpdateIfStale();
+
       // Check if we should perform an update check
       if (!forceCheck && !(await this.shouldCheckForUpdate())) {
         return null;
@@ -406,7 +808,10 @@ class UpdateService {
         return null;
       }
 
-      return this.mapReleaseToUpdateInfo(latestRelease);
+      const updateInfo = await this.withLocalDownloadState(
+        this.mapReleaseToUpdateInfo(latestRelease)
+      );
+      return await this.maybeAutoDownloadUpdate(updateInfo);
     } catch (error) {
       console.error('Error checking for update:', error);
       return null;
@@ -587,6 +992,27 @@ class UpdateService {
     return null;
   }
 
+  async clearDownloadedUpdatePackage(): Promise<void> {
+    await this.removeDownloadedUpdate();
+  }
+
+  async prepareLatestReleaseDownloadForTesting(): Promise<UpdateInfo | null> {
+    const update = await this.getLatestReleaseForTesting();
+    if (!update) {
+      return null;
+    }
+
+    if (update.isDownloaded) {
+      return update;
+    }
+
+    if (!update.downloadUrl) {
+      return update;
+    }
+
+    return await this.downloadUpdate(update);
+  }
+
   /**
    * Force fetch latest release info for testing (developer mode)
    * Always returns update info regardless of version comparison
@@ -598,7 +1024,9 @@ class UpdateService {
         return null;
       }
 
-      return this.mapReleaseToUpdateInfo(latestRelease);
+      return await this.withLocalDownloadState(
+        this.mapReleaseToUpdateInfo(latestRelease)
+      );
     } catch (error) {
       console.error('Error fetching latest release for testing:', error);
       return null;

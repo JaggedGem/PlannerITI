@@ -27,7 +27,7 @@ import { StorageViewer } from '../../components/StorageViewer';
 import * as Notifications from 'expo-notifications';
 import { initializeNotifications } from '../../utils/notificationUtils';
 import { formatCompactDate } from '@/utils/dateLocalization';
-import { updateService, UPDATE_AVAILABLE_EVENT } from '@/services/updateService';
+import { updateService, UPDATE_AVAILABLE_EVENT, UpdateInfo } from '@/services/updateService';
 
 // Store keys
 const IDNP_KEY = '@planner_idnp';
@@ -530,6 +530,7 @@ export default function Settings() {
   const [isCheckingForUpdate, setIsCheckingForUpdate] = useState(false);
   const [showUpToDateModal, setShowUpToDateModal] = useState(false);
   const [currentAppVersion, setCurrentAppVersion] = useState('');
+  const [autoDownloadUpdates, setAutoDownloadUpdates] = useState(true);
   const [devGradeActive, setDevGradeActive] = useState<boolean>(false);
 
   // Load last refresh time on mount
@@ -550,6 +551,22 @@ export default function Settings() {
       }
     })();
     return undefined;
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    updateService.getAutoDownloadOnWifiSetting()
+      .then(value => {
+        if (isMounted) setAutoDownloadUpdates(value);
+      })
+      .catch(error => {
+        console.error('Error loading update auto-download setting:', error);
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const handleManualScheduleRefresh = useCallback(async () => {
@@ -603,6 +620,15 @@ export default function Settings() {
     }
   }, [isCheckingForUpdate]);
 
+  const handleToggleAutoDownloadUpdates = useCallback(async (value: boolean) => {
+    setAutoDownloadUpdates(value);
+    try {
+      await updateService.setAutoDownloadOnWifiSetting(value);
+    } catch (error) {
+      console.error('Error saving update auto-download setting:', error);
+    }
+  }, []);
+
   const handleDevInjectGrades = useCallback(async () => {
     try {
       const next = !devGradeActive;
@@ -621,6 +647,108 @@ export default function Settings() {
       Alert.alert('Error', 'Could not toggle grade injection');
     }
   }, [devGradeActive]);
+
+  const emitDevUpdateModel = useCallback((update: UpdateInfo) => {
+    DeviceEventEmitter.emit(UPDATE_AVAILABLE_EVENT, update);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, []);
+
+  const handleDevTestUpdateModel = useCallback(async () => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      await updateService.clearDismissedVersion();
+
+      const testUpdate = await updateService.manualCheckForUpdate();
+      if (!testUpdate) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        Alert.alert(
+          'No Test Update',
+          'Could not fetch a release right now. Check your connection and try again.'
+        );
+        return;
+      }
+
+      emitDevUpdateModel(testUpdate);
+      Alert.alert(
+        '✓ Test Update Model',
+        `Version: ${testUpdate.latestVersion}\nABI: ${testUpdate.targetAbi || 'unknown'}\nAsset: ${testUpdate.downloadAssetName || 'n/a'}`
+      );
+    } catch (error) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Error', 'Failed to trigger test update model');
+      console.error('Test update model error:', error);
+    }
+  }, [emitDevUpdateModel]);
+
+  const handleDevTestDownloadedUpdateModel = useCallback(async () => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      await updateService.clearDismissedVersion();
+
+      const downloadedUpdate = await updateService.prepareLatestReleaseDownloadForTesting();
+      if (!downloadedUpdate) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        Alert.alert(
+          'No Test Update',
+          'Could not fetch a release to download right now.'
+        );
+        return;
+      }
+
+      if (!downloadedUpdate.isDownloaded) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        Alert.alert(
+          'Download Skipped',
+          'The selected release did not provide a direct APK download.'
+        );
+        return;
+      }
+
+      emitDevUpdateModel(downloadedUpdate);
+      Alert.alert(
+        '✓ Downloaded Update Ready',
+        `Opened the update model with a cached package.\n\nAsset: ${downloadedUpdate.downloadAssetName || 'n/a'}\nYou should now see the Install button.`
+      );
+    } catch (error) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Error', 'Failed to prepare downloaded update test');
+      console.error('Downloaded update test error:', error);
+    }
+  }, [emitDevUpdateModel]);
+
+  const handleDevInstallCachedUpdate = useCallback(async () => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      const installed = await updateService.installDownloadedUpdate();
+      if (!installed) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        Alert.alert(
+          'No Cached Package',
+          'Download a test update first, then try install intent testing again.'
+        );
+        return;
+      }
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Error', 'Failed to trigger installer intent');
+      console.error('Install cached update test error:', error);
+    }
+  }, []);
+
+  const handleDevClearDownloadedUpdate = useCallback(async () => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      await updateService.clearDownloadedUpdatePackage();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert('Cleared', 'Removed cached update package and metadata.');
+    } catch (error) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Error', 'Failed to clear cached update package');
+      console.error('Clear downloaded update error:', error);
+    }
+  }, []);
 
   // Add useEffect to load IDNP and listen for updates
   useEffect(() => {
@@ -1297,43 +1425,34 @@ export default function Settings() {
 
           <TouchableOpacity
             style={styles.devToolButton}
-            onPress={async () => {
-              try {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                const testUpdate = await updateService.getLatestReleaseForTesting();
-                
-                if (testUpdate) {
-                  // Clear any dismissed version to ensure the modal shows
-                  await updateService.clearDismissedVersion();
-                  
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                  Alert.alert(
-                    '✓ Test Update Modal',
-                    `Fetched latest release info:\n\nVersion: ${testUpdate.latestVersion}\nCurrent: ${testUpdate.currentVersion}\n\nThe update notification will appear shortly.`,
-                    [{ text: 'OK', style: 'default' }]
-                  );
-                  
-                  // Trigger a check that will show the modal
-                  setTimeout(async () => {
-                    const update = await updateService.checkForUpdate(true);
-                    if (!update) {
-                      // If no real update, force show with test data
-                      DeviceEventEmitter.emit(UPDATE_AVAILABLE_EVENT, testUpdate);
-                    }
-                  }, 500);
-                } else {
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-                  Alert.alert('Error', 'Failed to fetch latest release from GitHub');
-                }
-              } catch (error) {
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-                Alert.alert('Error', 'Failed to test update modal');
-                console.error('Test update modal error:', error);
-              }
-            }}
+            onPress={handleDevTestUpdateModel}
           >
             <MaterialIcons name="new-releases" size={24} color="#FF9800" />
-            <Text style={styles.devToolText}>Test Update Modal</Text>
+            <Text style={styles.devToolText}>Test Update Model</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.devToolButton}
+            onPress={handleDevTestDownloadedUpdateModel}
+          >
+            <MaterialIcons name="download-done" size={24} color="#4CAF50" />
+            <Text style={styles.devToolText}>Test Downloaded Update Model</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.devToolButton}
+            onPress={handleDevInstallCachedUpdate}
+          >
+            <MaterialIcons name="system-update-alt" size={24} color="#55B7FF" />
+            <Text style={styles.devToolText}>Test Installer Intent</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.devToolButton}
+            onPress={handleDevClearDownloadedUpdate}
+          >
+            <MaterialIcons name="delete-outline" size={24} color="#EF5350" />
+            <Text style={styles.devToolText}>Clear Cached Update Package</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -2046,6 +2165,20 @@ export default function Settings() {
               </View>
             </View>
 
+            <View style={styles.settingItem}>
+              <View style={styles.settingLabelContainer}>
+                <Text style={styles.settingLabel}>Auto-download on Wi-Fi</Text>
+                <Text style={styles.settingDescription}>
+                  Download updates in the background and show an install button when ready.
+                </Text>
+              </View>
+              <CustomToggle
+                value={autoDownloadUpdates}
+                onValueChange={handleToggleAutoDownloadUpdates}
+                activeColor="#2C3DCD"
+              />
+            </View>
+
             <TouchableOpacity
               style={[
                 styles.refreshButton,
@@ -2067,6 +2200,7 @@ export default function Settings() {
 
             <Text style={styles.updateNote}>
               Updates are checked automatically once per day when you open the app.
+              Auto-downloads run on Wi-Fi when enabled.
             </Text>
           </View>
         </View>
