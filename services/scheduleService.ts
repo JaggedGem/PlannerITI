@@ -133,6 +133,7 @@ export interface ThesisScheduleEvent extends BaseSpecialScheduleEvent {
   period: number | null;
   startTime: string | null;
   endTime: string | null;
+  subgroupDependent?: boolean;
 }
 
 export interface ExamScheduleEvent extends BaseSpecialScheduleEvent {
@@ -291,6 +292,43 @@ const getSystemLanguage = (): Language => {
 };
 
 const WEEKDAY_LABELS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
+
+const LANGUAGE_TOKENS = new Set([
+  'engleza',
+  'romana',
+  'rusa',
+  'franceza',
+  'germana',
+  'italiana',
+  'spaniola',
+]);
+
+const SUBJECT_TOKEN_ALIASES: Record<string, string> = {
+  eng: 'engleza',
+  englez: 'engleza',
+  engl: 'engleza',
+  english: 'engleza',
+  rom: 'romana',
+  roman: 'romana',
+  rum: 'romana',
+  rus: 'rusa',
+  fr: 'franceza',
+  franc: 'franceza',
+  ger: 'germana',
+  germ: 'germana',
+  it: 'italiana',
+  sp: 'spaniola',
+  mat: 'matematica',
+  mate: 'matematica',
+  bio: 'biologia',
+  biologie: 'biologia',
+  fiz: 'fizica',
+  chim: 'chimie',
+  info: 'informatica',
+  inf: 'informatica',
+};
+
+const SUBJECT_MATCH_THRESHOLD = 0.8;
 
 const isDateWeekend = (date: Date): boolean => date.getDay() === 0 || date.getDay() === 6;
 
@@ -1289,6 +1327,318 @@ export const scheduleService = {
     };
   },
 
+  normalizeSubjectMatchKey(value: string): string {
+    if (!value) return '';
+    return value
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[\s\-_.\/,:;()\[\]{}]+/g, ' ')
+      .trim();
+  },
+
+  normalizeSubjectTokens(value: string): string[] {
+    const normalized = this.normalizeSubjectMatchKey(value);
+    if (!normalized) return [];
+
+    const rawTokens = normalized.split(' ').filter(Boolean);
+    const tokens: string[] = [];
+    let hasLanguageToken = false;
+
+    rawTokens.forEach(token => {
+      if (token === 'l' || token === 'limba') {
+        return;
+      }
+
+      const mapped = SUBJECT_TOKEN_ALIASES[token] || token;
+      if (mapped.length === 1 && !/\d/.test(mapped)) {
+        return;
+      }
+
+      tokens.push(mapped);
+
+      if (LANGUAGE_TOKENS.has(mapped)) {
+        hasLanguageToken = true;
+      }
+    });
+
+    if (hasLanguageToken) {
+      tokens.push('limba');
+    }
+
+    return Array.from(new Set(tokens));
+  },
+
+  getSubjectMatchScore(subject: string, candidate: string): number {
+    const normalizedSubject = this.normalizeSubjectMatchKey(subject);
+    const normalizedCandidate = this.normalizeSubjectMatchKey(candidate);
+    if (!normalizedSubject || !normalizedCandidate) return 0;
+    if (normalizedSubject === normalizedCandidate) return 1;
+
+    const subjectTokens = this.normalizeSubjectTokens(subject);
+    const candidateTokens = this.normalizeSubjectTokens(candidate);
+    if (subjectTokens.length === 0 || candidateTokens.length === 0) return 0;
+
+    const subjectSet = new Set(subjectTokens);
+    const candidateSet = new Set(candidateTokens);
+    const unionSize = new Set([...subjectSet, ...candidateSet]).size || 1;
+    const intersectionSize = Array.from(subjectSet).filter(token => candidateSet.has(token)).length;
+
+    let score = intersectionSize / unionSize;
+
+    if (normalizedSubject.includes(normalizedCandidate) || normalizedCandidate.includes(normalizedSubject)) {
+      score += 0.2;
+    }
+
+    const lengthPenalty = Math.min(0.12, Math.abs(normalizedSubject.length - normalizedCandidate.length) / 80);
+    score -= lengthPenalty;
+
+    return Math.max(0, Math.min(1, score));
+  },
+
+  normalizeScheduleSubgroup(groupName?: string | null): SubGroupType | null {
+    const normalized = String(groupName || '').trim().toLowerCase();
+    if (!normalized) return null;
+    if (normalized.includes('grupa 1') || normalized.includes('subgroup 1')) return 'Subgroup 1';
+    if (normalized.includes('grupa 2') || normalized.includes('subgroup 2')) return 'Subgroup 2';
+    return null;
+  },
+
+  resolveSpecialScheduleDaySchedule(
+    data: ApiResponse,
+    dateKey: string,
+    date: Date,
+    datePeriodTimes: DatePeriodTimesEntry | null
+  ): { [key: string]: DaySchedule } | undefined {
+    const weekendKey = `weekend_${dateKey}`;
+    if (data.data[weekendKey]) {
+      return data.data[weekendKey];
+    }
+
+    let effectiveDayName: keyof ApiResponse['data'] | undefined;
+
+    if (datePeriodTimes?.override?.mode === 'weekday_replace' && datePeriodTimes.override.replaceWeekday) {
+      effectiveDayName = this.normalizeWeekdayKey(datePeriodTimes.override.replaceWeekday);
+    }
+
+    if (!effectiveDayName && datePeriodTimes?.override?.recoverySource?.weekday) {
+      effectiveDayName = this.normalizeWeekdayKey(datePeriodTimes.override.recoverySource.weekday);
+    }
+
+    if (!effectiveDayName && datePeriodTimes?.override?.replaceWeekday) {
+      effectiveDayName = this.normalizeWeekdayKey(datePeriodTimes.override.replaceWeekday);
+    }
+
+    if (!effectiveDayName && datePeriodTimes?.weekday) {
+      effectiveDayName = this.normalizeWeekdayKey(datePeriodTimes.weekday);
+    }
+
+    if (!effectiveDayName) {
+      effectiveDayName = this.getWeekdayKeyForDate(date);
+    }
+
+    return effectiveDayName ? data.data[effectiveDayName] : undefined;
+  },
+
+  getSubgroupPeriodsForSubject(
+    daySchedule: { [key: string]: DaySchedule },
+    date: Date,
+    subject: string,
+    allowedPeriods: Set<number>
+  ): { subgroup1?: number; subgroup2?: number } {
+    const normalizedSubject = this.normalizeSubjectMatchKey(subject);
+    const weekKey = this.isEvenWeek(date) ? 'par' : 'impar';
+    const result: { subgroup1?: number; subgroup2?: number } = {};
+
+    const orderedPeriods = Object.entries(daySchedule)
+      .map(([period, schedules]) => ({
+        period: Number(period),
+        schedules
+      }))
+      .filter(entry => Number.isFinite(entry.period))
+      .sort((a, b) => a.period - b.period);
+
+    orderedPeriods.forEach(({ period, schedules }) => {
+      if (!allowedPeriods.has(period)) return;
+
+      const bothItems = Array.isArray(schedules.both) ? schedules.both : [];
+      const weekItems = Array.isArray((schedules as any)[weekKey]) ? (schedules as any)[weekKey] : [];
+      const items = [...bothItems, ...weekItems];
+
+      items.forEach(item => {
+        const itemSubject = item?.subjectid?.name || '';
+        if (!itemSubject) return;
+        if (this.normalizeSubjectMatchKey(itemSubject) !== normalizedSubject) return;
+
+        const subgroup = this.normalizeScheduleSubgroup(item?.groupids?.name);
+        if (subgroup === 'Subgroup 1' && !result.subgroup1) {
+          result.subgroup1 = period;
+        }
+        if (subgroup === 'Subgroup 2' && !result.subgroup2) {
+          result.subgroup2 = period;
+        }
+      });
+    });
+
+    if (result.subgroup1 && result.subgroup2) {
+      return result;
+    }
+
+    // Fallback: fuzzy subject matching for abbreviated or variant names.
+    const missingSubgroups = new Set<SubGroupType>();
+    if (!result.subgroup1) missingSubgroups.add('Subgroup 1');
+    if (!result.subgroup2) missingSubgroups.add('Subgroup 2');
+    if (missingSubgroups.size === 0) return result;
+
+    const bestBySubgroup: Record<SubGroupType, { score: number; period: number }> = {
+      'Subgroup 1': { score: 0, period: Number.POSITIVE_INFINITY },
+      'Subgroup 2': { score: 0, period: Number.POSITIVE_INFINITY },
+    };
+
+    orderedPeriods.forEach(({ period, schedules }) => {
+      if (!allowedPeriods.has(period)) return;
+
+      const bothItems = Array.isArray(schedules.both) ? schedules.both : [];
+      const weekItems = Array.isArray((schedules as any)[weekKey]) ? (schedules as any)[weekKey] : [];
+      const items = [...bothItems, ...weekItems];
+
+      items.forEach(item => {
+        const itemSubject = item?.subjectid?.name || '';
+        if (!itemSubject) return;
+
+        const subgroup = this.normalizeScheduleSubgroup(item?.groupids?.name);
+        if (!subgroup || !missingSubgroups.has(subgroup)) return;
+
+        const score = this.getSubjectMatchScore(subject, itemSubject);
+        if (score < SUBJECT_MATCH_THRESHOLD) return;
+
+        const best = bestBySubgroup[subgroup];
+        if (score > best.score || (score === best.score && period < best.period)) {
+          bestBySubgroup[subgroup] = { score, period };
+        }
+      });
+    });
+
+    if (!result.subgroup1 && bestBySubgroup['Subgroup 1'].score >= SUBJECT_MATCH_THRESHOLD) {
+      result.subgroup1 = bestBySubgroup['Subgroup 1'].period;
+    }
+    if (!result.subgroup2 && bestBySubgroup['Subgroup 2'].score >= SUBJECT_MATCH_THRESHOLD) {
+      result.subgroup2 = bestBySubgroup['Subgroup 2'].period;
+    }
+
+    return result;
+  },
+
+  async resolveSubgroupDependentThesisEvents(
+    response: SpecialScheduleResponse,
+    groupName?: string
+  ): Promise<SpecialScheduleResponse> {
+    if (response.type !== 'thesis') return response;
+
+    const thesisEvents = response.events.filter(
+      (event): event is ThesisScheduleEvent => event.type === 'thesis'
+    );
+    const hasDependent = thesisEvents.some(event => event.subgroupDependent);
+    if (!hasDependent) return response;
+
+    const baseEvents = thesisEvents.filter(event => !event.subgroupDependent);
+    const dependentEvents = thesisEvents.filter(event => event.subgroupDependent);
+
+    let scheduleData: ApiResponse | null = null;
+    try {
+      let resolvedGroupId = this.settings.selectedGroupId;
+      const normalizedTargetGroup = this.normalizeSpecialScheduleGroupName(
+        groupName || this.settings.selectedGroupName
+      );
+
+      if (normalizedTargetGroup) {
+        const groups = await this.getGroups();
+        const matchingGroup = groups.find(group =>
+          this.normalizeSpecialScheduleGroupName(group.name) === normalizedTargetGroup
+        );
+        if (matchingGroup?._id) {
+          resolvedGroupId = matchingGroup._id;
+        }
+      }
+
+      scheduleData = await this.getClassSchedule(resolvedGroupId || '', false);
+    } catch (error) {
+      scheduleData = null;
+    }
+
+    if (!scheduleData || !scheduleData.data) {
+      return { ...response, events: baseEvents };
+    }
+
+    const grouped = new Map<string, ThesisScheduleEvent[]>();
+    dependentEvents.forEach(event => {
+      const key = `${event.date}::${this.normalizeSubjectMatchKey(event.subject)}`;
+      const list = grouped.get(key) || [];
+      list.push(event);
+      grouped.set(key, list);
+    });
+
+    const resolvedEvents: ThesisScheduleEvent[] = [...baseEvents];
+
+    for (const groupEvents of grouped.values()) {
+      const dateKey = groupEvents[0]?.date || '';
+      const subject = groupEvents[0]?.subject || '';
+      if (!dateKey || !subject) continue;
+
+      const dateObj = new Date(`${dateKey}T00:00:00`);
+      if (Number.isNaN(dateObj.getTime())) continue;
+
+      const datePeriodTimes = await this.getDatePeriodTimes(dateObj);
+      const daySchedule = this.resolveSpecialScheduleDaySchedule(
+        scheduleData,
+        dateKey,
+        dateObj,
+        datePeriodTimes
+      );
+      if (!daySchedule) continue;
+
+      const availablePeriods = new Set<number>();
+      const eventByPeriod = new Map<number, ThesisScheduleEvent>();
+      groupEvents.forEach(event => {
+        const periodNum = typeof event.period === 'number' ? event.period : Number(event.period);
+        if (!Number.isFinite(periodNum)) return;
+        availablePeriods.add(periodNum);
+        if (!eventByPeriod.has(periodNum)) {
+          eventByPeriod.set(periodNum, event);
+        }
+      });
+
+      if (availablePeriods.size === 0) continue;
+
+      const subgroupPeriods = this.getSubgroupPeriodsForSubject(
+        daySchedule,
+        dateObj,
+        subject,
+        availablePeriods
+      );
+
+      const subgroupAssignments: Array<{ subgroup: SubGroupType; period: number }> = [];
+      if (subgroupPeriods.subgroup1) {
+        subgroupAssignments.push({ subgroup: 'Subgroup 1', period: subgroupPeriods.subgroup1 });
+      }
+      if (subgroupPeriods.subgroup2) {
+        subgroupAssignments.push({ subgroup: 'Subgroup 2', period: subgroupPeriods.subgroup2 });
+      }
+
+      subgroupAssignments.forEach(({ subgroup, period }) => {
+        const baseEvent = eventByPeriod.get(period);
+        if (!baseEvent) return;
+        resolvedEvents.push({
+          ...baseEvent,
+          subgroup,
+          subgroupDependent: false,
+        });
+      });
+    }
+
+    return { ...response, events: resolvedEvents };
+  },
+
   normalizeSpecialScheduleResponse(
     type: SpecialScheduleType,
     groupName: string | null,
@@ -1335,6 +1685,7 @@ export const scheduleService = {
           period: Number.isFinite(rawPeriod) ? Number(rawPeriod) : null,
           startTime: typeof event.startTime === 'string' && event.startTime.trim().length > 0 ? event.startTime : null,
           endTime: typeof event.endTime === 'string' && event.endTime.trim().length > 0 ? event.endTime : null,
+          subgroupDependent: Boolean(event.subgroupDependent),
         };
       })
       .filter((event: SpecialScheduleEvent | null): event is SpecialScheduleEvent => Boolean(event));
@@ -1415,14 +1766,18 @@ export const scheduleService = {
     if (this.specialScheduleFetchedThisSession.has(sessionKey)) {
       const cached = await this.readSpecialScheduleCache(type, normalizedGroup, false);
       if (cached) {
-        return cached;
+        return type === 'thesis'
+          ? await this.resolveSubgroupDependentThesisEvents(cached, normalizedGroup)
+          : cached;
       }
     }
 
     if (!forceRefresh) {
       const freshCached = await this.readSpecialScheduleCache(type, normalizedGroup, true);
       if (freshCached) {
-        return freshCached;
+        return type === 'thesis'
+          ? await this.resolveSubgroupDependentThesisEvents(freshCached, normalizedGroup)
+          : freshCached;
       }
     }
 
@@ -1441,14 +1796,19 @@ export const scheduleService = {
       }
 
       const payload = await response.json();
-      const normalized = this.normalizeSpecialScheduleResponse(type, normalizedGroup || null, payload);
+      let normalized = this.normalizeSpecialScheduleResponse(type, normalizedGroup || null, payload);
+      if (type === 'thesis') {
+        normalized = await this.resolveSubgroupDependentThesisEvents(normalized, normalizedGroup);
+      }
       await this.cacheSpecialSchedule(type, normalizedGroup, normalized);
       this.specialScheduleFetchedThisSession.add(sessionKey);
       return normalized;
     } catch (error) {
       const staleCached = await this.readSpecialScheduleCache(type, normalizedGroup, false);
       if (staleCached) {
-        return staleCached;
+        return type === 'thesis'
+          ? await this.resolveSubgroupDependentThesisEvents(staleCached, normalizedGroup)
+          : staleCached;
       }
 
       const message = error instanceof Error ? error.message : `Unable to fetch ${type} schedule`;
@@ -1474,7 +1834,11 @@ export const scheduleService = {
       groupName || this.settings.selectedGroupName
     );
     const cached = await this.readSpecialScheduleCache(type, normalizedGroup, false);
-    if (cached) return cached;
+    if (cached) {
+      return type === 'thesis'
+        ? await this.resolveSubgroupDependentThesisEvents(cached, normalizedGroup)
+        : cached;
+    }
     return this.buildUnavailableSpecialSchedule(
       type,
       normalizedGroup || null,

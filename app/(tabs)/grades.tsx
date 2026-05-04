@@ -205,7 +205,7 @@ const formatOfficialEventSummary = (event: OfficialAssessmentEvent, roomLabel: s
       ? formatExamTimeLabel(event)
       : thesisTime || thesisPeriod;
   const room = event.room ? `${roomLabel} ${event.room}` : '';
-  const subgroup = event.subgroup ? `SG ${event.subgroup}` : '';
+  const subgroup = event.subgroup ? `${event.subgroup}` : '';
 
   return [dateLabel, timingLabel, room, subgroup].filter(Boolean).join(' • ');
 };
@@ -1008,7 +1008,7 @@ const ExamsView = ({
                               ? formatExamTimeLabel(event)
                               : formatThesisTimeLabel(event);
                             const room = event.room ? `${t('schedule').room} ${event.room}` : '';
-                            const subgroup = event.subgroup ? `SG ${event.subgroup}` : '';
+                            const subgroup = event.subgroup ? `${event.subgroup}` : '';
                             const meta = [timeLabel, room, subgroup, event.teacher].filter(Boolean).join(' \u2022 ');
 
                             return (
@@ -1030,7 +1030,7 @@ const ExamsView = ({
                                     </Text>
                                   </View>
                                   {event.subgroup ? (
-                                    <Text style={styles.officialEventSubgroup}>SG {event.subgroup}</Text>
+                                    <Text style={styles.officialEventSubgroup}>{event.subgroup}</Text>
                                   ) : null}
                                 </View>
                                 <Text style={styles.officialEventSubject}>{event.subject}</Text>
