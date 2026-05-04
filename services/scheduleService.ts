@@ -1625,15 +1625,49 @@ export const scheduleService = {
         subgroupAssignments.push({ subgroup: 'Subgroup 2', period: subgroupPeriods.subgroup2 });
       }
 
+      const assignedPeriods = new Set<number>();
+
       subgroupAssignments.forEach(({ subgroup, period }) => {
         const baseEvent = eventByPeriod.get(period);
         if (!baseEvent) return;
+        assignedPeriods.add(period);
         resolvedEvents.push({
           ...baseEvent,
           subgroup,
           subgroupDependent: false,
         });
       });
+
+      const missingSubgroups: SubGroupType[] = [];
+      if (!subgroupPeriods.subgroup1) missingSubgroups.push('Subgroup 1');
+      if (!subgroupPeriods.subgroup2) missingSubgroups.push('Subgroup 2');
+
+      const unassignedPeriods = Array.from(eventByPeriod.keys()).filter(
+        period => !assignedPeriods.has(period)
+      );
+
+      if (subgroupAssignments.length === 0) {
+        unassignedPeriods.forEach(period => {
+          const baseEvent = eventByPeriod.get(period);
+          if (!baseEvent) return;
+          resolvedEvents.push({
+            ...baseEvent,
+            subgroup: baseEvent.subgroup ?? null,
+            subgroupDependent: false,
+          });
+        });
+        continue;
+      }
+
+      if (missingSubgroups.length === 1 && unassignedPeriods.length === 1) {
+        const baseEvent = eventByPeriod.get(unassignedPeriods[0]);
+        if (!baseEvent) continue;
+        resolvedEvents.push({
+          ...baseEvent,
+          subgroup: missingSubgroups[0],
+          subgroupDependent: false,
+        });
+      }
     }
 
     return { ...response, events: resolvedEvents };
