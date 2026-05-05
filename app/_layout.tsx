@@ -3,9 +3,8 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { useFonts } from 'expo-font';
 import { SplashScreen, Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { useColorScheme, StatusBar, View } from 'react-native';
+import { useColorScheme, StatusBar } from 'react-native';
 import authService from '../services/authService';
-import UpdateNotification from '@/components/UpdateNotification';
 import LoginNotification from '@/components/LoginNotification';
 import { scheduleService } from '@/services/scheduleService';
 import { updateService } from '@/services/updateService';
@@ -170,16 +169,6 @@ export default function RootLayout() {
   }, [loaded]);
 
   useEffect(() => {
-    if (!loaded) {
-      return;
-    }
-
-    updateService.initializeUpdateStorage().catch((error) => {
-      console.error('Error preparing update storage:', error);
-    });
-  }, [loaded]);
-
-  useEffect(() => {
     if (loaded && startupReady) {
       SplashScreen.hideAsync();
     }
@@ -195,7 +184,6 @@ export default function RootLayout() {
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const backgroundColor = isDark ? '#000' : '#fff';
 
   return (
     <ThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
@@ -254,7 +242,6 @@ function RootLayoutNav() {
             }} 
           />
         </Stack>
-        <UpdateNotification />
         <LoginNotification />
       </AuthProvider>
     </ThemeProvider>

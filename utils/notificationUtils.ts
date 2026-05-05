@@ -233,7 +233,8 @@ export function configureNotifications() {
   // Set up the notification handler for how notifications should appear to users
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
-      shouldShowAlert: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
       shouldPlaySound: true,
       shouldSetBadge: true,
     }),

@@ -105,9 +105,7 @@ Built with React Native, Expo, and Expo Router, PlannerITI offers an offline-fir
 
 ### 🔄 Updates & Release Channels
 - **OTA Updates**: Staged over-the-air updates via Expo Updates
-- **Release Notifications**: In-app update prompts from GitHub releases
 - **Channel Awareness**: Beta/production filtering based on app variant
-- **Remind Later**: Snooze update prompts for a week
 
 ## 🚀 Getting Started
 
@@ -217,14 +215,13 @@ PlannerITI/
 │   ├── auth/                     # Authentication components
 │   ├── schedule/                 # Schedule view components
 │   ├── ui/                       # UI primitives
-│   ├── LoginNotification.tsx     # Login prompt banner
-│   └── UpdateNotification.tsx    # Update prompt modal
+│   └── LoginNotification.tsx     # Login prompt banner
 ├── services/                     # Business logic & API
 │   ├── authService.ts            # Authentication service
 │   ├── scheduleService.ts        # Schedule management
 │   ├── gradesService.ts          # Grades API integration
 │   ├── settingsService.ts        # Settings persistence
-│   └── updateService.ts          # Update checks + OTA staging
+│   └── updateService.ts          # OTA staging + channel/version helpers
 ├── utils/                        # Utility functions
 │   ├── assignmentStorage.ts     # Assignment data management
 │   ├── notificationHelper.ts    # Notification scheduling
@@ -289,7 +286,6 @@ Build profiles are defined in `eas.json`:
 - **Expo Blur** ~15.0.7 - Blur effects
 - **Expo Linear Gradient** ~15.0.7 - Gradient backgrounds
 - **Expo Haptics** ~15.0.7 - Haptic feedback
-- **React Native Markdown Display** ^7.0.2 - Release notes rendering
 
 ### Utilities
 - **date-fns** 4.1.0 - Date manipulation
