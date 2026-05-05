@@ -8,12 +8,14 @@
       "developmentClient": true,
       "distribution": "internal",
       "channel": "development",
+      "android": {
+        "buildType": "app-bundle"
+      },
       "env": {
         "APP_VARIANT": "development",
         "ANDROID_PACKAGE": "me.jagged.planneriti.dev",
         "IOS_BUNDLE_IDENTIFIER": "me.jagged.planneriti.dev",
-        "API_KEY": "your_api_key_here",
-        "GRAVATAR_API_KEY": "your_gravatar_key_here"
+        "RUNTIME_VERSION": "1.2.0-dev.1"
       }
     },
     "beta": {
@@ -21,34 +23,26 @@
       "distribution": "internal",
       "channel": "beta",
       "android": {
-        "buildType": "apk"
-      },
-      "npm": {
-        "args": ["--legacy-peer-deps"]
+        "buildType": "app-bundle"
       },
       "env": {
         "APP_VARIANT": "beta",
         "ANDROID_PACKAGE": "me.jagged.planneriti.beta",
         "IOS_BUNDLE_IDENTIFIER": "me.jagged.planneriti.beta",
-        "API_KEY": "your_api_key_here",
-        "GRAVATAR_API_KEY": "your_gravatar_key_here"
+        "RUNTIME_VERSION": "1.2.0-beta.1"
       }
     },
     "production": {
       "autoIncrement": true,
       "channel": "production",
       "android": {
-        "buildType": "apk"
-      },
-      "npm": {
-        "args": ["--legacy-peer-deps"]
+        "buildType": "app-bundle"
       },
       "env": {
         "APP_VARIANT": "production",
         "ANDROID_PACKAGE": "me.jagged.planneriti",
         "IOS_BUNDLE_IDENTIFIER": "me.jagged.planneriti",
-        "API_KEY": "your_api_key_here",
-        "GRAVATAR_API_KEY": "your_gravatar_key_here"
+        "RUNTIME_VERSION": "1.2.0"
       }
     }
   },
