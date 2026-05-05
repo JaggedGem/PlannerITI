@@ -23,12 +23,17 @@ module.exports = () => {
       slug: "PlannerITI",
       version: "1.2.0-beta.1",
       orientation: "portrait",
-      icon: "assets/images/icon.png",
+      icon: "assets/images/ios-light.png",
       scheme: "myapp",
       userInterfaceStyle: "automatic",
       jsEngine: "hermes",
       newArchEnabled: true,
       ios: {
+        icon: {
+          light: "assets/images/ios-light.png",
+          dark: "assets/images/ios-dark.png",
+          tinted: "assets/images/ios-tinted.png"
+        },
         supportsTablet: true,
         bundleIdentifier: variantConfig.iosBundleIdentifier
       },
@@ -44,10 +49,10 @@ module.exports = () => {
         [
           "expo-splash-screen",
           {
-            "image": "assets/images/splash-icon.png",
+            "image": "assets/images/ios-dark.png",
             "imageWidth": 200,
             "resizeMode": "contain",
-            "backgroundColor": "#232433"
+            "backgroundColor": "#05060f"
           }
         ]
       ],
