@@ -17,7 +17,7 @@ class UpdateService {
   private isExpoGo: boolean;
 
   /**
-   * Infer release track from semantic prerelease tags (e.g. 1.2.0-beta.1).
+   * Infer release track from semantic prerelease tags (e.g. 1.3.0-beta.1).
    */
   private inferTrackFromVersion(version: string | null | undefined): 'beta' | null {
     if (!version) {

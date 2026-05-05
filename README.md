@@ -175,8 +175,8 @@ Built with React Native, Expo, and Expo Router, PlannerITI offers an offline-fir
 ### OTA Updates
 
 ```bash
-npm run update       # Android (beta channel)
-npm run update:ios   # iOS (beta channel)
+npm run update       # Android
+npm run update:ios   # iOS
 ```
 
 ### Local Builds
@@ -248,7 +248,7 @@ The app uses `app.config.js` for configuration. Key settings:
 
 - **App Name**: PlannerITI
 - **Slug**: planneriti
-- **Version**: 1.2.0-beta.1
+- **Version**: 1.3.0
 - **Orientation**: Portrait (locked)
 - **Splash Screen**: Custom splash with icon
 - **Theme**: Automatic light/dark

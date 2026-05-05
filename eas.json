@@ -15,7 +15,7 @@
         "APP_VARIANT": "development",
         "ANDROID_PACKAGE": "me.jagged.planneriti.dev",
         "IOS_BUNDLE_IDENTIFIER": "me.jagged.planneriti.dev",
-        "RUNTIME_VERSION": "1.2.0-dev.1"
+        "RUNTIME_VERSION": "1.3.0-dev.1"
       }
     },
     "beta": {
@@ -29,7 +29,7 @@
         "APP_VARIANT": "beta",
         "ANDROID_PACKAGE": "me.jagged.planneriti.beta",
         "IOS_BUNDLE_IDENTIFIER": "me.jagged.planneriti.beta",
-        "RUNTIME_VERSION": "1.2.0-beta.1"
+        "RUNTIME_VERSION": "1.3.0-beta.1"
       }
     },
     "production": {
@@ -42,7 +42,7 @@
         "APP_VARIANT": "production",
         "ANDROID_PACKAGE": "me.jagged.planneriti",
         "IOS_BUNDLE_IDENTIFIER": "me.jagged.planneriti",
-        "RUNTIME_VERSION": "1.2.0"
+        "RUNTIME_VERSION": "1.3.0"
       }
     }
   },
