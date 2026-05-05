@@ -63,4 +63,5 @@ app-example
 example-grades-api-request-response.html
 package-lock.json
 
-eas.json
+.codex
+CLAUDE.md

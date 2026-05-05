@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform, NativeModules } from 'react-native';
 import { format } from 'date-fns';
+import { fetchCustomApi } from '../utils/customApi';
 // Refactored: remove direct runtime import of settingsService to break cycle.
 // Consumers (settingsService) should call scheduleService.registerSettingsSync({...}) after import.
 
@@ -106,8 +107,54 @@ export interface Subject {
   isCustom?: boolean;
 }
 
+export type SpecialScheduleType = 'thesis' | 'exam';
+
+export interface SpecialScheduleDocument {
+  url: string;
+  filename: string;
+  semester: string | null;
+  academicYear: string | null;
+  examStudyYear: number | null;
+  source: string | null;
+}
+
+interface BaseSpecialScheduleEvent {
+  group: string;
+  date: string;
+  subject: string;
+  teacher: string;
+  room: string;
+  subgroup: string | null;
+  type: SpecialScheduleType;
+}
+
+export interface ThesisScheduleEvent extends BaseSpecialScheduleEvent {
+  type: 'thesis';
+  period: number | null;
+  startTime: string | null;
+  endTime: string | null;
+  subgroupDependent?: boolean;
+}
+
+export interface ExamScheduleEvent extends BaseSpecialScheduleEvent {
+  type: 'exam';
+  time: string | null;
+}
+
+export type SpecialScheduleEvent = ThesisScheduleEvent | ExamScheduleEvent;
+
+export interface SpecialScheduleResponse {
+  available: boolean;
+  type: SpecialScheduleType;
+  group: string | null;
+  document: SpecialScheduleDocument | null;
+  events: SpecialScheduleEvent[];
+  reasonCode: string | null;
+  reason: string | null;
+  warnings: string[];
+}
+
 const API_BASE_URL = 'https://orar-api.ceiti.md/v1';
-const CUSTOM_API_BASE_URL = 'https://papi.jagged.site';
 
 export const DAYS_MAP = {
   1: 'monday',
@@ -133,6 +180,8 @@ export const CACHE_KEYS = {
   SCHEDULE_PREFIX: 'schedule_cache_',
   SETTINGS: 'user_settings',
   LAST_FETCH_PREFIX: 'last_schedule_fetch_',
+  SPECIAL_SCHEDULE_PREFIX: 'special_schedule_cache_',
+  LAST_SPECIAL_FETCH_PREFIX: 'last_special_schedule_fetch_',
   GROUPS: 'groups_cache',
   RECOVERY_DAYS: 'recovery_days_cache',
   LAST_RECOVERY_SYNC: 'last_recovery_days_sync',
@@ -141,6 +190,7 @@ export const CACHE_KEYS = {
 };
 
 const CACHE_EXPIRY = 3 * 24 * 60 * 60 * 1000; // 3 days in milliseconds
+const SPECIAL_SCHEDULE_CACHE_EXPIRY = 6 * 60 * 60 * 1000; // 6 hours
 const DEFAULT_GROUP_NAME = 'P-2422';
 
 const PERIOD_TIMES_CACHE_KEY = 'period_times_cache';
@@ -156,15 +206,27 @@ interface PeriodTime {
   end: string;
 }
 
+interface RecoverySource {
+  date?: string;
+  weekday?: string;
+  weekType?: string;
+}
+
 interface DateOverride {
   id: number;
   date: string;
-  mode: 'times_override' | 'weekday_replace';
+  mode: 'times_override' | 'weekday_replace' | 'recover_with_custom' | 'recover_day';
   reason?: string;
   replaceWeekday?: string | null;
   groupId: string;
   groupName: string;
   isActive: boolean;
+  hasRecoverySource?: boolean;
+  hasCustomSchedule?: boolean;
+  hasRemovedPeriods?: boolean;
+  customPeriodCount?: number;
+  removedPeriodCount?: number;
+  recoverySource?: RecoverySource;
   source?: string;
   updatedBy?: string;
   createdAt?: string;
@@ -173,11 +235,15 @@ interface DateOverride {
 }
 
 interface WeekScheduleDay {
-  date: string;
-  weekday: string;
-  isWeekend: boolean;
-  isOverride: boolean;
-  schedule: PeriodTime[];
+  date?: string;
+  weekday?: string;
+  isWeekend?: boolean;
+  isOverride?: boolean;
+  dayState?: 'normal' | 'partial' | 'empty' | string;
+  schedule?: PeriodTime[];
+  baseSchedule?: PeriodTime[];
+  removedPeriods?: Array<number | string>;
+  removedPeriodCount?: number;
   override: DateOverride | null;
 }
 
@@ -196,7 +262,11 @@ interface DatePeriodTimesEntry {
   weekday: string;
   isWeekend: boolean;
   isOverride: boolean;
+  dayState?: 'normal' | 'partial' | 'empty' | string;
   schedule: PeriodTime[];
+  baseSchedule: PeriodTime[];
+  removedPeriods: Array<number | string>;
+  removedPeriodCount: number;
   override: DateOverride | null;
 }
 
@@ -221,6 +291,53 @@ const getSystemLanguage = (): Language => {
   }
 };
 
+const WEEKDAY_LABELS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
+
+const LANGUAGE_TOKENS = new Set([
+  'engleza',
+  'romana',
+  'rusa',
+  'franceza',
+  'germana',
+  'italiana',
+  'spaniola',
+]);
+
+const SUBJECT_TOKEN_ALIASES: Record<string, string> = {
+  eng: 'engleza',
+  englez: 'engleza',
+  engl: 'engleza',
+  english: 'engleza',
+  rom: 'romana',
+  roman: 'romana',
+  rum: 'romana',
+  rus: 'rusa',
+  fr: 'franceza',
+  franc: 'franceza',
+  ger: 'germana',
+  germ: 'germana',
+  it: 'italiana',
+  sp: 'spaniola',
+  mat: 'matematica',
+  mate: 'matematica',
+  bio: 'biologia',
+  biologie: 'biologia',
+  fiz: 'fizica',
+  chim: 'chimie',
+  info: 'informatica',
+  inf: 'informatica',
+};
+
+const SUBJECT_MATCH_THRESHOLD = 0.8;
+
+const isDateWeekend = (date: Date): boolean => date.getDay() === 0 || date.getDay() === 6;
+
+const addDays = (date: Date, days: number): Date => {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
+};
+
 export const scheduleService = {
   // Default settings
   settings: {
@@ -240,6 +357,7 @@ export const scheduleService = {
   cachedDatePeriodTimes: {} as DatePeriodTimesMap,
   cachedSubjects: [] as Subject[],
   cachedAssignmentCounts: [] as PeriodAssignmentCount[],
+  specialScheduleFetchedThisSession: new Set<string>(),
   // Debug controls
   _debug: false,
   _ready: false,
@@ -396,12 +514,168 @@ export const scheduleService = {
     return DAYS_MAP[jsDay as keyof typeof DAYS_MAP] as keyof ApiResponse['data'];
   },
 
+  getWeekdayLabelForDate(date: Date): string {
+    return WEEKDAY_LABELS[date.getDay()];
+  },
+
+  getRemovedPeriodNumbersForDisplay(entry: DatePeriodTimesEntry | null): number[] {
+    if (!entry || !Array.isArray(entry.removedPeriods) || entry.removedPeriods.length === 0) {
+      return [];
+    }
+
+    const numericRemoved = Array.from(new Set(
+      entry.removedPeriods
+        .map(period => Number(period))
+        .filter(period => Number.isFinite(period))
+        .map(period => Math.trunc(period))
+        .filter(period => period >= 0)
+    ));
+
+    if (numericRemoved.length === 0) {
+      return [];
+    }
+
+    const baseIndices = Array.from(new Set((entry.baseSchedule || []).map(period => period.index))).sort((a, b) => a - b);
+    const activeIndices = Array.from(new Set((entry.schedule || []).map(period => period.index))).sort((a, b) => a - b);
+
+    const matchesActiveSchedule = (removedIndices: number[]): boolean => {
+      if (baseIndices.length === 0) return false;
+      const removedSet = new Set(removedIndices);
+      const remaining = baseIndices.filter(index => !removedSet.has(index));
+      return remaining.length === activeIndices.length && remaining.every((value, idx) => value === activeIndices[idx]);
+    };
+
+    const asZeroBased = numericRemoved;
+    const asOneBased = numericRemoved.map(period => period - 1).filter(period => period >= 0);
+    const zeroBasedMatches = matchesActiveSchedule(asZeroBased);
+    const oneBasedMatches = matchesActiveSchedule(asOneBased);
+
+    let displayNumbers: number[];
+    if (zeroBasedMatches && !oneBasedMatches) {
+      displayNumbers = numericRemoved.map(period => period + 1);
+    } else if (oneBasedMatches && !zeroBasedMatches) {
+      displayNumbers = numericRemoved;
+    } else {
+      const treatAsZeroBased = numericRemoved.some(period => period === 0);
+      displayNumbers = treatAsZeroBased
+        ? numericRemoved.map(period => period + 1)
+        : numericRemoved;
+    }
+
+    return Array.from(new Set(displayNumbers.filter(period => period > 0))).sort((a, b) => a - b);
+  },
+
+  buildOverrideInfoMessage(entry: DatePeriodTimesEntry | null): string {
+    if (!entry?.isOverride) return '';
+
+    const explicitReason = entry.override?.reason?.trim() || '';
+    if (explicitReason) {
+      return explicitReason;
+    }
+
+    const activeCount = Array.isArray(entry.schedule) ? entry.schedule.length : 0;
+    const baseCount = Array.isArray(entry.baseSchedule) ? entry.baseSchedule.length : 0;
+    const removedDisplay = this.getRemovedPeriodNumbersForDisplay(entry);
+    const replacedWeekday = entry.override?.replaceWeekday || entry.override?.recoverySource?.weekday || '';
+    const replacedWeekdayLabel = replacedWeekday
+      ? `${replacedWeekday.charAt(0).toUpperCase()}${replacedWeekday.slice(1)}`
+      : '';
+
+    if (entry.dayState === 'empty' || (baseCount > 0 && activeCount === 0)) {
+      return baseCount > 0
+        ? `All ${baseCount} periods were removed for this day.`
+        : 'No classes are scheduled for this day due to an override.';
+    }
+
+    const parts: string[] = [];
+
+    if (removedDisplay.length > 0) {
+      parts.push(`Removed periods: ${removedDisplay.join(', ')}.`);
+    }
+
+    if (baseCount > 0 && activeCount !== baseCount) {
+      parts.push(`Showing ${activeCount} of ${baseCount} periods.`);
+    } else if (entry.override?.hasCustomSchedule && activeCount > 0) {
+      parts.push(`Custom schedule with ${activeCount} periods.`);
+    }
+
+    if (replacedWeekdayLabel) {
+      parts.push(`Follows ${replacedWeekdayLabel} classes.`);
+    }
+
+    if (parts.length > 0) {
+      return parts.join(' ');
+    }
+
+    return 'Temporary schedule override is active for this day.';
+  },
+
+  resolveWeekSchedulePeriods(day?: WeekScheduleDay | null): PeriodTime[] {
+    if (!day) return [];
+
+    if (Array.isArray(day.schedule) && day.schedule.length > 0) {
+      return [...day.schedule].sort((a, b) => a.index - b.index);
+    }
+
+    const baseSchedule = Array.isArray(day.baseSchedule) ? [...day.baseSchedule] : [];
+    if (baseSchedule.length === 0) {
+      return [];
+    }
+
+    if (day.dayState === 'empty') {
+      return [];
+    }
+
+    if (day.dayState === 'partial' || (Array.isArray(day.removedPeriods) && day.removedPeriods.length > 0)) {
+      const removedPeriods = new Set((day.removedPeriods || []).map(period => String(period)));
+      return baseSchedule.filter(period => {
+        const periodIndex = String(period.index);
+        const periodNumber = String(period.index + 1);
+        return !removedPeriods.has(periodIndex) && !removedPeriods.has(periodNumber);
+      });
+    }
+
+    return baseSchedule;
+  },
+
+  normalizeWeekScheduleDay(day: WeekScheduleDay | undefined, weekStart: Date | null, index: number): DatePeriodTimesEntry | null {
+    const fallbackDate = weekStart ? addDays(weekStart, index) : null;
+    const resolvedDate = day?.date || (fallbackDate ? this.getDateKey(fallbackDate) : '');
+    if (!resolvedDate) return null;
+
+    const resolvedDateObject = new Date(`${resolvedDate}T00:00:00`);
+    const resolvedWeekday = day?.weekday || this.getWeekdayLabelForDate(resolvedDateObject);
+    const resolvedSchedule = this.resolveWeekSchedulePeriods(day);
+    const resolvedOverride = day?.override
+      ? {
+          ...day.override,
+          mode: day.override.mode,
+          recoverySource: day.override.recoverySource || undefined,
+        }
+      : null;
+
+    return {
+      date: resolvedDate,
+      weekday: resolvedWeekday,
+      isWeekend: day?.isWeekend ?? isDateWeekend(resolvedDateObject),
+      isOverride: Boolean(resolvedOverride) || Boolean(day?.isOverride),
+      dayState: day?.dayState,
+      schedule: resolvedSchedule,
+      baseSchedule: Array.isArray(day?.baseSchedule) ? [...day.baseSchedule] : [...resolvedSchedule],
+      removedPeriods: Array.isArray(day?.removedPeriods) ? [...day.removedPeriods] : [],
+      removedPeriodCount: typeof day?.removedPeriodCount === 'number'
+        ? day.removedPeriodCount
+        : (Array.isArray(day?.removedPeriods) ? day.removedPeriods.length : 0),
+      override: resolvedOverride,
+    };
+  },
+
   buildRecoveryDaysFromDatePeriodTimes(): RecoveryDay[] {
     return this.getDatePeriodEntriesForCurrentGroup()
       .filter(entry => entry.isWeekend && entry.isOverride && entry.override?.isActive !== false)
       .map(entry => ({
         date: entry.date,
-        replacedDay: entry.override?.replaceWeekday || 'monday',
+        replacedDay: entry.override?.replaceWeekday || entry.override?.recoverySource?.weekday || 'monday',
         reason: entry.override?.reason || '',
         groupId: entry.override?.groupId || '',
         groupName: entry.override?.groupName || '',
@@ -479,16 +753,14 @@ export const scheduleService = {
   mergeWeekPeriodTimes(weekResponse: WeekScheduleResponse) {
     if (!weekResponse || !Array.isArray(weekResponse.days)) return;
 
-    weekResponse.days.forEach(day => {
-      if (!day || !day.date || !Array.isArray(day.schedule)) return;
-      this.setCachedDatePeriodEntry(day.date, {
-        date: day.date,
-        weekday: day.weekday,
-        isWeekend: Boolean(day.isWeekend),
-        isOverride: Boolean(day.isOverride),
-        schedule: day.schedule,
-        override: day.override || null,
-      });
+    const weekStart = weekResponse.week?.startDate ? new Date(`${weekResponse.week.startDate}T00:00:00`) : null;
+    const normalizedDays = Array.from({ length: 7 }, (_, index) => {
+      const day = weekResponse.days[index];
+      return this.normalizeWeekScheduleDay(day, weekStart, index);
+    }).filter((day): day is DatePeriodTimesEntry => Boolean(day));
+
+    normalizedDays.forEach(day => {
+      this.setCachedDatePeriodEntry(day.date, day);
     });
 
     this.cachedRecoveryDays = this.buildRecoveryDaysFromDatePeriodTimes();
@@ -933,7 +1205,7 @@ export const scheduleService = {
   async hasInternetConnection(): Promise<boolean> {
     try {
       if (Platform.OS !== 'web') {
-        const endpoints = [`${CUSTOM_API_BASE_URL}/api/keepalive`, `${API_BASE_URL}/grupe`];
+        const endpoints = [`${API_BASE_URL}/grupe`];
 
         for (const endpoint of endpoints) {
           const controller = new AbortController();
@@ -955,12 +1227,686 @@ export const scheduleService = {
             }
           }
         }
-        return false;
+        try {
+          const response = await fetchCustomApi('/api/keepalive', {
+            method: 'HEAD',
+            timeoutMs: 5000,
+          });
+          return response.ok;
+        } catch {
+          return false;
+        }
       }
       return navigator.onLine;
     } catch (error) {
       return false;
     }
+  },
+
+  normalizeSpecialScheduleGroupName(groupName?: string): string {
+    const rawGroup = String(groupName || '').trim();
+    if (!rawGroup) return '';
+
+    // Canonical thesis/exam group format: X-YYZA with optional trailing R.
+    // Some sources append extra suffixes (e.g. "P-2422c"), which should be removed.
+    const canonicalMatch = rawGroup.match(/^([A-Za-z]-\d{3}[A-Za-z0-9])/);
+    if (!canonicalMatch) return rawGroup;
+
+    const canonicalBase = canonicalMatch[1];
+    const keepTrailingR = /r$/i.test(rawGroup) && !canonicalBase.toUpperCase().endsWith('R');
+    return keepTrailingR ? `${canonicalBase}R` : canonicalBase;
+  },
+
+  getSpecialScheduleCacheScope(groupName?: string): string {
+    const normalizedGroup = this.normalizeSpecialScheduleGroupName(groupName);
+    return normalizedGroup.length > 0 ? normalizedGroup : '__meta__';
+  },
+
+  getSpecialScheduleSessionKey(type: SpecialScheduleType, groupName?: string): string {
+    return `${type}_${this.getSpecialScheduleCacheScope(groupName)}`;
+  },
+
+  getSpecialScheduleCacheKey(type: SpecialScheduleType, groupName?: string): string {
+    return `${CACHE_KEYS.SPECIAL_SCHEDULE_PREFIX}${type}_${this.getSpecialScheduleCacheScope(groupName)}`;
+  },
+
+  getSpecialScheduleLastFetchKey(type: SpecialScheduleType, groupName?: string): string {
+    return `${CACHE_KEYS.LAST_SPECIAL_FETCH_PREFIX}${type}_${this.getSpecialScheduleCacheScope(groupName)}`;
+  },
+
+  buildUnavailableSpecialSchedule(
+    type: SpecialScheduleType,
+    groupName?: string | null,
+    reasonCode: string | null = 'unavailable',
+    reason: string | null = null
+  ): SpecialScheduleResponse {
+    return {
+      available: false,
+      type,
+      group: typeof groupName === 'string' && groupName.trim().length > 0 ? groupName.trim() : null,
+      document: null,
+      events: [],
+      reasonCode,
+      reason,
+      warnings: [],
+    };
+  },
+
+  normalizeSpecialScheduleDocument(document: any): SpecialScheduleDocument | null {
+    if (!document || typeof document !== 'object') {
+      return null;
+    }
+
+    const examStudyYearRaw = (document as { examStudyYear?: unknown }).examStudyYear;
+    const parsedExamStudyYear =
+      typeof examStudyYearRaw === 'number'
+        ? examStudyYearRaw
+        : typeof examStudyYearRaw === 'string' && examStudyYearRaw.trim().length > 0
+          ? Number(examStudyYearRaw)
+          : null;
+
+    return {
+      url: typeof (document as { url?: unknown }).url === 'string' ? (document as { url: string }).url : '',
+      filename:
+        typeof (document as { filename?: unknown }).filename === 'string'
+          ? (document as { filename: string }).filename
+          : '',
+      semester:
+        typeof (document as { semester?: unknown }).semester === 'string'
+          ? (document as { semester: string }).semester
+          : null,
+      academicYear:
+        typeof (document as { academicYear?: unknown }).academicYear === 'string'
+          ? (document as { academicYear: string }).academicYear
+          : null,
+      examStudyYear: Number.isFinite(parsedExamStudyYear) ? Number(parsedExamStudyYear) : null,
+      source:
+        typeof (document as { source?: unknown }).source === 'string'
+          ? (document as { source: string }).source
+          : null,
+    };
+  },
+
+  normalizeSubjectMatchKey(value: string): string {
+    if (!value) return '';
+    return value
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[\s\-_.\/,:;()\[\]{}]+/g, ' ')
+      .trim();
+  },
+
+  normalizeSubjectTokens(value: string): string[] {
+    const normalized = this.normalizeSubjectMatchKey(value);
+    if (!normalized) return [];
+
+    const rawTokens = normalized.split(' ').filter(Boolean);
+    const tokens: string[] = [];
+    let hasLanguageToken = false;
+
+    rawTokens.forEach(token => {
+      if (token === 'l' || token === 'limba') {
+        return;
+      }
+
+      const mapped = SUBJECT_TOKEN_ALIASES[token] || token;
+      if (mapped.length === 1 && !/\d/.test(mapped)) {
+        return;
+      }
+
+      tokens.push(mapped);
+
+      if (LANGUAGE_TOKENS.has(mapped)) {
+        hasLanguageToken = true;
+      }
+    });
+
+    if (hasLanguageToken) {
+      tokens.push('limba');
+    }
+
+    return Array.from(new Set(tokens));
+  },
+
+  getSubjectMatchScore(subject: string, candidate: string): number {
+    const normalizedSubject = this.normalizeSubjectMatchKey(subject);
+    const normalizedCandidate = this.normalizeSubjectMatchKey(candidate);
+    if (!normalizedSubject || !normalizedCandidate) return 0;
+    if (normalizedSubject === normalizedCandidate) return 1;
+
+    const subjectTokens = this.normalizeSubjectTokens(subject);
+    const candidateTokens = this.normalizeSubjectTokens(candidate);
+    if (subjectTokens.length === 0 || candidateTokens.length === 0) return 0;
+
+    const subjectSet = new Set(subjectTokens);
+    const candidateSet = new Set(candidateTokens);
+    const unionSize = new Set([...subjectSet, ...candidateSet]).size || 1;
+    const intersectionSize = Array.from(subjectSet).filter(token => candidateSet.has(token)).length;
+
+    let score = intersectionSize / unionSize;
+
+    if (normalizedSubject.includes(normalizedCandidate) || normalizedCandidate.includes(normalizedSubject)) {
+      score += 0.2;
+    }
+
+    const lengthPenalty = Math.min(0.12, Math.abs(normalizedSubject.length - normalizedCandidate.length) / 80);
+    score -= lengthPenalty;
+
+    return Math.max(0, Math.min(1, score));
+  },
+
+  normalizeScheduleSubgroup(groupName?: string | null): SubGroupType | null {
+    const normalized = String(groupName || '').trim().toLowerCase();
+    if (!normalized) return null;
+    if (normalized.includes('grupa 1') || normalized.includes('subgroup 1')) return 'Subgroup 1';
+    if (normalized.includes('grupa 2') || normalized.includes('subgroup 2')) return 'Subgroup 2';
+    return null;
+  },
+
+  resolveSpecialScheduleDaySchedule(
+    data: ApiResponse,
+    dateKey: string,
+    date: Date,
+    datePeriodTimes: DatePeriodTimesEntry | null
+  ): { [key: string]: DaySchedule } | undefined {
+    const weekendKey = `weekend_${dateKey}`;
+    if (data.data[weekendKey]) {
+      return data.data[weekendKey];
+    }
+
+    let effectiveDayName: keyof ApiResponse['data'] | undefined;
+
+    if (datePeriodTimes?.override?.mode === 'weekday_replace' && datePeriodTimes.override.replaceWeekday) {
+      effectiveDayName = this.normalizeWeekdayKey(datePeriodTimes.override.replaceWeekday);
+    }
+
+    if (!effectiveDayName && datePeriodTimes?.override?.recoverySource?.weekday) {
+      effectiveDayName = this.normalizeWeekdayKey(datePeriodTimes.override.recoverySource.weekday);
+    }
+
+    if (!effectiveDayName && datePeriodTimes?.override?.replaceWeekday) {
+      effectiveDayName = this.normalizeWeekdayKey(datePeriodTimes.override.replaceWeekday);
+    }
+
+    if (!effectiveDayName && datePeriodTimes?.weekday) {
+      effectiveDayName = this.normalizeWeekdayKey(datePeriodTimes.weekday);
+    }
+
+    if (!effectiveDayName) {
+      effectiveDayName = this.getWeekdayKeyForDate(date);
+    }
+
+    return effectiveDayName ? data.data[effectiveDayName] : undefined;
+  },
+
+  getSubgroupPeriodsForSubject(
+    daySchedule: { [key: string]: DaySchedule },
+    date: Date,
+    subject: string,
+    allowedPeriods: Set<number>
+  ): { subgroup1?: number; subgroup2?: number } {
+    const normalizedSubject = this.normalizeSubjectMatchKey(subject);
+    const weekKey = this.isEvenWeek(date) ? 'par' : 'impar';
+    const result: { subgroup1?: number; subgroup2?: number } = {};
+
+    const orderedPeriods = Object.entries(daySchedule)
+      .map(([period, schedules]) => ({
+        period: Number(period),
+        schedules
+      }))
+      .filter(entry => Number.isFinite(entry.period))
+      .sort((a, b) => a.period - b.period);
+
+    orderedPeriods.forEach(({ period, schedules }) => {
+      if (!allowedPeriods.has(period)) return;
+
+      const bothItems = Array.isArray(schedules.both) ? schedules.both : [];
+      const weekItems = Array.isArray((schedules as any)[weekKey]) ? (schedules as any)[weekKey] : [];
+      const items = [...bothItems, ...weekItems];
+
+      items.forEach(item => {
+        const itemSubject = item?.subjectid?.name || '';
+        if (!itemSubject) return;
+        if (this.normalizeSubjectMatchKey(itemSubject) !== normalizedSubject) return;
+
+        const subgroup = this.normalizeScheduleSubgroup(item?.groupids?.name);
+        if (subgroup === 'Subgroup 1' && !result.subgroup1) {
+          result.subgroup1 = period;
+        }
+        if (subgroup === 'Subgroup 2' && !result.subgroup2) {
+          result.subgroup2 = period;
+        }
+      });
+    });
+
+    if (result.subgroup1 && result.subgroup2) {
+      return result;
+    }
+
+    // Fallback: fuzzy subject matching for abbreviated or variant names.
+    const missingSubgroups = new Set<SubGroupType>();
+    if (!result.subgroup1) missingSubgroups.add('Subgroup 1');
+    if (!result.subgroup2) missingSubgroups.add('Subgroup 2');
+    if (missingSubgroups.size === 0) return result;
+
+    const bestBySubgroup: Record<SubGroupType, { score: number; period: number }> = {
+      'Subgroup 1': { score: 0, period: Number.POSITIVE_INFINITY },
+      'Subgroup 2': { score: 0, period: Number.POSITIVE_INFINITY },
+    };
+
+    orderedPeriods.forEach(({ period, schedules }) => {
+      if (!allowedPeriods.has(period)) return;
+
+      const bothItems = Array.isArray(schedules.both) ? schedules.both : [];
+      const weekItems = Array.isArray((schedules as any)[weekKey]) ? (schedules as any)[weekKey] : [];
+      const items = [...bothItems, ...weekItems];
+
+      items.forEach(item => {
+        const itemSubject = item?.subjectid?.name || '';
+        if (!itemSubject) return;
+
+        const subgroup = this.normalizeScheduleSubgroup(item?.groupids?.name);
+        if (!subgroup || !missingSubgroups.has(subgroup)) return;
+
+        const score = this.getSubjectMatchScore(subject, itemSubject);
+        if (score < SUBJECT_MATCH_THRESHOLD) return;
+
+        const best = bestBySubgroup[subgroup];
+        if (score > best.score || (score === best.score && period < best.period)) {
+          bestBySubgroup[subgroup] = { score, period };
+        }
+      });
+    });
+
+    if (!result.subgroup1 && bestBySubgroup['Subgroup 1'].score >= SUBJECT_MATCH_THRESHOLD) {
+      result.subgroup1 = bestBySubgroup['Subgroup 1'].period;
+    }
+    if (!result.subgroup2 && bestBySubgroup['Subgroup 2'].score >= SUBJECT_MATCH_THRESHOLD) {
+      result.subgroup2 = bestBySubgroup['Subgroup 2'].period;
+    }
+
+    return result;
+  },
+
+  async resolveSubgroupDependentThesisEvents(
+    response: SpecialScheduleResponse,
+    groupName?: string
+  ): Promise<SpecialScheduleResponse> {
+    if (response.type !== 'thesis') return response;
+
+    const thesisEvents = response.events.filter(
+      (event): event is ThesisScheduleEvent => event.type === 'thesis'
+    );
+    const hasDependent = thesisEvents.some(event => event.subgroupDependent);
+    if (!hasDependent) return response;
+
+    const baseEvents = thesisEvents.filter(event => !event.subgroupDependent);
+    const dependentEvents = thesisEvents.filter(event => event.subgroupDependent);
+
+    let scheduleData: ApiResponse | null = null;
+    try {
+      let resolvedGroupId = this.settings.selectedGroupId;
+      const normalizedTargetGroup = this.normalizeSpecialScheduleGroupName(
+        groupName || this.settings.selectedGroupName
+      );
+
+      if (normalizedTargetGroup) {
+        const groups = await this.getGroups();
+        const matchingGroup = groups.find(group =>
+          this.normalizeSpecialScheduleGroupName(group.name) === normalizedTargetGroup
+        );
+        if (matchingGroup?._id) {
+          resolvedGroupId = matchingGroup._id;
+        }
+      }
+
+      scheduleData = await this.getClassSchedule(resolvedGroupId || '', false);
+    } catch (error) {
+      scheduleData = null;
+    }
+
+    if (!scheduleData || !scheduleData.data) {
+      return { ...response, events: baseEvents };
+    }
+
+    const grouped = new Map<string, ThesisScheduleEvent[]>();
+    dependentEvents.forEach(event => {
+      const key = `${event.date}::${this.normalizeSubjectMatchKey(event.subject)}`;
+      const list = grouped.get(key) || [];
+      list.push(event);
+      grouped.set(key, list);
+    });
+
+    const resolvedEvents: ThesisScheduleEvent[] = [...baseEvents];
+
+    for (const groupEvents of grouped.values()) {
+      const dateKey = groupEvents[0]?.date || '';
+      const subject = groupEvents[0]?.subject || '';
+      if (!dateKey || !subject) continue;
+
+      const dateObj = new Date(`${dateKey}T00:00:00`);
+      if (Number.isNaN(dateObj.getTime())) continue;
+
+      const datePeriodTimes = await this.getDatePeriodTimes(dateObj);
+      const daySchedule = this.resolveSpecialScheduleDaySchedule(
+        scheduleData,
+        dateKey,
+        dateObj,
+        datePeriodTimes
+      );
+      if (!daySchedule) continue;
+
+      const availablePeriods = new Set<number>();
+      const eventByPeriod = new Map<number, ThesisScheduleEvent>();
+      groupEvents.forEach(event => {
+        const periodNum = typeof event.period === 'number' ? event.period : Number(event.period);
+        if (!Number.isFinite(periodNum)) return;
+        availablePeriods.add(periodNum);
+        if (!eventByPeriod.has(periodNum)) {
+          eventByPeriod.set(periodNum, event);
+        }
+      });
+
+      if (availablePeriods.size === 0) continue;
+
+      const subgroupPeriods = this.getSubgroupPeriodsForSubject(
+        daySchedule,
+        dateObj,
+        subject,
+        availablePeriods
+      );
+
+      const subgroupAssignments: Array<{ subgroup: SubGroupType; period: number }> = [];
+      if (subgroupPeriods.subgroup1) {
+        subgroupAssignments.push({ subgroup: 'Subgroup 1', period: subgroupPeriods.subgroup1 });
+      }
+      if (subgroupPeriods.subgroup2) {
+        subgroupAssignments.push({ subgroup: 'Subgroup 2', period: subgroupPeriods.subgroup2 });
+      }
+
+      const assignedPeriods = new Set<number>();
+
+      subgroupAssignments.forEach(({ subgroup, period }) => {
+        const baseEvent = eventByPeriod.get(period);
+        if (!baseEvent) return;
+        assignedPeriods.add(period);
+        resolvedEvents.push({
+          ...baseEvent,
+          subgroup,
+          subgroupDependent: false,
+        });
+      });
+
+      const missingSubgroups: SubGroupType[] = [];
+      if (!subgroupPeriods.subgroup1) missingSubgroups.push('Subgroup 1');
+      if (!subgroupPeriods.subgroup2) missingSubgroups.push('Subgroup 2');
+
+      const unassignedPeriods = Array.from(eventByPeriod.keys()).filter(
+        period => !assignedPeriods.has(period)
+      );
+
+      if (subgroupAssignments.length === 0) {
+        unassignedPeriods.forEach(period => {
+          const baseEvent = eventByPeriod.get(period);
+          if (!baseEvent) return;
+          resolvedEvents.push({
+            ...baseEvent,
+            subgroup: baseEvent.subgroup ?? null,
+            subgroupDependent: false,
+          });
+        });
+        continue;
+      }
+
+      if (missingSubgroups.length === 1 && unassignedPeriods.length === 1) {
+        const baseEvent = eventByPeriod.get(unassignedPeriods[0]);
+        if (!baseEvent) continue;
+        resolvedEvents.push({
+          ...baseEvent,
+          subgroup: missingSubgroups[0],
+          subgroupDependent: false,
+        });
+      }
+    }
+
+    return { ...response, events: resolvedEvents };
+  },
+
+  normalizeSpecialScheduleResponse(
+    type: SpecialScheduleType,
+    groupName: string | null,
+    payload: any
+  ): SpecialScheduleResponse {
+    const rawGroup = typeof payload?.group === 'string' && payload.group.trim().length > 0
+      ? payload.group.trim()
+      : groupName;
+    const resolvedType: SpecialScheduleType = payload?.type === 'exam' ? 'exam' : type;
+    const rawEvents = Array.isArray(payload?.events) ? payload.events : [];
+
+    const events: SpecialScheduleEvent[] = rawEvents
+      .map((event: any): SpecialScheduleEvent | null => {
+        if (!event || typeof event !== 'object') return null;
+
+        const base = {
+          group: typeof event.group === 'string' ? event.group : rawGroup || '',
+          date: typeof event.date === 'string' ? event.date : '',
+          subject: typeof event.subject === 'string' ? event.subject : '',
+          teacher: typeof event.teacher === 'string' ? event.teacher : '',
+          room: typeof event.room === 'string' ? event.room : '',
+          subgroup: typeof event.subgroup === 'string' && event.subgroup.trim().length > 0 ? event.subgroup.trim() : null,
+        };
+
+        if (!base.date || !base.subject) return null;
+
+        if (resolvedType === 'exam') {
+          return {
+            ...base,
+            type: 'exam',
+            time: typeof event.time === 'string' && event.time.trim().length > 0 ? event.time : null,
+          };
+        }
+
+        const rawPeriod = typeof event.period === 'number'
+          ? event.period
+          : typeof event.period === 'string' && event.period.trim().length > 0
+            ? Number(event.period)
+            : null;
+
+        return {
+          ...base,
+          type: 'thesis',
+          period: Number.isFinite(rawPeriod) ? Number(rawPeriod) : null,
+          startTime: typeof event.startTime === 'string' && event.startTime.trim().length > 0 ? event.startTime : null,
+          endTime: typeof event.endTime === 'string' && event.endTime.trim().length > 0 ? event.endTime : null,
+          subgroupDependent: Boolean(event.subgroupDependent),
+        };
+      })
+      .filter((event: SpecialScheduleEvent | null): event is SpecialScheduleEvent => Boolean(event));
+
+    const warnings = Array.isArray(payload?.warnings)
+      ? payload.warnings.filter((warning: unknown): warning is string => typeof warning === 'string')
+      : [];
+
+    return {
+      available: Boolean(payload?.available),
+      type: resolvedType,
+      group: rawGroup,
+      document: this.normalizeSpecialScheduleDocument(payload?.document),
+      events,
+      reasonCode: typeof payload?.reasonCode === 'string' ? payload.reasonCode : null,
+      reason: typeof payload?.reason === 'string' ? payload.reason : null,
+      warnings,
+    };
+  },
+
+  async readSpecialScheduleCache(
+    type: SpecialScheduleType,
+    groupName?: string,
+    enforceExpiry: boolean = true
+  ): Promise<SpecialScheduleResponse | null> {
+    try {
+      const normalizedGroup = this.normalizeSpecialScheduleGroupName(groupName);
+      const cacheKey = this.getSpecialScheduleCacheKey(type, groupName);
+      const lastFetchKey = this.getSpecialScheduleLastFetchKey(type, groupName);
+      const [cachedRaw, lastFetchRaw] = await Promise.all([
+        AsyncStorage.getItem(cacheKey),
+        AsyncStorage.getItem(lastFetchKey),
+      ]);
+
+      if (!cachedRaw) return null;
+
+      if (enforceExpiry) {
+        if (!lastFetchRaw) return null;
+        const lastFetchMs = new Date(lastFetchRaw).getTime();
+        if (!Number.isFinite(lastFetchMs)) return null;
+        if (Date.now() - lastFetchMs > SPECIAL_SCHEDULE_CACHE_EXPIRY) {
+          return null;
+        }
+      }
+
+      const parsed = JSON.parse(cachedRaw);
+      return this.normalizeSpecialScheduleResponse(type, normalizedGroup || null, parsed);
+    } catch (error) {
+      this.log('Failed to read special schedule cache', error);
+      return null;
+    }
+  },
+
+  async cacheSpecialSchedule(type: SpecialScheduleType, groupName: string | undefined, data: SpecialScheduleResponse): Promise<void> {
+    try {
+      const cacheKey = this.getSpecialScheduleCacheKey(type, groupName);
+      const lastFetchKey = this.getSpecialScheduleLastFetchKey(type, groupName);
+      await Promise.all([
+        AsyncStorage.setItem(cacheKey, JSON.stringify(data)),
+        AsyncStorage.setItem(lastFetchKey, new Date().toISOString()),
+      ]);
+    } catch (error) {
+      this.log('Failed to cache special schedule', error);
+    }
+  },
+
+  async getSpecialSchedule(
+    type: SpecialScheduleType,
+    groupName?: string,
+    forceRefresh: boolean = false
+  ): Promise<SpecialScheduleResponse> {
+    await this.ready();
+    const normalizedGroup = this.normalizeSpecialScheduleGroupName(
+      groupName || this.settings.selectedGroupName
+    );
+    const sessionKey = this.getSpecialScheduleSessionKey(type, normalizedGroup);
+
+    if (this.specialScheduleFetchedThisSession.has(sessionKey)) {
+      const cached = await this.readSpecialScheduleCache(type, normalizedGroup, false);
+      if (cached) {
+        return type === 'thesis'
+          ? await this.resolveSubgroupDependentThesisEvents(cached, normalizedGroup)
+          : cached;
+      }
+    }
+
+    if (!forceRefresh) {
+      const freshCached = await this.readSpecialScheduleCache(type, normalizedGroup, true);
+      if (freshCached) {
+        return type === 'thesis'
+          ? await this.resolveSubgroupDependentThesisEvents(freshCached, normalizedGroup)
+          : freshCached;
+      }
+    }
+
+    const endpoint = type === 'exam' ? '/api/schedule/exams' : '/api/schedule/theses';
+    const params = new URLSearchParams();
+    if (normalizedGroup) {
+      params.append('group', normalizedGroup);
+    }
+
+    const requestPath = params.toString() ? `${endpoint}?${params.toString()}` : endpoint;
+
+    try {
+      const response = await fetchCustomApi(requestPath);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch ${type} schedule: ${response.status}`);
+      }
+
+      const payload = await response.json();
+      let normalized = this.normalizeSpecialScheduleResponse(type, normalizedGroup || null, payload);
+      if (type === 'thesis') {
+        normalized = await this.resolveSubgroupDependentThesisEvents(normalized, normalizedGroup);
+      }
+      await this.cacheSpecialSchedule(type, normalizedGroup, normalized);
+      this.specialScheduleFetchedThisSession.add(sessionKey);
+      return normalized;
+    } catch (error) {
+      const staleCached = await this.readSpecialScheduleCache(type, normalizedGroup, false);
+      if (staleCached) {
+        return type === 'thesis'
+          ? await this.resolveSubgroupDependentThesisEvents(staleCached, normalizedGroup)
+          : staleCached;
+      }
+
+      const message = error instanceof Error ? error.message : `Unable to fetch ${type} schedule`;
+      return this.buildUnavailableSpecialSchedule(type, normalizedGroup || null, 'fetch_failed', message);
+    }
+  },
+
+  async getExamAndThesisSchedule(groupName?: string, forceRefresh: boolean = false): Promise<{
+    thesis: SpecialScheduleResponse;
+    exam: SpecialScheduleResponse;
+  }> {
+    const [thesis, exam] = await Promise.all([
+      this.getSpecialSchedule('thesis', groupName, forceRefresh),
+      this.getSpecialSchedule('exam', groupName, forceRefresh),
+    ]);
+
+    return { thesis, exam };
+  },
+
+  async getCachedSpecialSchedule(type: SpecialScheduleType, groupName?: string): Promise<SpecialScheduleResponse> {
+    await this.ready();
+    const normalizedGroup = this.normalizeSpecialScheduleGroupName(
+      groupName || this.settings.selectedGroupName
+    );
+    const cached = await this.readSpecialScheduleCache(type, normalizedGroup, false);
+    if (cached) {
+      return type === 'thesis'
+        ? await this.resolveSubgroupDependentThesisEvents(cached, normalizedGroup)
+        : cached;
+    }
+    return this.buildUnavailableSpecialSchedule(
+      type,
+      normalizedGroup || null,
+      'cache_miss',
+      'Special schedule is not cached yet'
+    );
+  },
+
+  async getCachedExamAndThesisSchedule(groupName?: string): Promise<{
+    thesis: SpecialScheduleResponse;
+    exam: SpecialScheduleResponse;
+  }> {
+    const [thesis, exam] = await Promise.all([
+      this.getCachedSpecialSchedule('thesis', groupName),
+      this.getCachedSpecialSchedule('exam', groupName),
+    ]);
+    return { thesis, exam };
+  },
+
+  async prewarmSpecialSchedules(forceRefresh: boolean = true, groupName?: string): Promise<{
+    thesis: SpecialScheduleResponse;
+    exam: SpecialScheduleResponse;
+  }> {
+    await this.ready();
+    const resolvedGroup = this.normalizeSpecialScheduleGroupName(
+      groupName || this.settings.selectedGroupName
+    );
+    if (!resolvedGroup) {
+      return {
+        thesis: this.buildUnavailableSpecialSchedule('thesis', null, 'group_missing', 'No group selected'),
+        exam: this.buildUnavailableSpecialSchedule('exam', null, 'group_missing', 'No group selected'),
+      };
+    }
+    return this.getExamAndThesisSchedule(resolvedGroup, forceRefresh);
   },
 
   async getPeriodTimes(): Promise<DatePeriodTimesEntry | null> {
@@ -1017,7 +1963,7 @@ export const scheduleService = {
       params.append('group_id', this.settings.selectedGroupId);
     }
 
-    const response = await fetch(`${CUSTOM_API_BASE_URL}/api/schedule/week?${params.toString()}`);
+    const response = await fetchCustomApi(`/api/schedule/week?${params.toString()}`);
     if (!response.ok) throw new Error('Failed to fetch weekly period times');
 
     const weekResponse: WeekScheduleResponse = await response.json();
@@ -1112,7 +2058,7 @@ export const scheduleService = {
   },
 
   async getScheduleForDay(data: ApiResponse, dayName: keyof ApiResponse['data'] | undefined, date?: Date) {
-    if (!dayName) return [];
+    if (!dayName && !date) return [];
 
     const result: Array<{
       period: string;
@@ -1140,6 +2086,39 @@ export const scheduleService = {
     }
 
     const datePeriodTimes = date ? await this.getDatePeriodTimes(date) : null;
+    const effectiveDateSchedule = Array.isArray(datePeriodTimes?.schedule) ? datePeriodTimes.schedule : null;
+    const allowedDatePeriods = effectiveDateSchedule
+      ? new Set(effectiveDateSchedule.map(period => String(period.index + 1)))
+      : null;
+    const replacedDayName =
+      datePeriodTimes?.override?.replaceWeekday ||
+      datePeriodTimes?.override?.recoverySource?.weekday ||
+      undefined;
+    const overrideReason = this.buildOverrideInfoMessage(datePeriodTimes);
+    let overrideInfoAdded = false;
+
+    const addOverrideInfoIfNeeded = () => {
+      if (overrideInfoAdded || !overrideReason) {
+        return;
+      }
+
+      result.push({
+        period: 'recovery-info',
+        startTime: '00:00',
+        endTime: '00:01',
+        className: `Schedule Override: ${overrideReason}`,
+        teacherName: '',
+        roomNumber: '',
+        isCustom: true,
+        color: '#FF5733',
+        isRecoveryDay: Boolean(datePeriodTimes?.isWeekend && datePeriodTimes?.isOverride),
+        recoveryReason: overrideReason,
+        replacedDayName,
+        assignmentCount: 0 // Recovery info never has assignments
+      });
+
+      overrideInfoAdded = true;
+    };
 
     let daySchedule: { [key: string]: DaySchedule } | undefined;
 
@@ -1152,6 +2131,15 @@ export const scheduleService = {
 
       // Primary: resolve by actual date and custom API metadata.
       if (datePeriodTimes?.override?.mode === 'weekday_replace' && datePeriodTimes.override.replaceWeekday) {
+        effectiveDayName = this.normalizeWeekdayKey(datePeriodTimes.override.replaceWeekday);
+      }
+
+      // Recovery weekends often reuse another weekday's classes.
+      if (!effectiveDayName && datePeriodTimes?.override?.recoverySource?.weekday) {
+        effectiveDayName = this.normalizeWeekdayKey(datePeriodTimes.override.recoverySource.weekday);
+      }
+
+      if (!effectiveDayName && datePeriodTimes?.override?.replaceWeekday) {
         effectiveDayName = this.normalizeWeekdayKey(datePeriodTimes.override.replaceWeekday);
       }
 
@@ -1175,9 +2163,12 @@ export const scheduleService = {
 
     // Convert the date to a dateKey for assignment filtering
     const dateKey = date ? format(date, 'yyyy-MM-dd') : '';
+    addOverrideInfoIfNeeded();
 
-    if ((!daySchedule || typeof daySchedule !== 'object') && datePeriodTimes?.schedule?.length) {
-      datePeriodTimes.schedule.forEach(period => {
+    if ((!daySchedule || typeof daySchedule !== 'object') && effectiveDateSchedule?.length) {
+      effectiveDateSchedule.forEach(period => {
+        addOverrideInfoIfNeeded();
+
         const periodId = String(period.index + 1);
         let assignmentCount = 0;
 
@@ -1197,9 +2188,9 @@ export const scheduleService = {
           className: `Period ${period.index + 1}`,
           teacherName: '',
           roomNumber: '',
-          isRecoveryDay: Boolean(datePeriodTimes.isWeekend && datePeriodTimes.isOverride),
-          recoveryReason: datePeriodTimes.override?.reason,
-          replacedDayName: datePeriodTimes.override?.replaceWeekday || undefined,
+          isRecoveryDay: Boolean(datePeriodTimes?.isWeekend && datePeriodTimes?.isOverride),
+          recoveryReason: datePeriodTimes?.override?.reason,
+          replacedDayName,
           assignmentCount
         });
       });
@@ -1207,6 +2198,10 @@ export const scheduleService = {
 
     // Process each period synchronously since we already have all the data
     Object.entries(daySchedule || {}).forEach(([periodNum, schedules]) => {
+      if (allowedDatePeriods && !allowedDatePeriods.has(periodNum)) {
+        return;
+      }
+
       const processScheduleItem = (item: ScheduleItem & { isRecoveryDay?: boolean; recoveryInfo?: any }, isEvenWeek?: boolean) => {
         const itemGroup = item.groupids.name;
         
@@ -1251,22 +2246,7 @@ export const scheduleService = {
         }
 
         // Add info banner when the selected date has an active override reason.
-        if (periodNum === '1' && datePeriodTimes?.isOverride && datePeriodTimes.override?.reason) {
-          result.push({
-            period: 'recovery-info',
-            startTime: '00:00',
-            endTime: '00:01',
-            className: `Schedule Override: ${datePeriodTimes.override.reason}`,
-            teacherName: '',
-            roomNumber: '',
-            isCustom: true,
-            color: '#FF5733',
-            isRecoveryDay: true,
-            recoveryReason: datePeriodTimes.override.reason,
-            replacedDayName: datePeriodTimes.override.replaceWeekday || undefined,
-            assignmentCount: 0 // Recovery info never has assignments
-          });
-        }
+        addOverrideInfoIfNeeded();
 
         // Get assignment count for this period from cached assignment counts, filtering by date
         const periodId = periodNum.toString();
@@ -1306,7 +2286,7 @@ export const scheduleService = {
           group: compareItemGroup,
           isRecoveryDay: Boolean(datePeriodTimes?.isWeekend && datePeriodTimes?.isOverride),
           recoveryReason: datePeriodTimes?.override?.reason,
-          replacedDayName: datePeriodTimes?.override?.replaceWeekday || undefined,
+          replacedDayName,
           assignmentCount
         });
       };
@@ -1428,6 +2408,7 @@ export const scheduleService = {
     // Also clear assignment counts when resetting
     this.cachedAssignmentCounts = [];
     AsyncStorage.removeItem(CACHE_KEYS.ASSIGNMENT_COUNTS);
+    this.specialScheduleFetchedThisSession.clear();
     
     this.saveSettings();
     this.notifyListeners();

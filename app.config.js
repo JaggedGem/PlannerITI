@@ -23,11 +23,17 @@ module.exports = () => {
       slug: "PlannerITI",
       version: "1.2.0",
       orientation: "portrait",
-      icon: "assets/images/icon.png",
+      icon: "assets/images/ios-light.png",
       scheme: "myapp",
       userInterfaceStyle: "automatic",
+      jsEngine: "hermes",
       newArchEnabled: true,
       ios: {
+        icon: {
+          light: "assets/images/ios-light.png",
+          dark: "assets/images/ios-dark.png",
+          tinted: "assets/images/ios-tinted.png"
+        },
         supportsTablet: true,
         bundleIdentifier: variantConfig.iosBundleIdentifier
       },
@@ -43,10 +49,10 @@ module.exports = () => {
         [
           "expo-splash-screen",
           {
-            "image": "assets/images/splash-icon.png",
+            "image": "assets/images/ios-dark.png",
             "imageWidth": 200,
             "resizeMode": "contain",
-            "backgroundColor": "#232433"
+            "backgroundColor": "#05060f"
           }
         ]
       ],
@@ -61,6 +67,9 @@ module.exports = () => {
           projectId: "fe01b043-f283-48db-a683-3c5f23546a96"
         },
         environment: appVariant,
+        customApiLocalUrl: process.env.CUSTOM_API_LOCAL_URL || '',
+        customApiLocalHost: process.env.CUSTOM_API_LOCAL_HOST || '',
+        customApiLocalPort: process.env.CUSTOM_API_LOCAL_PORT || '5000',
         gravatarApiKey: process.env.GRAVATAR_API_KEY,
         apiKey: process.env.API_KEY
       },

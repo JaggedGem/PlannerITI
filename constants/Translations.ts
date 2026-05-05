@@ -132,6 +132,7 @@ type TranslationType = {
     dayView: string;
     weekView: string;
     assignments: string;
+    assessments: string;
     loadingAssignments: string;
   };
   subgroup: {
@@ -350,6 +351,8 @@ type TranslationType = {
       thesis: string;
       exam: string;
       newBadge: string;
+  officialSchedule: string;
+  noOfficialExams: string;
     };
   };
   recovery: {
@@ -615,6 +618,7 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       dayView: 'Day View',
       weekView: 'Week View',
       assignments: 'Assignments',
+      assessments: 'Assessments',
       loadingAssignments: 'Loading assignments...',
     },
     subgroup: {
@@ -833,6 +837,8 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         thesis: 'Thesis',
         exam: 'Exam',
         newBadge: 'New',
+  officialSchedule: 'Official Schedule',
+  noOfficialExams: 'No official exam/thesis schedule available',
       },
     },
     recovery: {
@@ -1116,6 +1122,7 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       dayView: 'Vizualizare pe zi',
       weekView: 'Vizualizare pe săptămână',
       assignments: 'Teme',
+      assessments: 'Evaluări',
       loadingAssignments: 'Se încarcă temele...',
     },
     subgroup: {
@@ -1334,6 +1341,8 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         thesis: 'Teză',
         exam: 'Examen',
         newBadge: 'Nou',
+  officialSchedule: 'Program Oficial',
+  noOfficialExams: 'Nu există program oficial de examene/teze disponibil',
       },
     },
     recovery: {
@@ -1617,6 +1626,7 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       dayView: 'По дням',
       weekView: 'По неделям',
       assignments: 'Задания',
+      assessments: 'Оценивания',
       loadingAssignments: 'Загрузка заданий...',
     },
     subgroup: {
@@ -1835,6 +1845,8 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         thesis: 'Теза',
         exam: 'Экзамен',
         newBadge: 'Новое',
+  officialSchedule: 'Официальное расписание',
+  noOfficialExams: 'Официальное расписание экзаменов/тез недоступно',
       },
     },
     recovery: {

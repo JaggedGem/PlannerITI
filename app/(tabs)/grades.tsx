@@ -20,6 +20,17 @@ import {
   GRADES_REFRESH_START_EVENT,
   GRADES_REFRESH_END_EVENT
 } from '@/services/gradesService';
+import {
+  scheduleService,
+  ExamScheduleEvent,
+  ThesisScheduleEvent,
+  SpecialScheduleResponse,
+} from '@/services/scheduleService';
+import {
+  eventMatchesSelectedSubgroup,
+  formatExamTimeLabel,
+  formatThesisTimeLabel,
+} from '@/utils/specialScheduleUtils';
 // Import authService
 import authService from '@/services/authService';
 
@@ -31,6 +42,15 @@ type ViewMode = 'grades' | 'exams';
 // Map of newly detected grades/exams keyed by semester-subject
 type NewGradeHighlight = { gradeIndices: number[]; newExam?: boolean };
 type NewGradeHighlightsMap = Record<string, NewGradeHighlight>;
+type OfficialAssessmentEvent =
+  | (ExamScheduleEvent & { type: 'exam' })
+  | (ThesisScheduleEvent & { type: 'thesis' });
+
+interface OfficialScheduleState {
+  thesis: SpecialScheduleResponse | null;
+  exam: SpecialScheduleResponse | null;
+  loading: boolean;
+}
 
 interface Grade {
   id: string;
@@ -105,6 +125,123 @@ const cloneStudentGrades = (data: StudentGrades): StudentGrades => ({
   annualGrades: data.annualGrades.map(grade => ({ ...grade })),
   currentSemester: data.currentSemester
 });
+
+const parseEventDate = (date: string): Date => new Date(`${date}T00:00:00`);
+
+const parseTimeToMinutes = (time?: string | null): number => {
+  if (!time) return Number.MAX_SAFE_INTEGER;
+  const [hoursRaw, minutesRaw] = time.split(':');
+  const hours = Number(hoursRaw);
+  const minutes = Number(minutesRaw);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return Number.MAX_SAFE_INTEGER;
+  return hours * 60 + minutes;
+};
+
+const normalizeAssessmentText = (value: string): string => {
+  const normalized = value
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9.\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // Expand common short forms used in schedules/grade portals.
+  const expanded = normalized
+    .replace(/\bl\.\s*/g, 'limba ')
+    .replace(/\blimba\b/g, 'limba')
+    .replace(/\bl engleza\b/g, 'limba engleza')
+    .replace(/\bl romana\b/g, 'limba romana')
+    .replace(/\bl franceza\b/g, 'limba franceza')
+    .replace(/\bl germana\b/g, 'limba germana')
+    .replace(/\binf\.\b/g, 'informatica')
+    .replace(/\bmat\.\b/g, 'matematica')
+    .replace(/\bfiz\.\b/g, 'fizica')
+    .replace(/\bchim\.\b/g, 'chimie')
+    .replace(/\bist\.\b/g, 'istorie')
+    .replace(/\bgeo\.\b/g, 'geografie');
+
+  return expanded
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
+const scoreAssessmentTextMatch = (left: string, right: string): number => {
+  const a = normalizeAssessmentText(left);
+  const b = normalizeAssessmentText(right);
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+
+  const leftTokens = a.split(' ');
+  const rightTokens = b.split(' ');
+  const tokenIntersection = leftTokens.filter(token => rightTokens.includes(token)).length;
+  const tokenUnion = new Set<string>([...leftTokens, ...rightTokens]).size || 1;
+
+  let score = tokenIntersection / tokenUnion;
+  if (a.includes(b) || b.includes(a)) score += 0.2;
+  if (leftTokens[0] && rightTokens[0] && leftTokens[0] === rightTokens[0]) score += 0.1;
+
+  return Math.max(0, Math.min(1, score));
+};
+
+const normalizeExamType = (type: string): 'exam' | 'thesis' | 'other' => {
+  const key = normalizeAssessmentText(type);
+  if (key.includes('teza') || key.includes('thesis')) return 'thesis';
+  if (key.includes('examen') || key.includes('exam')) return 'exam';
+  return 'other';
+};
+
+const formatOfficialEventSummary = (event: OfficialAssessmentEvent, roomLabel: string): string => {
+  const eventDate = parseEventDate(event.date);
+  const dateLabel = Number.isFinite(eventDate.getTime())
+    ? `${String(eventDate.getDate()).padStart(2, '0')}.${String(eventDate.getMonth() + 1).padStart(2, '0')}`
+    : event.date;
+
+  const thesisTime = event.type === 'thesis' ? formatThesisTimeLabel(event) : '';
+  const thesisPeriod = event.type === 'thesis' && event.period ? `P${event.period}` : '';
+  const timingLabel =
+    event.type === 'exam'
+      ? formatExamTimeLabel(event)
+      : thesisTime || thesisPeriod;
+  const room = event.room ? `${roomLabel} ${event.room}` : '';
+  const subgroup = event.subgroup ? `${event.subgroup}` : '';
+
+  return [dateLabel, timingLabel, room, subgroup].filter(Boolean).join(' • ');
+};
+
+const findMatchingOfficialEvent = (
+  exam: Exam,
+  officialEvents: OfficialAssessmentEvent[]
+): OfficialAssessmentEvent | null => {
+  if (officialEvents.length === 0) return null;
+
+  const normalizedType = normalizeExamType(exam.type);
+  const candidates = normalizedType === 'other'
+    ? officialEvents
+    : officialEvents.filter(event => event.type === normalizedType);
+  if (candidates.length === 0) return null;
+
+  let bestMatch: OfficialAssessmentEvent | null = null;
+  let bestScore = 0;
+
+  candidates.forEach((event) => {
+    const subjectScore = scoreAssessmentTextMatch(exam.name, event.subject);
+    const eventDateMs = parseEventDate(event.date).getTime();
+    const isFutureEvent = Number.isFinite(eventDateMs) && eventDateMs >= Date.now() - 12 * 60 * 60 * 1000;
+    const dateBonus = exam.isUpcoming ? (isFutureEvent ? 0.15 : -0.15) : 0;
+    const typeBonus = normalizedType === 'other' ? 0 : 0.2;
+    const totalScore = subjectScore + dateBonus + typeBonus;
+
+    if (totalScore > bestScore) {
+      bestScore = totalScore;
+      bestMatch = event;
+    }
+  });
+
+  const matchThreshold = normalizedType === 'other' ? 0.55 : 0.34;
+  return bestScore >= matchThreshold ? bestMatch : null;
+};
 
 const recalculateSubjectAverages = (subject: GradeSubject) => {
   const numericGrades = subject.grades
@@ -280,7 +417,7 @@ const IDNPScreen = ({ onSave, errorMessage, isSubmitting }: {
 }) => {
   const [idnp, setIdnp] = useState('');
   const [error, setError] = useState(errorMessage || '');
-  const { t } = useTranslation();
+  const { t, currentLanguage } = useTranslation();
 
   useEffect(() => {
     if (errorMessage) {
@@ -361,7 +498,7 @@ const IDNPScreen = ({ onSave, errorMessage, isSubmitting }: {
 
 // Loading screen component
 const LoadingScreen = ({ message }: { message?: string }) => {
-  const { t } = useTranslation();
+  const { t, currentLanguage } = useTranslation();
   
   return (
     <View style={styles.loadingContainer}>
@@ -382,7 +519,7 @@ const SemesterDropdown = ({
   onSemesterChange: (index: number) => void 
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const { t } = useTranslation();
+  const { t, currentLanguage } = useTranslation();
 
   const toggleDropdown = () => {
     setIsOpen(prev => !prev);
@@ -582,21 +719,18 @@ const SubjectCard = ({
 // Exams component with semester filtering
 const ExamsView = ({ 
   exams,
-  studentInfo
+  studentInfo,
+  officialSchedule,
+  selectedSubgroup
 }: { 
   exams: Exam[];
   studentInfo: StudentInfo;
+  officialSchedule: OfficialScheduleState;
+  selectedSubgroup: 'Subgroup 1' | 'Subgroup 2';
 }) => {
-  const { t } = useTranslation();
+  const { t, currentLanguage } = useTranslation();
   
-  // Handle empty exams array
-  if (!exams || exams.length === 0) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.emptyText}>{t('grades').subjects.noExams}</Text>
-      </View>
-    );
-  }
+  const safeExams = exams || [];
 
   // Get current semester based on date
   const currentSemesterNumber = getCurrentSemester();
@@ -614,7 +748,7 @@ const ExamsView = ({
   // Add state for selected semester - initialize with calculated student semester if it exists in the data
   const [selectedSemester, setSelectedSemester] = useState<number | null>(() => {
     // Check if the student's current semester exists in the exams data
-    const hasSemester = exams.some(exam => exam.semester === studentCurrentSemester);
+    const hasSemester = safeExams.some(exam => exam.semester === studentCurrentSemester);
     return hasSemester ? studentCurrentSemester : null;
   });
   
@@ -623,11 +757,11 @@ const ExamsView = ({
   // Get unique semesters from exams
   const semesters = useMemo(() => {
     const uniqueSemesters = Array.from(
-      new Set(exams.map(exam => exam.semester))
+      new Set(safeExams.map(exam => exam.semester))
     ).sort((a, b) => a - b);
     
     return uniqueSemesters;
-  }, [exams]);
+  }, [safeExams]);
 
   // Helper function to convert semester number to year and semester
   const formatSemesterLabel = (semesterNumber: number) => {
@@ -639,10 +773,10 @@ const ExamsView = ({
   // Filter exams by semester if one is selected
   const filteredExams = useMemo(() => {
     if (selectedSemester === null) {
-      return exams;
+      return safeExams;
     }
-    return exams.filter(exam => exam.semester === selectedSemester);
-  }, [exams, selectedSemester]);
+    return safeExams.filter(exam => exam.semester === selectedSemester);
+  }, [safeExams, selectedSemester]);
 
   // Group exams by type
   const examsByType = useMemo(() => {
@@ -657,6 +791,30 @@ const ExamsView = ({
     
     return grouped;
   }, [filteredExams]);
+
+  const officialEvents = useMemo(() => {
+    const thesisEvents = (officialSchedule.thesis?.events || []).filter(
+      (event): event is ThesisScheduleEvent =>
+        event.type === 'thesis' && eventMatchesSelectedSubgroup(event.subgroup, selectedSubgroup)
+    );
+    const examEvents = (officialSchedule.exam?.events || []).filter(
+      (event): event is ExamScheduleEvent =>
+        event.type === 'exam' && eventMatchesSelectedSubgroup(event.subgroup, selectedSubgroup)
+    );
+
+    return [...examEvents, ...thesisEvents]
+      .map((event): OfficialAssessmentEvent => event.type === 'exam' ? { ...event, type: 'exam' } : { ...event, type: 'thesis' })
+      .sort((left, right) => {
+        if (left.date !== right.date) return left.date.localeCompare(right.date);
+        const leftTime = left.type === 'exam'
+          ? parseTimeToMinutes(left.time)
+          : parseTimeToMinutes(left.startTime || left.endTime);
+        const rightTime = right.type === 'exam'
+          ? parseTimeToMinutes(right.time)
+          : parseTimeToMinutes(right.startTime || right.endTime);
+        return leftTime - rightTime;
+      });
+  }, [officialSchedule.exam?.events, officialSchedule.thesis?.events, selectedSubgroup]);
 
   // Toggle dropdown
   const toggleDropdown = () => {
@@ -735,46 +893,164 @@ const ExamsView = ({
       </View>
 
       {/* Exams list */}
-      <ScrollView style={styles.examsList}>
-        {Object.entries(examsByType).map(([type, examList]) => (
-          <View key={type} style={styles.examTypeSection}>
-            <Text style={styles.examTypeTitle}>{type}</Text>
-            {examList.map((exam, index) => (
-              <Animated.View
-                key={`${type}-${index}`}
-                entering={FadeInUp.delay(index * 100).springify()}
-                style={styles.examCard}
-              >
-                <View style={styles.examHeaderRow}>
-                  <Text style={styles.examSubject}>{exam.name}</Text>
+      <ScrollView style={styles.examsList} contentContainerStyle={styles.examsListContent}>
+              {Object.entries(examsByType).map(([type, examList]) => (
+                <View key={type} style={styles.examTypeSection}>
+                  {examList.map((exam, index) => {
+                    const normalizedType = normalizeExamType(exam.type);
+                    const officialMatch = findMatchingOfficialEvent(exam, officialEvents);
+                    const officialSummary = officialMatch
+                      ? formatOfficialEventSummary(officialMatch, t('schedule').room)
+                      : '';
+
+                    return (
+                      <Animated.View
+                        key={`${type}-${index}`}
+                        entering={FadeInUp.delay(index * 80).springify()}
+                        style={[
+                          styles.examCard,
+                          normalizedType === 'thesis' && styles.examCardThesis,
+                          normalizedType === 'exam' && styles.examCardExamVariant,
+                        ]}
+                      >
+                        <View style={styles.examHeaderRow}>
+                          <Text style={styles.examSubject} numberOfLines={2}>{exam.name}</Text>
+                          <View style={[
+                            styles.examTypePill,
+                            normalizedType === 'thesis' && styles.examTypePillThesis,
+                            normalizedType === 'exam' && styles.examTypePillExamVariant,
+                            normalizedType === 'other' && styles.examTypePillOther,
+                          ]}>
+                            <Text style={styles.examTypePillText}>{exam.type}</Text>
+                          </View>
+                        </View>
+                        <View style={styles.examDetails}>
+                          <Text style={styles.examSemester}>
+                            {formatSemesterLabel(exam.semester)}
+                          </Text>
+                          {!exam.isUpcoming ? (
+                            <Text style={[
+                              styles.examGrade,
+                              normalizedType === 'thesis' && styles.examGradeThesis,
+                              normalizedType === 'exam' && styles.examGradeExam,
+                            ]}>{exam.grade}</Text>
+                          ) : (
+                            <Text style={styles.upcomingExamGrade}>TBD</Text>
+                          )}
+                        </View>
+                        {exam.isUpcoming && (
+                          <View
+                            style={[
+                              styles.upcomingIndicatorContainer,
+                              officialSummary && styles.upcomingIndicatorContainerInfo,
+                            ]}
+                          >
+                            <MaterialIcons
+                              name={officialSummary ? 'event-note' : 'schedule'}
+                              size={16}
+                              color={officialSummary ? '#A8C8FF' : '#FFBC5E'}
+                            />
+                            <Text
+                              style={[
+                                styles.upcomingIndicatorText,
+                                officialSummary
+                                  ? styles.upcomingIndicatorInfoText
+                                  : styles.upcomingIndicatorDefaultText,
+                              ]}
+                            >
+                              {officialSummary || t('grades').subjects.upcoming}
+                            </Text>
+                          </View>
+                        )}
+                        {officialSummary && !exam.isUpcoming && (
+                          <Text style={styles.examOfficialMeta}>
+                            {officialSummary}
+                          </Text>
+                        )}
+                      </Animated.View>
+                    );
+                  })}
                 </View>
-                <View style={styles.examDetails}>
-                  <Text style={styles.examSemester}>
-                    {formatSemesterLabel(exam.semester)}
-                  </Text>
-                  {exam.isUpcoming ? (
-                    <View style={styles.upcomingIndicatorContainer}>
-                      <MaterialIcons name="schedule" size={18} color="#FFD700" />
-                      <Text style={styles.upcomingIndicatorText}>
-                        {t('grades').subjects.upcoming}
-                      </Text>
-                    </View>
-                  ) : (
-                    <Text style={styles.examGrade}>{exam.grade}</Text>
-                  )}
+              ))}
+
+              {Object.keys(examsByType).length === 0 && (
+                <Text style={styles.emptyText}>
+                  {selectedSemester !== null
+                    ? t('grades').semesters.noDataSemester.replace('{{semester}}', selectedSemester.toString())
+                    : t('grades').semesters.noData}
+                </Text>
+              )}
+
+              {/* Official schedule section */}
+              {officialEvents.length > 0 && (
+                <View style={styles.officialSectionContainer}>
+                  <View style={styles.officialSectionHeader}>
+                    <Text style={styles.sectionTitle}>{t('grades').subjects.officialSchedule}</Text>
+                  </View>
+                  {(() => {
+                    const sortedByDate: Record<string, OfficialAssessmentEvent[]> = {};
+                    officialEvents.forEach(event => {
+                      if (!sortedByDate[event.date]) sortedByDate[event.date] = [];
+                      sortedByDate[event.date].push(event);
+                    });
+
+                    return Object.entries(sortedByDate).sort(([a], [b]) => a.localeCompare(b)).map(([date, events], dateIdx) => {
+                      const eventDate = parseEventDate(date);
+                      const dateLabel = Number.isFinite(eventDate.getTime())
+                        ? formatLocalizedDate(eventDate, currentLanguage, false)
+                        : date;
+
+                      return (
+                        <View key={`official-${date}`} style={styles.officialDateGroup}>
+                          <Text style={styles.officialDateTitle}>{dateLabel}</Text>
+                          {events.map((event, eventIdx) => {
+                            const timeLabel = event.type === 'exam'
+                              ? formatExamTimeLabel(event)
+                              : formatThesisTimeLabel(event);
+                            const room = event.room ? `${t('schedule').room} ${event.room}` : '';
+                            const subgroup = event.subgroup ? `${event.subgroup}` : '';
+                            const meta = [timeLabel, room, subgroup, event.teacher].filter(Boolean).join(' \u2022 ');
+
+                            return (
+                              <Animated.View
+                                key={`official-${date}-${eventIdx}`}
+                                entering={FadeInUp.delay((dateIdx * 3 + eventIdx) * 60).springify()}
+                                style={[
+                                  styles.officialEventCard,
+                                  event.type === 'exam' ? styles.officialEventCardExam : styles.officialEventCardThesis,
+                                ]}
+                              >
+                                <View style={styles.officialEventHeader}>
+                                  <View style={[
+                                    styles.officialEventTypePill,
+                                    event.type === 'exam' ? styles.officialEventTypePillExam : styles.officialEventTypePillThesis,
+                                  ]}>
+                                    <Text style={styles.officialEventTypeText}>
+                                      {event.type === 'exam' ? t('grades').subjects.exam : t('grades').subjects.thesis}
+                                    </Text>
+                                  </View>
+                                  {event.subgroup ? (
+                                    <Text style={styles.officialEventSubgroup}>{event.subgroup}</Text>
+                                  ) : null}
+                                </View>
+                                <Text style={styles.officialEventSubject}>{event.subject}</Text>
+                                {meta ? <Text style={styles.officialEventMeta} numberOfLines={2}>{meta}</Text> : null}
+                              </Animated.View>
+                            );
+                          })}
+                        </View>
+                      );
+                    });
+                  })()}
                 </View>
-              </Animated.View>
-            ))}
-          </View>
-        ))}
-        
-        {Object.keys(examsByType).length === 0 && (
-          <Text style={styles.emptyText}>
-            {selectedSemester !== null 
-              ? t('grades').semesters.noDataSemester.replace('{{semester}}', selectedSemester.toString())
-              : t('grades').semesters.noData}
-          </Text>
-        )}
+              )}
+
+              {officialEvents.length === 0 && Object.keys(examsByType).length > 0 && officialSchedule.thesis !== null && officialSchedule.exam !== null && (
+                <View style={styles.officialSectionContainer}>
+                  <Text style={styles.sectionTitle}>{t('grades').subjects.officialSchedule}</Text>
+                  <Text style={styles.noOfficialDataText}>{t('grades').subjects.noOfficialExams}</Text>
+                </View>
+              )}
       </ScrollView>
     </View>
   );
@@ -1423,6 +1699,14 @@ const GradesScreen = ({
   // UI state
   const [refreshing, setRefreshing] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('grades');
+  const [selectedSubgroup, setSelectedSubgroup] = useState<'Subgroup 1' | 'Subgroup 2'>(
+    scheduleService.getSettings().group
+  );
+  const [officialSchedule, setOfficialSchedule] = useState<OfficialScheduleState>({
+    thesis: null,
+    exam: null,
+    loading: false,
+  });
   const [activeSemesterIndex, setActiveSemesterIndex] = useState(
     studentGrades?.currentGrades
       ? studentGrades.currentGrades.findIndex(s => s.semester === currentSemesterNumber) 
@@ -1501,14 +1785,78 @@ const GradesScreen = ({
     };
   }, []);
 
-  // Kick off a background indicator when manual refresh invoked
+  useEffect(() => {
+    const unsubscribe = scheduleService.subscribe(() => {
+      setSelectedSubgroup(scheduleService.getSettings().group);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const loadCachedOfficialSchedule = useCallback(async () => {
+    const fallbackGroup = scheduleService.getSettings().selectedGroupName;
+    const groupName = String(studentGrades?.studentInfo.group || fallbackGroup || '').trim();
+
+    if (!groupName) {
+      setOfficialSchedule(prev => ({ ...prev, thesis: null, exam: null, loading: false }));
+      return;
+    }
+
+    setOfficialSchedule(prev => ({ ...prev, loading: true }));
+    try {
+      const [thesis, exam] = await Promise.all([
+        scheduleService.getCachedSpecialSchedule('thesis', groupName),
+        scheduleService.getCachedSpecialSchedule('exam', groupName),
+      ]);
+
+      setOfficialSchedule({
+        thesis,
+        exam,
+        loading: false,
+      });
+    } catch (error) {
+      setOfficialSchedule(prev => ({
+        ...prev,
+        thesis:
+          prev.thesis ||
+          scheduleService.buildUnavailableSpecialSchedule('thesis', groupName, 'cache_read_failed', 'Unable to load cached thesis schedule'),
+        exam:
+          prev.exam ||
+          scheduleService.buildUnavailableSpecialSchedule('exam', groupName, 'cache_read_failed', 'Unable to load cached exam schedule'),
+        loading: false,
+      }));
+    }
+  }, [studentGrades?.studentInfo.group]);
+
+  useEffect(() => {
+    void loadCachedOfficialSchedule();
+  }, [loadCachedOfficialSchedule]);
+
+  useEffect(() => {
+    void loadCachedOfficialSchedule();
+    // Also trigger a background network refresh when viewing exams
+    if (viewMode === 'exams') {
+      const groupName = String(studentGrades?.studentInfo.group || scheduleService.getSettings().selectedGroupName || '').trim();
+      if (groupName) {
+        scheduleService
+          .getExamAndThesisSchedule(groupName)
+          .then(({ thesis, exam }) => {
+            setOfficialSchedule({ thesis, exam, loading: false });
+          })
+          .catch(() => {});
+      }
+    }
+  }, [viewMode, loadCachedOfficialSchedule, studentGrades?.studentInfo.group]);
+
   const handleRefresh = useCallback(async () => {
     if (refreshing) return;
     setRefreshing(true);
     setIsBackgroundRefreshing(true);
     setBackgroundRefreshStart(Date.now());
     try {
-      await onRefresh();
+      await Promise.all([
+        onRefresh(),
+        loadCachedOfficialSchedule(),
+      ]);
     } finally {
       setRefreshing(false);
       // Actual end of background refresh will be when new cache event fires; set a safety timeout
@@ -1519,7 +1867,7 @@ const GradesScreen = ({
         }
       }, 8000);
     }
-  }, [onRefresh, refreshing, isBackgroundRefreshing]);
+  }, [onRefresh, refreshing, isBackgroundRefreshing, loadCachedOfficialSchedule]);
 
   // Get current semester data
   const currentSemesterData = useMemo(() => {
@@ -1808,7 +2156,12 @@ const GradesScreen = ({
           </Text>
         </ScrollView>
       ) : (
-        <ExamsView exams={studentGrades.exams} studentInfo={studentGrades.studentInfo} />
+        <ExamsView
+          exams={studentGrades.exams}
+          studentInfo={studentGrades.studentInfo}
+          officialSchedule={officialSchedule}
+          selectedSubgroup={selectedSubgroup}
+        />
       )}
 
       {/* Grade Calculator Modal */}
@@ -2797,17 +3150,20 @@ const styles = StyleSheet.create({
   examsList: {
     flex: 1,
     padding: 20,
-    paddingBottom: 100,
+  },
+  sectionTitle: {
+    color: '#E9EEFF',
+    fontSize: 15,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginBottom: 10,
   },
   examTypeSection: {
-    marginBottom: 24,
+    marginBottom: 8,
   },
   examTypeTitle: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 12,
-    paddingHorizontal: 4,
+    display: 'none',
   },
   examCard: {
     backgroundColor: '#1A1A1A',
@@ -2834,6 +3190,150 @@ const styles = StyleSheet.create({
     color: '#4D96FF',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  examCardThesis: {
+    borderLeftWidth: 3,
+    borderLeftColor: 'rgba(77, 150, 255, 0.6)',
+  },
+  examCardExamVariant: {
+    borderLeftWidth: 3,
+    borderLeftColor: 'rgba(255, 149, 0, 0.6)',
+  },
+  examTypePill: {
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    backgroundColor: 'rgba(138, 138, 141, 0.2)',
+    marginLeft: 8,
+  },
+  examTypePillThesis: {
+    backgroundColor: 'rgba(77, 150, 255, 0.2)',
+  },
+  examTypePillExamVariant: {
+    backgroundColor: 'rgba(255, 149, 0, 0.2)',
+  },
+  examTypePillOther: {
+    backgroundColor: 'rgba(138, 138, 141, 0.15)',
+  },
+  examTypePillText: {
+    color: '#C8D0E0',
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+  examGradeThesis: {
+    color: '#6EB0FF',
+  },
+  examGradeExam: {
+    color: '#FFA94D',
+  },
+  examsListContent: {
+    paddingBottom: 100,
+  },
+  officialSectionContainer: {
+    marginTop: 16,
+  },
+  noOfficialDataText: {
+    color: '#8A8A8D',
+    fontSize: 13,
+    fontStyle: 'italic',
+    marginTop: 4,
+    paddingHorizontal: 4,
+  },
+  officialSectionHeader: {
+    marginTop: 8,
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  officialSectionSubtitle: {
+    color: '#8A8A8D',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  officialRefreshButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#1E233F',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(77, 150, 255, 0.35)',
+  },
+  officialLoadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 14,
+  },
+  officialLoadingText: {
+    color: '#8A8A8D',
+    fontSize: 13,
+  },
+  officialDateGroup: {
+    marginBottom: 16,
+  },
+  officialDateTitle: {
+    color: '#AFBCD9',
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  officialEventCard: {
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+  },
+  officialEventCardExam: {
+    backgroundColor: 'rgba(255, 149, 0, 0.08)',
+    borderColor: 'rgba(255, 149, 0, 0.28)',
+  },
+  officialEventCardThesis: {
+    backgroundColor: 'rgba(77, 150, 255, 0.1)',
+    borderColor: 'rgba(77, 150, 255, 0.3)',
+  },
+  officialEventHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  officialEventTypePill: {
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  officialEventTypePillExam: {
+    backgroundColor: 'rgba(255, 149, 0, 0.2)',
+  },
+  officialEventTypePillThesis: {
+    backgroundColor: 'rgba(77, 150, 255, 0.25)',
+  },
+  officialEventTypeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+    textTransform: 'uppercase',
+  },
+  officialEventSubgroup: {
+    color: '#B6C2DA',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  officialEventSubject: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  officialEventMeta: {
+    color: '#C3C7D4',
+    fontSize: 13,
+    lineHeight: 18,
   },
   // View mode switcher styles
   viewModeSwitcher: {
@@ -3078,19 +3578,40 @@ const styles = StyleSheet.create({
   },
   upcomingIndicatorContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+    alignItems: 'flex-start',
+    backgroundColor: 'rgba(255, 149, 0, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 149, 0, 0.3)',
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 6,
     borderRadius: 8,
+    marginTop: 8,
+    gap: 6,
+  },
+  upcomingIndicatorContainerInfo: {
+    backgroundColor: 'rgba(77, 150, 255, 0.12)',
+    borderColor: 'rgba(77, 150, 255, 0.3)',
   },
   upcomingIndicatorText: {
-    color: '#FFD700',
     fontSize: 12,
-    marginLeft: 4,
+    flex: 1,
+    flexWrap: 'wrap',
+    lineHeight: 16,
+  },
+  upcomingIndicatorDefaultText: {
+    color: '#FFBC5E',
+  },
+  upcomingIndicatorInfoText: {
+    color: '#A8C8FF',
+  },
+  examOfficialMeta: {
+    marginTop: 8,
+    color: '#73809B',
+    fontSize: 12,
+    lineHeight: 16,
   },
   upcomingExamGrade: {
-    color: '#FFD700',
+    color: '#FFBC5E',
   },
   emptyContainer: {
     flex: 1,

@@ -8,7 +8,6 @@ import { scheduleService } from './services/scheduleService';
 import { gradesDataService } from './services/gradesService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAssignments } from './utils/assignmentStorage';
-import UpdateNotification from './components/UpdateNotification';
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
@@ -22,12 +21,18 @@ export default function App() {
           await scheduleService.ready();
           await scheduleService.refreshGroups(true);
           await scheduleService.ensureSelectedGroup();
-          await scheduleService.refreshSchedule(true);
           // Silent grades refresh (if IDNP stored)
           const idnp = await AsyncStorage.getItem('@planner_idnp');
-            if (idnp) {
-              gradesDataService.silentRefresh(idnp);
-            }
+          if (idnp) {
+            // Intentionally fire-and-forget to keep startup responsive.
+            void gradesDataService.silentRefresh(idnp);
+          }
+
+          // Wait for schedule + theses/exams warmup on startup for smoother first screen render.
+          await Promise.all([
+            scheduleService.refreshSchedule(true),
+            scheduleService.prewarmSpecialSchedules(true),
+          ]);
         } catch (e) {
           // Silent - fallback to cached data
         }
@@ -68,7 +73,6 @@ export default function App() {
   return (
     <>
       <ExpoRoot context={require.context('./app')} />
-      <UpdateNotification />
     </>
   );
 }
