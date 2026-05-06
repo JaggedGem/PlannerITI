@@ -41,19 +41,23 @@ const red      = (t) => paint('red', t);
 
 const BOX = { tl:'╭', tr:'╮', bl:'╰', br:'╯', h:'─', v:'│', lm:'├', rm:'┤', tm:'┬', bm:'┴' };
 
-const hRule = (w, l = BOX.tl, r = BOX.tr, mid = BOX.lm, fill = BOX.h) =>
-  l + fill.repeat(w - 2) + r;
+const hRule = (w, l = BOX.tl, r = BOX.tr, fill = BOX.h) =>
+  l + fill.repeat(Math.max(0, w - 2)) + r;
 
-const row = (content, w) => {
-  const pad = Math.max(0, w - 2 - ansiLen(content) - 2);
-  return `${BOX.v} ${content}${' '.repeat(pad)} ${BOX.v}`;
+// Renders a bordered row; content may contain ANSI codes.
+const boxRow = (content, w) => {
+  const pad = Math.max(0, w - 4 - ansiLen(content));
+  return `${cyan(BOX.v)}  ${content}${' '.repeat(pad)}  ${cyan(BOX.v)}`;
 };
 
-const printBox = (lines, w = 62) => {
+// Auto-sizes the box to fit the widest line, respecting an optional minimum.
+const printBox = (lines, minW = 0) => {
+  const maxContent = lines.reduce((m, l) => Math.max(m, ansiLen(l)), 0);
+  const w = Math.max(minW, maxContent + 4); // 2 borders + 2 spaces each side
   process.stdout.write('\n');
   console.log(cyan(hRule(w)));
   for (const line of lines) {
-    console.log(cyan(BOX.v) + ' ' + line + ' '.repeat(Math.max(0, w - 2 - ansiLen(line) - 2)) + ' ' + cyan(BOX.v));
+    console.log(boxRow(line, w));
   }
   console.log(cyan(hRule(w, BOX.bl, BOX.br)));
 };
@@ -102,13 +106,13 @@ const log = {
   header() {
     console.clear();
     printBox([
-      bold('  PlannerITI  ') + gray('APK Builder'),
-      gray('  Bundletool-based Android release packager'),
+      bold('PlannerITI') + '  ' + gray('APK Builder'),
+      gray('Bundletool-based Android release packager'),
       '',
-      gray('  --gen-keystore   Generate a new signing keystore'),
-      gray('  --include-universal   Also build a universal APK'),
-      gray('  --help            Show all flags'),
-    ], 58);
+      gray('--gen-keystore        Generate a new signing keystore'),
+      gray('--include-universal   Also build a universal APK'),
+      gray('--help                Show all flags'),
+    ]);
     console.log();
   },
 
@@ -178,7 +182,6 @@ const pickPreferredApk = (paths) => {
 };
 
 // Runs a child process, capturing stderr for better error messages.
-// When silent=true the child's stdout/stderr are piped (used during spinner).
 let VERBOSE = false;
 
 const runCommand = (cmd, cmdArgs, { silent = false } = {}) =>
@@ -222,16 +225,40 @@ const saveConfig = (cfg) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  Interactive prompt — replaces the question line with ✓ after input
+// ─────────────────────────────────────────────────────────────────────────────
+
+let rl; // set in main()
+
+const ask = async (label, fallback = '', isSecret = false) => {
+  const hint   = fallback ? ` ${gray(`(${fallback})`)}` : '';
+  // Hide secret defaults so we don't print passwords as hints
+  const safeHint = isSecret && fallback ? ` ${gray('(set)')}` : hint;
+
+  const answer = await rl.question(`  ${cyan('?')} ${label}${safeHint}: `);
+  const value  = answer.trim() || fallback;
+
+  // Move cursor up one line, clear it, rewrite with checkmark
+  process.stdout.write('\x1b[1A\x1b[2K\r');
+  const display = isSecret
+    ? (value ? gray('•'.repeat(Math.min(value.length, 10))) : red('(empty)'))
+    : (value ? bold(value) : dim('(empty)'));
+  console.log(`  ${green('✓')} ${dim(label + ':')} ${display}`);
+
+  return value;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  Keystore generation
 // ─────────────────────────────────────────────────────────────────────────────
 
-const genKeystore = async (ask) => {
+const genKeystore = async () => {
   log.section('Generate Signing Keystore');
   log.info('This creates a keystore for GitHub / direct distribution.\n');
 
   const outPath  = path.resolve(await ask('Output path', 'github-release.jks'));
   const alias    = await ask('Key alias', 'planneriti-github');
-  const password = await ask('Password (min 6 chars)');
+  const password = await ask('Password (min 6 chars)', '', true);
   if (password.length < 6) throw new Error('Password must be at least 6 characters.');
   const cn       = await ask('Your name or organization', 'PlannerITI');
   const validity = await ask('Validity in days', '10000');
@@ -265,34 +292,40 @@ const genKeystore = async (ask) => {
   printBox([
     bold(green('Keystore created!')),
     '',
-    `  Path   ${gray(outPath)}`,
-    `  Alias  ${gray(alias)}`,
-    ...(sha1   ? [`  SHA1   ${yellow(sha1)}`] : []),
-    ...(sha256 ? [`  SHA256 ${gray(sha256.substring(0, 44) + '…')}`] : []),
+    `Path    ${gray(outPath)}`,
+    `Alias   ${gray(alias)}`,
+    ...(sha1   ? [`SHA1    ${yellow(sha1)}`] : []),
+    ...(sha256 ? [`SHA256  ${gray(sha256.substring(0, 44) + '…')}`] : []),
     '',
-    yellow('  ⚠  Back up this file and password safely.'),
-    yellow('  ⚠  Add it to .gitignore — never commit it.'),
-  ], 66);
+    yellow('⚠  Back up this file and password safely.'),
+    yellow('⚠  Add it to .gitignore — never commit it.'),
+  ]);
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  APK build (single target)
+//
+//  Universal mode  → extracts universal.apk from the .apks archive (one file,
+//                    sideload-ready) — behaviour unchanged.
+//  Per-ABI mode    → outputs the signed .apks bundle directly; no extraction.
+//                    The .apks is already signed and can be distributed as-is
+//                    or uploaded to a store / sideloaded via bundletool install-apks.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const buildApk = async ({
+const buildTarget = async ({
   bundletoolCmd, aabPath, outputDir, version, appName,
   abi, locales, screenDensity, sdkVersion,
   keystore, keyAlias, ksPass, keyPass,
   universal = false,
 }) => {
-  const label   = universal ? 'universal' : abi;
-  const tmpDir  = fs.mkdtempSync(path.join(os.tmpdir(), 'planneriti-'));
-  const apksOut = path.join(tmpDir, `${sanitize(appName)}-${label}.apks`);
-  const extrDir = path.join(tmpDir, `extract-${label}`);
+  const label  = universal ? 'universal' : abi;
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'planneriti-'));
 
   if (universal) {
-    // Universal mode: --mode=universal, no device-spec.
-    // The .apks file is a plain ZIP containing universal.apk — unzip directly.
+    // ── Universal: one self-contained APK ────────────────────────────────────
+    const apksOut = path.join(tmpDir, `${sanitize(appName)}-universal.apks`);
+    const extrDir = path.join(tmpDir, 'extract-universal');
+
     await runCommand(bundletoolCmd, [
       'build-apks',
       `--bundle=${aabPath}`,
@@ -307,8 +340,18 @@ const buildApk = async ({
     ensureDir(extrDir);
     await runCommand('unzip', ['-q', apksOut, '-d', extrDir], { silent: true });
 
+    const selected = pickPreferredApk(findApkFiles(extrDir));
+    if (!selected) throw new Error('No APK found inside universal .apks archive');
+
+    const outName = `${sanitize(appName)}-${version}-android-universal.apk`;
+    const outPath = path.join(outputDir, outName);
+    fs.copyFileSync(selected, outPath);
+    return outPath;
+
   } else {
-    // Per-ABI mode: --mode=default with device-spec for both build and extract.
+    // ── Per-ABI: output the signed .apks bundle directly ─────────────────────
+    // The device-spec narrows the bundle to only splits relevant for this ABI,
+    // keeping the file small.  The resulting .apks is already properly signed.
     const specPath = path.join(tmpDir, `spec-${abi}.json`);
     fs.writeFileSync(specPath, JSON.stringify({
       supportedAbis: [abi],
@@ -317,10 +360,13 @@ const buildApk = async ({
       sdkVersion,
     }, null, 2));
 
+    const outName = `${sanitize(appName)}-${version}-android-${abi}.apks`;
+    const outPath = path.join(outputDir, outName);
+
     await runCommand(bundletoolCmd, [
       'build-apks',
       `--bundle=${aabPath}`,
-      `--output=${apksOut}`,
+      `--output=${outPath}`,
       '--mode=default',
       `--device-spec=${specPath}`,
       `--ks=${keystore}`,
@@ -329,53 +375,38 @@ const buildApk = async ({
       `--key-pass=pass:${keyPass}`,
     ], { silent: true });
 
-    ensureDir(extrDir);
-    await runCommand(bundletoolCmd, [
-      'extract-apks',
-      `--apks=${apksOut}`,
-      `--output-dir=${extrDir}`,
-      `--device-spec=${specPath}`,
-    ], { silent: true });
+    return outPath;
   }
-
-  const selected = pickPreferredApk(findApkFiles(extrDir));
-  if (!selected) throw new Error(`No APK extracted for ${label}`);
-
-  const outName = `${sanitize(appName)}-${version}-android-${label}.apk`;
-  const outPath = path.join(outputDir, outName);
-  fs.copyFileSync(selected, outPath);
-
-  return outPath;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Summary table
+//  Summary table  (auto-sized)
 // ─────────────────────────────────────────────────────────────────────────────
 
 const printSummary = (results, outputDir) => {
-  const COL = { label: 16, size: 10, file: 36 };
-  const W   = 68;
+  // Pre-render each data row so we can measure max width before drawing the box.
+  const dataRows = results.map(({ label, filePath, error }) => {
+    if (error) {
+      return `  ${red('✗')}  ${label}  ${red(error.substring(0, 50))}`;
+    }
+    const size = fs.existsSync(filePath) ? formatBytes(fs.statSync(filePath).size) : '?';
+    const file = path.basename(filePath);
+    return `  ${green('✓')}  ${label}  ${gray(size)}  ${dim(file)}`;
+  });
 
-  const header = bold('Build Summary');
-  const sub    = gray(outputDir);
+  const headerLine = bold('Build Summary');
+  const subLine    = gray(outputDir);
+
+  const allLines   = [headerLine, subLine, ...dataRows];
+  const maxContent = allLines.reduce((m, l) => Math.max(m, ansiLen(l)), 0);
+  const W          = maxContent + 4; // 2 borders + 2 spaces each side
 
   console.log();
   console.log(cyan(hRule(W)));
-  console.log(row(`  ${header}`, W));
-  console.log(row(`  ${sub}`, W));
+  console.log(boxRow(headerLine, W));
+  console.log(boxRow(subLine,    W));
   console.log(cyan(hRule(W, BOX.lm, BOX.rm)));
-
-  for (const { label, filePath, error } of results) {
-    if (error) {
-      console.log(row(`  ${red('✗')}  ${label.padEnd(COL.label)}  ${red(error.substring(0, 40))}`, W));
-    } else {
-      const size = fs.existsSync(filePath) ? formatBytes(fs.statSync(filePath).size) : '?';
-      const file = path.basename(filePath);
-      const line = `  ${green('✓')}  ${label.padEnd(COL.label)}  ${gray(size.padStart(COL.size - 2))}  ${dim(file)}`;
-      console.log(row(line, W));
-    }
-  }
-
+  for (const row of dataRows) console.log(boxRow(row, W));
   console.log(cyan(hRule(W, BOX.bl, BOX.br)));
 };
 
@@ -387,31 +418,37 @@ const printHelp = () => {
   printBox([
     bold('Usage'),
     '',
-    '  node build-apks.js [options]',
+    'node build-apks.js [options]',
     '',
     bold('Flags'),
-    `  ${cyan('--aab')} <path>            Path to .aab file`,
-    `  ${cyan('--bundletool')} <path>     bundletool JAR or command`,
-    `  ${cyan('--version')} <tag>         Release version tag`,
-    `  ${cyan('--app')} <name>            App name for file naming`,
-    `  ${cyan('--out')} <dir>             Output directory`,
-    `  ${cyan('--abis')} <list>           Comma-separated ABI list`,
-    `  ${cyan('--keystore')} <path>       Path to .jks keystore`,
-    `  ${cyan('--alias')} <alias>         Key alias`,
-    `  ${cyan('--ks-pass')} <pass>        Keystore password`,
-    `  ${cyan('--key-pass')} <pass>       Key password (defaults to ks-pass)`,
-    `  ${cyan('--locales')} <list>        Supported locales (default: en,ro,ru)`,
-    `  ${cyan('--density')} <dpi>         Screen density (default: 480)`,
-    `  ${cyan('--sdk')} <version>         SDK version (default: 33)`,
-    `  ${cyan('--include-universal')}     Also build a universal APK`,
-    `  ${cyan('--gen-keystore')}          Generate a new signing keystore`,
-    `  ${cyan('--no-save')}               Skip "save config?" prompt`,
-    `  ${cyan('--help')}                  Show this help`,
+    `${cyan('--aab')} <path>              Path to .aab file`,
+    `${cyan('--bundletool')} <path>       bundletool JAR or command`,
+    `${cyan('--version')} <tag>           Release version tag`,
+    `${cyan('--app')} <name>              App name for file naming`,
+    `${cyan('--out')} <dir>               Output directory`,
+    `${cyan('--abis')} <list>             Comma-separated ABI list`,
+    `${cyan('--keystore')} <path>         Path to .jks keystore`,
+    `${cyan('--alias')} <alias>           Key alias`,
+    `${cyan('--ks-pass')} <pass>          Keystore password`,
+    `${cyan('--key-pass')} <pass>         Key password (defaults to ks-pass)`,
+    `${cyan('--locales')} <list>          Supported locales (default: en,ro,ru)`,
+    `${cyan('--density')} <dpi>           Screen density (default: 480)`,
+    `${cyan('--sdk')} <version>           SDK version (default: 33)`,
+    `${cyan('--include-universal')}       Also build a universal APK`,
+    `${cyan('--gen-keystore')}            Generate a new signing keystore`,
+    `${cyan('--no-save')}                 Skip "save config?" prompt`,
+    `${cyan('--verbose')}                 Print bundletool output`,
+    `${cyan('--help')}                    Show this help`,
+    '',
+    bold('Output'),
+    'Per-ABI targets produce a signed .apks bundle (install via',
+    '  bundletool install-apks --apks=<file>).',
+    'Universal target produces a sideload-ready .apk.',
     '',
     bold('Config'),
-    '  Settings are saved in .apkbuilder.json (passwords excluded).',
-    '  Add this file to .gitignore.',
-  ], 64);
+    'Settings are saved in .apkbuilder.json (passwords excluded).',
+    'Add this file to .gitignore.',
+  ]);
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -428,17 +465,12 @@ const main = async () => {
 
   log.header();
 
-  const rl  = readline.createInterface({ input: process.stdin, output: process.stdout });
-  const ask = async (label, fallback = '') => {
-    const hint   = fallback ? ` ${gray(`(${fallback})`)}` : '';
-    const answer = await rl.question(`  ${cyan('?')} ${label}${hint}: `);
-    return answer.trim() || fallback;
-  };
+  rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 
   try {
     // ── Keystore generation shortcut ──────────────────────────────────────────
     if (args['gen-keystore']) {
-      await genKeystore(ask);
+      await genKeystore();
       return;
     }
 
@@ -479,12 +511,12 @@ const main = async () => {
     const keyAlias = await ask('Key alias', args.alias || process.env.KEYSTORE_ALIAS || config.keyAlias || '');
     if (!keyAlias) throw new Error('Key alias is required.');
 
-    const ksPass  = args['ks-pass']  || process.env.KEYSTORE_PASS || await ask('Keystore password');
+    const ksPass  = args['ks-pass']  || process.env.KEYSTORE_PASS || await ask('Keystore password', '', true);
     if (!ksPass) throw new Error('Keystore password is required.');
-    const keyPass = args['key-pass'] || process.env.KEY_PASS      || await ask('Key password', ksPass);
+    const keyPass = args['key-pass'] || process.env.KEY_PASS      || await ask('Key password', ksPass, true);
 
     // Advanced (always default, no prompt spam)
-    const locales      = normalizeList(args.locales || config.locales || 'en,ro,ru');
+    const locales       = normalizeList(args.locales || config.locales || 'en,ro,ru');
     const screenDensity = parseInt(args.density || config.screenDensity || '480', 10);
     const sdkVersion    = parseInt(args.sdk     || config.sdkVersion   || '33',  10);
 
@@ -514,22 +546,23 @@ const main = async () => {
       ...(includeUniversal ? [{ label: 'universal', universal: true }] : []),
     ];
 
-    log.section(`Building ${targets.length} APK${targets.length > 1 ? 's' : ''}`);
+    log.section(`Building ${targets.length} target${targets.length > 1 ? 's' : ''}`);
 
     const results = [];
 
     for (let i = 0; i < targets.length; i++) {
       const t = targets[i];
-      spinner.start(`[${i + 1}/${targets.length}]  ${t.label}`);
+      const ext = t.universal ? 'apk' : 'apks';
+      spinner.start(`[${i + 1}/${targets.length}]  ${t.label}  ${dim('→ .' + ext)}`);
 
       try {
-        const filePath = await buildApk({
+        const filePath = await buildTarget({
           bundletoolCmd, aabPath, outputDir, version, appName,
           abi: t.abi, locales, screenDensity, sdkVersion,
           keystore, keyAlias, ksPass, keyPass,
           universal: t.universal,
         });
-        spinner.succeed(`[${i + 1}/${targets.length}]  ${t.label}  ${gray(formatBytes(fs.statSync(filePath).size))}`);
+        spinner.succeed(`[${i + 1}/${targets.length}]  ${t.label}  ${gray(formatBytes(fs.statSync(filePath).size))}  ${dim('.' + ext)}`);
         results.push({ label: t.label, filePath });
       } catch (err) {
         const firstLine = err.message.split('\n')[0];
