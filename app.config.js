@@ -3,8 +3,8 @@ import "dotenv/config";
 // Read environment variables set in eas.json
 module.exports = () => {
   const appVariant = process.env.APP_VARIANT || 'production';
-  const androidPackage = process.env.ANDROID_PACKAGE || 'me.jagged.planneriti';
-  const iosBundleIdentifier = process.env.IOS_BUNDLE_IDENTIFIER || 'me.jagged.planneriti';
+  const androidPackage = process.env.ANDROID_PACKAGE || 'site.jagged.planneriti';
+  const iosBundleIdentifier = process.env.IOS_BUNDLE_IDENTIFIER || 'site.jagged.planneriti';
 
   // Use the environment variables directly - they already have the variant suffix
   const variantConfig = {
