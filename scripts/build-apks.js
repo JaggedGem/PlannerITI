@@ -179,19 +179,30 @@ const pickPreferredApk = (paths) => {
 
 // Runs a child process, capturing stderr for better error messages.
 // When silent=true the child's stdout/stderr are piped (used during spinner).
+let VERBOSE = false;
+
 const runCommand = (cmd, cmdArgs, { silent = false } = {}) =>
   new Promise((resolve, reject) => {
-    const stdio = silent ? ['pipe', 'pipe', 'pipe'] : 'inherit';
+    const pipe  = silent && !VERBOSE;
+    const stdio = pipe ? ['pipe', 'pipe', 'pipe'] : 'inherit';
     const child = spawn(cmd, cmdArgs, { stdio });
 
-    let stderr = '';
-    if (silent && child.stderr) child.stderr.on('data', d => { stderr += d; });
+    let stderr = '', stdout = '';
+    if (pipe) {
+      if (child.stderr) child.stderr.on('data', d => { stderr += d; });
+      if (child.stdout) child.stdout.on('data', d => { stdout += d; });
+    }
 
-    child.on('error', (err) => reject(new Error(`Could not run '${cmd}': ${err.message}`)));
+    child.on('error', (err) => {
+      const hint = err.code === 'ENOENT'
+        ? `\n  '${cmd}' not found. Install it or pass --bundletool <path>.`
+        : '';
+      reject(new Error(`Could not run '${cmd}': ${err.message}${hint}`));
+    });
     child.on('exit', (code) => {
       if (code === 0) return resolve();
-      const detail = stderr.trim() ? `\n${stderr.trim()}` : ` (exit ${code})`;
-      reject(new Error(`${cmd} failed${detail}`));
+      const detail = [stderr, stdout].map(s => s.trim()).filter(Boolean).join('\n');
+      reject(new Error(`bundletool failed (exit ${code})${detail ? `:\n${detail}` : ''}`));
     });
   });
 
@@ -279,18 +290,25 @@ const buildApk = async ({
   const apksOut = path.join(tmpDir, `${sanitize(appName)}-${label}.apks`);
   const extrDir = path.join(tmpDir, `extract-${label}`);
 
-  const buildArgs = [
-    'build-apks',
-    `--bundle=${aabPath}`,
-    `--output=${apksOut}`,
-    '--mode=universal',
-    `--ks=${keystore}`,
-    `--ks-key-alias=${keyAlias}`,
-    `--ks-pass=pass:${ksPass}`,
-    `--key-pass=pass:${keyPass}`,
-  ];
+  if (universal) {
+    // Universal mode: --mode=universal, no device-spec.
+    // The .apks file is a plain ZIP containing universal.apk — unzip directly.
+    await runCommand(bundletoolCmd, [
+      'build-apks',
+      `--bundle=${aabPath}`,
+      `--output=${apksOut}`,
+      '--mode=universal',
+      `--ks=${keystore}`,
+      `--ks-key-alias=${keyAlias}`,
+      `--ks-pass=pass:${ksPass}`,
+      `--key-pass=pass:${keyPass}`,
+    ], { silent: true });
 
-  if (!universal) {
+    ensureDir(extrDir);
+    await runCommand('unzip', ['-q', apksOut, '-d', extrDir], { silent: true });
+
+  } else {
+    // Per-ABI mode: --mode=default with device-spec for both build and extract.
     const specPath = path.join(tmpDir, `spec-${abi}.json`);
     fs.writeFileSync(specPath, JSON.stringify({
       supportedAbis: [abi],
@@ -298,17 +316,27 @@ const buildApk = async ({
       screenDensity,
       sdkVersion,
     }, null, 2));
-    buildArgs.push(`--device-spec=${specPath}`);
+
+    await runCommand(bundletoolCmd, [
+      'build-apks',
+      `--bundle=${aabPath}`,
+      `--output=${apksOut}`,
+      '--mode=default',
+      `--device-spec=${specPath}`,
+      `--ks=${keystore}`,
+      `--ks-key-alias=${keyAlias}`,
+      `--ks-pass=pass:${ksPass}`,
+      `--key-pass=pass:${keyPass}`,
+    ], { silent: true });
+
+    ensureDir(extrDir);
+    await runCommand(bundletoolCmd, [
+      'extract-apks',
+      `--apks=${apksOut}`,
+      `--output-dir=${extrDir}`,
+      `--device-spec=${specPath}`,
+    ], { silent: true });
   }
-
-  await runCommand(bundletoolCmd, buildArgs, { silent: true });
-
-  ensureDir(extrDir);
-  await runCommand(bundletoolCmd, [
-    'extract-apks',
-    `--apks=${apksOut}`,
-    `--output-dir=${extrDir}`,
-  ], { silent: true });
 
   const selected = pickPreferredApk(findApkFiles(extrDir));
   if (!selected) throw new Error(`No APK extracted for ${label}`);
@@ -396,6 +424,7 @@ const main = async () => {
   const spinner = new Spinner();
 
   if (args.help) { log.header(); printHelp(); return; }
+  if (args.verbose) VERBOSE = true;
 
   log.header();
 
@@ -503,8 +532,11 @@ const main = async () => {
         spinner.succeed(`[${i + 1}/${targets.length}]  ${t.label}  ${gray(formatBytes(fs.statSync(filePath).size))}`);
         results.push({ label: t.label, filePath });
       } catch (err) {
-        spinner.fail(`[${i + 1}/${targets.length}]  ${t.label}  ${red(err.message.split('\n')[0])}`);
-        results.push({ label: t.label, error: err.message.split('\n')[0] });
+        const firstLine = err.message.split('\n')[0];
+        const rest      = err.message.split('\n').slice(1).join('\n').trim();
+        spinner.fail(`[${i + 1}/${targets.length}]  ${t.label}  ${red(firstLine)}`);
+        if (rest) console.error(rest.split('\n').map(l => `        ${l}`).join('\n'));
+        results.push({ label: t.label, error: firstLine });
       }
     }
 
