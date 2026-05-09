@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable, TouchableOpacity, TextInput, Alert } from 'react-native';
 import { Assignment, getPeriodById, AssignmentType, Subtask, toggleSubtaskCompletion, addSubtask, deleteSubtask, updateAllSubtaskCompletion, getSubtasksForAssignment } from '../../utils/assignmentStorage';
-import { format } from 'date-fns';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { 
   useSharedValue, 
@@ -196,7 +195,7 @@ export default function AssignmentItem({
   // State for period information
   const [period, setPeriod] = useState<Period | null>(null);
   const [remainingTime, setRemainingTime] = useState<string>('');
-  const { t, currentLanguage } = useTranslation();
+  const { t, currentLanguage, formatTimeFromDate } = useTranslation();
   const { showOptionsMenu } = useAssignmentOptions();
   
   // Add state for subtasks
@@ -324,13 +323,7 @@ export default function AssignmentItem({
   // Format the due date/time for display with localization
   const formattedTime = (() => {
     const date = new Date(assignment.dueDate);
-    
-    // Format time as localized string (e.g., "3:30 PM" or "15:30")
-    if (currentLanguage === 'en') {
-      return format(date, 'h:mm a');  // 12-hour format with AM/PM
-    } else {
-      return format(date, 'HH:mm');   // 24-hour format
-    }
+    return formatTimeFromDate(date);
   })();
   
   // Animation styles

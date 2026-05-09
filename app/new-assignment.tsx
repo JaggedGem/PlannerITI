@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, memo } from 'react';
+import React, { useState, useRef, useEffect, memo, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -548,7 +548,8 @@ const TimePicker = ({
   onTimeChange: (date: Date) => void;
   timePresets?: { label: string, hour: number, minute: number }[];
 }) => {
-  const { currentLanguage } = useTranslation();
+  const { formatTimeFromDate, currentLanguage } = useTranslation();
+  const shouldUse24HourFormat = currentLanguage !== 'en';
   const hours = Array.from({ length: 12 }, (_, i) => i + 1);
   const minutes = Array.from({ length: 12 }, (_, i) => i * 5);
   
@@ -558,24 +559,6 @@ const TimePicker = ({
   const amPmScale = useSharedValue(1);
   const presetButtonScale = useSharedValue(1);
   
-  // Use 24-hour format for Romanian and Russian
-  const shouldUse24HourFormat = currentLanguage === 'ro' || currentLanguage === 'ru';
-  
-  const getTimeString = (date: Date) => {
-    if (shouldUse24HourFormat) {
-      // 24-hour format for Romanian and Russian
-      const hours = date.getHours().toString().padStart(2, '0');
-      const minutes = date.getMinutes().toString().padStart(2, '0');
-      return `${hours}:${minutes}`;
-    } else {
-      // 12-hour format with AM/PM for English
-      const hours = date.getHours() > 12 ? date.getHours() - 12 : date.getHours() === 0 ? 12 : date.getHours();
-      const minutes = date.getMinutes() < 10 ? `0${date.getMinutes()}` : date.getMinutes();
-      const period = date.getHours() >= 12 ? 'PM' : 'AM';
-      return `${hours}:${minutes} ${period}`;
-    }
-  };
-  
   const updateHour = (hour: number) => {
     // Animate hour change
     hourRotation.value = withSequence(
@@ -584,17 +567,7 @@ const TimePicker = ({
     );
     
     const newTime = new Date(selectedTime);
-    
-    if (shouldUse24HourFormat) {
-      // In 24-hour format, just set the hour directly
-      newTime.setHours(hour);
-    } else {
-      // In 12-hour format, adjust based on AM/PM
-      const isPM = selectedTime.getHours() >= 12;
-      const adjustedHour = isPM ? (hour === 12 ? 12 : hour + 12) : (hour === 12 ? 0 : hour);
-      newTime.setHours(adjustedHour);
-    }
-    
+    newTime.setHours(hour);
     onTimeChange(newTime);
   };
   
@@ -674,7 +647,7 @@ const TimePicker = ({
         }]}
         entering={FadeIn.duration(200)}
       >
-        {getTimeString(selectedTime)}
+        {formatTimeFromDate(selectedTime)}
       </Animated.Text>
       
       <View style={styles.timePresetContainer}>
@@ -686,7 +659,7 @@ const TimePicker = ({
           {timePresets.map((preset, index) => {
             const presetDate = new Date(selectedTime);
             presetDate.setHours(preset.hour, preset.minute);
-            const presetTimeString = getTimeString(presetDate);
+            const presetTimeString = formatTimeFromDate(presetDate);
             const isSelected = selectedTime.getHours() === preset.hour && 
                            selectedTime.getMinutes() === preset.minute;
             
@@ -861,8 +834,19 @@ const ASSIGNMENT_TYPE_KEYWORDS = {
 };
 
 export default function NewAssignmentScreen() {
-  const { t, currentLanguage } = useTranslation();
+  const { t, currentLanguage, formatDate: formatDateFromHook, formatTime: formatTimeFromHook } = useTranslation();
+  const shouldUse24HourFormat = currentLanguage !== 'en';
   const bottomTabOverflow = useBottomTabOverflow();
+  
+  // Wrapper for formatDate to match DatePicker expectations
+  const formatDate = useCallback((date: Date) => {
+    return formatDateFromHook(date, {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  }, [formatDateFromHook]);
   
   // Form state
   const [title, setTitle] = useState('');
@@ -1630,36 +1614,7 @@ export default function NewAssignmentScreen() {
   
   // Helper function to format period time
   const formatPeriodTime = (timeString: string): string => {
-    const [hours, minutes] = timeString.split(':').map(Number);
-    
-    // Use 24-hour format for non-English languages
-    if (!currentLanguage.startsWith('en')) {
-      return `${hours < 10 ? '0' + hours : hours}:${minutes < 10 ? '0' + minutes : minutes}`;
-    } else {
-      // Use 12-hour format with AM/PM for English
-      const period = hours >= 12 ? 'PM' : 'AM';
-      const displayHours = hours % 12 || 12;
-      return `${displayHours}:${minutes < 10 ? '0' + minutes : minutes} ${period}`;
-    }
-  };
-  
-  // Format date for display
-  const formatDate = (date: Date) => {
-    return date.toLocaleDateString(currentLanguage, {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    });
-  };
-  
-  // Format time for display
-  const formatTime = (date: Date) => {
-    return date.toLocaleTimeString(currentLanguage, {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    });
+    return formatTimeFromHook(timeString);
   };
 
   // Save assignment and navigate back

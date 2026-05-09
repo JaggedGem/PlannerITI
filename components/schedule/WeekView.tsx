@@ -40,19 +40,7 @@ const getWeekStart = (date: Date): Date => {
   return result;
 };
 
-interface FormattedHour {
-  hour: string;
-  period: string;
-}
 
-// Format hour in 12h or 24h format based on locale
-const formatHourByLocale = (hour: number, isEnglish: boolean): string | FormattedHour => {
-  if (!isEnglish) return hour.toString().padStart(2, '0');
-  
-  const period = hour >= 12 ? 'PM' : 'AM';
-  const hour12 = hour % 12 || 12;
-  return { hour: hour12.toString(), period };
-};
 
 // Get minimum and maximum hours from all periods
 const getTimeRange = (schedule: Record<string, any[]>): { min: number, max: number } => {
@@ -461,7 +449,7 @@ export default function WeekView() {
     }
     return 0; // Weekday - stay on current week
   });
-  const { t, formatDate } = useTranslation();
+  const { t, formatDate, formatHour } = useTranslation();
   const currentTime = useTimeUpdate();
   const verticalScrollRef = useRef<ScrollView>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -1201,7 +1189,7 @@ export default function WeekView() {
             {/* Time slots column */}
             <View style={[styles.timeColumn, { width: timeColumnWidth }]}>
               {timeSlots.map((hour, index) => {
-                const formattedHour = formatHourByLocale(hour, settings.language === 'en');
+                const formattedHour = formatHour(hour);
                 const isCurrentHour = hour === nowHour && weekOffset === 0;
                 
                 return (

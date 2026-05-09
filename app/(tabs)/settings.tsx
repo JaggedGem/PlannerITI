@@ -26,7 +26,6 @@ import { getAssignments, AssignmentType } from '../../utils/assignmentStorage';
 import { StorageViewer } from '../../components/StorageViewer';
 import * as Notifications from 'expo-notifications';
 import { initializeNotifications } from '../../utils/notificationUtils';
-import { formatCompactDate } from '@/utils/dateLocalization';
 import { updateService } from '@/services/updateService';
 
 // Store keys
@@ -145,6 +144,7 @@ const TimePicker = ({
   use12HourFormat?: boolean;
   translations?: { cancel: string; confirm: string };
 }) => {
+  const { formatTimeFromDate } = useTranslation();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
   const [localValue, setLocalValue] = useState(value);
@@ -196,17 +196,6 @@ const TimePicker = ({
 
   const formatNumber = (num: number, padLength = 2) => {
     return num.toString().padStart(padLength, '0');
-  };
-
-  const formatTimeForDisplay = (date: Date) => {
-    if (use12HourFormat) {
-      const hours = date.getHours();
-      const hour12 = hours % 12 || 12;
-      const minutes = date.getMinutes();
-      const ampm = hours >= 12 ? 'PM' : 'AM';
-      return `${hour12}:${minutes.toString().padStart(2, '0')} ${ampm}`;
-    }
-    return date.toTimeString().slice(0, 5);
   };
 
   const handleHourScroll = (event: any) => {
@@ -303,7 +292,7 @@ const TimePicker = ({
           <View style={styles.timePickerHeader}>
             <Text style={styles.timePickerTitle}>{label}</Text>
             <Text style={styles.timePickerValue}>
-              {formatTimeForDisplay(localValue)}
+              {formatTimeFromDate(localValue)}
             </Text>
           </View>
 
@@ -476,7 +465,7 @@ const CustomToggle = ({
 };
 
 export default function Settings() {
-  const { t, currentLanguage } = useTranslation();
+  const { t, currentLanguage, formatCompactDate, formatTimeFromDate } = useTranslation();
   const router = useRouter();
   const flatListRef = useRef<FlatList<Group>>(null);
   const { user, logout, reloadUser, loading } = useAuthContext();
@@ -1385,18 +1374,10 @@ export default function Settings() {
     }
   }, [notificationSettings]);
   
-  // Format time for display (12 or 24 hour)
+  // Format time for display with centralized locale handling
   const formatTimeDisplay = useCallback((date: Date) => {
-    const hours = date.getHours();
-    const minutes = date.getMinutes();
-    
-    // 12-hour format
-    const period = hours >= 12 ? 'PM' : 'AM';
-    const displayHours = hours % 12 || 12; // Convert 0 to 12 for 12 AM
-    const displayMinutes = minutes < 10 ? `0${minutes}` : minutes;
-    
-    return `${displayHours}:${displayMinutes} ${period}`;
-  }, []);
+    return formatTimeFromDate(date);
+  }, [formatTimeFromDate]);
   
   // Show notification time picker
   const handleShowNotificationTimePicker = useCallback(() => {
@@ -1457,7 +1438,7 @@ export default function Settings() {
                   <Text style={styles.timeButtonText}>
                     {formatTimeDisplay(new Date(notificationSettings.notificationTime))}
                   </Text>
-                  <MaterialIcons name="edit" size={16} color="#3478F6" />
+                  <MaterialIcons name="edit" size={16} color="#3478F6" style={styles.timeButtonIcon} />
           </TouchableOpacity>
               </View>
             </View>
@@ -1896,7 +1877,7 @@ export default function Settings() {
                   <Text style={styles.scheduleDetailLabel}>{t('settings').schedule.lastUpdated}</Text>
                   <Text style={styles.scheduleDetailValue}>
                     {lastScheduleRefresh
-                      ? formatCompactDate(lastScheduleRefresh, currentLanguage, true)
+                      ? formatCompactDate(lastScheduleRefresh, true)
                       : t('settings').schedule.noRecentRefresh}
                   </Text>
                 </View>
@@ -2849,10 +2830,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: '#1A1A1A',
     alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
   },
   timeButtonText: {
     color: 'white',
     fontSize: 16,
+  },
+  timeButtonIcon: {
+    marginLeft: 8,
   },
   timeSeparator: {
     color: 'white',

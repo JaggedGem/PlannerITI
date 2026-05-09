@@ -6,7 +6,7 @@ import Animated, { FadeInUp, Layout, useSharedValue, useAnimatedStyle, withRepea
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from '@/hooks/useTranslation';
-import { formatLocalizedDate } from '@/utils/dateLocalization';
+
 import React from 'react';
 import { 
   fetchStudentInfo, 
@@ -728,7 +728,7 @@ const ExamsView = ({
   officialSchedule: OfficialScheduleState;
   selectedSubgroup: 'Subgroup 1' | 'Subgroup 2';
 }) => {
-  const { t, currentLanguage } = useTranslation();
+  const { t, currentLanguage, formatFullDate } = useTranslation();
   
   const safeExams = exams || [];
 
@@ -997,7 +997,7 @@ const ExamsView = ({
                     return Object.entries(sortedByDate).sort(([a], [b]) => a.localeCompare(b)).map(([date, events], dateIdx) => {
                       const eventDate = parseEventDate(date);
                       const dateLabel = Number.isFinite(eventDate.getTime())
-                        ? formatLocalizedDate(eventDate, currentLanguage, false)
+                        ? formatFullDate(eventDate, false)
                         : date;
 
                       return (
@@ -1647,7 +1647,7 @@ const GradesScreen = ({
   newHighlights: NewGradeHighlightsMap,
   onAcknowledgeHighlight: (semesterNumber: number, subjectName: string) => void
 }) => {
-  const { t, currentLanguage } = useTranslation();
+  const { t, currentLanguage, formatFullDate } = useTranslation();
   const [isBackgroundRefreshing, setIsBackgroundRefreshing] = useState(false);
   const [backgroundRefreshStart, setBackgroundRefreshStart] = useState<number | null>(null);
   const [backgroundJustUpdated, setBackgroundJustUpdated] = useState(false);
@@ -1933,8 +1933,8 @@ const GradesScreen = ({
     if (!lastUpdated) return t('grades').neverUpdated;
     
     const date = new Date(lastUpdated);
-    return formatLocalizedDate(date, currentLanguage, true);
-  }, [lastUpdated, currentLanguage]);
+    return formatFullDate(date, true);
+  }, [lastUpdated, formatFullDate]);
   
   // Toggle subject expand/collapse
   const toggleSubject = useCallback((subjectName: string, semesterNumber: number) => {
@@ -2206,7 +2206,7 @@ const GradesScreen = ({
 export default function Grades() {
   // Fix: Use a ref to prevent duplicate API requests
   const fetchingRef = useRef(false);
-  const { t, currentLanguage } = useTranslation();
+  const { t, currentLanguage, formatFullDate } = useTranslation();
 
   const [idnp, setIdnp] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -2497,7 +2497,7 @@ export default function Grades() {
         setErrorMessage(t('grades').networkError);
       } else {
         // If we have cached data, just show an error toast but keep the cached data
-        setErrorMessage(`${t('grades').networkErrorCache} ${formatLocalizedDate(new Date(lastUpdated || 0), currentLanguage, false)}`);
+        setErrorMessage(`${t('grades').networkErrorCache} ${formatFullDate(new Date(lastUpdated || 0), false)}`);
         
         // Error notification
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);

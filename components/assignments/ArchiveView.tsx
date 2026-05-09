@@ -31,7 +31,7 @@ export default function ArchiveView({
   onToggleAssignment,
   onDeleteAssignment,
 }: ArchiveViewProps) {
-  const { t } = useTranslation();
+  const { t, formatFullDate } = useTranslation();
   
   // State for lazy loading
   const [visibleItems, setVisibleItems] = useState(15);
@@ -172,7 +172,7 @@ export default function ArchiveView({
                           {assignment.title}
                         </Text>
                         <Text style={styles.assignmentSubtitle}>
-                          {assignment.courseName || t('assignments').common.uncategorized} • {new Date(assignment.dueDate).toLocaleDateString()}
+                          {assignment.courseName || t('assignments').common.uncategorized} • {formatFullDate(new Date(assignment.dueDate), false)}
                         </Text>
                       </View>
                       

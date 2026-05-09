@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, memo } from 'react';
+import React, { useState, useRef, useEffect, memo, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -526,7 +526,8 @@ const TimePicker = ({
   onTimeChange: (date: Date) => void;
   timePresets?: { label: string, hour: number, minute: number }[];
 }) => {
-  const { currentLanguage } = useTranslation();
+  const { formatTimeFromDate, currentLanguage } = useTranslation();
+  const shouldUse24HourFormat = currentLanguage !== 'en';
   const hours = Array.from({ length: 12 }, (_, i) => i + 1);
   const minutes = Array.from({ length: 12 }, (_, i) => i * 5);
   
@@ -536,23 +537,7 @@ const TimePicker = ({
   const amPmScale = useSharedValue(1);
   const presetButtonScale = useSharedValue(1);
   
-  // Use 24-hour format for Romanian and Russian
-  const shouldUse24HourFormat = currentLanguage === 'ro' || currentLanguage === 'ru';
-  
-  const getTimeString = (date: Date) => {
-    if (shouldUse24HourFormat) {
-      // 24-hour format for Romanian and Russian
-      const hours = date.getHours().toString().padStart(2, '0');
-      const minutes = date.getMinutes().toString().padStart(2, '0');
-      return `${hours}:${minutes}`;
-    } else {
-      // 12-hour format with AM/PM for English
-      const hours = date.getHours() > 12 ? date.getHours() - 12 : date.getHours() === 0 ? 12 : date.getHours();
-      const minutes = date.getMinutes() < 10 ? `0${date.getMinutes()}` : date.getMinutes();
-      const period = date.getHours() >= 12 ? 'PM' : 'AM';
-      return `${hours}:${minutes} ${period}`;
-    }
-  };
+
   
   const updateHour = (hour: number) => {
     // Animate hour change
@@ -652,7 +637,7 @@ const TimePicker = ({
         }]}
         entering={FadeIn.duration(200)}
       >
-        {getTimeString(selectedTime)}
+        {formatTimeFromDate(selectedTime)}
       </Animated.Text>
       
       <View style={styles.timePresetContainer}>
@@ -664,7 +649,7 @@ const TimePicker = ({
           {timePresets.map((preset, index) => {
             const presetDate = new Date(selectedTime);
             presetDate.setHours(preset.hour, preset.minute);
-            const presetTimeString = getTimeString(presetDate);
+            const presetTimeString = formatTimeFromDate(presetDate);
             const isSelected = selectedTime.getHours() === preset.hour && 
                            selectedTime.getMinutes() === preset.minute;
             
@@ -923,8 +908,19 @@ export default function EditAssignmentScreen() {
   const titleInputRef = useRef<TextInput>(null);
   
   // Translation hook
-  const { t, currentLanguage } = useTranslation();
+  const { t, currentLanguage, formatDate: formatDateFromHook } = useTranslation();
+  const shouldUse24HourFormat = currentLanguage !== 'en';
   const bottomTabOverflow = useBottomTabOverflow();
+  
+  // Wrapper for formatDate to match DatePicker expectations
+  const formatDate = useCallback((date: Date) => {
+    return formatDateFromHook(date, {
+      weekday: 'short',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  }, [formatDateFromHook]);
   
   // Add state for modals inside EditAssignmentScreen
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -1270,12 +1266,7 @@ export default function EditAssignmentScreen() {
           <DatePicker
             selectedDate={dueDate}
             onDateChange={setDueDate}
-            formatDate={(date) => date.toLocaleDateString(currentLanguage, {
-              weekday: 'short',
-              month: 'long',
-              day: 'numeric',
-              year: 'numeric'
-            })}
+            formatDate={formatDate}
             currentLanguage={currentLanguage}
             days={t('weekdays').short}
             quickDateOptions={[

@@ -337,10 +337,8 @@ const ArchivedAssignmentsView = memo(({
   onToggle: (id: string) => void,
   onDelete: (id: string) => void
 }) => {
-  const { t } = useTranslation();
-  
-  // State for lazy loading
-  const [visibleItems, setVisibleItems] = useState(15);
+  const { t, formatFullDate } = useTranslation();
+  const [visibleItems, setVisibleItems] = useState(10);
   const [hasMore, setHasMore] = useState(true);
   const isLoadingMoreRef = useRef(false);
   
@@ -359,7 +357,7 @@ const ArchivedAssignmentsView = memo(({
     
     // Simulate delay to avoid UI jank
     setTimeout(() => {
-      setVisibleItems(prev => {
+      setVisibleItems((prev: number) => {
         const newValue = prev + 10;
         if (newValue >= sortedAssignments.length) {
           setHasMore(false);
@@ -427,7 +425,7 @@ const ArchivedAssignmentsView = memo(({
                   {assignment.title}
                 </Text>
                 <Text style={styles.archivedSubtitle}>
-                  {assignment.courseCode} • {new Date(assignment.dueDate).toLocaleDateString()}
+                  {assignment.courseCode} • {formatFullDate(new Date(assignment.dueDate), false)}
                 </Text>
               </View>
             </View>

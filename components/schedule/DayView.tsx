@@ -85,14 +85,7 @@ const getAssignmentTypeColor = (type: AssignmentType): string => {
   }
 };
 
-const formatTimeByLocale = (time: string, isEnglish: boolean) => {
-  if (!isEnglish) return time;
 
-  const [hours, minutes] = time.split(':').map(Number);
-  const period = hours >= 12 ? 'PM' : 'AM';
-  const hour12 = hours % 12 || 12;
-  return `${hour12}:${minutes.toString().padStart(2, '0')} ${period}`;
-};
 
 const getMinutesBetween = (currentTime: Date, targetTime: string) => {
   const [hours, minutes] = targetTime.split(':').map(Number);
@@ -238,7 +231,7 @@ export default function DayView() {
   const [initialLoadAttempted, setInitialLoadAttempted] = useState(false);
   const currentDate = useRef(new Date()).current;
   const isEvenWeek = scheduleService.isEvenWeek(selectedDate);
-  const { t, formatDate } = useTranslation();
+  const { t, formatDate, formatTime } = useTranslation();
   const recoveryDay = useMemo(() => scheduleService.isRecoveryDay(selectedDate), [selectedDate]);
   const scheduleOverride = useMemo(() => {
     if (!Array.isArray(todaySchedule)) return null;
@@ -1065,9 +1058,9 @@ export default function DayView() {
   const formatDisplayTime = useCallback(
     (time?: string | null): string => {
       if (!time) return '';
-      return formatTimeByLocale(time, settings.language === 'en');
+      return formatTime(time);
     },
-    [settings.language]
+    [formatTime]
   );
 
   const formatDisplayTimeRange = useCallback(
@@ -1429,7 +1422,7 @@ export default function DayView() {
                         }]}
                         >
                           <Text style={[styles.time, { marginBottom: 'auto' }]}>
-                            {formatTimeByLocale(item.startTime, settings.language === 'en')}
+                            {formatTime(item.startTime)}
                           </Text>
 
                           {/* Time separator - show chevron if has assignments, otherwise show dot */}
@@ -1451,7 +1444,7 @@ export default function DayView() {
                           </View>
 
                           <Text style={[styles.time, { marginTop: 'auto' }]}>
-                            {formatTimeByLocale(item.endTime, settings.language === 'en')}
+                            {formatTime(item.endTime)}
                           </Text>
                         </View>
 
