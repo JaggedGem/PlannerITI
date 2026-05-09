@@ -1,6 +1,9 @@
-// This is a shim for web and Android where the tab bar is generally opaque.
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+// Shared bottom spacing helper that works both inside and outside tab screens.
 export default undefined;
 
 export function useBottomTabOverflow() {
-  return 0;
+  const { bottom } = useSafeAreaInsets();
+  return bottom;
 }

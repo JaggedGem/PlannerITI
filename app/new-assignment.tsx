@@ -38,6 +38,7 @@ import { useTranslation } from '@/hooks/useTranslation';
 import { ModernDropdownPortal } from '@/components/ModernDropdownPortal';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { SegmentItem } from '@/components/modernDropdown';
+import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
 
 // Extend Subject type to include custom period properties
 interface ExtendedSubject extends Subject {
@@ -861,6 +862,7 @@ const ASSIGNMENT_TYPE_KEYWORDS = {
 
 export default function NewAssignmentScreen() {
   const { t, currentLanguage } = useTranslation();
+  const bottomTabOverflow = useBottomTabOverflow();
   
   // Form state
   const [title, setTitle] = useState('');
@@ -2323,7 +2325,7 @@ export default function NewAssignmentScreen() {
             </Animated.View>
             
             {/* Add spacing at the bottom for better scroll experience */}
-            <View style={styles.bottomSpacing} />
+            <View style={[styles.bottomSpacing, { height: 40 + bottomTabOverflow }]} />
           </View>
         </KeyboardAwareScrollView>
       </SafeAreaView>

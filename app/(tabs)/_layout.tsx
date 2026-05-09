@@ -2,6 +2,7 @@ import { Tabs } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import React from 'react';
 import { Platform, View, Text, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from '@/hooks/useTranslation';
 import Animated, { useAnimatedStyle, withSpring } from 'react-native-reanimated';
 
@@ -86,6 +87,7 @@ function AnimatedTabBarIcon({ focused, color, name }: AnimatedTabBarIconProps) {
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const { t } = useTranslation();
+  const { bottom } = useSafeAreaInsets();
   
   const theme = Colors[colorScheme ?? 'light'];
   const isDark = colorScheme === 'dark';
@@ -106,8 +108,8 @@ export default function TabLayout() {
           headerShown: false,
           tabBarButton: HapticTab,
           tabBarStyle: {
-            height: 80,
-            paddingBottom: Platform.OS === 'ios' ? 20 : 10,
+            height: 70 + bottom,
+            paddingBottom: Platform.OS === 'ios' ? 20 + bottom : 10 + bottom,
             paddingTop: 10,
             backgroundColor: backgroundColor,
             borderTopWidth: 0,

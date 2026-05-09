@@ -43,6 +43,7 @@ import { useTranslation } from '@/hooks/useTranslation';
 import { ModernDropdownPortal } from '@/components/ModernDropdownPortal';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { SegmentItem } from '@/components/modernDropdown';
+import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
 
 // Import the components from new-assignment.tsx
 // For a real app, these would be separated into their own files
@@ -923,6 +924,7 @@ export default function EditAssignmentScreen() {
   
   // Translation hook
   const { t, currentLanguage } = useTranslation();
+  const bottomTabOverflow = useBottomTabOverflow();
   
   // Add state for modals inside EditAssignmentScreen
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -1203,7 +1205,10 @@ export default function EditAssignmentScreen() {
       {/* Main Content */}
       <KeyboardAwareScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.formContainer}
+        contentContainerStyle={[
+          styles.formContainer,
+          { paddingBottom: 24 + bottomTabOverflow },
+        ]}
         keyboardShouldPersistTaps="handled"
         extraScrollHeight={20}
       >
@@ -1374,6 +1379,8 @@ export default function EditAssignmentScreen() {
           </View>
           <Text style={styles.subtaskHint}>{t('assignments').subtasks.hint}</Text>
         </View>
+
+        <View style={{ height: 24 + bottomTabOverflow }} />
       </KeyboardAwareScrollView>
 
       {/* Assignment Type Selection Modal - Using Portal */}
