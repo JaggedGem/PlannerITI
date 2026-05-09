@@ -133,6 +133,26 @@ const parseGrade = (gradeStr: string): number => {
 };
 
 /**
+ * Converts a grade string to an integer number of hundredths.
+ * Values with more than 2 decimal places are truncated to preserve floor behavior.
+ * @param gradeStr The grade string (e.g. "9.5", "9,5", "9")
+ * @returns The grade as an integer number of hundredths, or NaN if invalid
+ */
+const parseGradeToHundredths = (gradeStr: string): number => {
+  if (!gradeStr) return NaN;
+
+  const cleanedStr = gradeStr.trim().replace(',', '.');
+  const match = cleanedStr.match(/^([0-9]+)(?:\.([0-9]+))?$/);
+
+  if (!match) return NaN;
+
+  const wholePart = parseInt(match[1], 10);
+  const decimalPart = (match[2] || '').padEnd(2, '0').slice(0, 2);
+
+  return wholePart * 100 + parseInt(decimalPart, 10);
+};
+
+/**
  * Calculate the average of grades from an array of grade strings
  * @param grades Array of grade strings
  * @returns The average value or undefined if no valid grades
@@ -140,14 +160,13 @@ const parseGrade = (gradeStr: string): number => {
 const calculateAverage = (grades: string[]): number | undefined => {
   // Filter out non-numeric grades (like "a", "m" etc.)
   const validGrades = grades
-    .map(g => parseGrade(g))
+    .map(g => parseGradeToHundredths(g))
     .filter(g => !isNaN(g));
   
   if (validGrades.length === 0) return undefined;
   
   const sum = validGrades.reduce((acc, grade) => acc + grade, 0);
-  // Round DOWN to 2 decimal places (Math.floor with multiplier) instead of using toFixed which rounds
-  return Math.floor((sum / validGrades.length) * 100) / 100;
+  return Math.floor(sum / validGrades.length) / 100;
 };
 
 /**
