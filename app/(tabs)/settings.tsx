@@ -1089,7 +1089,10 @@ export default function Settings() {
     if (!isAuthenticated) {
       return (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('settings').account.title}</Text>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="account-circle" size={24} color="#2C3DCD" style={styles.sectionIcon} />
+            <Text style={styles.sectionTitle}>{t('settings').account.title}</Text>
+          </View>
           <TouchableOpacity style={styles.signInButton} onPress={() => router.push('/auth')}>
             <Text style={styles.signInButtonText}>{t('settings').account.signIn}</Text>
           </TouchableOpacity>
@@ -1099,7 +1102,10 @@ export default function Settings() {
   
     return (
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>{t('settings').account.title}</Text>
+        <View style={styles.sectionHeader}>
+          <MaterialIcons name="account-circle" size={24} color="#2C3DCD" style={styles.sectionIcon} />
+          <Text style={styles.sectionTitle}>{t('settings').account.title}</Text>
+        </View>
         <View style={styles.accountInfo}>
           <MemoizedGravatarProfile />
         </View>
@@ -1170,7 +1176,10 @@ export default function Settings() {
 
     return (
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Developer Tools</Text>
+        <View style={styles.sectionHeader}>
+          <MaterialIcons name="bug-report" size={24} color="#9C27B0" style={styles.sectionIcon} />
+          <Text style={styles.sectionTitle}>Developer Tools</Text>
+        </View>
         
         <View style={styles.devToolsList}>
           <TouchableOpacity
@@ -1803,7 +1812,10 @@ export default function Settings() {
         {/* Add IDNP management section when IDNP is saved */}
         {savedIdnp && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('settings').idnp.title}</Text>
+            <View style={styles.sectionHeader}>
+              <MaterialIcons name="security" size={24} color="#FF9566" style={styles.sectionIcon} />
+              <Text style={styles.sectionTitle}>{t('settings').idnp.title}</Text>
+            </View>
             <View style={styles.idnpInfo}>
               <Text style={styles.idnpValue}>
                 {savedIdnp.substring(0, 4) + '••••••' + savedIdnp.substring(10)}
@@ -1821,7 +1833,10 @@ export default function Settings() {
 
         {/* Language Selection Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('settings').language}</Text>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="language" size={24} color="#42A5F5" style={styles.sectionIcon} />
+            <Text style={styles.sectionTitle}>{t('settings').language}</Text>
+          </View>
           <TouchableOpacity
             style={styles.languageSelector}
             onPress={() => setShowLanguageModal(true)}
@@ -1968,7 +1983,10 @@ export default function Settings() {
 
         {/* Subgroup Selection Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('settings').subGroup}</Text>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="groups" size={24} color="#66BB6A" style={styles.sectionIcon} />
+            <Text style={styles.sectionTitle}>{t('settings').subGroup}</Text>
+          </View>
           <View style={styles.optionsContainer}>
             {SUBGROUPS.map(group => (
               <TouchableOpacity
@@ -1992,9 +2010,11 @@ export default function Settings() {
 
         {/* Custom Periods Section */}
         <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{t('settings').customPeriods.title}</Text>
-            <View style={{ flex: 1 }} />
+          <View style={styles.sectionHeaderWithAction}>
+            <View style={styles.sectionHeaderContent}>
+              <MaterialIcons name="event" size={24} color="#D85A77" style={styles.sectionIcon} />
+              <Text style={styles.sectionTitle}>{t('settings').customPeriods.title}</Text>
+            </View>
             <TouchableOpacity
               style={styles.addButton}
               onPress={handleAddPeriod}
@@ -2609,7 +2629,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: 'white',
-    marginBottom: 16,
+    textAlignVertical: 'center',
   },
   optionsContainer: {
     flexDirection: 'row',
@@ -2740,7 +2760,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
+    justifyContent: 'flex-start',
+  },
+  sectionHeaderWithAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
     justifyContent: 'space-between',
+  },
+  sectionHeaderContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
   },
   sectionIcon: {
     marginRight: 8,
