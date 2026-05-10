@@ -3175,7 +3175,12 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
-    marginBottom: 8,
+    marginBottom: 0,
+    flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
+    paddingRight: 8,
+    lineHeight: 21,
   },
   examDetails: {
     flexDirection: 'row',
@@ -3205,6 +3210,8 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     backgroundColor: 'rgba(138, 138, 141, 0.2)',
     marginLeft: 8,
+    flexShrink: 0,
+    alignSelf: 'flex-start',
   },
   examTypePillThesis: {
     backgroundColor: 'rgba(77, 150, 255, 0.2)',
@@ -3573,7 +3580,7 @@ const styles = StyleSheet.create({
   examHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 8,
   },
   upcomingIndicatorContainer: {
