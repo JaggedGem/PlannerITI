@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, TextInput, TouchableOpacity, Platform, Modal } from 'react-native';
-import { Link, router } from 'expo-router';
+import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ThemedText } from '../ThemedText';
 import { ThemedView } from '../ThemedView';
@@ -163,13 +163,11 @@ export function SignupScreen() {
 
           <View style={styles.footer}>
             <ThemedText>{t('auth').signup.hasAccount} </ThemedText>
-            <Link href="/auth" asChild>
-              <TouchableOpacity>
-                <ThemedText style={{ color: "#2C3DCD" }}>
+            <TouchableOpacity onPress={() => router.replace('/auth')}>
+              <ThemedText style={{ color: "#2C3DCD" }}>
                 {t('auth').signup.loginLink}
-                </ThemedText>
-              </TouchableOpacity>
-            </Link>
+              </ThemedText>
+            </TouchableOpacity>
           </View>
         </View>
       </View>

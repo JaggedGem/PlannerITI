@@ -14,6 +14,7 @@ import { initializeNotifications } from '@/utils/notificationUtils';
 import { getAssignments } from '@/utils/assignmentStorage';
 import { scheduleAllNotifications } from '@/utils/notificationUtils';
 import { gradesDataService } from '@/services/gradesService';
+import * as SystemUI from 'expo-system-ui';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -38,6 +39,13 @@ export default function RootLayout() {
     ...FontAwesome.font,
   });
   const [startupReady, setStartupReady] = useState(false);
+
+  const colorScheme = useColorScheme();
+  useEffect(() => {
+    SystemUI.setBackgroundColorAsync(
+      colorScheme === 'dark' ? '#141414' : '#ffffff'
+    );
+  }, [colorScheme]);
 
   // Pre-load auth state values for faster app startup
   useEffect(() => {
@@ -184,6 +192,7 @@ export default function RootLayout() {
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const bg = isDark ? '#141414' : '#ffffff';
 
   return (
     <ThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
@@ -200,17 +209,13 @@ function RootLayoutNav() {
             presentation: 'containedTransparentModal',
             headerTransparent: true,
             headerTintColor: isDark ? '#fff' : '#000',
+            contentStyle: { backgroundColor: bg },
           }}
         >
           <Stack.Screen name="index" options={{ animation: 'none' }} />
           <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="auth" />
-          <Stack.Screen 
-            name="signup" 
-            options={{ 
-              headerShown: false,
-            }} 
-          />
+          <Stack.Screen name="auth" options={{ presentation: 'card' }} />
+          <Stack.Screen name="signup" options={{ headerShown: false, presentation: 'card' }} />
           <Stack.Screen 
             name="forgot-password" 
             options={{ 

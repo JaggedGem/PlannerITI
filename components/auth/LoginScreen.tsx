@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, TextInput, TouchableOpacity, Alert, Platform, Modal } from 'react-native';
-import { Link, router } from 'expo-router';
+import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ThemedText } from '../ThemedText';
 import { ThemedView } from '../ThemedView';
@@ -145,13 +145,11 @@ export function LoginScreen() {
 
           <View style={styles.footer}>
             <ThemedText>{t('auth').login.noAccount} </ThemedText>
-            <Link href="/signup" asChild>
-              <TouchableOpacity>
-                <ThemedText style={{ color: "#2C3DCD" }}>
-                  {t('auth').login.signupLink}
-                </ThemedText>
-              </TouchableOpacity>
-            </Link>
+            <TouchableOpacity onPress={() => router.replace('/signup')}>
+              <ThemedText style={{ color: "#2C3DCD" }}>
+                {t('auth').login.signupLink}
+              </ThemedText>
+            </TouchableOpacity>
           </View>
         </View>
       </View>
