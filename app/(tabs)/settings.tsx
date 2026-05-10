@@ -27,6 +27,7 @@ import { StorageViewer } from '../../components/StorageViewer';
 import * as Notifications from 'expo-notifications';
 import { initializeNotifications } from '../../utils/notificationUtils';
 import { updateService } from '@/services/updateService';
+import { BottomModalPortal } from '@/components/BottomModalPortal';
 
 // Store keys
 const IDNP_KEY = '@planner_idnp';
@@ -2077,50 +2078,44 @@ export default function Settings() {
       </ScrollView>
 
       {/* Language Selection Modal */}
-      <Modal
-        visible={showLanguageModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowLanguageModal(false)}
+      <BottomModalPortal
+        isVisible={showLanguageModal}
+        onClose={() => setShowLanguageModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{t('settings').language}</Text>
-              <TouchableOpacity onPress={() => setShowLanguageModal(false)}>
-                <MaterialIcons name="close" size={24} color="white" />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.languagesList}>
-              {Object.entries(languages).map(([code, { name, icon }]) => (
-                <TouchableOpacity
-                  key={code}
-                  style={[
-                    styles.languageOption,
-                    settings.language === code && styles.selectedLanguageOption
-                  ]}
-                  onPress={() => {
-                    handleLanguageChange(code as keyof typeof languages);
-                    setShowLanguageModal(false);
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  }}
-                >
-                  <Text style={styles.languageIcon}>{icon}</Text>
-                  <Text style={[
-                    styles.languageOptionText,
-                    settings.language === code && styles.selectedLanguageOptionText
-                  ]}>
-                    {name}
-                  </Text>
-                  {settings.language === code && (
-                    <MaterialIcons name="check" size={24} color="white" />
-                  )}
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>{t('settings').language}</Text>
+          <TouchableOpacity onPress={() => setShowLanguageModal(false)}>
+            <MaterialIcons name="close" size={24} color="white" />
+          </TouchableOpacity>
         </View>
-      </Modal>
+        <View style={styles.languagesList}>
+          {Object.entries(languages).map(([code, { name, icon }]) => (
+            <TouchableOpacity
+              key={code}
+              style={[
+                styles.languageOption,
+                settings.language === code && styles.selectedLanguageOption
+              ]}
+              onPress={() => {
+                handleLanguageChange(code as keyof typeof languages);
+                setShowLanguageModal(false);
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              }}
+            >
+              <Text style={styles.languageIcon}>{icon}</Text>
+              <Text style={[
+                styles.languageOptionText,
+                settings.language === code && styles.selectedLanguageOptionText
+              ]}>
+                {name}
+              </Text>
+              {settings.language === code && (
+                <MaterialIcons name="check" size={24} color="white" />
+              )}
+            </TouchableOpacity>
+          ))}
+        </View>
+      </BottomModalPortal>
 
       {/* Time Pickers */}
       {showStartPicker && (
@@ -2147,197 +2142,185 @@ export default function Settings() {
       )}
 
       {/* Groups Selection Modal */}
-      <Modal
-        visible={showGroupModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => {
+      <BottomModalPortal
+        isVisible={showGroupModal}
+        onClose={() => {
           setShowGroupModal(false);
           setSearchQuery('');
         }}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{t('settings').group.select}</Text>
-              <TouchableOpacity onPress={() => {
-                setShowGroupModal(false);
-                setSearchQuery('');
-              }}>
-                <MaterialIcons name="close" size={24} color="white" />
-              </TouchableOpacity>
-            </View>
-            
-            {/* Search Bar */}
-            <View style={styles.searchContainer}>
-              <MaterialIcons name="search" size={20} color="#8A8A8D" style={styles.searchIcon} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder={t('settings').group.search}
-                placeholderTextColor="#8A8A8D"
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                autoCapitalize="none"
-              />
-              {searchQuery.length > 0 && (
-                <TouchableOpacity onPress={handleSearchClear} style={styles.searchClearButton}>
-                  <MaterialIcons name="clear" size={20} color="#8A8A8D" />
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {isLoading ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#3478F6" />
-                <Text style={styles.loadingText}>{t('settings').group.searching}</Text>
-              </View>
-            ) : error ? (
-              <View style={styles.errorContainer}>
-                <Text style={styles.errorText}>{error}</Text>
-              </View>
-            ) : filteredGroups.length === 0 ? (
-              <ListEmptyComponent />
-            ) : (
-              <FlatList
-                ref={flatListRef}
-                data={filteredGroups}
-                renderItem={renderGroupItem}
-                keyExtractor={keyExtractor}
-                style={styles.groupsList}
-                contentContainerStyle={styles.groupsListContent}
-                onScrollToIndexFailed={onScrollToIndexFailed}
-                keyboardShouldPersistTaps="handled"
-                initialNumToRender={10}
-                maxToRenderPerBatch={10}
-                updateCellsBatchingPeriod={50}
-                windowSize={5}
-                removeClippedSubviews={true}
-                getItemLayout={getItemLayout}
-                ListEmptyComponent={ListEmptyComponent}
-                showsVerticalScrollIndicator={false}
-                maintainVisibleContentPosition={{
-                  minIndexForVisible: 0,
-                  autoscrollToTopThreshold: 10
-                }}
-                // Performance optimizations
-                bounces={false}
-                scrollEventThrottle={16}
-                directionalLockEnabled={true}
-                disableIntervalMomentum={true}
-                decelerationRate="fast"
-              />
-            )}
-          </View>
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>{t('settings').group.select}</Text>
+          <TouchableOpacity onPress={() => {
+            setShowGroupModal(false);
+            setSearchQuery('');
+          }}>
+            <MaterialIcons name="close" size={24} color="white" />
+          </TouchableOpacity>
         </View>
-      </Modal>
+        
+        {/* Search Bar */}
+        <View style={styles.searchContainer}>
+          <MaterialIcons name="search" size={20} color="#8A8A8D" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder={t('settings').group.search}
+            placeholderTextColor="#8A8A8D"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            autoCapitalize="none"
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={handleSearchClear} style={styles.searchClearButton}>
+              <MaterialIcons name="clear" size={20} color="#8A8A8D" />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {isLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#3478F6" />
+            <Text style={styles.loadingText}>{t('settings').group.searching}</Text>
+          </View>
+        ) : error ? (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : filteredGroups.length === 0 ? (
+          <ListEmptyComponent />
+        ) : (
+          <FlatList
+            ref={flatListRef}
+            data={filteredGroups}
+            renderItem={renderGroupItem}
+            keyExtractor={keyExtractor}
+            style={styles.groupsList}
+            contentContainerStyle={styles.groupsListContent}
+            onScrollToIndexFailed={onScrollToIndexFailed}
+            keyboardShouldPersistTaps="handled"
+            initialNumToRender={10}
+            maxToRenderPerBatch={10}
+            updateCellsBatchingPeriod={50}
+            windowSize={5}
+            removeClippedSubviews={true}
+            getItemLayout={getItemLayout}
+            ListEmptyComponent={ListEmptyComponent}
+            showsVerticalScrollIndicator={false}
+            maintainVisibleContentPosition={{
+              minIndexForVisible: 0,
+              autoscrollToTopThreshold: 10
+            }}
+            // Performance optimizations
+            bounces={false}
+            scrollEventThrottle={16}
+            directionalLockEnabled={true}
+            disableIntervalMomentum={true}
+            decelerationRate="fast"
+          />
+        )}
+      </BottomModalPortal>
 
       {/* Custom Period Modal */}
-      <Modal
-        visible={showPeriodModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => {
+      <BottomModalPortal
+        isVisible={showPeriodModal}
+        onClose={() => {
           setShowPeriodModal(false);
           resetPeriodForm();
         }}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {editingPeriod ? t('settings').customPeriods.edit : t('settings').customPeriods.add}
-              </Text>
-              <TouchableOpacity onPress={() => {
-                setShowPeriodModal(false);
-                resetPeriodForm();
-              }}>
-                <MaterialIcons name="close" size={24} color="white" />
-              </TouchableOpacity>
-            </View>
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>
+            {editingPeriod ? t('settings').customPeriods.edit : t('settings').customPeriods.add}
+          </Text>
+          <TouchableOpacity onPress={() => {
+            setShowPeriodModal(false);
+            resetPeriodForm();
+          }}>
+            <MaterialIcons name="close" size={24} color="white" />
+          </TouchableOpacity>
+        </View>
 
-            <View style={styles.formContainer}>
-              {/* Name Input */}
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>{t('settings').customPeriods.name}</Text>
-                <TextInput
-                  style={styles.formInput}
-                  value={periodName}
-                  onChangeText={setPeriodName}
-                  placeholder={t('settings').customPeriods.name}
-                  placeholderTextColor="#8A8A8D"
-                />
-              </View>
+        <View style={styles.formContainer}>
+          {/* Name Input */}
+          <View style={styles.formGroup}>
+            <Text style={styles.formLabel}>{t('settings').customPeriods.name}</Text>
+            <TextInput
+              style={styles.formInput}
+              value={periodName}
+              onChangeText={setPeriodName}
+              placeholder={t('settings').customPeriods.name}
+              placeholderTextColor="#8A8A8D"
+            />
+          </View>
 
-              {/* Time Selection */}
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>{t('settings').customPeriods.time}</Text>
-                <View style={styles.timeContainer}>
-                  <TouchableOpacity
-                    style={styles.timeButton}
-                    onPress={() => setShowStartPicker(true)}
-                  >
-                    <Text style={styles.timeButtonText}>
-                      {startTime.toTimeString().slice(0, 5)}
-                    </Text>
-                  </TouchableOpacity>
-                  <Text style={styles.timeSeparator}>-</Text>
-                  <TouchableOpacity
-                    style={styles.timeButton}
-                    onPress={() => setShowEndPicker(true)}
-                  >
-                    <Text style={styles.timeButtonText}>
-                      {endTime.toTimeString().slice(0, 5)}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Days Selection */}
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>{t('settings').customPeriods.days}</Text>
-                <View style={styles.daysContainer}>
-                  {[1, 2, 3, 4, 5].map((day) => (
-                    <TouchableOpacity
-                      key={day}
-                      style={[
-                        styles.dayButton,
-                        selectedDays.includes(day) && styles.selectedDayButton
-                      ]}
-                      onPress={() => toggleDay(day)}
-                    >
-                      <Text style={[
-                        styles.dayButtonText,
-                        selectedDays.includes(day) && styles.selectedDayButtonText
-                      ]}>
-                        {t('weekdays').short[day]}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              {/* Enabled Toggle */}
-              <View style={styles.formGroup}>
-                <View style={styles.switchContainer}>
-                  <Text style={styles.formLabel}>{t('settings').customPeriods.enabled}</Text>
-                  <CustomToggle
-                    value={isEnabled}
-                    onValueChange={setIsEnabled}
-                  />
-                </View>
-              </View>
-
-              {/* Save Button */}
+          {/* Time Selection */}
+          <View style={styles.formGroup}>
+            <Text style={styles.formLabel}>{t('settings').customPeriods.time}</Text>
+            <View style={styles.timeContainer}>
               <TouchableOpacity
-                style={styles.saveButton}
-                onPress={handleSavePeriod}
+                style={styles.timeButton}
+                onPress={() => setShowStartPicker(true)}
               >
-                <Text style={styles.saveButtonText}>{t('settings').customPeriods.save}</Text>
+                <Text style={styles.timeButtonText}>
+                  {startTime.toTimeString().slice(0, 5)}
+                </Text>
+              </TouchableOpacity>
+              <Text style={styles.timeSeparator}>-</Text>
+              <TouchableOpacity
+                style={styles.timeButton}
+                onPress={() => setShowEndPicker(true)}
+              >
+                <Text style={styles.timeButtonText}>
+                  {endTime.toTimeString().slice(0, 5)}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
+
+          {/* Days Selection */}
+          <View style={styles.formGroup}>
+            <Text style={styles.formLabel}>{t('settings').customPeriods.days}</Text>
+            <View style={styles.daysContainer}>
+              {[1, 2, 3, 4, 5].map((day) => (
+                <TouchableOpacity
+                  key={day}
+                  style={[
+                    styles.dayButton,
+                    selectedDays.includes(day) && styles.selectedDayButton
+                  ]}
+                  onPress={() => toggleDay(day)}
+                >
+                  <Text style={[
+                    styles.dayButtonText,
+                    selectedDays.includes(day) && styles.selectedDayButtonText
+                  ]}>
+                    {t('weekdays').short[day]}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {/* Enabled Toggle */}
+          <View style={styles.formGroup}>
+            <View style={styles.switchContainer}>
+              <Text style={styles.formLabel}>{t('settings').customPeriods.enabled}</Text>
+              <CustomToggle
+                value={isEnabled}
+                onValueChange={setIsEnabled}
+              />
+            </View>
+          </View>
+
+          {/* Save Button */}
+          <TouchableOpacity
+            style={styles.saveButton}
+            onPress={handleSavePeriod}
+          >
+            <Text style={styles.saveButtonText}>{t('settings').customPeriods.save}</Text>
+          </TouchableOpacity>
         </View>
-      </Modal>
+      </BottomModalPortal>
 
       {/* Custom Confirmation Dialog */}
       <Modal
@@ -2389,55 +2372,45 @@ export default function Settings() {
       </Modal>
 
       {/* Account Action Sheet */}
-      <Modal
-        visible={showAccountActionSheet}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowAccountActionSheet(false)}
+      <BottomModalPortal
+        isVisible={showAccountActionSheet}
+        onClose={() => setShowAccountActionSheet(false)}
       >
+        <View style={styles.actionSheetHeader}>
+          <Text style={styles.actionSheetTitle}>
+            {t('settings').account.actions.title}
+          </Text>
+          <TouchableOpacity 
+            style={styles.actionSheetClose}
+            onPress={() => setShowAccountActionSheet(false)}
+          >
+            <MaterialIcons name="close" size={24} color="white" />
+          </TouchableOpacity>
+        </View>
+
         <TouchableOpacity
-          style={styles.actionSheetOverlay}
-          activeOpacity={1}
-          onPress={() => setShowAccountActionSheet(false)}
+          style={styles.actionSheetButton}
+          onPress={handleLogout}
         >
-          <View style={styles.actionSheet}>
-            <View style={styles.actionSheetHeader}>
-              <Text style={styles.actionSheetTitle}>
-                {t('settings').account.actions.title}
-              </Text>
-              <TouchableOpacity 
-                style={styles.actionSheetClose}
-                onPress={() => setShowAccountActionSheet(false)}
-              >
-                <MaterialIcons name="close" size={24} color="white" />
-              </TouchableOpacity>
-            </View>
-
-            <TouchableOpacity
-              style={styles.actionSheetButton}
-              onPress={handleLogout}
-            >
-              <MaterialIcons name="logout" size={24} color="#FF6B6B" />
-              <Text style={[styles.actionSheetButtonText, { color: '#FF6B6B' }]}>
-                {t('settings').account.actions.logout}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.actionSheetButton}
-              onPress={() => {
-                setShowAccountActionSheet(false);
-                setShowDeleteAccountConfirm(true);
-              }}
-            >
-              <MaterialIcons name="delete-forever" size={24} color="#FF6B6B" />
-              <Text style={[styles.actionSheetButtonText, { color: '#FF6B6B' }]}>
-                {t('settings').account.actions.delete}
-              </Text>
-            </TouchableOpacity>
-          </View>
+          <MaterialIcons name="logout" size={24} color="#FF6B6B" />
+          <Text style={[styles.actionSheetButtonText, { color: '#FF6B6B' }]}>
+            {t('settings').account.actions.logout}
+          </Text>
         </TouchableOpacity>
-      </Modal>
+
+        <TouchableOpacity
+          style={styles.actionSheetButton}
+          onPress={() => {
+            setShowAccountActionSheet(false);
+            setShowDeleteAccountConfirm(true);
+          }}
+        >
+          <MaterialIcons name="delete-forever" size={24} color="#FF6B6B" />
+          <Text style={[styles.actionSheetButtonText, { color: '#FF6B6B' }]}>
+            {t('settings').account.actions.delete}
+          </Text>
+        </TouchableOpacity>
+      </BottomModalPortal>
 
       {/* Delete Account Confirmation */}
       <Modal
