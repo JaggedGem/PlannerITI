@@ -2323,53 +2323,53 @@ export default function Settings() {
       </BottomModalPortal>
 
       {/* Custom Confirmation Dialog */}
-      <Modal
-        visible={showConfirmDialog}
-        transparent={true}
-        animationType="fade"
+      <BottomModalPortal
+        isVisible={showConfirmDialog}
+        onClose={() => {
+          setShowConfirmDialog(false);
+          setPeriodToDelete(null);
+        }}
       >
-        <View style={styles.confirmOverlay}>
-          <View style={styles.confirmDialog}>
-            <Text style={styles.confirmTitle}>
-              {confirmDialogType === 'idnp' 
-                ? t('settings').idnp.clearConfirmTitle 
-                : t('settings').customPeriods.deleteConfirmTitle}
-            </Text>
-            <Text style={styles.confirmMessage}>
-              {confirmDialogType === 'idnp'
-                ? t('settings').idnp.clearConfirmMessage
-                : t('settings').customPeriods.deleteConfirmMessage}
-            </Text>
+        <View style={styles.confirmDialogContent}>
+          <Text style={styles.confirmTitle}>
+            {confirmDialogType === 'idnp' 
+              ? t('settings').idnp.clearConfirmTitle 
+              : t('settings').customPeriods.deleteConfirmTitle}
+          </Text>
+          <Text style={styles.confirmMessage}>
+            {confirmDialogType === 'idnp'
+              ? t('settings').idnp.clearConfirmMessage
+              : t('settings').customPeriods.deleteConfirmMessage}
+          </Text>
+          
+          <View style={styles.confirmButtons}>
+            <TouchableOpacity
+              style={[styles.confirmButton, styles.cancelButton]}
+              onPress={() => {
+                setShowConfirmDialog(false);
+                setPeriodToDelete(null);
+              }}
+            >
+              <Text style={styles.cancelButtonText}>
+                {confirmDialogType === 'idnp'
+                  ? t('settings').idnp.clearConfirmCancel
+                  : t('settings').customPeriods.cancel}
+              </Text>
+            </TouchableOpacity>
             
-            <View style={styles.confirmButtons}>
-              <TouchableOpacity
-                style={[styles.confirmButton, styles.cancelButton]}
-                onPress={() => {
-                  setShowConfirmDialog(false);
-                  setPeriodToDelete(null);
-                }}
-              >
-                <Text style={styles.cancelButtonText}>
-                  {confirmDialogType === 'idnp'
-                    ? t('settings').idnp.clearConfirmCancel
-                    : t('settings').customPeriods.cancel}
-                </Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[styles.confirmButton, styles.clearButton]}
-                onPress={confirmDialogType === 'idnp' ? handleConfirmClearIdnp : handleConfirmDeletePeriod}
-              >
-                <Text style={styles.clearButtonText}>
-                  {confirmDialogType === 'idnp'
-                    ? t('settings').idnp.clearConfirmConfirm
-                    : t('settings').customPeriods.delete}
-                </Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              style={[styles.confirmButton, styles.clearButton]}
+              onPress={confirmDialogType === 'idnp' ? handleConfirmClearIdnp : handleConfirmDeletePeriod}
+            >
+              <Text style={styles.clearButtonText}>
+                {confirmDialogType === 'idnp'
+                  ? t('settings').idnp.clearConfirmConfirm
+                  : t('settings').customPeriods.delete}
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
-      </Modal>
+      </BottomModalPortal>
 
       {/* Account Action Sheet */}
       <BottomModalPortal
@@ -2413,152 +2413,140 @@ export default function Settings() {
       </BottomModalPortal>
 
       {/* Delete Account Confirmation */}
-      <Modal
-        visible={showDeleteAccountConfirm}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowDeleteAccountConfirm(false)}
+      <BottomModalPortal
+        isVisible={showDeleteAccountConfirm}
+        onClose={() => setShowDeleteAccountConfirm(false)}
       >
-        <View style={styles.confirmOverlay}>
-          <View style={styles.confirmDialog}>
-            <Text style={styles.confirmTitle}>
-              {t('settings').account.deleteConfirm.title}
-            </Text>
-            <Text style={styles.confirmMessage}>
-              {t('settings').account.deleteConfirm.message}
-            </Text>
+        <View style={styles.confirmDialogContent}>
+          <Text style={styles.confirmTitle}>
+            {t('settings').account.deleteConfirm.title}
+          </Text>
+          <Text style={styles.confirmMessage}>
+            {t('settings').account.deleteConfirm.message}
+          </Text>
+          
+          <View style={styles.confirmButtons}>
+            <TouchableOpacity
+              style={[styles.confirmButton, styles.cancelButton]}
+              onPress={() => setShowDeleteAccountConfirm(false)}
+            >
+              <Text style={styles.cancelButtonText}>
+                {t('settings').account.deleteConfirm.cancel}
+              </Text>
+            </TouchableOpacity>
             
-            <View style={styles.confirmButtons}>
-              <TouchableOpacity
-                style={[styles.confirmButton, styles.cancelButton]}
-                onPress={() => setShowDeleteAccountConfirm(false)}
-              >
-                <Text style={styles.cancelButtonText}>
-                  {t('settings').account.deleteConfirm.cancel}
-                </Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[styles.confirmButton, styles.deleteButton]}
-                onPress={() => {
-                  setShowDeleteAccountConfirm(false);
-                  setShowPasswordModal(true);
-                }}
-              >
-                <Text style={styles.deleteButtonText}>
-                  {t('settings').account.deleteConfirm.confirm}
-                </Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              style={[styles.confirmButton, styles.deleteButton]}
+              onPress={() => {
+                setShowDeleteAccountConfirm(false);
+                setShowPasswordModal(true);
+              }}
+            >
+              <Text style={styles.deleteButtonText}>
+                {t('settings').account.deleteConfirm.confirm}
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
-      </Modal>
+      </BottomModalPortal>
       
       {/* Password Confirmation Modal */}
-      <Modal
-        visible={showPasswordModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => {
+      <BottomModalPortal
+        isVisible={showPasswordModal}
+        onClose={() => {
           setShowPasswordModal(false);
           setPasswordForDeletion('');
           setPasswordError(null);
         }}
       >
-        <View style={styles.confirmOverlay}>
-          <View style={styles.confirmDialog}>
-            <Text style={styles.confirmTitle}>Confirm Account Deletion</Text>
-            <Text style={styles.confirmMessage}>
-              Please enter your password to confirm account deletion.
-            </Text>
+        <View style={styles.confirmDialogContent}>
+          <Text style={styles.confirmTitle}>Confirm Account Deletion</Text>
+          <Text style={styles.confirmMessage}>
+            Please enter your password to confirm account deletion.
+          </Text>
+          
+          <View style={[
+            styles.passwordInputContainer,
+            passwordError ? styles.passwordInputError : null
+          ]}>
+            <TextInput
+              style={styles.passwordInput}
+              placeholder="Your password"
+              placeholderTextColor="#666"
+              secureTextEntry
+              value={passwordForDeletion}
+              onChangeText={(text) => {
+                setPasswordForDeletion(text);
+                if (passwordError) setPasswordError(null);
+              }}
+              editable={!deletingAccount}
+            />
+          </View>
+          
+          {passwordError && (
+            <Text style={styles.errorText}>{passwordError}</Text>
+          )}
+          
+          <View style={styles.confirmButtons}>
+            <TouchableOpacity
+              style={[styles.confirmButton, styles.cancelButton]}
+              onPress={() => {
+                setShowPasswordModal(false);
+                setPasswordForDeletion('');
+                setPasswordError(null);
+              }}
+              disabled={deletingAccount}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
             
-            <View style={[
-              styles.passwordInputContainer,
-              passwordError ? styles.passwordInputError : null
-            ]}>
-              <TextInput
-                style={styles.passwordInput}
-                placeholder="Your password"
-                placeholderTextColor="#666"
-                secureTextEntry
-                value={passwordForDeletion}
-                onChangeText={(text) => {
-                  setPasswordForDeletion(text);
-                  if (passwordError) setPasswordError(null);
-                }}
-                editable={!deletingAccount}
-              />
-            </View>
-            
-            {passwordError && (
-              <Text style={styles.errorText}>{passwordError}</Text>
-            )}
-            
-            <View style={styles.confirmButtons}>
-              <TouchableOpacity
-                style={[styles.confirmButton, styles.cancelButton]}
-                onPress={() => {
-                  setShowPasswordModal(false);
-                  setPasswordForDeletion('');
-                  setPasswordError(null);
-                }}
-                disabled={deletingAccount}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[styles.confirmButton, styles.deleteButton]}
-                onPress={handleDeleteAccount}
-                disabled={deletingAccount}
-              >
-                {deletingAccount ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={styles.deleteButtonText}>Delete</Text>
-                )}
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              style={[styles.confirmButton, styles.deleteButton]}
+              onPress={handleDeleteAccount}
+              disabled={deletingAccount}
+            >
+              {deletingAccount ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.deleteButtonText}>Delete</Text>
+              )}
+            </TouchableOpacity>
           </View>
         </View>
-      </Modal>
+      </BottomModalPortal>
 
       {/* Deletion Success Modal */}
-      <Modal
-        visible={showDeletionSuccessModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => completeAccountDeletion()}
+      <BottomModalPortal
+        isVisible={showDeletionSuccessModal}
+        onClose={() => completeAccountDeletion()}
       >
-        <View style={styles.confirmOverlay}>
-          <View style={styles.confirmDialog}>
-            <View style={styles.successIconContainer}>
-              <MaterialIcons name="check-circle" size={64} color="#4CAF50" />
-            </View>
-            
-            <Text style={styles.confirmTitle}>Deletion Request Sent</Text>
-            <Text style={styles.confirmMessage}>
-              We've sent a confirmation email to verify your account deletion request. 
-              Please check your email inbox and follow the instructions to complete the process.
-            </Text>
-            
-            <TouchableOpacity
-              style={styles.emailButton}
-              onPress={openEmailApp}
-            >
-              <MaterialIcons name="email" size={20} color="white" />
-              <Text style={styles.emailButtonText}>Open Email App</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={styles.doneButton}
-              onPress={completeAccountDeletion}
-            >
-              <Text style={styles.doneButtonText}>Done</Text>
-            </TouchableOpacity>
+        <View style={styles.confirmDialogContent}>
+          <View style={styles.successIconContainer}>
+            <MaterialIcons name="check-circle" size={64} color="#4CAF50" />
           </View>
+          
+          <Text style={styles.confirmTitle}>Deletion Request Sent</Text>
+          <Text style={styles.confirmMessage}>
+            We've sent a confirmation email to verify your account deletion request. 
+            Please check your email inbox and follow the instructions to complete the process.
+          </Text>
+          
+          <TouchableOpacity
+            style={styles.emailButton}
+            onPress={openEmailApp}
+          >
+            <MaterialIcons name="email" size={20} color="white" />
+            <Text style={styles.emailButtonText}>Open Email App</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.doneButton}
+            onPress={completeAccountDeletion}
+          >
+            <Text style={styles.doneButtonText}>Done</Text>
+          </TouchableOpacity>
         </View>
-      </Modal>
+      </BottomModalPortal>
 
       {/* Notification time picker modal */}
       {showNotificationTimeModal && (
@@ -2921,20 +2909,27 @@ const styles = StyleSheet.create({
     width: '80%',
     maxWidth: 400,
   },
+  confirmDialogContent: {
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+  },
   confirmTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: 'white',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   confirmMessage: {
     color: '#8A8A8D',
     fontSize: 16,
-    marginBottom: 20,
+    marginBottom: 16,
+    marginTop: 8,
   },
   confirmButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    marginTop: 20,
+    gap: 12,
   },
   confirmButton: {
     flex: 1,
@@ -2944,7 +2939,6 @@ const styles = StyleSheet.create({
   },
   cancelButton: {
     backgroundColor: '#1A1A1A',
-    marginRight: 10,
   },
   clearButton: {
     backgroundColor: '#FF6B6B',

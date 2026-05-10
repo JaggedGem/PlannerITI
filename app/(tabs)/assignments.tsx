@@ -6,6 +6,7 @@ import { useColorScheme } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import DaySection from '../../components/assignments/DaySection';
 import FloatingActionButton from '../../components/assignments/FloatingActionButton';
+import { BottomModalPortal } from '../../components/BottomModalPortal';
 import { Ionicons } from '@expo/vector-icons';
 import { 
   getAssignments, 
@@ -545,52 +546,43 @@ const ModernDropdown = memo(({
   };
 
   return (
-    <Modal
-      visible={isVisible}
-      transparent={true}
-      animationType="fade"
-      onRequestClose={onClose}
+    <BottomModalPortal
+      isVisible={isVisible}
+      onClose={onClose}
     >
-      <Pressable 
-        style={styles.modalOverlay} 
-        onPress={onClose}
-      >
-        <View style={styles.dropdownContainer}>
-          <View style={styles.dropdownHeader}>
-            <Text style={styles.dropdownTitle}>{t('assignments').title}</Text>
-            <Pressable onPress={onClose} style={styles.closeButton}>
-              <Ionicons name="close" size={24} color="#8A8A8D" />
-            </Pressable>
-          </View>
-          
-          {segments.map((segment, index) => (
-            <Pressable
-              key={segment}
-              style={({ pressed }) => [
-                styles.dropdownItem,
-                selectedIndex === index && styles.dropdownItemSelected,
-                pressed && styles.dropdownItemPressed
+      <View style={styles.dropdownHeader}>
+        <Text style={styles.dropdownTitle}>{t('assignments').title}</Text>
+        <Pressable onPress={onClose} style={styles.closeButton}>
+          <Ionicons name="close" size={24} color="#8A8A8D" />
+        </Pressable>
+      </View>
+      
+      {segments.map((segment, index) => (
+        <Pressable
+          key={segment}
+          style={({ pressed }) => [
+            styles.dropdownItem,
+            selectedIndex === index && styles.dropdownItemSelected,
+            pressed && styles.dropdownItemPressed
+          ]}
+          onPress={() => handleSelect(index)}
+        >
+          <View style={styles.dropdownItemContent}>
+            <Text 
+              style={[
+                styles.dropdownItemText,
+                selectedIndex === index && styles.dropdownItemTextSelected
               ]}
-              onPress={() => handleSelect(index)}
             >
-              <View style={styles.dropdownItemContent}>
-                <Text 
-                  style={[
-                    styles.dropdownItemText,
-                    selectedIndex === index && styles.dropdownItemTextSelected
-                  ]}
-                >
-                  {segment}
-                </Text>
-                {selectedIndex === index && (
-                  <Ionicons name="checkmark" size={20} color="#3478F6" />
-                )}
-              </View>
-            </Pressable>
-          ))}
-        </View>
-      </Pressable>
-    </Modal>
+              {segment}
+            </Text>
+            {selectedIndex === index && (
+              <Ionicons name="checkmark" size={20} color="#3478F6" />
+            )}
+          </View>
+        </Pressable>
+      ))}
+    </BottomModalPortal>
   );
 });
 
