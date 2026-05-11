@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { StyleSheet, View, Dimensions, BackHandler, Platform, StatusBar } from 'react-native';
 import { ModernDropdown, ModernDropdownProps } from './modernDropdown';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { Colors } from '@/constants/Colors';
 
 /**
  * A wrapper around ModernDropdown that ensures it always renders on top
@@ -58,11 +59,11 @@ const styles = StyleSheet.create({
     left: 0,
     zIndex: 10000,
     elevation: 10000,
-    backgroundColor: 'transparent',
+    backgroundColor: Colors.dark.transparent,
   },
   modalWrapper: {
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: Colors.dark.transparent,
     ...Platform.select({
       ios: {
         zIndex: 10000, 

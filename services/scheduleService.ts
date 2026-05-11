@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform, NativeModules } from 'react-native';
 import { format } from 'date-fns';
 import { fetchCustomApi } from '../utils/customApi';
+import { Colors } from '@/constants/Colors';
 // Refactored: remove direct runtime import of settingsService to break cycle.
 // Consumers (settingsService) should call scheduleService.registerSettingsSync({...}) after import.
 
@@ -2129,7 +2130,7 @@ export const scheduleService = {
         teacherName: '',
         roomNumber: '',
         isCustom: true,
-        color: '#FF5733',
+        color: Colors.dark.recoveryColor,
         isRecoveryDay: Boolean(datePeriodTimes?.isWeekend && datePeriodTimes?.isOverride),
         recoveryReason: overrideReason,
         replacedDayName,
@@ -2349,7 +2350,7 @@ export const scheduleService = {
             teacherName: '',
             roomNumber: '',
             isCustom: true,
-            color: customPeriod.color || '#4CC9F0',
+            color: customPeriod.color || Colors.dark.customPeriodColor,
             assignmentCount
           });
         }

@@ -90,10 +90,7 @@ export default function TabLayout() {
   const { bottom } = useSafeAreaInsets();
   
   const theme = Colors[colorScheme ?? 'light'];
-  const isDark = colorScheme === 'dark';
-  
-  // Background color based on theme
-  const backgroundColor = isDark ? '#141414' : '#FFFFFF';
+  const backgroundColor = theme.backgroundApp;
 
   return (
     <View style={[styles.container, { backgroundColor }]}>
@@ -103,8 +100,8 @@ export default function TabLayout() {
       <Tabs
         initialRouteName="schedule"
         screenOptions={{
-          tabBarActiveTintColor: isDark ? '#FFFFFF' : '#2C3DCD',
-          tabBarInactiveTintColor: isDark ? '#8A8A8D' : '#687076',
+          tabBarActiveTintColor: theme.tabIconSelected,
+          tabBarInactiveTintColor: theme.tabIconDefault,
           headerShown: false,
           tabBarButton: HapticTab,
           tabBarStyle: {
@@ -115,7 +112,7 @@ export default function TabLayout() {
             borderTopWidth: 0,
             ...(Platform.OS === 'ios' 
               ? {
-                  shadowColor: '#000',
+                  shadowColor: theme.shadow,
                   shadowOffset: { width: 0, height: -2 },
                   shadowOpacity: 0.1,
                   shadowRadius: 4,

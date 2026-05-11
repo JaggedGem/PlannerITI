@@ -28,6 +28,7 @@ import * as Notifications from 'expo-notifications';
 import { initializeNotifications } from '../../utils/notificationUtils';
 import { updateService } from '@/services/updateService';
 import { BottomModalPortal } from '@/components/BottomModalPortal';
+import { Colors } from '@/constants/Colors';
 
 // Store keys
 const IDNP_KEY = '@planner_idnp';
@@ -55,18 +56,7 @@ const languages = {
 const SUBGROUPS: SubGroupType[] = ['Subgroup 1', 'Subgroup 2'];
 
 // Array of theme-appropriate colors for random selection
-const THEME_COLORS = [
-  '#2C3DCD', // Blue
-  '#9D54BB', // Purple
-  '#D85A77', // Pink
-  '#FF9566', // Coral
-  '#FFBE3F', // Amber
-  '#42A5F5', // Light Blue
-  '#26A69A', // Teal
-  '#66BB6A', // Green
-  '#EC407A', // Deep Pink
-  '#7986CB', // Indigo
-];
+const THEME_COLORS = Colors.dark.randomColors as unknown as string[];
 
 const getRandomColor = () => {
   return THEME_COLORS[Math.floor(Math.random() * THEME_COLORS.length)];
@@ -95,7 +85,7 @@ const GroupItem = memo(({
   // Memoize styles to prevent unnecessary recalculations
   const itemStyle = useMemo(() => [
     styles.groupItem,
-    isSelected && { ...styles.selectedOption, backgroundColor: '#2C3DCD' }
+    isSelected && { ...styles.selectedOption, backgroundColor: Colors.dark.primaryStrong }
   ], [isSelected]);
 
   const textStyle = useMemo(() => [
@@ -366,11 +356,11 @@ const TimePicker = ({
               >
                 <Text style={[
                   styles.timePickerPeriodText,
-                  { color: period === 'AM' ? '#ffffff' : '#8A8A8D' }
+                  { color: period === 'AM' ? Colors.dark.white : Colors.dark.mutedText }
                 ]}>AM</Text>
                 <Text style={[
                   styles.timePickerPeriodText,
-                  { color: period === 'PM' ? '#ffffff' : '#8A8A8D' }
+                  { color: period === 'PM' ? Colors.dark.white : Colors.dark.mutedText }
                 ]}>PM</Text>
               </TouchableOpacity>
             )}
@@ -400,9 +390,9 @@ const TimePicker = ({
 const CustomToggle = ({ 
   value, 
   onValueChange, 
-  activeColor = '#2C3DCD',
-  inactiveColor = '#232433',
-  thumbColor = '#ffffff',
+  activeColor = Colors.dark.primaryStrong,
+  inactiveColor = Colors.dark.surfaceRaisedAlt,
+  thumbColor = Colors.dark.white,
   disabled = false
 }: { 
   value: boolean;
@@ -417,7 +407,7 @@ const CustomToggle = ({
   
   const backgroundColor = backgroundColorAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [disabled ? '#3A3A3A' : inactiveColor, disabled ? '#6B7DB3' : activeColor]
+    outputRange: [disabled ? Colors.dark.borderStrong : inactiveColor, disabled ? Colors.dark.toggleDisabled : activeColor]
   });
 
   useEffect(() => {
@@ -454,7 +444,7 @@ const CustomToggle = ({
       ]}>
         <Animated.View style={[
           styles.toggleThumb,
-          { transform: [{ translateX }], backgroundColor: disabled ? '#CCCCCC' : thumbColor }
+            { transform: [{ translateX }], backgroundColor: disabled ? Colors.dark.toggleDisabledAlt : thumbColor }
         ]}>
           {value && !disabled && (
             <MaterialIcons name="check" size={14} color={activeColor} style={styles.toggleIcon} />
@@ -938,7 +928,7 @@ export default function Settings() {
     setStartTime(new Date(`2000-01-01T${period.starttime}`));
     setEndTime(new Date(`2000-01-01T${period.endtime}`));
     setSelectedDays(period.daysOfWeek || []);
-    setSelectedColor(period.color || '#2C3DCD');
+    setSelectedColor(period.color || Colors.dark.primaryStrong);
     setIsEnabled(period.isEnabled);
     setShowPeriodModal(true);
   }, []);
@@ -1091,7 +1081,7 @@ export default function Settings() {
       return (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <MaterialIcons name="account-circle" size={24} color="#2C3DCD" style={styles.sectionIcon} />
+            <MaterialIcons name="account-circle" size={24} color={Colors.dark.primaryStrong} style={styles.sectionIcon} />
             <Text style={styles.sectionTitle}>{t('settings').account.title}</Text>
           </View>
           <TouchableOpacity style={styles.signInButton} onPress={() => router.push('/auth')}>
@@ -1104,7 +1094,7 @@ export default function Settings() {
     return (
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <MaterialIcons name="account-circle" size={24} color="#2C3DCD" style={styles.sectionIcon} />
+          <MaterialIcons name="account-circle" size={24} color={Colors.dark.primaryStrong} style={styles.sectionIcon} />
           <Text style={styles.sectionTitle}>{t('settings').account.title}</Text>
         </View>
         <View style={styles.accountInfo}>
@@ -1158,14 +1148,14 @@ export default function Settings() {
             </Text>
             {!user?.is_verified && (
               <View style={styles.verificationBadge}>
-                <MaterialIcons name="warning" size={14} color="#FFB020" />
+                <MaterialIcons name="warning" size={14} color={Colors.dark.orange} />
                 <Text style={styles.verificationText}>
                   {t('settings').account.notVerified}
                 </Text>
               </View>
             )}
           </View>
-          <MaterialIcons name="chevron-right" size={24} color="#8A8A8D" />
+          <MaterialIcons name="chevron-right" size={24} color={Colors.dark.mutedText} />
         </TouchableOpacity>
       </>
     );
@@ -1178,7 +1168,7 @@ export default function Settings() {
     return (
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <MaterialIcons name="bug-report" size={24} color="#9C27B0" style={styles.sectionIcon} />
+          <MaterialIcons name="bug-report" size={24} color={Colors.dark.purple} style={styles.sectionIcon} />
           <Text style={styles.sectionTitle}>Developer Tools</Text>
         </View>
         
@@ -1191,7 +1181,7 @@ export default function Settings() {
               Alert.alert('Success', 'AsyncStorage has been cleared');
             }}
           >
-            <MaterialIcons name="delete-sweep" size={24} color="#FF6B6B" />
+            <MaterialIcons name="delete-sweep" size={24} color={Colors.dark.red} />
             <Text style={styles.devToolText}>Clear AsyncStorage</Text>
           </TouchableOpacity>
 
@@ -1203,7 +1193,7 @@ export default function Settings() {
               Alert.alert('Success', 'Schedule settings have been reset');
             }}
           >
-            <MaterialIcons name="restart-alt" size={24} color="#FFD700" />
+            <MaterialIcons name="restart-alt" size={24} color={Colors.dark.yellow} />
             <Text style={styles.devToolText}>Reset Schedule Settings</Text>
           </TouchableOpacity>
 
@@ -1238,7 +1228,7 @@ export default function Settings() {
               }
             }}
           >
-            <MaterialIcons name="refresh" size={24} color="#9C27B0" />
+            <MaterialIcons name="refresh" size={24} color={Colors.dark.purple} />
             <Text style={styles.devToolText}>Reset Notification System</Text>
           </TouchableOpacity>
 
@@ -1263,7 +1253,7 @@ export default function Settings() {
               }
             }}
           >
-            <MaterialIcons name="storage" size={24} color="#42A5F5" />
+            <MaterialIcons name="storage" size={24} color={Colors.dark.randomColors[5]} />
             <Text style={styles.devToolText}>View AsyncStorage</Text>
           </TouchableOpacity>
 
@@ -1271,7 +1261,7 @@ export default function Settings() {
             style={[styles.devToolButton, styles.devToolButtonRow]}
             onPress={handleDevInjectGrades}
           >
-            <MaterialIcons name="insert-chart" size={24} color={devGradeActive ? '#4CAF50' : '#FFD166'} />
+            <MaterialIcons name="insert-chart" size={24} color={devGradeActive ? Colors.dark.green : Colors.dark.yellow} />
             <View style={styles.devToolTextGroup}>
               <Text style={[styles.devToolText, styles.devToolTextLeft]}>
                 {devGradeActive ? 'Remove injected grades' : 'Inject 5 random grades'}
@@ -1402,7 +1392,7 @@ export default function Settings() {
     return (
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <MaterialIcons name="notifications" size={24} color="#3478F6" style={styles.sectionIcon} />
+          <MaterialIcons name="notifications" size={24} color={Colors.dark.primary} style={styles.sectionIcon} />
           <Text style={styles.sectionTitle}>{t('settings').notifications.title}</Text>
         </View>
         
@@ -1420,7 +1410,7 @@ export default function Settings() {
             <CustomToggle
               value={notificationSettings.enabled}
               onValueChange={handleToggleNotifications}
-              activeColor="#3478F6"
+              activeColor={Colors.dark.primary}
             />
           </View>
         </View>
@@ -1430,7 +1420,7 @@ export default function Settings() {
             {/* Time settings card */}
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <MaterialIcons name="access-time" size={20} color="#3478F6" />
+                <MaterialIcons name="access-time" size={20} color={Colors.dark.primary} />
                 <Text style={styles.cardTitle}>{t('settings').notifications.timeSettings}</Text>
               </View>
               
@@ -1448,7 +1438,7 @@ export default function Settings() {
                   <Text style={styles.timeButtonText}>
                     {formatTimeDisplay(new Date(notificationSettings.notificationTime))}
                   </Text>
-                  <MaterialIcons name="edit" size={16} color="#3478F6" style={styles.timeButtonIcon} />
+                  <MaterialIcons name="edit" size={16} color={Colors.dark.primary} style={styles.timeButtonIcon} />
           </TouchableOpacity>
               </View>
             </View>
@@ -1456,7 +1446,7 @@ export default function Settings() {
             {/* Reminder days card */}
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <MaterialIcons name="event" size={20} color="#3478F6" />
+                <MaterialIcons name="event" size={20} color={Colors.dark.primary} />
                 <Text style={styles.cardTitle}>{t('settings').notifications.reminderDays}</Text>
               </View>
               
@@ -1475,7 +1465,7 @@ export default function Settings() {
                   onIncrease={() => handleUpdateReminderDays('examReminderDays', notificationSettings.examReminderDays + 1)}
                   isMinValue={notificationSettings.examReminderDays <= 1}
                   icon="school"
-                  accentColor="#FF5757"
+                  accentColor={Colors.dark.danger}
                 />
                 
                 <ReminderSetting
@@ -1485,7 +1475,7 @@ export default function Settings() {
                   onIncrease={() => handleUpdateReminderDays('testReminderDays', notificationSettings.testReminderDays + 1)}
                   isMinValue={notificationSettings.testReminderDays <= 1}
                   icon="assignment"
-                  accentColor="#3478F6"
+                  accentColor={Colors.dark.primary}
                 />
                 
                 <ReminderSetting
@@ -1495,7 +1485,7 @@ export default function Settings() {
                   onIncrease={() => handleUpdateReminderDays('quizReminderDays', notificationSettings.quizReminderDays + 1)}
                   isMinValue={notificationSettings.quizReminderDays <= 1}
                   icon="quiz"
-                  accentColor="#FFB930"
+                  accentColor={Colors.dark.yellow}
                 />
               </View>
               
@@ -1510,7 +1500,7 @@ export default function Settings() {
                   onIncrease={() => handleUpdateReminderDays('projectReminderDays', notificationSettings.projectReminderDays + 1)}
                   isMinValue={notificationSettings.projectReminderDays <= 1}
                   icon="category"
-                  accentColor="#4CAF50"
+                  accentColor={Colors.dark.green}
                 />
                 
                 <ReminderSetting
@@ -1520,7 +1510,7 @@ export default function Settings() {
                   onIncrease={() => handleUpdateReminderDays('homeworkReminderDays', notificationSettings.homeworkReminderDays + 1)}
                   isMinValue={notificationSettings.homeworkReminderDays <= 1}
                   icon="book"
-                  accentColor="#9C27B0"
+                  accentColor={Colors.dark.lightPurple}
                 />
                 
                 <ReminderSetting
@@ -1530,7 +1520,7 @@ export default function Settings() {
                   onIncrease={() => handleUpdateReminderDays('otherReminderDays', notificationSettings.otherReminderDays + 1)}
                   isMinValue={notificationSettings.otherReminderDays <= 1}
                   icon="more-horiz"
-                  accentColor="#607D8B"
+                  accentColor={Colors.dark.neutral500}
                 />
               </View>
             </View>
@@ -1538,7 +1528,7 @@ export default function Settings() {
             {/* Daily reminders card */}
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <MaterialIcons name="update" size={20} color="#3478F6" />
+                <MaterialIcons name="update" size={20} color={Colors.dark.primary} />
                 <Text style={styles.cardTitle}>{t('settings').notifications.dailyReminders}</Text>
               </View>
               
@@ -1549,42 +1539,42 @@ export default function Settings() {
               <View style={styles.settingItem}>
                 <View style={styles.settingLabelContainer}>
                   <View style={styles.settingLabelWithIcon}>
-                    <MaterialIcons name="school" size={18} color="#FF5757" style={styles.settingItemIcon} />
+                    <MaterialIcons name="school" size={18} color={Colors.dark.danger} style={styles.settingItemIcon} />
                     <Text style={styles.settingLabel}>{t('settings').notifications.dailyExams}</Text>
                   </View>
                 </View>
                 <CustomToggle
                   value={notificationSettings.dailyRemindersForExams}
                   onValueChange={(value) => handleToggleDailyReminders('dailyRemindersForExams', value)}
-                  activeColor="#FF5757"
+                  activeColor={Colors.dark.danger}
                 />
               </View>
               
               <View style={styles.settingItem}>
                 <View style={styles.settingLabelContainer}>
                   <View style={styles.settingLabelWithIcon}>
-                    <MaterialIcons name="assignment" size={18} color="#3478F6" style={styles.settingItemIcon} />
+                    <MaterialIcons name="assignment" size={18} color={Colors.dark.primary} style={styles.settingItemIcon} />
                     <Text style={styles.settingLabel}>{t('settings').notifications.dailyTests}</Text>
                   </View>
                 </View>
                 <CustomToggle
                   value={notificationSettings.dailyRemindersForTests}
                   onValueChange={(value) => handleToggleDailyReminders('dailyRemindersForTests', value)}
-                  activeColor="#3478F6"
+                  activeColor={Colors.dark.primary}
                 />
               </View>
               
               <View style={styles.settingItem}>
                 <View style={styles.settingLabelContainer}>
                   <View style={styles.settingLabelWithIcon}>
-                    <MaterialIcons name="quiz" size={18} color="#FFB930" style={styles.settingItemIcon} />
+                    <MaterialIcons name="quiz" size={18} color={Colors.dark.yellow} style={styles.settingItemIcon} />
                     <Text style={styles.settingLabel}>{t('settings').notifications.dailyQuizzes}</Text>
                   </View>
                 </View>
                 <CustomToggle
                   value={notificationSettings.dailyRemindersForQuizzes}
                   onValueChange={(value) => handleToggleDailyReminders('dailyRemindersForQuizzes', value)}
-                  activeColor="#FFB930"
+                  activeColor={Colors.dark.yellow}
                 />
               </View>
             </View>
@@ -1592,7 +1582,7 @@ export default function Settings() {
             {/* Send daily digest now button */}
             {IS_DEV && (
               <TouchableOpacity
-                style={[styles.testNotificationButton, { backgroundColor: '#4CAF50', marginTop: 8 }]}
+                style={[styles.testNotificationButton, { backgroundColor: Colors.dark.green, marginTop: 8 }]}
                 onPress={async () => {
                   try {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -1613,7 +1603,7 @@ export default function Settings() {
                   }
                 }}
               >
-                <MaterialIcons name="calendar-today" size={20} color="#FFFFFF" style={styles.testNotificationIcon} />
+                <MaterialIcons name="calendar-today" size={20} color={Colors.dark.white} style={styles.testNotificationIcon} />
                 <Text style={styles.testNotificationText}>
                   {t('settings').notifications.sendDigestNow}
                 </Text>
@@ -1641,7 +1631,7 @@ export default function Settings() {
     onIncrease,
     isMinValue,
     icon,
-    accentColor = '#3478F6'
+    accentColor = Colors.dark.primary
   }: {
     label: string;
     value: number;
@@ -1662,7 +1652,7 @@ export default function Settings() {
           onPress={onDecrease}
           disabled={isMinValue}
         >
-          <MaterialIcons name="remove" size={18} color={isMinValue ? '#555' : accentColor} />
+          <MaterialIcons name="remove" size={18} color={isMinValue ? Colors.dark.neutral650 : accentColor} />
           </TouchableOpacity>
         
         <View style={[styles.counterValueContainer, { borderColor: accentColor }]}>
@@ -1763,14 +1753,14 @@ export default function Settings() {
           <View style={styles.elevatedContainer}>
             <View style={styles.syncHeader}>
               <View style={styles.syncIconContainer}>
-                <MaterialIcons name="security" size={22} color="#FFFFFF" />
+                <MaterialIcons name="security" size={22} color={Colors.dark.white} />
               </View>
               <View style={styles.syncContent}>
                 <Text style={styles.syncLabel}>{t('settings').idnp.syncToggle}</Text>
                 <CustomToggle
                   value={isAuthenticated && syncIdnp}
                   onValueChange={handleIdnpSyncToggle}
-                  activeColor="#2C3DCD"
+                  activeColor={Colors.dark.primaryStrong}
                   disabled={!isAuthenticated}
                 />
               </View>
@@ -1779,7 +1769,7 @@ export default function Settings() {
             {!isAuthenticated ? (
               <View style={styles.loginPromptContainer}>
                 <View style={styles.loginPromptContent}>
-                  <MaterialIcons name="info-outline" size={20} color="#FFB020" style={{marginRight: 8}} />
+                  <MaterialIcons name="info-outline" size={20} color={Colors.dark.orange} style={{marginRight: 8}} />
                   <Text style={styles.loginPromptText}>
                     {t('settings').idnp.loginRequired}
                   </Text>
@@ -1801,7 +1791,7 @@ export default function Settings() {
             
             {isAuthenticated && syncIdnp && (
               <View style={styles.syncStatusIndicator}>
-                <MaterialIcons name="check-circle" size={16} color="#4CAF50" style={{marginRight: 6}} />
+                <MaterialIcons name="check-circle" size={16} color={Colors.dark.green} style={{marginRight: 6}} />
                 <Text style={styles.syncStatusText}>
                   {savedIdnp ? t('settings').idnp.syncedStatus : t('settings').idnp.noIdnpSaved}
                 </Text>
@@ -1814,7 +1804,7 @@ export default function Settings() {
         {savedIdnp && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <MaterialIcons name="security" size={24} color="#FF9566" style={styles.sectionIcon} />
+              <MaterialIcons name="security" size={24} color={Colors.dark.orange} style={styles.sectionIcon} />
               <Text style={styles.sectionTitle}>{t('settings').idnp.title}</Text>
             </View>
             <View style={styles.idnpInfo}>
@@ -1825,7 +1815,7 @@ export default function Settings() {
                 style={styles.clearIdnpButton}
                 onPress={handleClearIdnp}
               >
-                <MaterialIcons name="delete-outline" size={24} color="#FF6B6B" />
+                <MaterialIcons name="delete-outline" size={24} color={Colors.dark.lightPink} />
                 <Text style={styles.clearIdnpText}>{t('settings').idnp.clearButton}</Text>
               </TouchableOpacity>
             </View>
@@ -1835,7 +1825,7 @@ export default function Settings() {
         {/* Language Selection Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <MaterialIcons name="language" size={24} color="#42A5F5" style={styles.sectionIcon} />
+            <MaterialIcons name="language" size={24} color={Colors.dark.lightBlue} style={styles.sectionIcon} />
             <Text style={styles.sectionTitle}>{t('settings').language}</Text>
           </View>
           <TouchableOpacity
@@ -1845,7 +1835,7 @@ export default function Settings() {
             <View style={styles.languageSelectorContent}>
               <Text style={styles.selectedLanguageIcon}>{languages[settings.language].icon}</Text>
               <Text style={styles.selectedLanguageName}>{languages[settings.language].name}</Text>
-              <MaterialIcons name="keyboard-arrow-down" size={24} color="#8A8A8D" />
+              <MaterialIcons name="keyboard-arrow-down" size={24} color={Colors.dark.neutral500} />
             </View>
           </TouchableOpacity>
         </View>
@@ -1853,7 +1843,7 @@ export default function Settings() {
         {/* Manual Schedule Refresh Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <MaterialIcons name="schedule" size={24} color="#2C3DCD" style={styles.sectionIcon} />
+            <MaterialIcons name="schedule" size={24} color={Colors.dark.primaryStrong} style={styles.sectionIcon} />
             <Text style={styles.sectionTitle}>{t('settings').schedule.title}</Text>
           </View>
           <View style={[styles.card, styles.scheduleCard]}>
@@ -1867,7 +1857,7 @@ export default function Settings() {
                 <MaterialIcons
                   name="group"
                   size={20}
-                  color="#8A8A8D"
+                  color={Colors.dark.neutral500}
                   style={styles.scheduleDetailIcon}
                 />
                 <View style={styles.scheduleDetailTextGroup}>
@@ -1876,7 +1866,7 @@ export default function Settings() {
                     <Text style={styles.scheduleDetailValue} numberOfLines={1}>
                       {settings.selectedGroupName || t('settings').group.select}
                     </Text>
-                    <MaterialIcons name="arrow-drop-down" size={20} color="#8A8A8D" />
+                    <MaterialIcons name="arrow-drop-down" size={20} color={Colors.dark.neutral500} />
                   </View>
                 </View>
               </TouchableOpacity>
@@ -1886,7 +1876,7 @@ export default function Settings() {
                 <MaterialIcons
                   name="update"
                   size={20}
-                  color="#8A8A8D"
+                  color={Colors.dark.neutral500}
                   style={styles.scheduleDetailIcon}
                 />
                 <View style={styles.scheduleDetailTextGroup}>
@@ -1910,9 +1900,9 @@ export default function Settings() {
               disabled={isRefreshingSchedule}
             >
               {isRefreshingSchedule ? (
-                <ActivityIndicator size="small" color="#ffffff" />
+                <ActivityIndicator size="small" color={Colors.dark.white} />
               ) : (
-                <MaterialIcons name="refresh" size={20} color="#ffffff" />
+                <MaterialIcons name="refresh" size={20} color={Colors.dark.white} />
               )}
               <Text style={[styles.refreshButtonText, styles.scheduleRefreshButtonText]}>
                 {isRefreshingSchedule ? t('settings').schedule.refreshing : t('settings').schedule.refresh}
@@ -1924,7 +1914,7 @@ export default function Settings() {
         {/* App Updates Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <MaterialIcons name="system-update" size={24} color="#2C3DCD" style={styles.sectionIcon} />
+            <MaterialIcons name="system-update" size={24} color={Colors.dark.primaryStrong} style={styles.sectionIcon} />
             <Text style={styles.sectionTitle}>App Version & OTA</Text>
           </View>
           <View style={[styles.card, styles.updateCard]}>
@@ -1933,7 +1923,7 @@ export default function Settings() {
                 <MaterialIcons
                   name="info-outline"
                   size={20}
-                  color="#8A8A8D"
+                  color={Colors.dark.neutral500}
                   style={styles.scheduleDetailIcon}
                 />
                 <View style={styles.scheduleDetailTextGroup}>
@@ -1948,7 +1938,7 @@ export default function Settings() {
                 <MaterialIcons
                   name="fingerprint"
                   size={20}
-                  color="#8A8A8D"
+                  color={Colors.dark.neutral500}
                   style={styles.scheduleDetailIcon}
                 />
                 <View style={styles.scheduleDetailTextGroup}>
@@ -1963,7 +1953,7 @@ export default function Settings() {
                 <MaterialIcons
                   name="label-outline"
                   size={20}
-                  color="#8A8A8D"
+                  color={Colors.dark.neutral500}
                   style={styles.scheduleDetailIcon}
                 />
                 <View style={styles.scheduleDetailTextGroup}>
@@ -1985,7 +1975,7 @@ export default function Settings() {
         {/* Subgroup Selection Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <MaterialIcons name="groups" size={24} color="#66BB6A" style={styles.sectionIcon} />
+            <MaterialIcons name="groups" size={24} color={Colors.dark.green} style={styles.sectionIcon} />
             <Text style={styles.sectionTitle}>{t('settings').subGroup}</Text>
           </View>
           <View style={styles.optionsContainer}>
@@ -2013,14 +2003,14 @@ export default function Settings() {
         <View style={styles.section}>
           <View style={styles.sectionHeaderWithAction}>
             <View style={styles.sectionHeaderContent}>
-              <MaterialIcons name="event" size={24} color="#D85A77" style={styles.sectionIcon} />
+              <MaterialIcons name="event" size={24} color={Colors.dark.lightPink} style={styles.sectionIcon} />
               <Text style={styles.sectionTitle}>{t('settings').customPeriods.title}</Text>
             </View>
             <TouchableOpacity
               style={styles.addButton}
               onPress={handleAddPeriod}
             >
-              <MaterialIcons name="add" size={24} color="white" />
+              <MaterialIcons name="add" size={24} color={Colors.dark.white} />
             </TouchableOpacity>
           </View>
 
@@ -2028,7 +2018,7 @@ export default function Settings() {
             {settings.customPeriods.map((period) => (
               <View key={period._id} style={styles.periodItem}>
                 <View style={styles.periodItemHeader}>
-                  <View style={[styles.colorDot, { backgroundColor: period.color || '#2C3DCD' }]} />
+                  <View style={[styles.colorDot, { backgroundColor: period.color || Colors.dark.primaryStrong }]} />
                   <Text style={styles.periodName}>{period.name || 'Custom Period'}</Text>
                   <CustomToggle
                     value={period.isEnabled}
@@ -2052,13 +2042,13 @@ export default function Settings() {
                     style={styles.periodAction}
                     onPress={() => handleEditPeriod(period)}
                   >
-                    <MaterialIcons name="edit" size={20} color="#8A8A8D" />
+                    <MaterialIcons name="edit" size={20} color={Colors.dark.neutral500} />
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.periodAction}
                     onPress={() => handleDeletePeriod(period._id)}
                   >
-                    <MaterialIcons name="delete" size={20} color="#ff6b6b" />
+                    <MaterialIcons name="delete" size={20} color={Colors.dark.lightPink} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -2085,7 +2075,7 @@ export default function Settings() {
         <View style={styles.modalHeader}>
           <Text style={styles.modalTitle}>{t('settings').language}</Text>
           <TouchableOpacity onPress={() => setShowLanguageModal(false)}>
-            <MaterialIcons name="close" size={24} color="white" />
+            <MaterialIcons name="close" size={24} color={Colors.dark.white} />
           </TouchableOpacity>
         </View>
         <View style={styles.languagesList}>
@@ -2110,7 +2100,7 @@ export default function Settings() {
                 {name}
               </Text>
               {settings.language === code && (
-                <MaterialIcons name="check" size={24} color="white" />
+                <MaterialIcons name="check" size={24} color={Colors.dark.white} />
               )}
             </TouchableOpacity>
           ))}
@@ -2155,31 +2145,31 @@ export default function Settings() {
             setShowGroupModal(false);
             setSearchQuery('');
           }}>
-            <MaterialIcons name="close" size={24} color="white" />
+            <MaterialIcons name="close" size={24} color={Colors.dark.white} />
           </TouchableOpacity>
         </View>
         
         {/* Search Bar */}
         <View style={styles.searchContainer}>
-          <MaterialIcons name="search" size={20} color="#8A8A8D" style={styles.searchIcon} />
+          <MaterialIcons name="search" size={20} color={Colors.dark.neutral500} style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
             placeholder={t('settings').group.search}
-            placeholderTextColor="#8A8A8D"
+            placeholderTextColor={Colors.dark.neutral500}
             value={searchQuery}
             onChangeText={setSearchQuery}
             autoCapitalize="none"
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={handleSearchClear} style={styles.searchClearButton}>
-              <MaterialIcons name="clear" size={20} color="#8A8A8D" />
+              <MaterialIcons name="clear" size={20} color={Colors.dark.neutral500} />
             </TouchableOpacity>
           )}
         </View>
 
         {isLoading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#3478F6" />
+            <ActivityIndicator size="large" color={Colors.dark.primary} />
             <Text style={styles.loadingText}>{t('settings').group.searching}</Text>
           </View>
         ) : error ? (
@@ -2236,7 +2226,7 @@ export default function Settings() {
             setShowPeriodModal(false);
             resetPeriodForm();
           }}>
-            <MaterialIcons name="close" size={24} color="white" />
+            <MaterialIcons name="close" size={24} color={Colors.dark.white} />
           </TouchableOpacity>
         </View>
 
@@ -2249,7 +2239,7 @@ export default function Settings() {
               value={periodName}
               onChangeText={setPeriodName}
               placeholder={t('settings').customPeriods.name}
-              placeholderTextColor="#8A8A8D"
+              placeholderTextColor={Colors.dark.neutral500}
             />
           </View>
 
@@ -2384,7 +2374,7 @@ export default function Settings() {
             style={styles.actionSheetClose}
             onPress={() => setShowAccountActionSheet(false)}
           >
-            <MaterialIcons name="close" size={24} color="white" />
+            <MaterialIcons name="close" size={24} color={Colors.dark.white} />
           </TouchableOpacity>
         </View>
 
@@ -2392,8 +2382,8 @@ export default function Settings() {
           style={styles.actionSheetButton}
           onPress={handleLogout}
         >
-          <MaterialIcons name="logout" size={24} color="#FF6B6B" />
-          <Text style={[styles.actionSheetButtonText, { color: '#FF6B6B' }]}>
+          <MaterialIcons name="logout" size={24} color={Colors.dark.lightPink} />
+          <Text style={[styles.actionSheetButtonText, { color: Colors.dark.lightPink }]}>
             {t('settings').account.actions.logout}
           </Text>
         </TouchableOpacity>
@@ -2405,8 +2395,8 @@ export default function Settings() {
             setShowDeleteAccountConfirm(true);
           }}
         >
-          <MaterialIcons name="delete-forever" size={24} color="#FF6B6B" />
-          <Text style={[styles.actionSheetButtonText, { color: '#FF6B6B' }]}>
+          <MaterialIcons name="delete-forever" size={24} color={Colors.dark.lightPink} />
+          <Text style={[styles.actionSheetButtonText, { color: Colors.dark.lightPink }]}>
             {t('settings').account.actions.delete}
           </Text>
         </TouchableOpacity>
@@ -2472,7 +2462,7 @@ export default function Settings() {
             <TextInput
               style={styles.passwordInput}
               placeholder="Your password"
-              placeholderTextColor="#666"
+              placeholderTextColor={Colors.dark.neutral500}
               secureTextEntry
               value={passwordForDeletion}
               onChangeText={(text) => {
@@ -2506,7 +2496,7 @@ export default function Settings() {
               disabled={deletingAccount}
             >
               {deletingAccount ? (
-                <ActivityIndicator size="small" color="#fff" />
+                <ActivityIndicator size="small" color={Colors.dark.white} />
               ) : (
                 <Text style={styles.deleteButtonText}>Delete</Text>
               )}
@@ -2522,7 +2512,7 @@ export default function Settings() {
       >
         <View style={styles.confirmDialogContent}>
           <View style={styles.successIconContainer}>
-            <MaterialIcons name="check-circle" size={64} color="#4CAF50" />
+            <MaterialIcons name="check-circle" size={64} color={Colors.dark.green} />
           </View>
           
           <Text style={styles.confirmTitle}>Deletion Request Sent</Text>
@@ -2535,7 +2525,7 @@ export default function Settings() {
             style={styles.emailButton}
             onPress={openEmailApp}
           >
-            <MaterialIcons name="email" size={20} color="white" />
+            <MaterialIcons name="email" size={20} color={Colors.dark.white} />
             <Text style={styles.emailButtonText}>Open Email App</Text>
           </TouchableOpacity>
           
@@ -2577,7 +2567,7 @@ export default function Settings() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#141414',
+    backgroundColor: Colors.dark.backgroundTertiary,
   },
   scrollContent: {
     padding: 20,
@@ -2589,7 +2579,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: 'white',
+    color: Colors.dark.white,
     textAlignVertical: 'center',
   },
   optionsContainer: {
@@ -2598,24 +2588,24 @@ const styles = StyleSheet.create({
   },
   optionButton: {
     flex: 1,
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
   },
   selectedOption: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
   },
   optionText: {
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
     fontSize: 16,
     fontWeight: '600',
   },
   selectedOptionText: {
-    color: 'white',
+    color: Colors.dark.white,
   },
   classSelector: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     padding: 16,
     borderRadius: 12,
   },
@@ -2625,17 +2615,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   selectedClassName: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '600',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: Colors.dark.overlayBlack70,
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#141414',
+    backgroundColor: Colors.dark.backgroundTertiary,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
@@ -2648,16 +2638,16 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     paddingBottom: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#2a2b36',
+    borderBottomColor: Colors.dark.modalBorderColor,
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: 'white',
+    color: Colors.dark.white,
   },
   searchContainer: {
     flexDirection: 'row',
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 12,
     marginBottom: 16,
     paddingVertical: 10,
@@ -2669,7 +2659,7 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
     padding: 0,
   },
@@ -2683,33 +2673,33 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   groupItem: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     padding: 16,
     borderRadius: 12,
     marginBottom: 10,
   },
   selectedGroupItem: {
-    backgroundColor: '#3478F6',
+    backgroundColor: Colors.dark.primary,
   },
   groupItemText: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '600',
   },
   teacherText: {
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
     fontSize: 14,
     marginTop: 4,
   },
   selectedTeacherText: {
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: Colors.dark.overlayWhite80,
   },
   loadingContainer: {
     padding: 30,
     alignItems: 'center',
   },
   loadingText: {
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
     marginTop: 10,
     fontSize: 16,
   },
@@ -2738,7 +2728,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   addButton: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
     width: 40,
     height: 40,
     borderRadius: 20,
@@ -2749,7 +2739,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   periodItem: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 12,
     padding: 16,
   },
@@ -2765,7 +2755,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   periodName: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '600',
     flex: 1,
@@ -2774,12 +2764,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   periodTime: {
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
     fontSize: 14,
     marginBottom: 4,
   },
   periodDays: {
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
     fontSize: 14,
   },
   periodItemActions: {
@@ -2791,7 +2781,7 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   noPeriods: {
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
     textAlign: 'center',
     padding: 20,
   },
@@ -2802,15 +2792,15 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   formLabel: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '600',
   },
   formInput: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 12,
     padding: 16,
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
   },
   timeContainer: {
@@ -2820,21 +2810,21 @@ const styles = StyleSheet.create({
   },
   timeButton: {
     flexDirection: 'row',
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     alignItems: 'center',
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 8,
   },
   timeButtonText: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
   },
   timeButtonIcon: {
     marginLeft: 8,
   },
   timeSeparator: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 20,
   },
   daysContainer: {
@@ -2843,28 +2833,28 @@ const styles = StyleSheet.create({
   },
   dayButton: {
     flex: 1,
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 12,
     padding: 12,
     alignItems: 'center',
   },
   selectedDayButton: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
   },
   dayButtonText: {
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
     fontSize: 14,
     fontWeight: '600',
   },
   selectedDayButtonText: {
-    color: 'white',
+    color: Colors.dark.white,
   },
   colorPreview: {
     width: 40,
     height: 40,
     borderRadius: 20,
     borderWidth: 2,
-    borderColor: '#1A1A1A',
+    borderColor: Colors.dark.surfaceSecondary,
   },
   switchContainer: {
     flexDirection: 'row',
@@ -2872,38 +2862,38 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   saveButton: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
     marginTop: 20,
   },
   saveButtonText: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '600',
   },
   clearIdnpButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     padding: 16,
     borderRadius: 12,
   },
   clearIdnpText: {
-    color: '#FF6B6B',
+    color: Colors.dark.lightPink,
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
   },
   confirmOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: Colors.dark.overlayBlack70,
     justifyContent: 'center',
     alignItems: 'center',
   },
   confirmDialog: {
-    backgroundColor: '#141414',
+    backgroundColor: Colors.dark.backgroundTertiary,
     borderRadius: 20,
     padding: 20,
     width: '80%',
@@ -2916,11 +2906,11 @@ const styles = StyleSheet.create({
   confirmTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: 'white',
+    color: Colors.dark.white,
     marginBottom: 12,
   },
   confirmMessage: {
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
     fontSize: 16,
     marginBottom: 16,
     marginTop: 8,
@@ -2938,35 +2928,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cancelButton: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
   },
   clearButton: {
-    backgroundColor: '#FF6B6B',
+    backgroundColor: Colors.dark.lightPink,
   },
   cancelButtonText: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '600',
   },
   clearButtonText: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '600',
   },
   timePickerOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: Colors.dark.overlayBlack70,
     justifyContent: 'center',
     alignItems: 'center',
   },
   timePickerContainer: {
-    backgroundColor: '#141414',
+    backgroundColor: Colors.dark.backgroundTertiary,
     borderRadius: 20,
     padding: 24,
     width: '90%',
     maxWidth: 400,
     elevation: 5,
-    shadowColor: '#000',
+    shadowColor: Colors.dark.black,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 8,
@@ -2978,12 +2968,12 @@ const styles = StyleSheet.create({
   timePickerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: 'white',
+    color: Colors.dark.white,
     marginBottom: 8,
   },
   timePickerValue: {
     fontSize: 16,
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
   },
   timePickerContent: {
     flexDirection: 'row',
@@ -2995,7 +2985,7 @@ const styles = StyleSheet.create({
   timePickerColumn: {
     flex: 1,
     alignItems: 'center',
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 12,
     overflow: 'hidden',
     minWidth: 100,
@@ -3007,26 +2997,26 @@ const styles = StyleSheet.create({
   },
   timePickerItemText: {
     fontSize: 38,
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
     opacity: 0.15,
     fontWeight: '400',
   },
   timePickerItemTextSelected: {
     fontSize: 44,
-    color: '#ffffff',
+    color: Colors.dark.white,
     opacity: 1,
     fontWeight: '600',
   },
   timePickerSeparator: {
     fontSize: 52,
-    color: '#ffffff',
+    color: Colors.dark.white,
     marginHorizontal: 20,
     opacity: 0.8,
     fontWeight: '300',
   },
   timePickerPeriodButton: {
     marginLeft: 20,
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 12,
     padding: 12,
     width: 60,
@@ -3050,18 +3040,18 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   timePickerCancelButton: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
   },
   timePickerConfirmButton: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
   },
   timePickerButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: 'white',
+    color: Colors.dark.white,
   },
   timePickerConfirmText: {
-    color: 'white',
+    color: Colors.dark.white,
     fontWeight: '600',
   },
   periodSelector: {
@@ -3080,7 +3070,7 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: '#ffffff',
+    backgroundColor: Colors.dark.white,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -3090,7 +3080,7 @@ const styles = StyleSheet.create({
     left: 6,
   },
   languageSelector: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     padding: 16,
     borderRadius: 12,
   },
@@ -3103,7 +3093,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   selectedLanguageName: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '600',
     flex: 1,
@@ -3114,31 +3104,31 @@ const styles = StyleSheet.create({
   languageOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     padding: 16,
     borderRadius: 12,
   },
   selectedLanguageOption: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
   },
   languageIcon: {
     fontSize: 20,
     marginRight: 12,
   },
   languageOptionText: {
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
     fontSize: 16,
     fontWeight: '600',
     flex: 1,
   },
   selectedLanguageOptionText: {
-    color: 'white',
+    color: Colors.dark.white,
   },
   // Account section styles
   accountInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     padding: 16,
     borderRadius: 12,
   },
@@ -3146,13 +3136,13 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
   avatarText: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 18,
     fontWeight: 'bold',
   },
@@ -3168,7 +3158,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   accountEmail: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -3178,7 +3168,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   verificationText: {
-    color: '#FFB020',
+    color: Colors.dark.orange,
     fontSize: 14,
     marginLeft: 4,
   },
@@ -3190,36 +3180,36 @@ const styles = StyleSheet.create({
   accountAction: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#141414',
+    backgroundColor: Colors.dark.backgroundTertiary,
     padding: 12,
     borderRadius: 12,
     flex: 1,
     marginRight: 8,
   },
   accountActionText: {
-    color: '#2C3DCD',
+    color: Colors.dark.primaryStrong,
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
   },
   signInButton: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
   },
   signInButtonText: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '600',
   },
   actionSheetOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: Colors.dark.overlayBlack70,
     justifyContent: 'flex-end',
   },
   actionSheet: {
-    backgroundColor: '#141414',
+    backgroundColor: Colors.dark.backgroundTertiary,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
@@ -3233,7 +3223,7 @@ const styles = StyleSheet.create({
   actionSheetTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: 'white',
+    color: Colors.dark.white,
   },
   actionSheetClose: {
     padding: 5,
@@ -3244,7 +3234,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     marginBottom: 12,
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
   },
   actionSheetButtonText: {
     fontSize: 16,
@@ -3252,35 +3242,35 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
   deleteButton: {
-    backgroundColor: '#FF6B6B',
+    backgroundColor: Colors.dark.lightPink,
   },
   deleteButtonText: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '600',
   },
   passwordInputContainer: {
     width: '100%',
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 10,
     marginTop: 10,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: 'transparent',
+    borderColor: Colors.dark.transparent,
   },
   
   passwordInputError: {
-    borderColor: '#FF6B6B',
+    borderColor: Colors.dark.lightPink,
   },
   
   passwordInput: {
     height: 50,
     paddingHorizontal: 15,
-    color: 'white',
+    color: Colors.dark.white,
   },
   
   errorText: {
-    color: '#FF6B6B',
+    color: Colors.dark.lightPink,
     fontSize: 14,
     marginBottom: 12,
     paddingHorizontal: 5,
@@ -3290,7 +3280,7 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    backgroundColor: Colors.dark.successIconColor,
     justifyContent: 'center',
     alignItems: 'center',
     alignSelf: 'center',
@@ -3299,7 +3289,7 @@ const styles = StyleSheet.create({
   
   emailButton: {
     flexDirection: 'row',
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
@@ -3310,13 +3300,13 @@ const styles = StyleSheet.create({
   },
   
   emailButtonText: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '600',
   },
   
   doneButton: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
@@ -3325,7 +3315,7 @@ const styles = StyleSheet.create({
   },
   
   doneButtonText: {
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -3333,7 +3323,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   devToolButton: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
@@ -3345,7 +3335,7 @@ const styles = StyleSheet.create({
       gap: 12,
     },
   devToolText: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 14,
     fontWeight: '600',
     marginTop: 8,
@@ -3361,7 +3351,7 @@ const styles = StyleSheet.create({
       gap: 2,
     },
     devToolSubtext: {
-      color: '#8A8A8D',
+      color: Colors.dark.mutedText,
       fontSize: 12,
       textAlign: 'left',
     },
@@ -3377,7 +3367,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   settingLabel: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -3386,12 +3376,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   settingValue: {
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
     fontSize: 16,
     marginRight: 8,
   },
   sectionSubtitle: {
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
     fontSize: 14,
     marginTop: 16,
     marginBottom: 8,
@@ -3404,15 +3394,15 @@ const styles = StyleSheet.create({
     padding: 4,
     marginHorizontal: 4,
     borderRadius: 4,
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
   },
   counterValue: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
     marginHorizontal: 8,
   },
   card: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
@@ -3421,7 +3411,7 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   scheduleCardTitle: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 12,
@@ -3445,12 +3435,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scheduleDetailLabel: {
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
     fontSize: 12,
     marginBottom: 2,
   },
   scheduleDetailValue: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 14,
     lineHeight: 20,
     fontWeight: '500',
@@ -3468,11 +3458,11 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: 'white',
+    color: Colors.dark.white,
     marginLeft: 8,
   },
   cardDescription: {
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
     fontSize: 14,
     marginBottom: 16,
     lineHeight: 20,
@@ -3482,7 +3472,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   settingDescription: {
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
     fontSize: 14,
     marginTop: 2,
   },
@@ -3496,13 +3486,13 @@ const styles = StyleSheet.create({
   reminderGroup: {
     marginBottom: 16,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.1)',
+    borderTopColor: Colors.dark.overlayWhite10,
     paddingTop: 12,
   },
   reminderGroupTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#BBBBBB',
+    color: Colors.dark.neutral250,
     marginBottom: 12,
   },
   reminderSettingItem: {
@@ -3527,7 +3517,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   counterUnit: {
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
     fontSize: 10,
     fontWeight: '500',
   },
@@ -3536,7 +3526,7 @@ const styles = StyleSheet.create({
   },
   testNotificationButton: {
     flexDirection: 'row',
-    backgroundColor: '#3478F6',
+    backgroundColor: Colors.dark.primary,
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
@@ -3548,23 +3538,23 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   testNotificationText: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '600',
   },
   elevatedContainer: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 12,
     padding: 16,
     marginVertical: 8,
-    shadowColor: '#000',
+    shadowColor: Colors.dark.black,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
   infoText: {
-    color: '#E0E0E6',
+    color: Colors.dark.neutral200,
     fontSize: 14,
     marginTop: 12,
     lineHeight: 20,
@@ -3576,7 +3566,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   idnpValue: {
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -3589,13 +3579,13 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
   syncLabel: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -3604,11 +3594,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 12,
     padding: 8,
-    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    backgroundColor: Colors.dark.successIconColor,
     borderRadius: 8,
   },
   syncStatusText: {
-    color: '#A2E1A6',
+    color: Colors.dark.lightGreen,
     fontSize: 14,
     fontWeight: '500',
   },
@@ -3624,32 +3614,32 @@ const styles = StyleSheet.create({
   loginPromptContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 176, 32, 0.15)',
+    backgroundColor: Colors.dark.loginPromptBackground,
     padding: 12,
     borderRadius: 8,
     marginBottom: 12,
   },
   loginPromptText: {
-    color: '#FFB020',
+    color: Colors.dark.orange,
     fontSize: 14,
     flex: 1,
     lineHeight: 20,
   },
   loginButton: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 8,
     alignItems: 'center',
   },
   loginButtonText: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 14,
     fontWeight: '600',
   },
   refreshButton: {
     flexDirection: 'row',
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
     borderRadius: 10,
     paddingVertical: 10,
     paddingHorizontal: 14,
@@ -3662,7 +3652,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   refreshButtonText: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 14,
     fontWeight: '600',
     marginLeft: 6,
@@ -3684,13 +3674,13 @@ const styles = StyleSheet.create({
   },
   channelBadge: {
     textTransform: 'uppercase',
-    color: '#3478F6',
+    color: Colors.dark.primary,
     fontWeight: '700',
     letterSpacing: 0.5,
   },
   updateNote: {
     fontSize: 12,
-    color: '#666',
+    color: Colors.dark.neutral600,
     textAlign: 'left',
     marginTop: 12,
     lineHeight: 18,

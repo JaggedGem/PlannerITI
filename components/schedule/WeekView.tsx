@@ -20,6 +20,7 @@ import {
   filterExamEventsForDate,
   filterThesisEventsForDate,
 } from '@/utils/specialScheduleUtils';
+import { Colors } from '@/constants/Colors';
 
 // Get week start (Monday) from current date
 const getWeekStart = (date: Date): Date => {
@@ -238,7 +239,7 @@ const RecoveryDayInfo = ({
           hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
         >
           <LinearGradient
-            colors={['#FF5733DD', '#FF5733AA']}
+            colors={Colors.dark.recoveryGradient}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.recoveryDayInfoButtonGradient}
@@ -994,20 +995,7 @@ export default function WeekView() {
   // Function to get color for a subject with improved color palette
   const getSubjectColor = (subjectName: string): string => {
     // More vibrant, design-friendly color palette
-    const colors = [
-      '#4361EE', // Royal Blue
-      '#F72585', // Pink
-      '#4CC9F0', // Cyan
-      '#7209B7', // Purple
-      '#3A86FF', // Blue
-      '#FB5607', // Orange
-      '#06D6A0', // Teal
-      '#FFBE0B', // Yellow
-      '#8338EC', // Violet
-      '#FF006E', // Hot Pink
-      '#38B000', // Green
-      '#FF5400', // Orange Red
-    ];
+    const colors = Colors.dark.subjectColors;
     
     let hash = 0;
     for (let i = 0; i < subjectName.length; i++) {
@@ -1032,7 +1020,7 @@ export default function WeekView() {
     return (
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#3478F6" />
+          <ActivityIndicator size="large" color={Colors.dark.primary} />
           <Text style={styles.loadingText}>{t('schedule').loading}</Text>
         </View>
       </SafeAreaView>
@@ -1227,7 +1215,7 @@ export default function WeekView() {
                       top: index * hourHeight,
                       width: '100%'
                     },
-                    hour === nowHour && weekOffset === 0 && { backgroundColor: 'rgba(52, 120, 246, 0.12)' }
+                    hour === nowHour && weekOffset === 0 && { backgroundColor: Colors.dark.overlayPrimary12 }
                   ]}
                 />
               ))}
@@ -1259,10 +1247,10 @@ export default function WeekView() {
                         height: timetableHeight,
                         left: dayIndex * dayColumnWidth,
                       },
-                      isToday && { backgroundColor: 'rgba(52, 120, 246, 0.03)' },
+                      isToday && { backgroundColor: Colors.dark.overlayPrimary03 },
                       dayExamEvents.length > 0 && dayThesisEvents.length === 0 && styles.dayContentExam,
                       dayThesisEvents.length > 0 && styles.dayContentThesis,
-                      (isRecoveryDay || isWeekend) && { backgroundColor: 'rgba(255, 87, 51, 0.05)' }
+                      (isRecoveryDay || isWeekend) && { backgroundColor: Colors.dark.overlayRecovery05 }
                     ]}
                     entering={FadeIn.duration(150).delay(dayIndex * 30)}
                   >
@@ -1335,17 +1323,17 @@ export default function WeekView() {
 const styles = StyleSheet.create<Styles>({
   container: {
     flex: 1,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: Colors.dark.backgroundSecondary,
   },
   content: {
     flex: 1,
   },
   headerContainer: {
-    backgroundColor: '#141414',
+    backgroundColor: Colors.dark.backgroundTertiary,
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
     paddingBottom: 12,
-    shadowColor: '#000',
+    shadowColor: Colors.dark.black,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
@@ -1361,17 +1349,17 @@ const styles = StyleSheet.create<Styles>({
   pageTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     letterSpacing: 0.5,
   },
   weekInfo: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 16,
   },
   weekText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 14,
     fontWeight: '600',
     letterSpacing: 0.3,
@@ -1386,7 +1374,7 @@ const styles = StyleSheet.create<Styles>({
     justifyContent: 'center',
   },
   navButtonText: {
-    color: '#2C3DCD',
+    color: Colors.dark.primaryStrong,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -1402,7 +1390,7 @@ const styles = StyleSheet.create<Styles>({
     position: 'relative',
   },
   todayColumn: {
-    backgroundColor: 'rgba(44, 61, 205, 0.1)', // Using #2C3DCD with 0.1 opacity
+    backgroundColor: Colors.dark.primaryStrong10,
   },
   recoveryIndicator: {
     position: 'absolute',
@@ -1414,7 +1402,7 @@ const styles = StyleSheet.create<Styles>({
   },
   recoveryDot: {
     fontSize: 8,
-    color: '#FF5733',
+    color: Colors.dark.recoveryColor,
   },
   recoveryDayInfo: {
     position: 'absolute',
@@ -1439,7 +1427,7 @@ const styles = StyleSheet.create<Styles>({
     overflow: 'hidden',
     zIndex: 10,
     elevation: 3,
-    shadowColor: '#000',
+    shadowColor: Colors.dark.black,
     shadowOffset: { width: 1, height: 1 },
     shadowOpacity: 0.3,
     shadowRadius: 2,
@@ -1451,7 +1439,7 @@ const styles = StyleSheet.create<Styles>({
     justifyContent: 'center',
   },
   recoveryDayInfoIcon: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 10,
     fontWeight: '700',
     textAlign: 'center',
@@ -1466,17 +1454,17 @@ const styles = StyleSheet.create<Styles>({
     width: 180,
     zIndex: 100,
     elevation: 5,
-    shadowColor: '#000',
+    shadowColor: Colors.dark.black,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
   },
   recoveryDayTooltip: {
-    backgroundColor: '#1C1C1E', // Dark background
+    backgroundColor: Colors.dark.surface, // Dark background
     padding: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#2C2C2E',
+    borderColor: Colors.dark.borderMuted,
   },
   recoveryDayTooltipHeader: {
     flexDirection: 'row',
@@ -1485,7 +1473,7 @@ const styles = StyleSheet.create<Styles>({
     marginBottom: 6,
   },
   recoveryDayTooltipTitle: {
-    color: '#FF5733',
+    color: Colors.dark.recoveryColor,
     fontSize: 14,
     fontWeight: 'bold',
   },
@@ -1493,18 +1481,18 @@ const styles = StyleSheet.create<Styles>({
     padding: 4,
   },
   closeTooltipText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 14,
     fontWeight: 'bold',
   } as TextStyle,
   recoveryDayTooltipReason: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 12,
     lineHeight: 18,
     opacity: 0.8,
   },
   dayName: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 13,
     fontWeight: '600',
     letterSpacing: 0.5,
@@ -1516,13 +1504,13 @@ const styles = StyleSheet.create<Styles>({
     marginTop: 2,
   },
   dateText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '700',
     marginTop: 2,
   },
   dayAssignmentBadge: {
-    backgroundColor: '#FF3B30',
+    backgroundColor: Colors.dark.red,
     borderRadius: 8,
     paddingHorizontal: 3,
     paddingVertical: 1,
@@ -1535,7 +1523,7 @@ const styles = StyleSheet.create<Styles>({
     right: 2,
   },
   dayAssignmentBadgeText: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 8,
     fontWeight: 'bold',
     textAlign: 'center',
@@ -1555,29 +1543,29 @@ const styles = StyleSheet.create<Styles>({
     justifyContent: 'center',
   },
   daySpecialBadgeExam: {
-    backgroundColor: 'rgba(255, 149, 0, 0.3)',
+    backgroundColor: Colors.dark.overlayOrange30,
   },
   daySpecialBadgeThesis: {
-    backgroundColor: 'rgba(52, 120, 246, 0.35)',
+    backgroundColor: Colors.dark.overlayPrimary35,
   },
   daySpecialBadgeLoading: {
-    backgroundColor: 'rgba(138, 138, 141, 0.35)',
+    backgroundColor: Colors.dark.overlayGray35,
   },
   daySpecialBadgeText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 9,
     fontWeight: '700',
     letterSpacing: 0.2,
   },
   dayColumnExam: {
-    backgroundColor: 'rgba(255, 149, 0, 0.08)',
+    backgroundColor: Colors.dark.overlayOrange08,
     borderWidth: 1,
-    borderColor: 'rgba(255, 149, 0, 0.2)',
+    borderColor: Colors.dark.overlayOrange20,
   },
   dayColumnThesis: {
-    backgroundColor: 'rgba(77, 150, 255, 0.14)',
+    backgroundColor: Colors.dark.overlayAccentBlue14,
     borderWidth: 1,
-    borderColor: 'rgba(77, 150, 255, 0.28)',
+    borderColor: Colors.dark.overlayAccentBlue28,
   },
   timetableContainer: {
     flexDirection: 'row',
@@ -1591,16 +1579,16 @@ const styles = StyleSheet.create<Styles>({
     justifyContent: 'center',
     alignItems: 'center',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.05)',
+    borderTopColor: Colors.dark.overlayWhite05,
   },
   timeHour: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 14,
     fontWeight: '700',
     textAlign: 'center',
   },
   timePeriod: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 9,
     fontWeight: '500',
     textAlign: 'center',
@@ -1613,7 +1601,7 @@ const styles = StyleSheet.create<Styles>({
   gridLine: {
     position: 'absolute',
     height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    backgroundColor: Colors.dark.overlayWhite03,
   },
   dayContent: {
     position: 'absolute',
@@ -1622,10 +1610,10 @@ const styles = StyleSheet.create<Styles>({
     borderRadius: 8,
   },
   dayContentExam: {
-    backgroundColor: 'rgba(255, 149, 0, 0.06)',
+    backgroundColor: Colors.dark.overlayOrange06,
   },
   dayContentThesis: {
-    backgroundColor: 'rgba(77, 150, 255, 0.08)',
+    backgroundColor: Colors.dark.overlayAccentBlue08,
   },
   timetableItem: {
     position: 'absolute',
@@ -1645,10 +1633,10 @@ const styles = StyleSheet.create<Styles>({
     marginBottom: 2,
   },
   className: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 11,
     fontWeight: '600',
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowColor: Colors.dark.overlayBlack50,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
     flex: 1,
@@ -1661,11 +1649,11 @@ const styles = StyleSheet.create<Styles>({
     marginTop: 2,
   },
   roomNumber: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 9,
     fontWeight: '500',
     opacity: 0.9,
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowColor: Colors.dark.overlayBlack50,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
     flex: 1,
@@ -1682,22 +1670,22 @@ const styles = StyleSheet.create<Styles>({
 	currentTimeIndicatorLine: {
 		flex: 1,
 		height: 2,
-		backgroundColor: '#FF3B30',
+		backgroundColor: Colors.dark.red,
 		opacity: 0.7,
 	},
 	currentTimeIndicatorDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#FF3B30',
+    backgroundColor: Colors.dark.red,
     marginRight: 2,
-    shadowColor: '#FF3B30',
+    shadowColor: Colors.dark.red,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
     shadowRadius: 4,
 	},
 	emptySchedule: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 10,
     textAlign: 'center',
     marginTop: 30,
@@ -1709,7 +1697,7 @@ const styles = StyleSheet.create<Styles>({
     alignItems: 'center',
 	},
 	loadingText: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 16,
     marginTop: 12,
 	},
@@ -1720,20 +1708,20 @@ const styles = StyleSheet.create<Styles>({
     padding: 20,
 	},
 	errorText: {
-    color: '#FF3B30',
+    color: Colors.dark.red,
     fontSize: 16,
     textAlign: 'center',
 	},
 	weekendColumn: {
-    backgroundColor: 'rgba(255, 87, 51, 0.1)',
+    backgroundColor: Colors.dark.overlayRecovery10,
     borderWidth: 1,
-    borderColor: 'rgba(255, 87, 51, 0.2)',
+    borderColor: Colors.dark.overlayRecovery20,
 	},
 	currentHourHighlight: {
-		backgroundColor: 'rgba(52, 120, 246, 0.08)', // Light blue background for current hour
+		backgroundColor: Colors.dark.overlayPrimary08, // Light blue background for current hour
 	},
   assignmentBadge: {
-    backgroundColor: '#FF3B30',
+    backgroundColor: Colors.dark.red,
     borderRadius: 10,
     paddingHorizontal: 4,
     paddingVertical: 1,
@@ -1743,7 +1731,7 @@ const styles = StyleSheet.create<Styles>({
     height: 16,
   },
   assignmentBadgeText: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 9,
     fontWeight: 'bold',
     textAlign: 'center',

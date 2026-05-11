@@ -21,6 +21,7 @@ import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { useAssignmentOptions } from './AssignmentOptionsContext';
+import { Colors } from '@/constants/Colors';
 
 interface AssignmentItemProps {
   assignment: Assignment;
@@ -91,23 +92,23 @@ const getAssignmentTypeIcon = (type: AssignmentType): any => {
 const getAssignmentTypeColor = (type: AssignmentType): string => {
   switch (type) {
     case AssignmentType.HOMEWORK:
-      return '#3478F6'; // iOS Blue
+      return Colors.dark.assignmentTypes.homework;
     case AssignmentType.TEST:
-      return '#FF9500'; // iOS Orange
+      return Colors.dark.assignmentTypes.test;
     case AssignmentType.EXAM:
-      return '#FF3B30'; // iOS Red
+      return Colors.dark.assignmentTypes.exam;
     case AssignmentType.PROJECT:
-      return '#5E5CE6'; // iOS Purple
+      return Colors.dark.assignmentTypes.project;
     case AssignmentType.QUIZ:
-      return '#FF375F'; // iOS Pink
+      return Colors.dark.assignmentTypes.quiz;
     case AssignmentType.LAB:
-      return '#64D2FF'; // iOS Light Blue
+      return Colors.dark.assignmentTypes.lab;
     case AssignmentType.ESSAY:
-      return '#30D158'; // iOS Green
+      return Colors.dark.assignmentTypes.essay;
     case AssignmentType.PRESENTATION:
-      return '#FFD60A'; // iOS Yellow
+      return Colors.dark.assignmentTypes.presentation;
     default:
-      return '#8E8E93'; // iOS Gray
+      return Colors.dark.assignmentTypes.other;
   }
 };
 
@@ -344,7 +345,7 @@ export default function AssignmentItem({
   const highlightStyle = useAnimatedStyle(() => {
     return {
       opacity: highlightOpacity.value,
-      backgroundColor: '#3478F620', // More subtle blue color with 20% opacity
+      backgroundColor: Colors.dark.highlightBlue20,
       position: 'absolute',
       top: 0,
       left: 0,
@@ -519,7 +520,7 @@ export default function AssignmentItem({
     Math.round((completedSubtasks / subtasks.length) * 100) : 0;
   
   // Determine priority styles
-  const priorityColor = assignment.isPriority ? '#FF3B30' : 'transparent';
+  const priorityColor = assignment.isPriority ? Colors.dark.red : Colors.dark.transparent;
   
   // Get assignment type icon and color
   const typeIcon = getAssignmentTypeIcon(assignment.assignmentType);
@@ -589,7 +590,7 @@ export default function AssignmentItem({
             <View style={[styles.checkbox, assignment.isCompleted && styles.checkboxChecked]}>
               <View style={styles.checkIconWrapper}>
                 <Animated.View style={[styles.checkIcon, checkboxStyle]}>
-                  <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                  <Ionicons name="checkmark" size={14} color={Colors.dark.white} />
                 </Animated.View>
               </View>
             </View>
@@ -597,8 +598,8 @@ export default function AssignmentItem({
           
           <View style={styles.contentContainer}>
             <View style={styles.titleRow}>
-              <View style={[styles.typeIndicator, { backgroundColor: isOrphaned ? '#8E8E93' : typeColor }]}>
-                <Ionicons name={isOrphaned ? 'alert-circle' : typeIcon} size={12} color="#FFFFFF" />
+              <View style={[styles.typeIndicator, { backgroundColor: isOrphaned ? Colors.dark.gray : typeColor }]}>
+                <Ionicons name={isOrphaned ? 'alert-circle' : typeIcon} size={12} color={Colors.dark.white} />
               </View>
               <Text 
                 style={[
@@ -621,7 +622,7 @@ export default function AssignmentItem({
                   <Ionicons 
                     name={expanded ? "chevron-up" : "chevron-down"} 
                     size={16} 
-                    color="#8A8A8D" 
+                    color={Colors.dark.mutedText} 
                   />
                 </TouchableOpacity>
               )}
@@ -685,7 +686,7 @@ export default function AssignmentItem({
                       <Ionicons 
                         name="chevron-down"
                         size={14} 
-                        color="#3478F6" 
+                        color={Colors.dark.primary} 
                       />
                     </TouchableOpacity>
                   )}
@@ -704,7 +705,7 @@ export default function AssignmentItem({
                     <Ionicons 
                       name="chevron-up" 
                       size={14} 
-                      color="#3478F6" 
+                      color={Colors.dark.primary} 
                     />
                   </TouchableOpacity>
                 )}
@@ -716,7 +717,7 @@ export default function AssignmentItem({
         <View style={styles.rightSection}>
           {assignment.isPriority && (
             <View style={[styles.priorityIndicator, { backgroundColor: priorityColor }]}>
-              <Ionicons name="star" size={14} color="#FFFFFF" />
+              <Ionicons name="star" size={14} color={Colors.dark.white} />
             </View>
           )}
           <Text style={[
@@ -744,7 +745,7 @@ export default function AssignmentItem({
               onPress={handleOpenOptions}
               hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
             >
-              <Ionicons name="ellipsis-horizontal" size={16} color="#8A8A8D" />
+              <Ionicons name="ellipsis-horizontal" size={16} color={Colors.dark.mutedText} />
             </TouchableOpacity>
           </View>
         </View>
@@ -778,7 +779,7 @@ export default function AssignmentItem({
                       ]}
                     >
                       {subtask.isCompleted && (
-                        <Ionicons name="checkmark" size={12} color="#FFFFFF" />
+                        <Ionicons name="checkmark" size={12} color={Colors.dark.white} />
                       )}
                     </View>
                     <Text 
@@ -796,7 +797,7 @@ export default function AssignmentItem({
                     onPress={() => handleDeleteSubtask(subtask.id)}
                     hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
                   >
-                    <Ionicons name="close-circle" size={16} color="#8A8A8D" />
+                    <Ionicons name="close-circle" size={16} color={Colors.dark.mutedText} />
                   </TouchableOpacity>
                 </Animated.View>
               ))
@@ -813,12 +814,12 @@ export default function AssignmentItem({
                   style={styles.subtaskCheckbox}
                   onPress={() => setShowAddSubtask(false)}
                 >
-                  <Ionicons name="add" size={16} color="#3478F6" />
+                  <Ionicons name="add" size={16} color={Colors.dark.primary} />
                 </TouchableOpacity>
                 <TextInput
                   style={styles.subtaskInput}
                   placeholder={t('assignments').subtasks.placeholder}
-                  placeholderTextColor="#8A8A8D"
+                  placeholderTextColor={Colors.dark.placeholder}
                   value={newSubtaskTitle}
                   onChangeText={setNewSubtaskTitle}
                   onSubmitEditing={handleAddSubtask}
@@ -842,7 +843,7 @@ export default function AssignmentItem({
                   <Ionicons 
                     name="checkmark" 
                     size={16} 
-                    color={newSubtaskTitle.trim() === '' ? "#8A8A8D" : "#FFFFFF"} 
+                    color={newSubtaskTitle.trim() === '' ? Colors.dark.mutedText : Colors.dark.white} 
                   />
                 </TouchableOpacity>
               </Animated.View>
@@ -851,7 +852,7 @@ export default function AssignmentItem({
                 style={styles.addSubtaskButton}
                 onPress={() => setShowAddSubtask(true)}
               >
-                <Ionicons name="add-circle-outline" size={16} color="#3478F6" />
+                <Ionicons name="add-circle-outline" size={16} color={Colors.dark.primary} />
                 <Text style={styles.addSubtaskText}>{t('assignments').subtasks.add}</Text>
               </TouchableOpacity>
             )}
@@ -865,7 +866,7 @@ export default function AssignmentItem({
           style={styles.addFirstSubtaskButton}
           onPress={() => setShowAddSubtask(true)}
         >
-          <Ionicons name="add-circle-outline" size={16} color="#3478F6" />
+          <Ionicons name="add-circle-outline" size={16} color={Colors.dark.primary} />
           <Text style={styles.addSubtaskText}>{t('assignments').subtasks.addFirst}</Text>
         </TouchableOpacity>
       )}
@@ -881,12 +882,12 @@ export default function AssignmentItem({
             style={styles.subtaskCheckbox}
             onPress={() => setShowAddSubtask(false)}
           >
-            <Ionicons name="add" size={16} color="#3478F6" />
+            <Ionicons name="add" size={16} color={Colors.dark.primary} />
           </TouchableOpacity>
           <TextInput
             style={styles.subtaskInput}
             placeholder={t('assignments').subtasks.placeholder}
-            placeholderTextColor="#8A8A8D"
+            placeholderTextColor={Colors.dark.placeholder}
             value={newSubtaskTitle}
             onChangeText={setNewSubtaskTitle}
             onSubmitEditing={handleAddSubtask}
@@ -910,7 +911,7 @@ export default function AssignmentItem({
             <Ionicons 
               name="checkmark" 
               size={16} 
-              color={newSubtaskTitle.trim() === '' ? "#8A8A8D" : "#FFFFFF"} 
+              color={newSubtaskTitle.trim() === '' ? Colors.dark.placeholder : Colors.dark.white} 
             />
           </TouchableOpacity>
         </Animated.View>
@@ -924,13 +925,13 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   container: {
-    backgroundColor: '#1C1C1E',
+    backgroundColor: Colors.dark.card,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: Colors.dark.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -949,14 +950,14 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: '#3478F6',
+    borderColor: Colors.dark.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'transparent',
+    backgroundColor: Colors.dark.transparent,
   },
   checkboxChecked: {
-    backgroundColor: '#3478F6',
-    borderColor: '#3478F6',
+    backgroundColor: Colors.dark.primary,
+    borderColor: Colors.dark.primary,
   },
   checkIconWrapper: {
     alignItems: 'center',
@@ -984,7 +985,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: 'rgba(142, 142, 142, 0.1)',
+    backgroundColor: Colors.dark.overlayGray10,
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 8,
@@ -1001,16 +1002,16 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 15,
     fontWeight: '500',
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     flex: 1,
   },
   completedTitle: {
     textDecorationLine: 'line-through',
-    color: 'rgba(255, 255, 255, 0.5)',
+    color: Colors.dark.overlayWhite50,
   },
   description: {
     fontSize: 13,
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
     marginBottom: 3,
     lineHeight: 18,
     flex: 1,
@@ -1040,7 +1041,7 @@ const styles = StyleSheet.create({
   },
   periodText: {
     fontSize: 12,
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
   },
   dueDateContainer: {
     flexDirection: 'row',
@@ -1049,7 +1050,7 @@ const styles = StyleSheet.create({
   },
   dueDateText: {
     fontSize: 12,
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
   },
   rightSection: {
     alignItems: 'flex-end',
@@ -1072,23 +1073,23 @@ const styles = StyleSheet.create({
   },
   timeText: {
     fontSize: 12,
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
     marginBottom: 3,
   },
   deleteButton: {
     padding: 4,
   },
   orphanedContainer: {
-    backgroundColor: '#1E1E1E',
+    backgroundColor: Colors.dark.cardMuted,
     borderWidth: 1,
-    borderColor: '#3A3A3A',
+    borderColor: Colors.dark.borderStrong,
     opacity: 0.8
   },
   orphanedText: {
-    color: '#8E8E93',
+    color: Colors.dark.gray,
   },
   orphanedBadge: {
-    backgroundColor: '#E0383E',
+    backgroundColor: Colors.dark.danger,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -1097,13 +1098,13 @@ const styles = StyleSheet.create({
   orphanedBadgeText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: Colors.dark.white,
   },
   orphanedDescription: {
-    color: '#6E6E73',
+    color: Colors.dark.subduedText,
   },
   overdueContainer: {
-    borderLeftColor: '#FF3B30',
+    borderLeftColor: Colors.dark.red,
     borderLeftWidth: 2,
   },
   timeRow: {
@@ -1113,35 +1114,35 @@ const styles = StyleSheet.create({
   },
   remainingTime: {
     fontSize: 12,
-    color: '#8E8E93',
+    color: Colors.dark.gray,
     marginTop: 2,
     textAlign: 'right',
   },
   overdueText: {
-    color: '#FF3B30',
+    color: Colors.dark.red,
     fontWeight: '500',
   },
   inOrphanedCourseContainer: {
     opacity: 0.9,
-    backgroundColor: '#222222',
+    backgroundColor: Colors.dark.orphanedCourseBackground,
   },
   inOrphanedCourseText: {
-    color: '#AAAAAA',
+    color: Colors.dark.neutral300,
   },
   inOrphanedCourseMetadata: {
-    color: '#6E6E73',
+    color: Colors.dark.subduedText,
   },
   expandButton: {
     marginLeft: 8,
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: 'rgba(142, 142, 142, 0.1)',
+    backgroundColor: Colors.dark.overlayGray10,
     justifyContent: 'center',
     alignItems: 'center',
   },
   subtasksContainer: {
-    backgroundColor: '#242426',
+    backgroundColor: Colors.dark.surfaceNested,
     marginTop: 1,
     borderBottomLeftRadius: 12,
     borderBottomRightRadius: 12,
@@ -1149,11 +1150,11 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     paddingTop: 8,
     borderLeftWidth: 3,
-    borderLeftColor: '#3478F6',
+    borderLeftColor: Colors.dark.primary,
     borderRightWidth: 1,
     borderBottomWidth: 1,
-    borderRightColor: '#2C2C2E',
-    borderBottomColor: '#2C2C2E',
+    borderRightColor: Colors.dark.borderMuted,
+    borderBottomColor: Colors.dark.borderMuted,
     marginLeft: 8,
     marginRight: 8,
   },
@@ -1165,19 +1166,19 @@ const styles = StyleSheet.create({
   subtaskProgressBar: {
     flex: 1,
     height: 4,
-    backgroundColor: 'rgba(142, 142, 142, 0.2)',
+    backgroundColor: Colors.dark.overlayGray20,
     borderRadius: 2,
     marginRight: 8,
     overflow: 'hidden',
   },
   subtaskProgressFill: {
     height: '100%',
-    backgroundColor: '#3478F6',
+    backgroundColor: Colors.dark.primary,
     borderRadius: 2,
   },
   subtaskProgressText: {
     fontSize: 12,
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
     marginLeft: 8,
   },
   subtaskItem: {
@@ -1186,8 +1187,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(142, 142, 142, 0.15)',
-    backgroundColor: 'rgba(28, 28, 30, 0.5)',
+    borderBottomColor: Colors.dark.overlayGray15,
+    backgroundColor: Colors.dark.subtaskBackground,
     borderRadius: 8,
     marginBottom: 4,
     paddingHorizontal: 8,
@@ -1203,22 +1204,22 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     borderWidth: 1.5,
-    borderColor: '#3478F6',
+    borderColor: Colors.dark.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
   subtaskCheckboxChecked: {
-    backgroundColor: '#3478F6',
+    backgroundColor: Colors.dark.primary,
   },
   subtaskTitle: {
     fontSize: 14,
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     flex: 1,
   },
   subtaskTitleCompleted: {
     textDecorationLine: 'line-through',
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
   },
   subtaskDeleteButton: {
     width: 24,
@@ -1234,26 +1235,26 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   addFirstSubtaskButton: {
+    backgroundColor: Colors.dark.surfaceNested,
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 10,
     paddingHorizontal: 12,
-    backgroundColor: '#242426',
     borderBottomLeftRadius: 12,
     borderBottomRightRadius: 12,
     marginTop: 1,
     marginLeft: 8,
     marginRight: 8,
     borderLeftWidth: 3,
-    borderLeftColor: '#3478F6',
+    borderLeftColor: Colors.dark.primary,
     borderRightWidth: 1,
     borderBottomWidth: 1,
-    borderRightColor: '#2C2C2E',
-    borderBottomColor: '#2C2C2E',
+    borderRightColor: Colors.dark.borderMuted,
+    borderBottomColor: Colors.dark.borderMuted,
   },
   addSubtaskText: {
     fontSize: 14,
-    color: '#3478F6',
+    color: Colors.dark.primary,
     marginLeft: 8,
   },
   addSubtaskInputContainer: {
@@ -1263,49 +1264,49 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   addFirstSubtaskInputContainer: {
+    backgroundColor: Colors.dark.surfaceNested,
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 8,
     paddingHorizontal: 12,
-    backgroundColor: '#242426',
     borderBottomLeftRadius: 12,
     borderBottomRightRadius: 12,
     marginTop: 1,
     marginLeft: 8,
     marginRight: 8,
     borderLeftWidth: 3,
-    borderLeftColor: '#3478F6',
+    borderLeftColor: Colors.dark.primary,
     borderRightWidth: 1,
     borderBottomWidth: 1,
-    borderRightColor: '#2C2C2E',
-    borderBottomColor: '#2C2C2E',
+    borderRightColor: Colors.dark.borderMuted,
+    borderBottomColor: Colors.dark.borderMuted,
   },
   subtaskInput: {
     flex: 1,
     fontSize: 14,
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     paddingVertical: 4,
   },
   subtaskAddButton: {
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: '#3478F6',
+    backgroundColor: Colors.dark.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
   subtaskAddButtonDisabled: {
-    backgroundColor: 'rgba(142, 142, 142, 0.2)',
+    backgroundColor: Colors.dark.overlayGray20,
   },
   loadingText: {
     fontSize: 14,
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
     textAlign: 'center',
     marginTop: 10,
     marginBottom: 10,
   },
   highlightedContainer: {
-    backgroundColor: '#3478F620', // More subtle color to match animation
+    backgroundColor: Colors.dark.highlightBlue20,
     borderRadius: 12,
   },
   descriptionContainer: {
@@ -1324,7 +1325,7 @@ const styles = StyleSheet.create({
   },
   expandDescriptionText: {
     fontSize: 12,
-    color: '#3478F6',
+    color: Colors.dark.primary,
     marginRight: 2,
   },
   collapseDescriptionButton: {

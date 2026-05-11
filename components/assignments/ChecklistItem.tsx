@@ -28,7 +28,7 @@ export default function ChecklistItem({ item, onToggle }: ChecklistItemProps) {
       >
         {item.isCompleted ? (
           <View style={[styles.checked, { backgroundColor: colors.tint }]}>
-            <Feather name="check" size={14} color="white" />
+            <Feather name="check" size={14} color={Colors.dark.white} />
           </View>
         ) : (
           <View style={[styles.unchecked, { borderColor: colors.text }]} />

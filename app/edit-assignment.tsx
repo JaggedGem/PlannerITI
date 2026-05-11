@@ -44,6 +44,7 @@ import { ModernDropdownPortal } from '@/components/ModernDropdownPortal';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { SegmentItem } from '@/components/modernDropdown';
 import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
+import { Colors } from '@/constants/Colors';
 
 // Import the components from new-assignment.tsx
 // For a real app, these would be separated into their own files
@@ -414,7 +415,7 @@ const DatePicker = ({
         style={styles.dateDisplayButton}
         onPress={() => setShowCalendar(!showCalendar)}
       >
-        <Ionicons name="calendar-outline" size={20} color="#2C3DCD" />
+        <Ionicons name="calendar-outline" size={20} color={Colors.dark.primaryStrong} />
         <Text style={styles.dateDisplayText}>
           {formatDate(selectedDate)}
         </Text>
@@ -422,7 +423,7 @@ const DatePicker = ({
           <Ionicons 
             name="chevron-down" 
             size={16} 
-            color="#8E8E93" 
+            color={Colors.dark.gray} 
           />
         </Animated.View>
       </TouchableOpacity>
@@ -433,7 +434,7 @@ const DatePicker = ({
             style={styles.calendarNavButton}
             onPress={() => navigateMonth(-1)}
           >
-            <Ionicons name="chevron-back" size={20} color="#8E8E93" />
+            <Ionicons name="chevron-back" size={20} color={Colors.dark.gray} />
           </TouchableOpacity>
           
           <Animated.View style={monthAnimStyle}>
@@ -446,7 +447,7 @@ const DatePicker = ({
             style={styles.calendarNavButton}
             onPress={() => navigateMonth(1)}
           >
-            <Ionicons name="chevron-forward" size={20} color="#8E8E93" />
+            <Ionicons name="chevron-forward" size={20} color={Colors.dark.gray} />
           </TouchableOpacity>
         </View>
         
@@ -709,7 +710,7 @@ const TimePicker = ({
                 }
               }}
             >
-              <Ionicons name="chevron-up" size={24} color="#FFFFFF" />
+              <Ionicons name="chevron-up" size={24} color={Colors.dark.white} />
             </TouchableOpacity>
             
             <Animated.Text style={[styles.timeWheelText, hourAnimStyle]}>
@@ -734,7 +735,7 @@ const TimePicker = ({
                 }
               }}
             >
-              <Ionicons name="chevron-down" size={24} color="#FFFFFF" />
+              <Ionicons name="chevron-down" size={24} color={Colors.dark.white} />
             </TouchableOpacity>
           </View>
         </View>
@@ -753,7 +754,7 @@ const TimePicker = ({
                 else updateMinute(nextMinute);
               }}
             >
-              <Ionicons name="chevron-up" size={24} color="#FFFFFF" />
+              <Ionicons name="chevron-up" size={24} color={Colors.dark.white} />
             </TouchableOpacity>
             
             <Animated.Text style={[styles.timeWheelText, minuteAnimStyle]}>
@@ -770,7 +771,7 @@ const TimePicker = ({
                 else updateMinute(Math.max(0, currentMinute - 5));
               }}
             >
-              <Ionicons name="chevron-down" size={24} color="#FFFFFF" />
+              <Ionicons name="chevron-down" size={24} color={Colors.dark.white} />
             </TouchableOpacity>
           </View>
         </View>
@@ -829,7 +830,7 @@ const CustomToggle = ({
   
   const trackColor = animatedValue.interpolate({
     inputRange: [0, 1],
-    outputRange: disabled ? ['#222222', '#444444'] : ['#2A2A2A', '#2C3DCD']
+    outputRange: disabled ? [Colors.dark.orphanedCourseBackground, Colors.dark.neutral900] : [Colors.dark.border, Colors.dark.primaryStrong]
   });
   
   return (
@@ -846,7 +847,7 @@ const CustomToggle = ({
           backgroundColor: trackColor,
           justifyContent: 'center',
           borderWidth: 1,
-          borderColor: value ? '#2C3DCD' : '#4D4D4D',
+          borderColor: value ? Colors.dark.primaryStrong : Colors.dark.toggleOffBorder,
         }}
       >
         <RNAnimated.View 
@@ -854,9 +855,9 @@ const CustomToggle = ({
             width: thumbSize,
             height: thumbSize,
             borderRadius: thumbSize / 2,
-            backgroundColor: disabled ? '#777777' : value ? '#FFFFFF' : '#f4f3f4',
+            backgroundColor: disabled ? Colors.dark.neutral700 : value ? Colors.dark.white : Colors.dark.offWhite,
             transform: [{ translateX: thumbPosition }],
-            shadowColor: '#000',
+            shadowColor: Colors.dark.black,
             shadowOffset: { width: 0, height: 1 },
             shadowOpacity: 0.2,
             shadowRadius: 1,
@@ -1161,7 +1162,7 @@ export default function EditAssignmentScreen() {
     return (
       <SafeAreaView style={styles.loadingContainer}>
         <StatusBar barStyle="light-content" />
-        <ActivityIndicator size="large" color="#2C3DCD" />
+        <ActivityIndicator size="large" color={Colors.dark.primaryStrong} />
         <Text style={styles.loadingText}>{t('assignments').loading}</Text>
       </SafeAreaView>
     );
@@ -1178,7 +1179,7 @@ export default function EditAssignmentScreen() {
           onPress={handleCancel}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Ionicons name="chevron-back" size={28} color="#2C3DCD" />
+          <Ionicons name="chevron-back" size={28} color={Colors.dark.primaryStrong} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t('assignments').editTitle}</Text>
         <TouchableOpacity 
@@ -1214,7 +1215,7 @@ export default function EditAssignmentScreen() {
             ref={titleInputRef}
             style={styles.titleInput}
             placeholder={t('assignments').titlePlaceholder}
-            placeholderTextColor="#8A8A8D"
+            placeholderTextColor={Colors.dark.neutral500}
             value={title}
             onChangeText={setTitle}
             autoCapitalize="sentences"
@@ -1232,7 +1233,7 @@ export default function EditAssignmentScreen() {
           <TextInput
             style={styles.descriptionInput}
             placeholder={t('assignments').descriptionPlaceholder}
-            placeholderTextColor="#8A8A8D"
+            placeholderTextColor={Colors.dark.neutral500}
             value={description}
             onChangeText={setDescription}
             multiline
@@ -1251,12 +1252,12 @@ export default function EditAssignmentScreen() {
             onPress={() => setIsTypeModalVisible(true)}
           >
             <View style={styles.typeDisplay}>
-              <Ionicons name={getTypeIcon()} size={20} color="#FFFFFF" style={styles.typeIcon} />
+              <Ionicons name={getTypeIcon()} size={20} color={Colors.dark.white} style={styles.typeIcon} />
               <Text style={styles.typeText}>
                 {t('assignments').types[assignmentType.toLowerCase() as 'homework' | 'test' | 'exam' | 'project' | 'quiz' | 'lab' | 'essay' | 'presentation' | 'other']}
               </Text>
             </View>
-            <Ionicons name="chevron-down" size={20} color="#8A8A8D" />
+            <Ionicons name="chevron-down" size={20} color={Colors.dark.neutral500} />
           </TouchableOpacity>
         </View>
         
@@ -1325,7 +1326,7 @@ export default function EditAssignmentScreen() {
                 }}
               >
                 {subtask.isCompleted && (
-                  <Ionicons name="checkmark" size={16} color="#2C3DCD" />
+                  <Ionicons name="checkmark" size={16} color={Colors.dark.primaryStrong} />
                 )}
               </TouchableOpacity>
               <Text style={[
@@ -1338,7 +1339,7 @@ export default function EditAssignmentScreen() {
                 style={styles.subtaskDeleteButton}
                 onPress={() => handleRemoveSubtask(subtask.id)}
               >
-                <Ionicons name="close-circle" size={18} color="#8A8A8D" />
+                <Ionicons name="close-circle" size={18} color={Colors.dark.neutral500} />
               </TouchableOpacity>
             </View>
           ))}
@@ -1348,7 +1349,7 @@ export default function EditAssignmentScreen() {
             <TextInput
               style={styles.subtaskInput}
               placeholder={t('assignments').subtasks.placeholder}
-              placeholderTextColor="#8A8A8D"
+              placeholderTextColor={Colors.dark.neutral500}
               value={newSubtaskTitle}
               onChangeText={setNewSubtaskTitle}
               onSubmitEditing={handleAddSubtask}
@@ -1364,7 +1365,7 @@ export default function EditAssignmentScreen() {
               <Ionicons 
                 name="add" 
                 size={20} 
-                color={newSubtaskTitle.trim() === '' ? "#8A8A8D" : "#FFFFFF"} 
+                color={newSubtaskTitle.trim() === '' ? Colors.dark.neutral500 : Colors.dark.white} 
               />
             </TouchableOpacity>
           </View>
@@ -1410,7 +1411,7 @@ export default function EditAssignmentScreen() {
             icon: <Ionicons 
               name={getTypeSpecificIcon() as any} 
               size={24}
-              color="#FFFFFF"
+              color={Colors.dark.white}
             />,
             isSelected: type === assignmentType
           };
@@ -1427,16 +1428,16 @@ export default function EditAssignmentScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#141414',
+    backgroundColor: Colors.dark.backgroundTertiary,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#141414',
+    backgroundColor: Colors.dark.backgroundApp,
   },
   loadingText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     marginTop: 16,
     fontSize: 16,
   },
@@ -1447,7 +1448,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#2A2A2A',
+    borderBottomColor: Colors.dark.border,
   },
   backButton: {
     padding: 4,
@@ -1455,28 +1456,28 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: Colors.dark.white,
   },
   saveButton: {
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
     borderRadius: 8,
     minWidth: 80,
     alignItems: 'center',
   },
   saveButtonDisabled: {
-    backgroundColor: '#292929',
+    backgroundColor: Colors.dark.disabledBackground,
     borderWidth: 1,
-    borderColor: '#3e3e3e',
+    borderColor: Colors.dark.disabledBorder,
   },
   saveButtonText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontWeight: '600',
     fontSize: 15,
   },
   saveButtonTextDisabled: {
-    color: '#6e6e6e',
+    color: Colors.dark.neutral650,
   },
   scrollView: {
     flex: 1,
@@ -1491,42 +1492,42 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     marginBottom: 8,
   },
   optionalText: {
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
     fontWeight: '400',
   },
   titleInput: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     borderWidth: 1,
-    borderColor: '#2A2A2A',
+    borderColor: Colors.dark.border,
   },
   descriptionInput: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     height: 100,
     textAlignVertical: 'top',
     borderWidth: 1,
-    borderColor: '#2A2A2A',
+    borderColor: Colors.dark.border,
   },
   typeSelector: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     padding: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#2A2A2A',
+    borderColor: Colors.dark.border,
   },
   typeDisplay: {
     flexDirection: 'row',
@@ -1536,17 +1537,17 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   typeText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '600',
   },
   datePickerContainer: {
     marginTop: 8,
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#333333',
+    borderColor: Colors.dark.borderMuted,
   },
   datePickerContent: {
     flexDirection: 'column',
@@ -1556,14 +1557,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     padding: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#2A2A2A',
+    borderColor: Colors.dark.border,
   },
   dateDisplayText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 16,
     flex: 1,
     marginLeft: 8,
@@ -1579,11 +1580,11 @@ const styles = StyleSheet.create({
   },
   calendarContainer: {
     marginTop: 8,
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#333333',
+    borderColor: Colors.dark.borderMuted,
   },
   calendarHeader: {
     flexDirection: 'row',
@@ -1596,7 +1597,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   calendarMonthYear: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -1607,7 +1608,7 @@ const styles = StyleSheet.create({
   calendarDayHeaderText: {
     flex: 1,
     textAlign: 'center',
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
     fontSize: 12,
     fontWeight: '600',
   },
@@ -1629,25 +1630,25 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   calendarDayButtonSelected: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
   },
   calendarDayButtonToday: {
     borderWidth: 1,
-    borderColor: '#2C3DCD',
+    borderColor: Colors.dark.primaryStrong,
   },
   calendarDayText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 14,
   },
   calendarDayTextOtherMonth: {
-    color: '#4D4D4D',
+    color: Colors.dark.neutral650,
   },
   calendarDayTextToday: {
-    color: '#2C3DCD',
+    color: Colors.dark.primaryStrong,
     fontWeight: '600',
   },
   calendarDayTextSelected: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontWeight: '600',
   },
   todayDot: {
@@ -1656,31 +1657,31 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
   },
   todayButton: {
     alignSelf: 'center',
     marginTop: 12,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#2C3DCD',
+    borderColor: Colors.dark.primaryStrong,
   },
   todayButtonText: {
-    color: '#2C3DCD',
+    color: Colors.dark.primaryStrong,
     fontSize: 14,
     fontWeight: '500',
   },
   timePickerContainer: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
   },
   timeDisplay: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 18,
     fontWeight: '600',
     marginBottom: 12,
@@ -1692,28 +1693,28 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   timePresetButton: {
-    backgroundColor: '#242424',
+    backgroundColor: Colors.dark.surfaceNested,
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 8,
     marginRight: 8,
   },
   timePresetButtonSelected: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
   },
   timePresetButtonText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 14,
   },
   timePresetButtonTextSelected: {
     fontWeight: '600',
   },
   timePresetTimeText: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 12,
   },
   timePresetTimeTextSelected: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontWeight: '600',
   },
   // Time wheel styles
@@ -1728,7 +1729,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 8,
   },
   timeWheelLabel: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 12,
     marginBottom: 8,
     opacity: 0.7,
@@ -1737,7 +1738,7 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#242424',
+    backgroundColor: Colors.dark.surfaceRaisedAlt2,
     borderRadius: 12,
     padding: 8,
     width: 80,
@@ -1750,31 +1751,31 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   timeWheelText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 26,
     fontWeight: '600',
     marginVertical: 8,
   },
   timeWheelSeparator: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 30,
     fontWeight: '600',
     marginHorizontal: 10,
   },
   amPmToggle: {
-    backgroundColor: '#242424',
+    backgroundColor: Colors.dark.surfaceRaisedAlt2,
     padding: 10,
     borderRadius: 12,
     width: 80,
     alignItems: 'center',
   },
   amPmToggleText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '600',
   },
   datePickerButtonText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     marginLeft: 8,
     fontSize: 16,
   },
@@ -1787,30 +1788,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 8,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#2A2A2A',
+    borderColor: Colors.dark.border,
   },
   subtaskCheckbox: {
     width: 22,
     height: 22,
     borderRadius: 4,
     borderWidth: 1,
-    borderColor: '#2C3DCD',
+    borderColor: Colors.dark.primaryStrong,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
   },
   subtaskTitle: {
     flex: 1,
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 15,
   },
   subtaskTitleCompleted: {
     textDecorationLine: 'line-through',
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
   },
   subtaskDeleteButton: {
     padding: 4,
@@ -1818,15 +1819,15 @@ const styles = StyleSheet.create({
   addSubtaskContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     padding: 8,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#2A2A2A',
+    borderColor: Colors.dark.border,
   },
   subtaskInput: {
     flex: 1,
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 15,
     padding: 4,
   },
@@ -1834,15 +1835,15 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
   addSubtaskButtonDisabled: {
-    backgroundColor: '#2A2A2A',
+    backgroundColor: Colors.dark.border,
   },
   subtaskHint: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 12,
     marginTop: 4,
     fontStyle: 'italic',
@@ -1850,33 +1851,33 @@ const styles = StyleSheet.create({
   quickDateButton: {
     paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: '#242424',
+    backgroundColor: Colors.dark.surfaceRaisedAlt2,
     borderRadius: 8,
     marginRight: 10,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#333333',
+    borderColor: Colors.dark.separatorBackground,
     minWidth: 100,
   },
   quickDateButtonSelected: {
-    backgroundColor: '#2C3DCD',
-    borderColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
+    borderColor: Colors.dark.primaryStrong,
   },
   quickDateButtonText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 14,
     marginBottom: 4,
   },
   quickDateButtonTextSelected: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontWeight: '600',
   },
   quickDateTimeText: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 12,
   },
   quickDateTimeTextSelected: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontWeight: '600',
   },
 }); 

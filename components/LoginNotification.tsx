@@ -1,27 +1,27 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Animated, TouchableOpacity, Platform, View, Text } from 'react-native';
+import { StyleSheet, Animated, TouchableOpacity, Platform, View, Text, useColorScheme } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Link, router } from 'expo-router';
-import { useThemeColor } from '../hooks/useThemeColor';
 import { ThemedText } from './ThemedText';
 import { ThemedView } from './ThemedView';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useTranslation } from '@/hooks/useTranslation';
+import { Colors } from '@/constants/Colors';
 
 const LOGIN_DISMISSED_KEY = '@login_notification_dismissed';
 
 export default function LoginNotification() {
   const [isVisible, setIsVisible] = useState(false);
   const [showOverlay, setShowOverlay] = useState(false);
+  const colorScheme = useColorScheme() ?? 'light';
+  const theme = Colors[colorScheme];
   const slideAnim = React.useRef(new Animated.Value(-100)).current;
   const scaleAnim = React.useRef(new Animated.Value(0.95)).current;
   const opacityAnim = React.useRef(new Animated.Value(0)).current;
   const overlayAnim = React.useRef(new Animated.Value(0)).current;
-  const backgroundColor = useThemeColor({}, 'background');
-  const accentColor = useThemeColor({}, 'tint');
-  const darkMode = useThemeColor({}, 'background') === '#1a1b26';
+  const darkMode = colorScheme === 'dark';
   const { t } = useTranslation();
 
   useEffect(() => {
@@ -126,7 +126,7 @@ export default function LoginNotification() {
             opacity: opacityAnim,
             ...Platform.select({
               ios: {
-                shadowColor: '#000',
+                shadowColor: theme.shadow,
                 shadowOffset: { width: 0, height: 2 },
                 shadowOpacity: 0.25,
                 shadowRadius: 8,
@@ -140,14 +140,14 @@ export default function LoginNotification() {
       >
         <LinearGradient
           colors={darkMode ? 
-            ['#2C3DCD', '#1a1b26'] : 
-            ['#4C63E9', '#2C3DCD']}
+            [theme.primaryStrong, theme.loginTopDark] : 
+            [theme.loginTopLight, theme.primaryStrong]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.gradient}
         >
           <View style={styles.iconContainer}>
-            <MaterialIcons name="lock" size={28} color="#fff" />
+            <MaterialIcons name="lock" size={28} color={theme.white} />
           </View>
           <ThemedView style={styles.content}>
             <ThemedText style={styles.title}>{t('loginPromo').stayConnected}</ThemedText>
@@ -160,14 +160,14 @@ export default function LoginNotification() {
             >
               <LinearGradient
                 colors={darkMode ? 
-                  ['rgba(255,255,255,0.15)', 'rgba(255,255,255,0.05)'] : 
-                  ['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.1)']}
+                  [theme.overlayWhite15, theme.overlayWhite05] : 
+                  [theme.overlayWhite30, theme.overlayWhite10]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.buttonGradient}
               >
                 <ThemedText style={styles.buttonText}>{t('loginPromo').getStarted}</ThemedText>
-                <MaterialIcons name="arrow-forward" size={20} color="#fff" />
+                <MaterialIcons name="arrow-forward" size={20} color={theme.white} />
               </LinearGradient>
             </TouchableOpacity>
             <TouchableOpacity 
@@ -194,7 +194,7 @@ export default function LoginNotification() {
         >
           <View style={styles.settingsHighlight}>
             <Text style={styles.signInText}>Sign in to your account</Text>
-            <MaterialIcons name="arrow-forward" size={20} color="#fff" />
+            <MaterialIcons name="arrow-forward" size={20} color={theme.white} />
           </View>
         </Animated.View>
       )}
@@ -223,24 +223,24 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: Colors.dark.overlayWhite15,
     justifyContent: 'center',
     alignItems: 'center',
   },
   content: {
     padding: 20,
     paddingLeft: 76,
-    backgroundColor: 'transparent',
+    backgroundColor: Colors.dark.transparent,
   },
   title: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#fff',
+    color: Colors.dark.white,
     marginBottom: 8,
   },
   message: {
     fontSize: 15,
-    color: 'rgba(255,255,255,0.9)',
+    color: Colors.dark.overlayWhite90,
     marginBottom: 20,
     lineHeight: 20,
   },
@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   buttonText: {
-    color: '#fff',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -269,11 +269,11 @@ const styles = StyleSheet.create({
   dismissText: {
     fontSize: 15,
     fontWeight: '500',
-    color: 'rgba(255,255,255,0.7)',
+    color: Colors.dark.overlayWhite70,
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.75)',
+    backgroundColor: Colors.dark.overlayBlack75,
     justifyContent: 'flex-end',
     alignItems: 'flex-end',
     zIndex: 999,
@@ -285,16 +285,16 @@ const styles = StyleSheet.create({
     right: 20,
     height: 52,
     borderRadius: 12,
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: Colors.dark.white,
     flexDirection: 'row',
     gap: 8,
   },
   signInText: {
-    color: '#fff',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '600',
   },

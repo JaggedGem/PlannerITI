@@ -25,6 +25,7 @@ import {
   filterThesisEventsForDate,
   thesisMatchesScheduleSlot,
 } from '@/utils/specialScheduleUtils';
+import { Colors } from '@/constants/Colors';
 
 // Key for storing whether the tutorial has been shown
 const TUTORIAL_SHOWN_KEY = 'schedule_tutorial_shown';
@@ -65,23 +66,23 @@ const getAssignmentTypeIcon = (type: AssignmentType): React.ComponentProps<typeo
 const getAssignmentTypeColor = (type: AssignmentType): string => {
   switch (type) {
     case AssignmentType.HOMEWORK:
-      return '#3478F6'; // iOS Blue
+      return Colors.dark.assignmentTypes.homework;
     case AssignmentType.TEST:
-      return '#FF9500'; // iOS Orange
+      return Colors.dark.assignmentTypes.test;
     case AssignmentType.EXAM:
-      return '#FF3B30'; // iOS Red
+      return Colors.dark.assignmentTypes.exam;
     case AssignmentType.PROJECT:
-      return '#5E5CE6'; // iOS Purple
+      return Colors.dark.assignmentTypes.project;
     case AssignmentType.QUIZ:
-      return '#FF375F'; // iOS Pink
+      return Colors.dark.assignmentTypes.quiz;
     case AssignmentType.LAB:
-      return '#64D2FF'; // iOS Light Blue
+      return Colors.dark.assignmentTypes.lab;
     case AssignmentType.ESSAY:
-      return '#30D158'; // iOS Green
+      return Colors.dark.assignmentTypes.essay;
     case AssignmentType.PRESENTATION:
-      return '#FFD60A'; // iOS Yellow
+      return Colors.dark.assignmentTypes.presentation;
     default:
-      return '#8E8E93'; // iOS Gray
+      return Colors.dark.assignmentTypes.other;
   }
 };
 
@@ -169,7 +170,7 @@ const ScheduleInfoBadge = ({ label, title, reason, details = [] }: ScheduleInfoB
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <LinearGradient
-            colors={['#FF5733', '#FF3333']}
+            colors={Colors.dark.recoveryInfoGradient}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.recoveryDayInfoButtonGradient}
@@ -1132,7 +1133,7 @@ export default function DayView() {
             </View>
 
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#3478F6" />
+              <ActivityIndicator size="large" color={Colors.dark.primary} />
               <Text style={styles.loadingText}>{t('schedule').loading}</Text>
             </View>
             <ViewModeMenu
@@ -1179,12 +1180,12 @@ export default function DayView() {
                     marginTop: 16,
                     paddingVertical: 10,
                     paddingHorizontal: 20,
-                    backgroundColor: '#2C3DCD',
+                    backgroundColor: Colors.dark.primaryStrong,
                     borderRadius: 8
                   }}
                   onPress={() => fetchSchedule()}
                 >
-                  <Text style={{ color: '#FFFFFF', fontWeight: '600' }}>
+                  <Text style={{ color: Colors.dark.white, fontWeight: '600' }}>
                     Retry
                   </Text>
                 </TouchableOpacity>
@@ -1227,7 +1228,7 @@ export default function DayView() {
           <View style={styles.dateList}>
             {/* Left gradient fade */}
             <LinearGradient
-              colors={['#141414', 'rgba(20, 20, 20, 0)']}
+              colors={[Colors.dark.backgroundTertiary, Colors.dark.overlayDarkTransparent]}
               start={{x: 0, y: 0}}
               end={{x: 1, y: 0}}
               style={styles.leftGradient}
@@ -1291,7 +1292,7 @@ export default function DayView() {
 
             {/* Right gradient fade */}
             <LinearGradient
-              colors={['rgba(20, 20, 20, 0)', '#141414']}
+              colors={[Colors.dark.overlayDarkTransparent, Colors.dark.backgroundTertiary]}
               start={{x: 0, y: 0}}
               end={{x: 1, y: 0}}
               style={styles.rightGradient}
@@ -1322,7 +1323,7 @@ export default function DayView() {
                 <View key={buildSpecialEventKey(examEvent)} style={[styles.assessmentCard, styles.assessmentCardExam]}>
                   <View style={styles.assessmentCardHeader}>
                     <View style={[styles.assessmentTypeBadge, styles.assessmentTypeBadgeExam]}>
-                      <Ionicons name="school-outline" size={12} color="#FFD8A8" />
+                      <Ionicons name="school-outline" size={12} color={Colors.dark.assessmentExamIcon} />
                       <Text style={styles.assessmentTypeText}>{t('grades').subjects.exam}</Text>
                     </View>
                     {examEvent.subgroup ? (
@@ -1347,7 +1348,7 @@ export default function DayView() {
                 <View key={buildSpecialEventKey(thesisEvent)} style={[styles.assessmentCard, styles.assessmentCardThesis]}>
                   <View style={styles.assessmentCardHeader}>
                     <View style={[styles.assessmentTypeBadge, styles.assessmentTypeBadgeThesis]}>
-                      <Ionicons name="document-text-outline" size={12} color="#CFE6FF" />
+                      <Ionicons name="document-text-outline" size={12} color={Colors.dark.assessmentThesisIcon} />
                       <Text style={styles.assessmentTypeText}>{t('grades').subjects.thesis}</Text>
                     </View>
                     {thesisEvent.subgroup ? (
@@ -1412,13 +1413,13 @@ export default function DayView() {
                       >
                         <View style={[styles.classCard, {
                         borderLeftColor: periodColor,
-                        backgroundColor: '#1A1A1A',
+                        backgroundColor: Colors.dark.surfaceSecondary,
                         shadowOpacity: 0.1,
                         minHeight: 100,
                       }]}
                       >
                         <View style={[styles.timeContainer, {
-                          borderRightColor: 'rgba(138, 138, 141, 0.2)'
+                          borderRightColor: Colors.dark.overlayGray20
                         }]}
                         >
                           <Text style={[styles.time, { marginBottom: 'auto' }]}>
@@ -1572,7 +1573,7 @@ export default function DayView() {
                               
                               {loadingAssignments[item.period || ''] ? (
                                 <View style={styles.loadingAssignments}>
-                                  <ActivityIndicator size="small" color="#3478F6" />
+                                  <ActivityIndicator size="small" color={Colors.dark.primary} />
                                   <Text style={styles.loadingAssignmentsText}>
                                     {'Loading assignments...'}
                                   </Text>
@@ -1616,7 +1617,7 @@ export default function DayView() {
                                       <Ionicons 
                                         name={getAssignmentTypeIcon(assignment.assignmentType)} 
                                         size={12} 
-                                        color="#FFFFFF" 
+                                        color={Colors.dark.white} 
                                       />
                                     </View>
                                     <View style={styles.assignmentDetails}>
@@ -1685,20 +1686,7 @@ export default function DayView() {
 
 // Function to generate consistent colors for subjects
 function getSubjectColor(subjectName: string): string {
-  const colors = [
-    '#4169E1', // Royal Blue
-    '#FF69B4', // Hot Pink
-    '#32CD32', // Lime Green
-    '#FF8C00', // Dark Orange
-    '#9370DB', // Medium Purple
-    '#20B2AA', // Light Sea Green
-    '#FF6347', // Tomato
-    '#4682B4', // Steel Blue
-    '#9ACD32', // Yellow Green
-    '#FF4500', // Orange Red
-    '#BA55D3', // Medium Orchid
-    '#2E8B57', // Sea Green
-  ];
+  const colors = Colors.dark.dayViewSubjectColors;
 
   // Generate a number from the subject name
   let hash = 0;
@@ -1852,14 +1840,14 @@ type Styles = {
 const styles = StyleSheet.create<Styles>({
   container: {
     flex: 1,
-    backgroundColor: '#0A0A0A', // Darker background for more contrast
+    backgroundColor: Colors.dark.backgroundSecondary, // Darker background for more contrast
   },
   header: {
     padding: 20,
-    backgroundColor: '#141414', // Subtle distinction from background
+    backgroundColor: Colors.dark.backgroundTertiary, // Subtle distinction from background
     borderBottomRightRadius: 32,
     borderBottomLeftRadius: 32,
-    shadowColor: '#000',
+    shadowColor: Colors.dark.black,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
@@ -1876,30 +1864,30 @@ const styles = StyleSheet.create<Styles>({
   headerTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     textAlign: 'center',
     letterSpacing: 0.5,
   },
   weekInfo: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 16,
   },
   weekText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 14,
     fontWeight: '600',
     letterSpacing: 0.3,
   },
   weekInfo2: {
-    backgroundColor: '#2C3DCD', // More vibrant blue for consistency
+    backgroundColor: Colors.dark.primaryStrong, // More vibrant blue for consistency
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 12,
   },
   weekText2: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -1926,61 +1914,61 @@ const styles = StyleSheet.create<Styles>({
     width: 70,
     height: 90,
     borderRadius: 20,
-    backgroundColor: '#1A1A1A', // Changed from #3A3A3C to match the app's darker theme
+    backgroundColor: Colors.dark.surfaceSecondary,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 12,
   },
   activeDateItem: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
     transform: [{ scale: 1.05 }],
   },
   todayDateItem: {
-    borderColor: '#2C3DCD',
+    borderColor: Colors.dark.primaryStrong,
     borderWidth: 2,
-    backgroundColor: '#1A1A1A', // Changed from #0A0A0A for better contrast
+    backgroundColor: Colors.dark.surfaceSecondary,
   },
   dateDay: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 14,
     fontWeight: '600',
     letterSpacing: 0.5,
     marginBottom: 6,
   },
   dateNumber: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 20,
     fontWeight: '700',
     marginBottom: 6, // Increased to make room for today dot
   },
   activeDateText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
   },
   todayText: {
-    color: '#2C3DCD',
+    color: Colors.dark.primaryStrong,
   },
   todayDot: {
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
     marginTop: 4,
   },
   scheduleContainer: {
     flex: 1,
     paddingHorizontal: 20,
     paddingTop: 16,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: Colors.dark.backgroundSecondary,
   },
   scheduleItem: {
     marginBottom: 16,
     zIndex: 1,
   },
   classCard: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 20,
     borderLeftWidth: 4,
-    shadowColor: '#000',
+    shadowColor: Colors.dark.black,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 3.84,
@@ -1997,7 +1985,7 @@ const styles = StyleSheet.create<Styles>({
     borderRightWidth: 2,
   },
   time: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 14,
     fontWeight: '500',
   },
@@ -2006,7 +1994,7 @@ const styles = StyleSheet.create<Styles>({
     padding: 16,
   },
   className: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '600',
     letterSpacing: 0.3,
@@ -2017,7 +2005,7 @@ const styles = StyleSheet.create<Styles>({
     marginTop: 8,
   },
   roomNumber: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 14,
     fontWeight: '500',
   },
@@ -2032,7 +2020,7 @@ const styles = StyleSheet.create<Styles>({
     marginRight: 8,
   },
   teacherName: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 14,
     fontWeight: '500',
   },
@@ -2043,7 +2031,7 @@ const styles = StyleSheet.create<Styles>({
     paddingTop: 40,
   },
   noScheduleText: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 16,
     fontWeight: '500',
   },
@@ -2069,7 +2057,7 @@ const styles = StyleSheet.create<Styles>({
     left: 90,
     right: 0,
     height: 2,
-    backgroundColor: '#FF3B30',
+    backgroundColor: Colors.dark.red,
     opacity: 0.7,
   },
   timeIndicatorArrowContainer: {
@@ -2079,9 +2067,9 @@ const styles = StyleSheet.create<Styles>({
     height: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FF3B30',
+    backgroundColor: Colors.dark.red,
     borderRadius: 6,
-    shadowColor: '#FF3B30',
+    shadowColor: Colors.dark.red,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: .5,
     shadowRadius: 6,
@@ -2090,7 +2078,7 @@ const styles = StyleSheet.create<Styles>({
   timeIndicatorMove: {
     position: 'absolute',
     left: 0,
-    borderColor: 'red',
+    borderColor: Colors.dark.red,
     width: 2,
     height: 2,
     borderRadius: 5,
@@ -2098,28 +2086,28 @@ const styles = StyleSheet.create<Styles>({
   timeIndicatorArrow: {
     width: 0,
     height: 0,
-    backgroundColor: 'transparent',
+    backgroundColor: Colors.dark.transparent,
     borderStyle: 'solid',
     borderLeftWidth: 4,
     borderRightWidth: 4,
     borderBottomWidth: 4,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderBottomColor: '#FF3B30',
+    borderLeftColor: Colors.dark.transparent,
+    borderRightColor: Colors.dark.transparent,
+    borderBottomColor: Colors.dark.red,
     transform: [{ rotate: '180deg' }],
   },
   timeLeftText: {
     position: 'absolute',
     left: 60,
-    backgroundColor: '#FF3B30',
-    color: 'white',
+    backgroundColor: Colors.dark.red,
+    color: Colors.dark.white,
     fontSize: 12,
     fontWeight: 'bold',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
     overflow: 'hidden',
-    shadowColor: '#FF3B30',
+    shadowColor: Colors.dark.red,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.3,
     shadowRadius: 2,
@@ -2134,7 +2122,7 @@ const styles = StyleSheet.create<Styles>({
     width: 6,
     height: 6,
     borderRadius: 3,
-    shadowColor: '#fff',
+    shadowColor: Colors.dark.white,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
     shadowRadius: 4,
@@ -2153,11 +2141,11 @@ const styles = StyleSheet.create<Styles>({
   },
   statusText: {
     fontSize: 12,
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontWeight: '600',
   },
   activeStatusText: {
-    color: '#3478F6',
+    color: Colors.dark.primary,
   },
   loadingContainer: {
     flex: 1,
@@ -2165,7 +2153,7 @@ const styles = StyleSheet.create<Styles>({
     alignItems: 'center',
   },
   loadingText: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 16,
     marginTop: 12,
   },
@@ -2176,7 +2164,7 @@ const styles = StyleSheet.create<Styles>({
     padding: 20,
   },
   errorText: {
-    color: '#FF3B30',
+    color: Colors.dark.red,
     fontSize: 16,
     textAlign: 'center',
   },
@@ -2206,40 +2194,40 @@ const styles = StyleSheet.create<Styles>({
     pointerEvents: 'none',
   },
   selectedDayText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
   },
   selectedDay: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
     transform: [{ scale: 1.05 }],
-    shadowColor: '#2C3DCD',
+    shadowColor: Colors.dark.primaryStrong,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
   },
   groupName: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 12,
     marginTop: 4,
   },
   recoveryBanner: {
-    backgroundColor: 'rgba(45, 137, 191, 1)',
+    backgroundColor: Colors.dark.recoveryInfoSurface,
     borderRadius: 10,
     padding: 16,
     marginVertical: 8,
   },
   recoveryTitle: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 14,
     fontWeight: '700',
   },
   recoveryInfo: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 12,
     marginTop: 4,
   },
   recoveryReason: {
-    color: '#FF4B4B',
+    color: Colors.dark.recoveryReason,
     fontSize: 12,
     fontStyle: 'italic',
     marginTop: 4,
@@ -2248,21 +2236,21 @@ const styles = StyleSheet.create<Styles>({
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#FF5733',
+    backgroundColor: Colors.dark.recoveryColor,
     marginTop: 4,
   },
   recoveryDayItem: {
-    borderColor: '#FF5733',
+    borderColor: Colors.dark.recoveryColor,
     borderWidth: 2,
-    backgroundColor: 'transparent',
+    backgroundColor: Colors.dark.transparent,
   },
   recoveryDayText: {
-    color: '#FF5733',
+    color: Colors.dark.recoveryColor,
   },
   selectedRecoveryDay: {
-    backgroundColor: '#FF5733',
+    backgroundColor: Colors.dark.recoveryColor,
     transform: [{ scale: 1.05 }],
-    shadowColor: '#FF5733',
+    shadowColor: Colors.dark.recoveryColor,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -2270,7 +2258,7 @@ const styles = StyleSheet.create<Styles>({
     borderWidth: 0, // Remove border when selected
   },
   selectedRecoveryDayText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
   },
   recoveryDayInfoButtonGradient: {
     flex: 1,
@@ -2279,13 +2267,13 @@ const styles = StyleSheet.create<Styles>({
     justifyContent: 'center',
   },
   recoveryDayInfoIcon: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 14,
     fontWeight: 'bold',
     textAlign: 'center',
   },
   recoveryDayInfoBadgeText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 11,
     fontWeight: '700',
     textAlign: 'center',
@@ -2299,11 +2287,11 @@ const styles = StyleSheet.create<Styles>({
     zIndex: 100,
   },
   recoveryDayTooltip: {
-    backgroundColor: '#1C1C1E',
+    backgroundColor: Colors.dark.surface,
     padding: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#2C2C2E',
+    borderColor: Colors.dark.borderMuted,
   },
   recoveryDayTooltipHeader: {
     flexDirection: 'row',
@@ -2312,7 +2300,7 @@ const styles = StyleSheet.create<Styles>({
     marginBottom: 6,
   },
   recoveryDayTooltipTitle: {
-    color: '#FF5733',
+    color: Colors.dark.recoveryColor,
     fontSize: 14,
     fontWeight: 'bold',
   },
@@ -2320,18 +2308,18 @@ const styles = StyleSheet.create<Styles>({
     padding: 4,
   },
   closeTooltipText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 14,
     fontWeight: 'bold',
   },
   recoveryDayTooltipReason: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 12,
     lineHeight: 18,
     opacity: 0.8,
   },
   recoveryDayTooltipDetail: {
-    color: '#AFAFB4',
+    color: Colors.dark.assessmentSubduedText,
     fontSize: 11,
     lineHeight: 16,
     marginTop: 4,
@@ -2356,7 +2344,7 @@ const styles = StyleSheet.create<Styles>({
     overflow: 'hidden',
     zIndex: 100,
     elevation: 5,
-    shadowColor: '#000',
+    shadowColor: Colors.dark.black,
     shadowOffset: { width: 1, height: 1 },
     shadowOpacity: 0.4,
     shadowRadius: 3,
@@ -2379,31 +2367,31 @@ const styles = StyleSheet.create<Styles>({
   },
   firstTimeIndicator: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(50, 50, 50, 0.9)',
+    backgroundColor: Colors.dark.overlayNeutral90,
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
+    shadowColor: Colors.dark.black,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 5,
   },
   firstTimeIndicatorText: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 14,
     fontWeight: '600',
     marginHorizontal: 8,
   },
   firstTimeIndicatorArrow: {
-    color: '#3478F6',
+    color: Colors.dark.primary,
     fontSize: 24,
     fontWeight: 'bold',
   },
   assignmentBadge: {
-    backgroundColor: '#FF3B30',
+    backgroundColor: Colors.dark.red,
     borderRadius: 12,
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -2412,7 +2400,7 @@ const styles = StyleSheet.create<Styles>({
     alignItems: 'center',
   },
   assignmentBadgeText: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 12,
     fontWeight: 'bold',
   },
@@ -2420,7 +2408,7 @@ const styles = StyleSheet.create<Styles>({
     position: 'absolute',
     bottom: 6,
     right: 6,
-    backgroundColor: '#FF3B30',
+    backgroundColor: Colors.dark.red,
     minWidth: 18,
     height: 18,
     borderRadius: 9,
@@ -2430,21 +2418,21 @@ const styles = StyleSheet.create<Styles>({
     zIndex: 1,
   },
   selectedDateAssignmentBadge: {
-    backgroundColor: '#FF3B30',
+    backgroundColor: Colors.dark.red,
   },
   dateAssignmentBadgeText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 12,
     fontWeight: 'bold',
   },
   selectedDateAssignmentBadgeText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
   },
   lastDateAssignmentBadge: {
     position: 'absolute',
     bottom: 6,
     left: 6,
-    backgroundColor: '#FF3B30',
+    backgroundColor: Colors.dark.red,
     minWidth: 18,
     height: 18,
     borderRadius: 9,
@@ -2465,11 +2453,11 @@ const styles = StyleSheet.create<Styles>({
   },
   assignmentsSeparator: {
     height: 1,
-    backgroundColor: 'rgba(138, 138, 141, 0.2)',
+    backgroundColor: Colors.dark.overlayGray20,
     marginBottom: 8,
   },
   assignmentsSectionTitle: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 13,
     fontWeight: '600',
     marginBottom: 8,
@@ -2478,7 +2466,7 @@ const styles = StyleSheet.create<Styles>({
     flexDirection: 'row',
     marginBottom: 8,
     alignItems: 'flex-start',
-    backgroundColor: 'rgba(60, 60, 60, 0.3)',
+    backgroundColor: Colors.dark.overlayNeutral30,
     borderRadius: 8,
     padding: 8,
   },
@@ -2494,13 +2482,13 @@ const styles = StyleSheet.create<Styles>({
     flex: 1,
   },
   assignmentTitle: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 14,
     fontWeight: '600',
     marginBottom: 2,
   },
   assignmentDescription: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 12,
   },
   loadingAssignments: {
@@ -2510,7 +2498,7 @@ const styles = StyleSheet.create<Styles>({
     paddingVertical: 12,
   },
   loadingAssignmentsText: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 14,
     marginLeft: 8,
   },
@@ -2520,7 +2508,7 @@ const styles = StyleSheet.create<Styles>({
     paddingVertical: 12,
   },
   noAssignmentsText: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 14,
     fontStyle: 'italic',
   },
@@ -2529,7 +2517,7 @@ const styles = StyleSheet.create<Styles>({
     gap: 10,
   },
   assessmentSectionTitle: {
-    color: '#D8E2FF',
+    color: Colors.dark.assessmentSectionTitle,
     fontSize: 14,
     fontWeight: '700',
     letterSpacing: 0.3,
@@ -2544,12 +2532,12 @@ const styles = StyleSheet.create<Styles>({
     gap: 6,
   },
   assessmentCardExam: {
-    backgroundColor: 'rgba(255, 149, 0, 0.08)',
-    borderColor: 'rgba(255, 149, 0, 0.26)',
+    backgroundColor: Colors.dark.overlayOrange08,
+    borderColor: Colors.dark.overlayOrange26,
   },
   assessmentCardThesis: {
-    backgroundColor: 'rgba(52, 120, 246, 0.1)',
-    borderColor: 'rgba(52, 120, 246, 0.3)',
+    backgroundColor: Colors.dark.overlayPrimary10,
+    borderColor: Colors.dark.overlayPrimary30,
   },
   assessmentCardHeader: {
     flexDirection: 'row',
@@ -2565,30 +2553,30 @@ const styles = StyleSheet.create<Styles>({
     paddingVertical: 4,
   },
   assessmentTypeBadgeExam: {
-    backgroundColor: 'rgba(255, 149, 0, 0.2)',
+    backgroundColor: Colors.dark.overlayOrange20,
   },
   assessmentTypeBadgeThesis: {
-    backgroundColor: 'rgba(77, 150, 255, 0.25)',
+    backgroundColor: Colors.dark.overlayAccentBlue25,
   },
   assessmentTypeText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.3,
     textTransform: 'uppercase',
   },
   assessmentSubgroupText: {
-    color: '#AFAFB4',
+    color: Colors.dark.assessmentSubduedText,
     fontSize: 11,
     fontWeight: '600',
   },
   assessmentSubjectText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 15,
     fontWeight: '600',
   },
   assessmentMetaText: {
-    color: '#AFAFB4',
+    color: Colors.dark.assessmentSubduedText,
     fontSize: 12,
     lineHeight: 18,
   },
@@ -2600,7 +2588,7 @@ const styles = StyleSheet.create<Styles>({
     marginBottom: 16,
   },
   specialLoadingText: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 13,
   },
   thesisInlineContainer: {
@@ -2608,9 +2596,9 @@ const styles = StyleSheet.create<Styles>({
     gap: 8,
   },
   thesisInlineCard: {
-    backgroundColor: 'rgba(52, 120, 246, 0.12)',
+    backgroundColor: Colors.dark.overlayPrimary12,
     borderWidth: 1,
-    borderColor: 'rgba(52, 120, 246, 0.25)',
+    borderColor: Colors.dark.overlayPrimary25,
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 8,
@@ -2625,19 +2613,19 @@ const styles = StyleSheet.create<Styles>({
     gap: 6,
   },
   thesisInlineTitle: {
-    color: '#E9F4FF',
+    color: Colors.dark.thesisInlineTitle,
     fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.3,
   },
   thesisInlineSubgroup: {
-    color: '#B9D9FF',
+    color: Colors.dark.thesisInlineSubgroup,
     fontSize: 10,
     fontWeight: '600',
   },
   thesisInlineMeta: {
-    color: '#D2E7FF',
+    color: Colors.dark.thesisInlineMeta,
     fontSize: 12,
     lineHeight: 17,
   },

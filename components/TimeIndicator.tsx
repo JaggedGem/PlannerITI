@@ -1,6 +1,7 @@
 import { StyleSheet, View, Dimensions } from 'react-native';
 import { useCallback } from 'react';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
+import { Colors } from '@/constants/Colors';
 
 interface TimeIndicatorProps {
   startTime: string;
@@ -59,8 +60,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 2,
-    backgroundColor: '#FF3B30',
-    shadowColor: '#FF3B30',
+    backgroundColor: Colors.dark.red,
+    shadowColor: Colors.dark.red,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
     shadowRadius: 4,
@@ -71,17 +72,17 @@ const styles = StyleSheet.create({
     left: 500, // Adjusted to account for container offset
     width: 0,
     height: 0,
-    backgroundColor: 'transparent',
+    backgroundColor: Colors.dark.transparent,
     borderStyle: 'solid',
     borderLeftWidth: 8,
     borderRightWidth: 8,
     borderTopWidth: 8,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderTopColor: '#FF3B30',
+    borderLeftColor: Colors.dark.transparent,
+    borderRightColor: Colors.dark.transparent,
+    borderTopColor: Colors.dark.red,
     transform: [{ rotate: '90deg' }],
     marginTop: -3,
-    shadowColor: '#FF3B30',
+    shadowColor: Colors.dark.red,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
     shadowRadius: 4,

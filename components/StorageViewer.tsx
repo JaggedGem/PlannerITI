@@ -10,6 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { Colors } from '@/constants/Colors';
 
 type StorageViewerProps = {
   visible: boolean;
@@ -48,7 +49,7 @@ export const StorageViewer = ({ visible, onClose, items }: StorageViewerProps) =
               style={styles.closeButton}
               onPress={onClose}
             >
-              <MaterialIcons name="close" size={24} color="white" />
+              <MaterialIcons name="close" size={24} color={Colors.dark.white} />
             </TouchableOpacity>
           </View>
           
@@ -63,7 +64,7 @@ export const StorageViewer = ({ visible, onClose, items }: StorageViewerProps) =
                   <MaterialIcons 
                     name={expandedItems.has(key) ? "expand-less" : "expand-more"} 
                     size={18} 
-                    color="white" 
+                    color={Colors.dark.white} 
                   />
                 </TouchableOpacity>
                 
@@ -91,7 +92,7 @@ export const StorageViewer = ({ visible, onClose, items }: StorageViewerProps) =
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#121212',
+    backgroundColor: Colors.dark.storageContainerBackground,
   },
   content: {
     flex: 1,
@@ -104,12 +105,12 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     paddingBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    borderBottomColor: Colors.dark.overlayWhite10,
   },
   title: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: 'white',
+    color: Colors.dark.white,
   },
   closeButton: {
     padding: 4,
@@ -118,7 +119,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   item: {
-    backgroundColor: '#232433',
+    backgroundColor: Colors.dark.surfaceRaisedAlt,
     borderRadius: 8,
     padding: 12,
     marginBottom: 12,
@@ -132,26 +133,26 @@ const styles = StyleSheet.create({
   itemKey: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#42A5F5',
+    color: Colors.dark.randomColors[5],
     flex: 1,
   },
   valueContainer: {
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    backgroundColor: Colors.dark.overlayBlack20,
     borderRadius: 4,
     padding: 8,
   },
   itemValue: {
     fontSize: 14,
-    color: '#E0E0E0',
+    color: Colors.dark.neutral200,
   },
   nullValue: {
     fontSize: 14,
-    color: '#888888',
+    color: Colors.dark.neutral400,
     fontStyle: 'italic',
   },
   showMoreText: {
     fontSize: 12,
-    color: '#888888',
+    color: Colors.dark.neutral400,
     marginTop: 4,
     textAlign: 'right',
     fontStyle: 'italic',

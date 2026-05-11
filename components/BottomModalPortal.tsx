@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { StyleSheet, View, Dimensions, BackHandler, Platform, StatusBar, Pressable, Modal, ViewStyle } from 'react-native';
 import Animated, { FadeIn, FadeOut, SlideInDown, SlideOutDown } from 'react-native-reanimated';
+import { Colors } from '@/constants/Colors';
 
 interface BottomModalPortalProps {
   isVisible: boolean;
@@ -21,7 +22,7 @@ export function BottomModalPortal({
   onClose,
   children,
   maxHeight = '80%',
-  backgroundColor = '#141414',
+  backgroundColor = Colors.dark.backgroundApp,
   borderRadius = 20,
 }: BottomModalPortalProps) {
   // Handle back button on Android
@@ -85,7 +86,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'transparent',
+    backgroundColor: Colors.dark.transparent,
   },
   overlayContainer: {
     position: 'absolute',
@@ -100,11 +101,11 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: Colors.dark.overlayBlack50,
   },
   modalWrapper: {
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: Colors.dark.transparent,
     justifyContent: 'flex-end',
   },
   modalContent: {

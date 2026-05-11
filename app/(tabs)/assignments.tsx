@@ -95,7 +95,7 @@ const EmptyState = memo(({ t }: { t: any }) => (
 // Memoized loading state display
 const LoadingState = memo(({ t }: { t: any }) => (
   <View style={styles.loadingContainer}>
-    <ActivityIndicator size="large" color="#3478F6" />
+    <ActivityIndicator size="large" color={Colors.dark.primary} />
     <Text style={styles.loadingText}>{t('assignments').loading}</Text>
   </View>
 ));
@@ -242,7 +242,7 @@ const CoursesView = memo(({
       ))}
       {visibleCourseCount < courseKeys.length && (
         <View style={styles.loadingMoreContainer}>
-          <ActivityIndicator size="small" color="#3478F6" />
+          <ActivityIndicator size="small" color={Colors.dark.primary} />
         </View>
       )}
     </ScrollView>
@@ -448,7 +448,7 @@ const ArchivedAssignmentsView = memo(({
       ))}
       {hasMore && (
         <View style={styles.loadingMoreContainer}>
-          <ActivityIndicator size="small" color="#3478F6" />
+          <ActivityIndicator size="small" color={Colors.dark.primary} />
         </View>
       )}
     </ScrollView>
@@ -560,7 +560,7 @@ const ModernDropdown = memo(({
       <View style={styles.dropdownHeader}>
         <Text style={styles.dropdownTitle}>{t('assignments').title}</Text>
         <Pressable onPress={onClose} style={styles.closeButton}>
-          <Ionicons name="close" size={24} color="#8A8A8D" />
+          <Ionicons name="close" size={24} color={Colors.dark.mutedText} />
         </Pressable>
       </View>
       
@@ -584,7 +584,7 @@ const ModernDropdown = memo(({
               {segment}
             </Text>
             {selectedIndex === index && (
-              <Ionicons name="checkmark" size={20} color="#3478F6" />
+              <Ionicons name="checkmark" size={20} color={Colors.dark.primary} />
             )}
           </View>
         </Pressable>
@@ -1137,7 +1137,7 @@ const Assignments = () => {
               onPress={handleArchivePress}
               activeOpacity={0.7}
             >
-              <Ionicons name="folder-open" size={18} color="#FFFFFF" />
+              <Ionicons name="folder-open" size={18} color={Colors.dark.white} />
             </TouchableOpacity>
           </View>
           
@@ -1156,7 +1156,7 @@ const Assignments = () => {
               <Ionicons 
                 name="chevron-down" 
                 size={16} 
-                color="#8A8A8D" 
+                color={Colors.dark.mutedText} 
                 style={[
                   styles.dropdownArrow,
                   isDropdownVisible && styles.dropdownArrowRotated
@@ -1202,7 +1202,7 @@ export default AssignmentsWithErrorBoundary;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: Colors.dark.backgroundSecondary,
   },
   headerContainer: {
     zIndex: 10,
@@ -1210,10 +1210,10 @@ const styles = StyleSheet.create({
   header: {
     padding: 20,
     paddingTop: Platform.OS === 'android' ? 40 : 20,
-    backgroundColor: '#141414',
+    backgroundColor: Colors.dark.backgroundTertiary,
     borderBottomRightRadius: 32,
     borderBottomLeftRadius: 32,
-    shadowColor: '#000',
+    shadowColor: Colors.dark.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
@@ -1228,11 +1228,11 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     letterSpacing: 0.5,
   },
   archiveButton: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
     width: 36,
     height: 36,
     borderRadius: 18,
@@ -1240,13 +1240,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   archiveButtonText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 14,
     fontWeight: '600',
   },
   archiveButtonIcon: {
     fontSize: 18,
-    color: '#FFFFFF',
+    color: Colors.dark.white,
   },
   contentContainer: {
     flex: 1,
@@ -1259,7 +1259,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
     fontSize: 16,
     marginTop: 12,
   },
@@ -1279,11 +1279,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '500',
     marginBottom: 8,
-    color: '#FFFFFF',
+    color: Colors.dark.white,
   },
   emptySubtext: {
     fontSize: 14,
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
   },
   courseContainer: {
     marginBottom: 8,
@@ -1296,14 +1296,14 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'flex-start',
     alignItems: 'center',
-    backgroundColor: '#141414',
+    backgroundColor: Colors.dark.backgroundTertiary,
     marginHorizontal: 20,
     marginTop: 10,
     borderRadius: 16,
     paddingVertical: 30,
   },
   simplifiedText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 18,
     fontWeight: '500',
     marginBottom: 20,
@@ -1314,12 +1314,12 @@ const styles = StyleSheet.create({
   },
   placeholderItem: {
     height: 50,
-    backgroundColor: '#1d1d1d',
+    backgroundColor: Colors.dark.surfaceTertiary,
     borderRadius: 8,
     marginVertical: 10,
   },
   safeModeBanner: {
-    backgroundColor: '#2C2C2E',
+    backgroundColor: Colors.dark.borderMuted,
     padding: 16,
     borderRadius: 12,
     marginBottom: 20,
@@ -1328,17 +1328,17 @@ const styles = StyleSheet.create({
   safeModeText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     marginBottom: 8,
   },
   safeModeDescription: {
     fontSize: 14,
-    color: '#AEAEB2',
+    color: Colors.dark.subduedText,
     textAlign: 'center',
   },
   safeModeIndicator: {
     fontSize: 12,
-    color: '#FFC107',
+    color: Colors.dark.yellow,
     textAlign: 'center',
     marginTop: 8,
   },
@@ -1346,7 +1346,7 @@ const styles = StyleSheet.create({
     paddingTop: 20,
   },
   simplifiedSection: {
-    backgroundColor: '#1C1C1E',
+    backgroundColor: Colors.dark.card,
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
@@ -1354,12 +1354,12 @@ const styles = StyleSheet.create({
   simplifiedTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     marginBottom: 12,
   },
   simplifiedItem: {
     height: 40,
-    backgroundColor: '#2C2C2E',
+    backgroundColor: Colors.dark.borderMuted,
     borderRadius: 8,
     marginBottom: 8,
   },
@@ -1367,40 +1367,40 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0A0A0A',
+    backgroundColor: Colors.dark.backgroundSecondary,
     padding: 20,
   },
   errorTitle: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     marginBottom: 12,
   },
   errorMessage: {
     fontSize: 16,
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
     marginBottom: 20,
     textAlign: 'center',
   },
   errorHint: {
     fontSize: 14,
-    color: '#FF9500',
+    color: Colors.dark.orange,
     textAlign: 'center',
     padding: 16,
-    backgroundColor: 'rgba(255, 149, 0, 0.1)',
+    backgroundColor: Colors.dark.overlayOrange10,
     borderRadius: 8,
     overflow: 'hidden',
     width: '100%',
   },
   dropdownButton: {
-    backgroundColor: '#232323',
+    backgroundColor: Colors.dark.surfaceRaised,
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 12,
     marginTop: 8,
   },
   dropdownButtonPressed: {
-    backgroundColor: '#2A2A2A',
+    backgroundColor: Colors.dark.border,
   },
   dropdownButtonContent: {
     flexDirection: 'row',
@@ -1410,7 +1410,7 @@ const styles = StyleSheet.create({
   dropdownButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: Colors.dark.white,
   },
   dropdownArrow: {
     transform: [{ rotate: '0deg' }],
@@ -1420,16 +1420,16 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: Colors.dark.overlayBlack50,
     justifyContent: 'flex-end',
   },
   dropdownContainer: {
-    backgroundColor: '#1C1C1E',
+    backgroundColor: Colors.dark.card,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingTop: 16,
     paddingBottom: Platform.OS === 'ios' ? 34 : 16,
-    shadowColor: '#000',
+    shadowColor: Colors.dark.shadow,
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
@@ -1442,12 +1442,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#2C2C2E',
+    borderBottomColor: Colors.dark.borderMuted,
   },
   dropdownTitle: {
     fontSize: 17,
     fontWeight: '600',
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
   },
   closeButton: {
     padding: 4,
@@ -1457,10 +1457,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   dropdownItemPressed: {
-    backgroundColor: '#2C2C2E',
+    backgroundColor: Colors.dark.borderMuted,
   },
   dropdownItemSelected: {
-    backgroundColor: '#2C3DCD20',
+    backgroundColor: Colors.dark.primaryHighlight20,
   },
   dropdownItemContent: {
     flexDirection: 'row',
@@ -1469,17 +1469,17 @@ const styles = StyleSheet.create({
   },
   dropdownItemText: {
     fontSize: 17,
-    color: '#FFFFFF',
+    color: Colors.dark.white,
   },
   dropdownItemTextSelected: {
-    color: '#3478F6',
+    color: Colors.dark.primary,
     fontWeight: '600',
   },
   // Archive specific styles
   archivedHeaderText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
     marginBottom: 16,
     marginTop: 8,
   },
@@ -1487,7 +1487,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   archivedItem: {
-    backgroundColor: '#1C1C1E',
+    backgroundColor: Colors.dark.card,
     borderRadius: 12,
     padding: 14,
     flexDirection: 'row',
@@ -1504,17 +1504,17 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#3478F6',
+    borderColor: Colors.dark.primary,
     marginRight: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
   archivedCheckboxCompleted: {
-    backgroundColor: '#3478F6',
-    borderColor: '#3478F6',
+    backgroundColor: Colors.dark.primary,
+    borderColor: Colors.dark.primary,
   },
   archivedCheckmark: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 14,
     fontWeight: 'bold',
   },
@@ -1524,28 +1524,28 @@ const styles = StyleSheet.create({
   archivedTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     marginBottom: 4,
   },
   archivedTitleCompleted: {
     textDecorationLine: 'line-through',
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
   },
   archivedSubtitle: {
     fontSize: 14,
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
   },
   archivedDeleteButton: {
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: 'rgba(255, 59, 48, 0.2)',
+    backgroundColor: Colors.dark.deleteButton,
     justifyContent: 'center',
     alignItems: 'center',
   },
   archivedDeleteText: {
     fontSize: 20,
-    color: '#FF3B30',
+    color: Colors.dark.red,
     fontWeight: 'bold',
   },
   headerButtons: {

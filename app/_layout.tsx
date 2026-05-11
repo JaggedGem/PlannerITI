@@ -4,6 +4,7 @@ import { useFonts } from 'expo-font';
 import { SplashScreen, Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { useColorScheme, StatusBar } from 'react-native';
+import { Colors } from '@/constants/Colors';
 import authService from '../services/authService';
 import LoginNotification from '@/components/LoginNotification';
 import { scheduleService } from '@/services/scheduleService';
@@ -42,8 +43,9 @@ export default function RootLayout() {
 
   const colorScheme = useColorScheme();
   useEffect(() => {
+    const theme = Colors[colorScheme === 'dark' ? 'dark' : 'light'];
     SystemUI.setBackgroundColorAsync(
-      colorScheme === 'dark' ? '#141414' : '#ffffff'
+      theme.backgroundApp
     );
   }, [colorScheme]);
 
@@ -192,13 +194,13 @@ export default function RootLayout() {
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const bg = isDark ? '#141414' : '#ffffff';
+  const theme = Colors[isDark ? 'dark' : 'light'];
 
   return (
     <ThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
       <StatusBar
         barStyle={isDark ? 'light-content' : 'dark-content'}
-        backgroundColor="transparent"
+        backgroundColor={Colors.dark.transparent}
         translucent
       />
       <AuthProvider>
@@ -208,8 +210,8 @@ function RootLayoutNav() {
             animation: 'default',
             presentation: 'containedTransparentModal',
             headerTransparent: true,
-            headerTintColor: isDark ? '#fff' : '#000',
-            contentStyle: { backgroundColor: bg },
+            headerTintColor: isDark ? theme.white : theme.black,
+            contentStyle: { backgroundColor: theme.backgroundApp },
           }}
         >
           <Stack.Screen name="index" options={{ animation: 'none' }} />

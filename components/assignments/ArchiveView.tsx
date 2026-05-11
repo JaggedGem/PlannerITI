@@ -16,6 +16,7 @@ import Animated, { FadeInDown, Layout, FadeOut } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from '@/hooks/useTranslation';
 import { router } from 'expo-router';
+import { Colors } from '@/constants/Colors';
 
 // Get screen dimensions
 const { width, height } = Dimensions.get('window');
@@ -114,7 +115,7 @@ export default function ArchiveView({
           style={styles.closeButton} 
           onPress={handleClose}
         >
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          <Ionicons name="arrow-back" size={24} color={Colors.dark.white} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t('assignments').archive.title}</Text>
         <View style={{width: 40}} />
@@ -160,7 +161,7 @@ export default function ArchiveView({
                         assignment.isCompleted && styles.checkboxCompleted
                       ]}>
                         {assignment.isCompleted && (
-                          <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+                          <Ionicons name="checkmark" size={16} color={Colors.dark.white} />
                         )}
                       </View>
                       
@@ -180,7 +181,7 @@ export default function ArchiveView({
                         style={styles.deleteButton}
                         onPress={() => onDeleteAssignment(assignment.id)}
                       >
-                        <Ionicons name="trash-outline" size={20} color="#FF3B30" />
+                        <Ionicons name="trash-outline" size={20} color={Colors.dark.red} />
                       </TouchableOpacity>
                     </TouchableOpacity>
                   </Animated.View>
@@ -190,7 +191,7 @@ export default function ArchiveView({
             
             {hasMore && visibleItems < assignments.length && (
               <View style={styles.loadingMoreContainer}>
-                <ActivityIndicator color="#3478F6" />
+                <ActivityIndicator color={Colors.dark.primary} />
                 <Text style={styles.loadingMoreText}>{t('loading')}...</Text>
               </View>
             )}
@@ -204,7 +205,7 @@ export default function ArchiveView({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: Colors.dark.backgroundSecondary,
   },
   header: {
     flexDirection: 'row',
@@ -213,18 +214,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: Platform.OS === 'ios' ? 80 : 40,
     paddingBottom: 20,
-    backgroundColor: '#141414',
+    backgroundColor: Colors.dark.backgroundApp,
   },
   headerTitle: {
     fontSize: 22,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: Colors.dark.white,
   },
   closeButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: Colors.dark.overlayWhite10,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -240,17 +241,17 @@ const styles = StyleSheet.create({
     paddingTop: 100,
   },
   emptyTitle: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 18,
     fontWeight: '600',
     marginBottom: 8,
   },
   emptySubtitle: {
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
     fontSize: 14,
   },
   assignmentsCount: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 18,
     marginBottom: 16,
   },
@@ -258,13 +259,13 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   monthTitle: {
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 12,
   },
   assignmentCard: {
-    backgroundColor: '#1C1C1E',
+    backgroundColor: Colors.dark.card,
     borderRadius: 12,
     marginBottom: 8,
     overflow: 'hidden',
@@ -279,37 +280,37 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#3478F6',
+    borderColor: Colors.dark.primary,
     marginRight: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
   checkboxCompleted: {
-    backgroundColor: '#3478F6',
-    borderColor: '#3478F6',
+    backgroundColor: Colors.dark.primary,
+    borderColor: Colors.dark.primary,
   },
   assignmentInfo: {
     flex: 1,
   },
   assignmentTitle: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 4,
   },
   assignmentTitleCompleted: {
     textDecorationLine: 'line-through',
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
   },
   assignmentSubtitle: {
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
     fontSize: 14,
   },
   deleteButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255, 59, 48, 0.1)',
+    backgroundColor: Colors.dark.overlayBlack20,
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 12,
@@ -319,7 +320,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   loadingMoreText: {
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
     fontSize: 14,
     marginTop: 8,
   },

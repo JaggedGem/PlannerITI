@@ -9,6 +9,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useTranslation } from '@/hooks/useTranslation';
 import { format, isToday, isYesterday, isTomorrow, differenceInDays } from 'date-fns';
+import { Colors } from '@/constants/Colors';
 
 interface CourseSectionProps {
   courseCode: string;
@@ -23,7 +24,7 @@ interface CourseSectionProps {
 // Function to get a color for a course code
 const getCourseColor = (courseCode: string, isOrphaned: boolean): string => {
   if (isOrphaned) {
-    return '#8E8E93'; // Gray for orphaned courses
+    return Colors.dark.gray;
   }
 
   // Simple hash function to generate a consistent color for each course code
@@ -185,12 +186,12 @@ const styles = StyleSheet.create({
   container: {
     borderRadius: 12,
     overflow: 'hidden',
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
   },
   orphanedContainer: {
-    backgroundColor: '#191919',
+    backgroundColor: Colors.dark.surfaceTertiary,
     borderWidth: 1,
-    borderColor: '#2A2A2A',
+    borderColor: Colors.dark.border,
     opacity: 0.9,
   },
   header: {
@@ -209,10 +210,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#232323',
+    backgroundColor: Colors.dark.surfaceRaised,
   },
   orphanedHeaderContent: {
-    backgroundColor: '#1E1E1E',
+    backgroundColor: Colors.dark.cardMuted,
   },
   courseInfo: {
     flex: 1,
@@ -220,19 +221,19 @@ const styles = StyleSheet.create({
   courseCode: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     marginBottom: 2,
   },
   courseName: {
     fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.9)',
+    color: Colors.dark.overlayWhite90,
   },
   orphanedText: {
-    color: '#8E8E93',
+    color: Colors.dark.gray,
   },
   orphanedDescription: {
     fontSize: 11,
-    color: '#E0383E',
+    color: Colors.dark.danger,
     marginTop: 2,
   },
   headerRight: {
@@ -242,7 +243,7 @@ const styles = StyleSheet.create({
   count: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: Colors.dark.white,
   },
   content: {
     paddingTop: 8,

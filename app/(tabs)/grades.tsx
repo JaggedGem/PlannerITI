@@ -33,6 +33,7 @@ import {
 } from '@/utils/specialScheduleUtils';
 // Import authService
 import authService from '@/services/authService';
+import { Colors } from '@/constants/Colors';
 
 // Types for local grades
 type GradeCategory = 'exam' | 'test' | 'homework' | 'project' | 'other';
@@ -458,7 +459,7 @@ const IDNPScreen = ({ onSave, errorMessage, isSubmitting }: {
             setError('');
           }}
           placeholder={t('grades').idnp.placeholder}
-          placeholderTextColor="#8A8A8D"
+          placeholderTextColor={Colors.dark.neutral500}
           keyboardType="numeric"
           maxLength={13}
           editable={!isSubmitting}
@@ -472,7 +473,7 @@ const IDNPScreen = ({ onSave, errorMessage, isSubmitting }: {
 
         {isSubmitting ? (
           <View style={styles.loadingNotice}>
-            <ActivityIndicator size="small" color="#2C3DCD" />
+            <ActivityIndicator size="small" color={Colors.dark.primaryStrong} />
             <Text style={styles.loadingText}>
               {t('grades').semesters.connecting}
             </Text>
@@ -502,7 +503,7 @@ const LoadingScreen = ({ message }: { message?: string }) => {
   
   return (
     <View style={styles.loadingContainer}>
-      <ActivityIndicator size="large" color="#2C3DCD" />
+      <ActivityIndicator size="large" color={Colors.dark.primaryStrong} />
       <Text style={styles.loadingText}>{message || t('loading')}</Text>
     </View>
   );
@@ -553,7 +554,7 @@ const SemesterDropdown = ({
         <MaterialIcons
           name={isOpen ? "arrow-drop-up" : "arrow-drop-down"}
           size={24}
-          color="white"
+          color={Colors.dark.white}
         />
       </TouchableOpacity>
 
@@ -612,14 +613,14 @@ const SubjectCard = ({
   // Calculate grade quality color
   const getGradeColor = (grade: string): string => {
     const normalized = grade.trim().toLowerCase();
-    if (normalized === 'a') return 'rgba(255, 61, 113, 0.65)'; // Unexcused absence (dedicated pink-red)
-    if (normalized === 'm') return 'rgba(46, 196, 182, 0.65)'; // Excused absence (dedicated teal)
+    if (normalized === 'a') return Colors.dark.overlayAbsenceUnexcused65; // Unexcused absence (dedicated pink-red)
+    if (normalized === 'm') return Colors.dark.overlayAbsenceExcused65; // Excused absence (dedicated teal)
     const numGrade = parseFloat(grade.replace(',', '.'));
-    if (isNaN(numGrade)) return 'rgba(44, 61, 205, 0.5)'; // Default blue for non-numeric
-    if (numGrade < 5) return 'rgba(255, 107, 107, 0.5)'; // Red for failing
-    if (numGrade >= 9) return 'rgba(75, 181, 67, 0.5)';  // Green for excellent
-    if (numGrade >= 7) return 'rgba(255, 184, 0, 0.5)';  // Orange for good
-    return 'rgba(44, 61, 205, 0.5)';                     // Blue for average
+    if (isNaN(numGrade)) return Colors.dark.overlayPrimaryStrong50; // Default blue for non-numeric
+    if (numGrade < 5) return Colors.dark.overlayFail50; // Red for failing
+    if (numGrade >= 9) return Colors.dark.overlaySuccess50;  // Green for excellent
+    if (numGrade >= 7) return Colors.dark.overlayGood50;  // Orange for good
+    return Colors.dark.overlayPrimaryStrong50;                     // Blue for average
   };
 
   return (
@@ -653,7 +654,7 @@ const SubjectCard = ({
             <MaterialIcons
               name={expanded ? "keyboard-arrow-up" : "keyboard-arrow-down"}
               size={24}
-              color="white"
+              color={Colors.dark.white}
             />
           )}
         </View>
@@ -845,7 +846,7 @@ const ExamsView = ({
           <MaterialIcons
             name={isOpen ? "arrow-drop-up" : "arrow-drop-down"}
             size={24}
-            color="white"
+            color={Colors.dark.white}
           />
         </TouchableOpacity>
 
@@ -948,7 +949,7 @@ const ExamsView = ({
                             <MaterialIcons
                               name={officialSummary ? 'event-note' : 'schedule'}
                               size={16}
-                              color={officialSummary ? '#A8C8FF' : '#FFBC5E'}
+                              color={officialSummary ? Colors.dark.accentBlueLight : Colors.dark.lightOrange}
                             />
                             <Text
                               style={[
@@ -981,7 +982,7 @@ const ExamsView = ({
                 </Text>
               )}
 
-              {/* Official schedule section */}
+              {/* Official schedule section
               {officialEvents.length > 0 && (
                 <View style={styles.officialSectionContainer}>
                   <View style={styles.officialSectionHeader}>
@@ -1043,14 +1044,14 @@ const ExamsView = ({
                     });
                   })()}
                 </View>
-              )}
+              )} */}
 
-              {officialEvents.length === 0 && Object.keys(examsByType).length > 0 && officialSchedule.thesis !== null && officialSchedule.exam !== null && (
+              {/* {officialEvents.length === 0 && Object.keys(examsByType).length > 0 && officialSchedule.thesis !== null && officialSchedule.exam !== null && (
                 <View style={styles.officialSectionContainer}>
                   <Text style={styles.sectionTitle}>{t('grades').subjects.officialSchedule}</Text>
                   <Text style={styles.noOfficialDataText}>{t('grades').subjects.noOfficialExams}</Text>
                 </View>
-              )}
+              )} */}
       </ScrollView>
     </View>
   );
@@ -1119,7 +1120,7 @@ const ErrorNotification = ({ message }: { message: string }) => (
     entering={FadeInUp.springify()}
     style={styles.errorNotification}
   >
-    <MaterialIcons name="error-outline" size={24} color="#FF6B6B" />
+    <MaterialIcons name="error-outline" size={24} color={Colors.dark.lightPink} />
     <Text style={styles.errorNotificationText}>{message}</Text>
   </Animated.View>
 );
@@ -1262,14 +1263,14 @@ const GradeCalculatorModal = ({
   // Calculate grade quality color - same as used in SubjectCard
   const getGradeColor = (grade: string): string => {
     const normalized = grade.trim().toLowerCase();
-    if (normalized === 'a') return 'rgba(255, 61, 113, 0.65)'; // Unexcused absence (dedicated pink-red)
-    if (normalized === 'm') return 'rgba(46, 196, 182, 0.65)'; // Excused absence (dedicated teal)
+    if (normalized === 'a') return Colors.dark.overlayAbsenceUnexcused65; // Unexcused absence (dedicated pink-red)
+    if (normalized === 'm') return Colors.dark.overlayAbsenceExcused65; // Excused absence (dedicated teal)
     const numGrade = parseFloat(grade.replace(',', '.'));
-    if (isNaN(numGrade)) return 'rgba(44, 61, 205, 0.5)'; // Default blue for non-numeric
-    if (numGrade < 5) return 'rgba(255, 107, 107, 0.5)'; // Red for failing
-    if (numGrade >= 9) return 'rgba(75, 181, 67, 0.5)';  // Green for excellent
-    if (numGrade >= 7) return 'rgba(255, 184, 0, 0.5)';  // Orange for good
-    return 'rgba(44, 61, 205, 0.5)';                     // Blue for average
+    if (isNaN(numGrade)) return Colors.dark.overlayPrimaryStrong50; // Default blue for non-numeric
+    if (numGrade < 5) return Colors.dark.overlayFail50; // Red for failing
+    if (numGrade >= 9) return Colors.dark.overlaySuccess50;  // Green for excellent
+    if (numGrade >= 7) return Colors.dark.overlayGood50;  // Orange for good
+    return Colors.dark.overlayPrimaryStrong50;                     // Blue for average
   };
   
   // Reset state when modal is opened
@@ -1401,7 +1402,7 @@ const GradeCalculatorModal = ({
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>{t('grades').calculator.title}</Text>
             <TouchableOpacity onPress={onClose}>
-              <MaterialIcons name="close" size={24} color="white" />
+              <MaterialIcons name="close" size={24} color={Colors.dark.white} />
             </TouchableOpacity>
           </View>
           
@@ -1537,7 +1538,7 @@ const GradeCalculatorModal = ({
                     </View>
                   ) : (
                     <Text style={{
-                      color: '#8A8A8D',
+                      color: Colors.dark.neutral500,
                       fontSize: 14,
                       textAlign: 'center',
                       padding: 10,
@@ -1566,7 +1567,7 @@ const GradeCalculatorModal = ({
                 value={targetAverage}
                 onChangeText={setTargetAverage}
                 placeholder="8.50"
-                placeholderTextColor="#8A8A8D"
+                placeholderTextColor={Colors.dark.neutral500}
                 keyboardType="numeric"
                 maxLength={4}
               />
@@ -1604,7 +1605,7 @@ const GradeCalculatorModal = ({
                       <View 
                         key={`result-grade-${index}`} 
                         style={{
-                          backgroundColor: 'rgba(75, 181, 67, 0.5)',
+                          backgroundColor: Colors.dark.overlaySuccess50,
                           borderRadius: 8,
                           paddingHorizontal: 12,
                           paddingVertical: 6,
@@ -1999,7 +2000,7 @@ const GradesScreen = ({
               }}
               disabled={refreshing}
             >
-              <MaterialIcons name="calculate" size={22} color="white" />
+              <MaterialIcons name="calculate" size={22} color={Colors.dark.white} />
             </TouchableOpacity>
           )}
           <TouchableOpacity 
@@ -2010,7 +2011,7 @@ const GradesScreen = ({
             <MaterialIcons 
               name="refresh" 
               size={24} 
-              color="white" 
+              color={Colors.dark.white} 
               style={[refreshing && styles.refreshingIcon]}
             />
           </TouchableOpacity>
@@ -2023,7 +2024,7 @@ const GradesScreen = ({
           entering={FadeInUp.springify()}
           style={[styles.warningBanner, refreshing && { opacity: 0.5 }]}
         >
-          <MaterialIcons name="info-outline" size={24} color="#FFD700" />
+          <MaterialIcons name="info-outline" size={24} color={Colors.dark.warningGold} />
           <Text style={[styles.warningText, textOpacity]}>
             {t('grades').lastUpdated} {lastUpdatedFormatted}. {t('grades').dataStale}
           </Text>
@@ -2085,7 +2086,7 @@ const GradesScreen = ({
                   <MaterialIcons
                     name={expandedSemesters[semester.semester] ? "keyboard-arrow-up" : "keyboard-arrow-down"}
                     size={24}
-                    color="white"
+                    color={Colors.dark.white}
                     style={textOpacity}
                   />
                 </View>
@@ -2178,7 +2179,7 @@ const GradesScreen = ({
       {/* Overlay only for initial/explicit pull refresh; background uses subtle bar */}
       {refreshing && (
         <View style={styles.refreshOverlay}>
-          <ActivityIndicator size="large" color="#2C3DCD" />
+          <ActivityIndicator size="large" color={Colors.dark.primaryStrong} />
           <Text style={styles.refreshingText}>{t('grades').refreshing}</Text>
         </View>
       )}
@@ -2639,7 +2640,7 @@ export default function Grades() {
           entering={FadeInUp.springify().delay(100)}
           style={[styles.errorNotification]}
         >
-          <MaterialIcons name="error-outline" size={24} color="#FF6B6B" />
+          <MaterialIcons name="error-outline" size={24} color={Colors.dark.lightPink} />
           <Text style={styles.errorNotificationText}>{errorMessage}</Text>
         </Animated.View>
       )}
@@ -2673,7 +2674,7 @@ export default function Grades() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#141414',
+    backgroundColor: Colors.dark.backgroundTertiary,
   },
   header: {
     flexDirection: 'row',
@@ -2684,10 +2685,10 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: 'white',
+    color: Colors.dark.white,
   },
   addButton: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
     width: 40,
     height: 40,
     borderRadius: 20,
@@ -2695,7 +2696,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   averageCard: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     margin: 20,
     marginTop: 0,
     borderRadius: 16,
@@ -2703,12 +2704,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   averageLabel: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 16,
     marginBottom: 8,
   },
   averageValue: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 32,
     fontWeight: 'bold',
   },
@@ -2720,20 +2721,20 @@ const styles = StyleSheet.create({
   },
   sortButton: {
     flex: 1,
-    backgroundColor: '#232433',
+    backgroundColor: Colors.dark.surfaceRaisedAlt,
     padding: 12,
     borderRadius: 12,
     alignItems: 'center',
   },
   sortButtonActive: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
   },
   sortButtonText: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 14,
   },
   sortButtonTextActive: {
-    color: 'white',
+    color: Colors.dark.white,
     fontWeight: '600',
   },
   list: {
@@ -2756,12 +2757,12 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   subject: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 18,
     fontWeight: '600',
   },
   gradeValue: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 24,
     fontWeight: 'bold',
   },
@@ -2771,15 +2772,15 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   category: {
-    color: 'rgba(255, 255, 255, 0.9)',
+    color: Colors.dark.overlayWhite90,
     fontSize: 14,
   },
   date: {
-    color: 'rgba(255, 255, 255, 0.9)',
+    color: Colors.dark.overlayWhite90,
     fontSize: 14,
   },
   notes: {
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: Colors.dark.overlayWhite80,
     fontSize: 14,
     marginBottom: 8,
   },
@@ -2792,19 +2793,19 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   emptyText: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     textAlign: 'center',
     marginTop: 40,
     fontSize: 16,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: Colors.dark.overlayBlack70,
     justifyContent: 'flex-end',
     width: '100%',
   },
   calculatorModalContent: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
@@ -2821,7 +2822,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: 'white',
+    color: Colors.dark.white,
   },
   form: {
     gap: 16,
@@ -2830,19 +2831,19 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   label: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 4,
     marginTop: 8,
   },
   input: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderWidth: 1,
-    borderColor: '#232433',
+    borderColor: Colors.dark.surfaceRaisedAlt,
     borderRadius: 12,
     padding: 16,
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
   },
   notesInput: {
@@ -2855,40 +2856,40 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   categoryButton: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 12,
   },
   categoryButtonActive: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
   },
   categoryButtonText: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 14,
   },
   categoryButtonTextActive: {
-    color: 'white',
+    color: Colors.dark.white,
     fontWeight: '600',
   },
   dateButton: {
-    backgroundColor: '#232433',
+    backgroundColor: Colors.dark.surfaceRaisedAlt,
     borderRadius: 12,
     padding: 16,
   },
   dateButtonText: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
   },
   saveButton: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
     marginTop: 20,
   },
   saveButtonText: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -2896,13 +2897,13 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#141414',
+    backgroundColor: Colors.dark.backgroundTertiary,
     padding: 20,
   },
   idnpContent: {
     width: '100%',
     maxWidth: 400,
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 16,
     padding: 20,
     alignItems: 'center',
@@ -2910,48 +2911,48 @@ const styles = StyleSheet.create({
   idnpTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: 'white',
+    color: Colors.dark.white,
     marginBottom: 16,
   },
   idnpDescription: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 16,
     textAlign: 'center',
     marginBottom: 16,
   },
   idnpInput: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 12,
     padding: 16,
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
     width: '100%',
     marginBottom: 16,
   },
   errorText: {
-    color: '#FF6B6B',
+    color: Colors.dark.lightPink,
     fontSize: 14,
     marginBottom: 16,
     textAlign: 'center',
   },
   disclaimerText: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 12,
     textAlign: 'center',
     marginBottom: 16,
   },
   submitButton: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
     width: '100%',
   },
   submitButtonDisabled: {
-    backgroundColor: '#8A8A8D',
+    backgroundColor: Colors.dark.neutral500,
   },
   submitButtonText: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -2959,10 +2960,10 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#141414',
+    backgroundColor: Colors.dark.backgroundTertiary,
   },
   loadingText: {
-    color: 'white',
+    color: Colors.dark.white,
     marginTop: 12,
     textAlign: 'center',
     paddingHorizontal: 12,
@@ -2970,7 +2971,7 @@ const styles = StyleSheet.create({
   loadingNotice: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#232433',
+    backgroundColor: Colors.dark.surfaceRaisedAlt,
     padding: 12,
     borderRadius: 8,
     marginBottom: 16,
@@ -2981,34 +2982,34 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#141414',
+    backgroundColor: Colors.dark.backgroundTertiary,
     padding: 20,
   },
   errorTitle: {
-    color: '#FF6B6B',
+    color: Colors.dark.lightPink,
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 12,
   },
   errorMessage: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
     textAlign: 'center',
     marginBottom: 24,
   },
   retryButton: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
   },
   retryButtonText: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '600',
   },
   idnpInputError: {
-    borderColor: '#FF6B6B',
+    borderColor: Colors.dark.lightPink,
     borderWidth: 1,
   },
   // New styles for semester dropdown
@@ -3020,18 +3021,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 12,
   },
   semesterDropdownButtonText: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '600',
   },
   semesterDropdownMenu: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 12,
     marginTop: 8,
     padding: 8,
@@ -3041,10 +3042,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   semesterDropdownItemActive: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
   },
   semesterDropdownItemText: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
   },
   semesterDropdownItemTextActive: {
@@ -3052,7 +3053,7 @@ const styles = StyleSheet.create({
   },
   // New styles for subject cards
   subjectCard: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 16,
     marginBottom: 12,
     overflow: 'hidden',
@@ -3070,15 +3071,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   subjectName: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '600',
     flex: 1,
     paddingRight: 8,
   },
   newBadge: {
-    backgroundColor: 'rgba(255, 209, 102, 0.15)',
-    borderColor: '#FFD166',
+    backgroundColor: Colors.dark.overlayAmber15,
+    borderColor: Colors.dark.lightYellow,
     borderWidth: 1,
     borderRadius: 8,
     paddingHorizontal: 8,
@@ -3088,7 +3089,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   newBadgeText: {
-    color: '#FFD166',
+    color: Colors.dark.lightYellow,
     fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -3100,13 +3101,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   averageGrade: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 18,
     fontWeight: '600',
   },
   gradesContainer: {
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    borderTopColor: Colors.dark.overlayWhite10,
     padding: 16,
   },
   gradesGrid: {
@@ -3115,7 +3116,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   gradeItem: {
-    backgroundColor: 'rgba(44, 61, 205, 0.5)',
+    backgroundColor: Colors.dark.overlayPrimaryStrong50,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -3125,16 +3126,16 @@ const styles = StyleSheet.create({
   },
   newGradeItem: {
     borderWidth: 1.5,
-    borderColor: '#FFD166',
-    backgroundColor: 'rgba(255, 209, 102, 0.18)',
-    shadowColor: '#FFD166',
+    borderColor: Colors.dark.lightYellow,
+    backgroundColor: Colors.dark.overlayAmber18,
+    shadowColor: Colors.dark.lightYellow,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.35,
     shadowRadius: 12,
     elevation: 0,
   },
   gradeText: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 14,
     fontWeight: '500',
   },
@@ -3142,7 +3143,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 4,
     right: 6,
-    color: '#FFD166',
+    color: Colors.dark.lightYellow,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -3152,7 +3153,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   sectionTitle: {
-    color: '#E9EEFF',
+    color: Colors.dark.offWhite,
     fontSize: 15,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -3166,13 +3167,13 @@ const styles = StyleSheet.create({
     display: 'none',
   },
   examCard: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
   },
   examSubject: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 0,
@@ -3188,51 +3189,51 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   examSemester: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 14,
   },
   examGrade: {
-    color: '#4D96FF',
+    color: Colors.dark.accentBlue,
     fontSize: 18,
     fontWeight: 'bold',
   },
   examCardThesis: {
     borderLeftWidth: 3,
-    borderLeftColor: 'rgba(77, 150, 255, 0.6)',
+    borderLeftColor: Colors.dark.examCardBorder,
   },
   examCardExamVariant: {
     borderLeftWidth: 3,
-    borderLeftColor: 'rgba(255, 149, 0, 0.6)',
+    borderLeftColor: Colors.dark.examCardBorderAlt,
   },
   examTypePill: {
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 3,
-    backgroundColor: 'rgba(138, 138, 141, 0.2)',
+    backgroundColor: Colors.dark.overlayGray20,
     marginLeft: 8,
     flexShrink: 0,
     alignSelf: 'flex-start',
   },
   examTypePillThesis: {
-    backgroundColor: 'rgba(77, 150, 255, 0.2)',
+    backgroundColor: Colors.dark.overlayAccentBlue20,
   },
   examTypePillExamVariant: {
-    backgroundColor: 'rgba(255, 149, 0, 0.2)',
+    backgroundColor: Colors.dark.overlayOrange20,
   },
   examTypePillOther: {
-    backgroundColor: 'rgba(138, 138, 141, 0.15)',
+    backgroundColor: Colors.dark.overlayGray15,
   },
   examTypePillText: {
-    color: '#C8D0E0',
+    color: Colors.dark.examTypePillText,
     fontSize: 11,
     fontWeight: '600',
     letterSpacing: 0.2,
   },
   examGradeThesis: {
-    color: '#6EB0FF',
+    color: Colors.dark.examGradeThesis,
   },
   examGradeExam: {
-    color: '#FFA94D',
+    color: Colors.dark.examGradeExam,
   },
   examsListContent: {
     paddingBottom: 100,
@@ -3241,7 +3242,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   noOfficialDataText: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 13,
     fontStyle: 'italic',
     marginTop: 4,
@@ -3255,7 +3256,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   officialSectionSubtitle: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 12,
     marginTop: 4,
   },
@@ -3263,11 +3264,11 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#1E233F',
+    backgroundColor: Colors.dark.officialRefreshSurface,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(77, 150, 255, 0.35)',
+    borderColor: Colors.dark.overlayAccentBlue35,
   },
   officialLoadingRow: {
     flexDirection: 'row',
@@ -3276,14 +3277,14 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   officialLoadingText: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 13,
   },
   officialDateGroup: {
     marginBottom: 16,
   },
   officialDateTitle: {
-    color: '#AFBCD9',
+    color: Colors.dark.officialDateTitle,
     fontSize: 13,
     fontWeight: '700',
     marginBottom: 8,
@@ -3295,12 +3296,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   officialEventCardExam: {
-    backgroundColor: 'rgba(255, 149, 0, 0.08)',
-    borderColor: 'rgba(255, 149, 0, 0.28)',
+    backgroundColor: Colors.dark.overlayOrange08,
+    borderColor: Colors.dark.overlayOrange28,
   },
   officialEventCardThesis: {
-    backgroundColor: 'rgba(77, 150, 255, 0.1)',
-    borderColor: 'rgba(77, 150, 255, 0.3)',
+    backgroundColor: Colors.dark.overlayAccentBlue10,
+    borderColor: Colors.dark.overlayAccentBlue30,
   },
   officialEventHeader: {
     flexDirection: 'row',
@@ -3314,31 +3315,31 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   officialEventTypePillExam: {
-    backgroundColor: 'rgba(255, 149, 0, 0.2)',
+    backgroundColor: Colors.dark.overlayOrange20,
   },
   officialEventTypePillThesis: {
-    backgroundColor: 'rgba(77, 150, 255, 0.25)',
+    backgroundColor: Colors.dark.overlayAccentBlue25,
   },
   officialEventTypeText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.2,
     textTransform: 'uppercase',
   },
   officialEventSubgroup: {
-    color: '#B6C2DA',
+    color: Colors.dark.officialEventSubgroup,
     fontSize: 11,
     fontWeight: '600',
   },
   officialEventSubject: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 15,
     fontWeight: '600',
     marginBottom: 6,
   },
   officialEventMeta: {
-    color: '#C3C7D4',
+    color: Colors.dark.officialEventMeta,
     fontSize: 13,
     lineHeight: 18,
   },
@@ -3348,7 +3349,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginHorizontal: 20,
     marginVertical: 12,
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 12,
     padding: 4,
   },
@@ -3360,15 +3361,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   activeModeTab: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
   },
   modeTabText: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 14,
     fontWeight: '500',
   },
   activeModeTabText: {
-    color: 'white',
+    color: Colors.dark.white,
     fontWeight: '600',
   },
   // Student info header styles
@@ -3377,12 +3378,12 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   studentName: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 22,
     fontWeight: 'bold',
   },
   studentDetails: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 14,
     marginTop: 4,
   },
@@ -3390,31 +3391,31 @@ const styles = StyleSheet.create({
   absencesContainer: {
     marginTop: 10,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    borderTopColor: Colors.dark.overlayWhite10,
     paddingTop: 10,
     width: '100%',
     alignItems: 'center',
   },
   absencesLabel: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 14,
   },
   absencesValue: {
     fontWeight: 'bold',
-    color: 'white',
+    color: Colors.dark.white,
   },
   absencesUnexcused: {
-    color: '#FF6B6B',
+    color: Colors.dark.lightPink,
     fontWeight: 'bold',
   },
   subjectHeaderEmpty: {
     opacity: 0.5,
   },
   gradeItemFailing: {
-    backgroundColor: 'rgba(255, 107, 107, 0.5)',
+    backgroundColor: Colors.dark.overlayFail50,
   },
   failingGrade: {
-    color: '#FF6B6B',
+    color: Colors.dark.lightPink,
   },
   scrollViewContent: {
     paddingBottom: 100,
@@ -3426,14 +3427,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 12,
     marginHorizontal: 20,
   },
   semesterTitle: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -3442,7 +3443,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   semesterAverageText: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 14,
     marginRight: 8,
   },
@@ -3451,14 +3452,14 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
   },
   semesterAverageCard: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
     alignItems: 'center',
   },
   lastUpdatedText: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 12,
     textAlign: 'center',
     marginTop: 16,
@@ -3475,7 +3476,7 @@ const styles = StyleSheet.create({
     marginRight: 16,
   },
   refreshButton: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
     width: 40,
     height: 40,
     borderRadius: 20,
@@ -3483,7 +3484,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     alignSelf: 'center',
     elevation: 2,
-    shadowColor: '#000',
+    shadowColor: Colors.dark.black,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
@@ -3494,7 +3495,7 @@ const styles = StyleSheet.create({
   warningBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+    backgroundColor: Colors.dark.overlayGold10,
     padding: 12,
     borderRadius: 8,
     marginHorizontal: 20,
@@ -3502,7 +3503,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   warningText: {
-    color: '#FFD700',
+    color: Colors.dark.warningGold,
     fontSize: 14,
     marginLeft: 8,
     flex: 1,
@@ -3510,7 +3511,7 @@ const styles = StyleSheet.create({
   errorNotification: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1f1f2c',
+    backgroundColor: Colors.dark.errorBannerSurface,
     padding: 16,
     borderRadius: 12,
     marginHorizontal: 20,
@@ -3520,7 +3521,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
-    shadowColor: "#000",
+    shadowColor: Colors.dark.black,
     shadowOffset: {
       width: 0,
       height: 2,
@@ -3530,19 +3531,19 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   errorNotificationText: {
-    color: '#FF6B6B',
+    color: Colors.dark.lightPink,
     fontSize: 14,
     marginLeft: 8,
     flex: 1,
   },
   refreshOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: Colors.dark.overlayBlack50,
     justifyContent: 'center',
     alignItems: 'center',
   },
   refreshingText: {
-    color: 'white',
+    color: Colors.dark.white,
     marginTop: 12,
     textAlign: 'center',
   },
@@ -3559,7 +3560,7 @@ const styles = StyleSheet.create({
   bottomRefreshBarTrack: {
     width: '60%',
     height: 4,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: Colors.dark.overlayWhite10,
     borderRadius: 2,
     overflow: 'hidden',
     marginBottom: 6,
@@ -3570,12 +3571,12 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: '40%',
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
     borderRadius: 2,
   },
   bottomRefreshBarText: {
     fontSize: 12,
-    color: '#8A8A8D'
+    color: Colors.dark.neutral500
   },
   examHeaderRow: {
     flexDirection: 'row',
@@ -3586,9 +3587,9 @@ const styles = StyleSheet.create({
   upcomingIndicatorContainer: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: 'rgba(255, 149, 0, 0.12)',
+    backgroundColor: Colors.dark.overlayOrange12,
     borderWidth: 1,
-    borderColor: 'rgba(255, 149, 0, 0.3)',
+    borderColor: Colors.dark.overlayOrange30,
     paddingHorizontal: 8,
     paddingVertical: 6,
     borderRadius: 8,
@@ -3596,8 +3597,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   upcomingIndicatorContainerInfo: {
-    backgroundColor: 'rgba(77, 150, 255, 0.12)',
-    borderColor: 'rgba(77, 150, 255, 0.3)',
+    backgroundColor: Colors.dark.overlayAccentBlue12,
+    borderColor: Colors.dark.overlayAccentBlue30,
   },
   upcomingIndicatorText: {
     fontSize: 12,
@@ -3606,30 +3607,30 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   upcomingIndicatorDefaultText: {
-    color: '#FFBC5E',
+    color: Colors.dark.lightOrange,
   },
   upcomingIndicatorInfoText: {
-    color: '#A8C8FF',
+    color: Colors.dark.accentBlueLight,
   },
   examOfficialMeta: {
     marginTop: 8,
-    color: '#73809B',
+    color: Colors.dark.officialMeta,
     fontSize: 12,
     lineHeight: 16,
   },
   upcomingExamGrade: {
-    color: '#FFBC5E',
+    color: Colors.dark.lightOrange,
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#141414',
+    backgroundColor: Colors.dark.backgroundTertiary,
     padding: 20,
   },
   pickerContainer: {
     borderWidth: 1,
-    borderColor: '#232433',
+    borderColor: Colors.dark.surfaceRaisedAlt,
     borderRadius: 12,
     padding: 8,
   },
@@ -3638,25 +3639,25 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   subjectOptionSelected: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
   },
   subjectOptionText: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
   },
   subjectOptionTextSelected: {
     fontWeight: '600',
   },
   currentGradesContainer: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderWidth: 1,
-    borderColor: '#232433',
+    borderColor: Colors.dark.surfaceRaisedAlt,
     borderRadius: 12,
     padding: 12,
     marginBottom: 16,
   },
   calculatorGradeItem: {
-    backgroundColor: 'rgba(44, 61, 205, 0.5)',
+    backgroundColor: Colors.dark.overlayPrimaryStrong50,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -3671,57 +3672,57 @@ const styles = StyleSheet.create({
     marginTop: 10,
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    borderTopColor: Colors.dark.overlayWhite10,
   },
   currentAverageLabel: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
   },
   currentAverageValue: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: 'bold',
   },
   calculateButton: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
     width: '100%',
   },
   calculateButtonDisabled: {
-    backgroundColor: '#8A8A8D',
+    backgroundColor: Colors.dark.neutral500,
   },
   calculateButtonText: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '600',
   },
   resultsContainer: {
     marginTop: 20,
     padding: 12,
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderWidth: 1,
-    borderColor: '#232433',
+    borderColor: Colors.dark.surfaceRaisedAlt,
     borderRadius: 12,
   },
   resultsTitle: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 12,
   },
   resultGradeItem: {
-    backgroundColor: 'rgba(75, 181, 67, 0.5)',
+    backgroundColor: Colors.dark.overlaySuccess50,
   },
   noGradesText: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 14,
     textAlign: 'center',
     padding: 10,
   },
   noSolutionText: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
     textAlign: 'center',
   },
@@ -3730,7 +3731,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   calculatorButton: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
     width: 40,
     height: 40,
     borderRadius: 20,
@@ -3740,7 +3741,7 @@ const styles = StyleSheet.create({
   subjectSeparator: {
     width: 1,
     height: 24,
-    backgroundColor: '#232433',
+    backgroundColor: Colors.dark.surfaceRaisedAlt,
     marginHorizontal: 5,
     alignSelf: 'center',
   },
@@ -3752,11 +3753,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 12,
     padding: 8,
     borderWidth: 1,
-    borderColor: '#232433',
+    borderColor: Colors.dark.surfaceRaisedAlt,
   },
   toggleOption: {
     paddingHorizontal: 16,
@@ -3766,21 +3767,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   toggleOptionActive: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
   },
   toggleOptionText: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 14,
     fontWeight: '500',
   },
   toggleOptionTextActive: {
-    color: 'white',
+    color: Colors.dark.white,
     fontWeight: '600',
   },
   toggleSeparator: {
     width: 1,
     height: 24,
-    backgroundColor: '#232433',
+    backgroundColor: Colors.dark.surfaceRaisedAlt,
     marginHorizontal: 5,
     alignSelf: 'center',
   },
@@ -3797,7 +3798,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: Colors.dark.overlayWhite08,
     borderRadius: 20,
     paddingHorizontal: 14,
     paddingVertical: 8,
@@ -3813,16 +3814,16 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
     opacity: 0.25,
   },
   dotDelay1: {},
   dotDelay2: {},
   backgroundIndicatorUpdated: {
-    backgroundColor: 'rgba(44, 205, 93, 0.15)',
+    backgroundColor: Colors.dark.overlaySuccess15,
   },
   backgroundUpdatedText: {
-    color: '#ACEFBF',
+    color: Colors.dark.successTintText,
     fontSize: 12,
     fontWeight: '600',
     letterSpacing: 0.5,
@@ -3835,31 +3836,31 @@ const styles = StyleSheet.create({
   },
   averagePillPrimary: {
     flexGrow: 1,
-    backgroundColor: 'rgba(44, 61, 205, 0.2)',
+    backgroundColor: Colors.dark.overlayPrimaryStrong20,
     borderRadius: 12,
     padding: 12,
     minWidth: 140,
   },
   averagePillSecondary: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: Colors.dark.overlayWhite05,
     borderRadius: 12,
     padding: 12,
     minWidth: 140,
   },
   averagePillLabel: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 12,
     marginBottom: 4,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   averagePillValue: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 20,
     fontWeight: '700',
   },
   averagePillMeta: {
-    color: '#B7C6FF',
+    color: Colors.dark.primarySoftText,
     fontSize: 12,
     marginTop: 4,
   },

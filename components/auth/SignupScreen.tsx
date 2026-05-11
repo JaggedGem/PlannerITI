@@ -6,6 +6,7 @@ import { ThemedText } from '../ThemedText';
 import { ThemedView } from '../ThemedView';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useThemeColor } from '../../hooks/useThemeColor';
+import { Colors } from '@/constants/Colors';
 import authService from '../../services/authService';
 import { StatusBar } from 'expo-status-bar';
 
@@ -24,6 +25,8 @@ export function SignupScreen() {
   const textColor = useThemeColor({}, 'text');
   const tintColor = useThemeColor({}, 'tint');
   const backgroundColor = useThemeColor({}, 'background');
+  const placeholderColor = useThemeColor({}, 'placeholder');
+  const actionColor = useThemeColor({}, 'primaryStrong');
 
   const showCustomAlert = (title: string, message: string) => {
     setAlertTitle(title);
@@ -93,7 +96,7 @@ export function SignupScreen() {
             <TextInput
               style={[styles.input, { backgroundColor: inputBackground, color: textColor }]}
               placeholder={t('auth').signup.email}
-              placeholderTextColor="#666"
+              placeholderTextColor={placeholderColor}
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
@@ -107,7 +110,7 @@ export function SignupScreen() {
             <TextInput
               style={[styles.input, { backgroundColor: inputBackground, color: textColor }]}
               placeholder={t('auth').signup.password}
-              placeholderTextColor="#666"
+              placeholderTextColor={placeholderColor}
               value={password}
               onChangeText={setPassword}
               secureTextEntry
@@ -120,7 +123,7 @@ export function SignupScreen() {
             <TextInput
               style={[styles.input, { backgroundColor: inputBackground, color: textColor }]}
               placeholder={t('auth').signup.confirmPassword}
-              placeholderTextColor="#666"
+              placeholderTextColor={placeholderColor}
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               secureTextEntry
@@ -135,7 +138,7 @@ export function SignupScreen() {
             <MaterialIcons
               name={acceptedPrivacy ? "check-box" : "check-box-outline-blank"}
               size={24}
-              color="#2C3DCD"
+              color={actionColor}
             />
             <ThemedText style={styles.privacyText}>
               {t('auth').signup.privacyAccept}
@@ -146,7 +149,7 @@ export function SignupScreen() {
             style={styles.privacyLink}
             onPress={openPrivacyPolicy}
           >
-            <ThemedText style={[styles.privacyLinkText, { color: "#2C3DCD" }]}>
+            <ThemedText style={[styles.privacyLinkText, { color: actionColor }]}>
               {t('auth').signup.privacyPolicyLink}
             </ThemedText>
           </TouchableOpacity>
@@ -164,7 +167,7 @@ export function SignupScreen() {
           <View style={styles.footer}>
             <ThemedText>{t('auth').signup.hasAccount} </ThemedText>
             <TouchableOpacity onPress={() => router.replace('/auth')}>
-              <ThemedText style={{ color: "#2C3DCD" }}>
+              <ThemedText style={{ color: actionColor }}>
                 {t('auth').signup.loginLink}
               </ThemedText>
             </TouchableOpacity>
@@ -184,7 +187,7 @@ export function SignupScreen() {
             <ThemedText style={styles.alertTitle}>{alertTitle}</ThemedText>
             <ThemedText style={styles.alertMessage}>{alertMessage}</ThemedText>
             <TouchableOpacity 
-              style={[styles.alertButton, { backgroundColor: '#2C3DCD' }]} 
+              style={[styles.alertButton, { backgroundColor: actionColor }]} 
               onPress={handleAlertConfirm}
             >
               <ThemedText style={styles.alertButtonText}>OK</ThemedText>
@@ -259,7 +262,7 @@ const styles = StyleSheet.create({
   button: {
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
@@ -268,7 +271,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   buttonText: {
-    color: '#FFF',
+    color: Colors.dark.white,
     fontSize: 18,
     fontWeight: '600',
   },
@@ -280,7 +283,7 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: Colors.dark.overlayBlack50,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -290,7 +293,7 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     alignItems: 'center',
     elevation: 5,
-    shadowColor: '#000',
+    shadowColor: Colors.dark.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
@@ -311,7 +314,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   alertButtonText: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '600',
   },

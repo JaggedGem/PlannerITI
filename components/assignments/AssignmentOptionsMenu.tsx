@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTranslation } from '@/hooks/useTranslation';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import { Colors } from '@/constants/Colors';
 
 interface AssignmentOptionsMenuProps {
   isVisible: boolean;
@@ -82,7 +83,7 @@ export function AssignmentOptionsMenu({
           style={styles.menuItem}
           onPress={handleEdit}
         >
-          <Ionicons name="create-outline" size={18} color="#3478F6" />
+          <Ionicons name="create-outline" size={18} color={Colors.dark.primary} />
           <Text style={styles.menuItemText}>{t('assignments').edit}</Text>
         </TouchableOpacity>
         
@@ -96,7 +97,7 @@ export function AssignmentOptionsMenu({
                 onClose();
               }}
             >
-              <Ionicons name="trash-outline" size={18} color="#FF3B30" />
+              <Ionicons name="trash-outline" size={18} color={Colors.dark.red} />
               <Text style={[styles.menuItemText, styles.deleteText]}>{t('assignments').delete}</Text>
             </TouchableOpacity>
           </>
@@ -113,24 +114,24 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: Colors.dark.overlayBlack50,
   },
   menuContainer: {
     position: 'absolute',
-    backgroundColor: '#2C2C2E',
+    backgroundColor: Colors.dark.borderMuted,
     borderRadius: 12,
     paddingVertical: 6,
     minWidth: 150,
-    shadowColor: '#000',
+    shadowColor: Colors.dark.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 10,
     elevation: 8,
     borderWidth: 1,
-    borderColor: '#3A3A3A',
+    borderColor: Colors.dark.borderStrong,
     // Add small drop shadow at the top to simulate a pointer
     borderTopWidth: 1,
-    borderTopColor: '#3A3A3A',
+    borderTopColor: Colors.dark.borderStrong,
   },
   menuItem: {
     flexDirection: 'row',
@@ -141,15 +142,15 @@ const styles = StyleSheet.create({
   menuItemText: {
     fontSize: 15,
     fontWeight: '500',
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     marginLeft: 12,
   },
   deleteText: {
-    color: '#FF3B30',
+    color: Colors.dark.red,
   },
   divider: {
     height: 1,
-    backgroundColor: '#3A3A3A',
+    backgroundColor: Colors.dark.borderStrong,
     marginHorizontal: 8,
   }
 }); 

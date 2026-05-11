@@ -32,6 +32,7 @@ export interface Assignment {
 }
 import { formatDistanceToNow, addHours, addDays, parseISO, format, startOfDay, isBefore, isAfter, differenceInDays } from 'date-fns';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Colors } from '@/constants/Colors';
 
 // Import the required types
 export enum SchedulableTriggerInputTypes {
@@ -167,7 +168,7 @@ export async function registerForPushNotificationsAsync() {
       name: 'default',
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#FF231F7C',
+      lightColor: Colors.dark.systemPushLight,
     });
 
     // Create assignment-specific channel
@@ -176,7 +177,7 @@ export async function registerForPushNotificationsAsync() {
       description: 'Notifications for assignment due dates and reminders',
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#3478F6',
+      lightColor: Colors.dark.primary,
     });
     
     // Create daily digest channel
@@ -185,7 +186,7 @@ export async function registerForPushNotificationsAsync() {
       description: 'Daily summary of upcoming assignments',
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#4CAF50',
+      lightColor: Colors.dark.green,
     });
   }
 

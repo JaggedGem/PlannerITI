@@ -39,6 +39,7 @@ import { ModernDropdownPortal } from '@/components/ModernDropdownPortal';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { SegmentItem } from '@/components/modernDropdown';
 import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
+import { Colors } from '@/constants/Colors';
 
 // Extend Subject type to include custom period properties
 interface ExtendedSubject extends Subject {
@@ -80,7 +81,7 @@ const CustomToggle = ({
   
   const trackColor = animatedValue.interpolate({
     inputRange: [0, 1],
-    outputRange: disabled ? ['#222222', '#444444'] : ['#2A2A2A', '#2C3DCD']
+    outputRange: disabled ? [Colors.dark.orphanedCourseBackground, Colors.dark.neutral900] : [Colors.dark.border, Colors.dark.primaryStrong]
   });
   
   return (
@@ -97,7 +98,7 @@ const CustomToggle = ({
           backgroundColor: trackColor,
           justifyContent: 'center',
           borderWidth: 1,
-          borderColor: value ? '#2C3DCD' : '#4D4D4D',
+          borderColor: value ? Colors.dark.primaryStrong : Colors.dark.toggleOffBorder,
         }}
       >
         <RNAnimated.View 
@@ -105,9 +106,9 @@ const CustomToggle = ({
             width: thumbSize,
             height: thumbSize,
             borderRadius: thumbSize / 2,
-            backgroundColor: disabled ? '#777777' : value ? '#FFFFFF' : '#f4f3f4',
+            backgroundColor: disabled ? Colors.dark.neutral700 : value ? Colors.dark.white : Colors.dark.offWhite,
             transform: [{ translateX: thumbPosition }],
-            shadowColor: '#000',
+            shadowColor: Colors.dark.black,
             shadowOffset: { width: 0, height: 1 },
             shadowOpacity: 0.2,
             shadowRadius: 1,
@@ -436,7 +437,7 @@ const DatePicker = ({
             <Ionicons
               name="chevron-down"
               size={20}
-              color="#FFFFFF"
+              color={Colors.dark.white}
             />
           </Animated.View>
         </TouchableOpacity>
@@ -465,13 +466,13 @@ const DatePicker = ({
         <Animated.View style={styles.calendarContainer}>
           <View style={styles.calendarHeader}>
             <TouchableOpacity onPress={() => navigateMonth(-1)}>
-              <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
+              <Ionicons name="chevron-back" size={22} color={Colors.dark.white} />
             </TouchableOpacity>
             <Text style={styles.calendarTitle}>
               {calendarMonth.toLocaleDateString(currentLanguage, { month: 'long', year: 'numeric' })}
             </Text>
             <TouchableOpacity onPress={() => navigateMonth(1)}>
-              <Ionicons name="chevron-forward" size={22} color="#FFFFFF" />
+              <Ionicons name="chevron-forward" size={22} color={Colors.dark.white} />
             </TouchableOpacity>
           </View>
           
@@ -713,7 +714,7 @@ const TimePicker = ({
                 }
               }}
             >
-              <Ionicons name="chevron-up" size={24} color="#FFFFFF" />
+              <Ionicons name="chevron-up" size={24} color={Colors.dark.white} />
             </TouchableOpacity>
             
             <Animated.Text style={[styles.timeWheelText, hourAnimStyle]}>
@@ -738,7 +739,7 @@ const TimePicker = ({
                 }
               }}
             >
-              <Ionicons name="chevron-down" size={24} color="#FFFFFF" />
+              <Ionicons name="chevron-down" size={24} color={Colors.dark.white} />
             </TouchableOpacity>
           </View>
         </View>
@@ -757,7 +758,7 @@ const TimePicker = ({
                 else updateMinute(nextMinute);
               }}
             >
-              <Ionicons name="chevron-up" size={24} color="#FFFFFF" />
+              <Ionicons name="chevron-up" size={24} color={Colors.dark.white} />
             </TouchableOpacity>
             
             <Animated.Text style={[styles.timeWheelText, minuteAnimStyle]}>
@@ -774,7 +775,7 @@ const TimePicker = ({
                 else updateMinute(Math.max(0, currentMinute - 5));
               }}
             >
-              <Ionicons name="chevron-down" size={24} color="#FFFFFF" />
+              <Ionicons name="chevron-down" size={24} color={Colors.dark.white} />
             </TouchableOpacity>
           </View>
         </View>
@@ -1706,7 +1707,7 @@ export default function NewAssignmentScreen() {
         styles.subjectCard,
         selectedSubjectId === item.id && styles.subjectCardSelected,
         // Add colored border for custom periods
-        item.isCustomPeriod && { borderLeftWidth: 4, borderLeftColor: item.color || '#2C3DCD' }
+        item.isCustomPeriod && { borderLeftWidth: 4, borderLeftColor: item.color || Colors.dark.primaryStrong }
       ]}
       onPress={() => handleSubjectSelect(item)}
       activeOpacity={0.7}
@@ -1716,13 +1717,13 @@ export default function NewAssignmentScreen() {
           {item.name}
         </Text>
         {item.isCustomPeriod ? (
-          <Text style={[styles.customBadge, { backgroundColor: item.color || '#2C3DCD' }]}>Period</Text>
+          <Text style={[styles.customBadge, { backgroundColor: item.color || Colors.dark.primaryStrong }]}>Period</Text>
         ) : item.isCustom && (
           <Text style={styles.customBadge}>Custom</Text>
         )}
       </View>
       {selectedSubjectId === item.id && (
-        <Ionicons name="checkmark-circle" size={24} color="#2C3DCD" />
+        <Ionicons name="checkmark-circle" size={24} color={Colors.dark.primaryStrong} />
       )}
     </TouchableOpacity>
   );
@@ -1841,18 +1842,18 @@ export default function NewAssignmentScreen() {
           <Ionicons 
             name={getIconForType()} 
             size={24} 
-            color={assignmentType === type ? "#2C3DCD" : "#FFFFFF"} 
+            color={assignmentType === type ? Colors.dark.primaryStrong : Colors.dark.white} 
             style={{marginRight: 12}}
           />
           <Text style={[
             styles.typeName,
-            assignmentType === type && {color: '#2C3DCD', fontWeight: '600'}
+            assignmentType === type && {color: Colors.dark.primaryStrong, fontWeight: '600'}
           ]}>
             {t('assignments').types[type.toLowerCase() as 'homework' | 'test' | 'exam' | 'project' | 'quiz' | 'lab' | 'essay' | 'presentation' | 'other']}
           </Text>
         </View>
         {assignmentType === type && (
-          <Ionicons name="checkmark-circle" size={24} color="#2C3DCD" />
+          <Ionicons name="checkmark-circle" size={24} color={Colors.dark.primaryStrong} />
         )}
       </TouchableOpacity>
     );
@@ -2024,7 +2025,7 @@ export default function NewAssignmentScreen() {
               <TextInput
                 style={styles.input}
                 placeholder={t('assignments').titlePlaceholder}
-                placeholderTextColor="#8A8A8D"
+                placeholderTextColor={Colors.dark.neutral500}
                 value={title}
                 onChangeText={handleTitleChange}
                 maxLength={50}
@@ -2044,12 +2045,12 @@ export default function NewAssignmentScreen() {
                 onPress={() => setIsTypeModalVisible(true)}
               >
                 <View style={styles.typeDisplay}>
-                  <Ionicons name={getTypeIcon()} size={20} color="#FFFFFF" style={styles.typeIcon} />
+                  <Ionicons name={getTypeIcon()} size={20} color={Colors.dark.white} style={styles.typeIcon} />
                   <Text style={styles.typeText}>
                     {t('assignments').types[assignmentType.toLowerCase() as 'homework' | 'test' | 'exam' | 'project' | 'quiz' | 'lab' | 'essay' | 'presentation' | 'other']}
                   </Text>
                 </View>
-                <Ionicons name="chevron-down" size={20} color="#8A8A8D" />
+                <Ionicons name="chevron-down" size={20} color={Colors.dark.neutral500} />
               </TouchableOpacity>
             </Animated.View>
             
@@ -2058,7 +2059,7 @@ export default function NewAssignmentScreen() {
               <TextInput
                 style={[styles.input, styles.textArea]}
                 placeholder={t('assignments').descriptionPlaceholder}
-                placeholderTextColor="#8A8A8D"
+                placeholderTextColor={Colors.dark.neutral500}
                 value={description}
                 onChangeText={setDescription}
                 multiline
@@ -2082,7 +2083,7 @@ export default function NewAssignmentScreen() {
                 ) : (
                   <Text style={styles.subjectPlaceholder}>{t('assignments').selectSubject}</Text>
                 )}
-                <Ionicons name="chevron-down" size={20} color="#8A8A8D" />
+                <Ionicons name="chevron-down" size={20} color={Colors.dark.neutral500} />
               </TouchableOpacity>
             </Animated.View>
             
@@ -2104,7 +2105,7 @@ export default function NewAssignmentScreen() {
                 
                 {!nextPeriodInfo && selectedSubjectId && (
                   <View style={styles.warningContainer}>
-                    <Ionicons name="alert-circle" size={16} color="#FFA500" />
+                    <Ionicons name="alert-circle" size={16} color={Colors.dark.alertOrange} />
                     <Text style={styles.warningText}>
                       {t('assignments').noUpcomingClasses} {selectedSubject?.name || t('assignments').thisSubject} {t('assignments').inNextTwoWeeks}
                     </Text>
@@ -2120,7 +2121,7 @@ export default function NewAssignmentScreen() {
                   >
                     {loadingNextPeriod ? (
                       <View style={styles.loadingNextPeriod}>
-                        <ActivityIndicator size="small" color="#2C3DCD" />
+                        <ActivityIndicator size="small" color={Colors.dark.primaryStrong} />
                         <Text style={styles.nextPeriodText}>{t('assignments').findingNextClass}</Text>
                       </View>
                     ) : nextPeriodInfo ? (
@@ -2130,16 +2131,16 @@ export default function NewAssignmentScreen() {
                           // Don't show weekText for tomorrow
                           <Text> </Text>
                         ) : nextPeriodInfo.weekText ? (
-                          <Text style={{ color: '#2C3DCD' }}> {nextPeriodInfo.weekText}</Text>
+                          <Text style={{ color: Colors.dark.primaryStrong }}> {nextPeriodInfo.weekText}</Text>
                         ) : null}
                         
                         {nextPeriodInfo.isTomorrow ? '' : (nextPeriodInfo.weekText ? ` ${t('assignments').on} ` : ' ')}
                         
                         {nextPeriodInfo.isTomorrow ? (
-                          <Text style={{ color: '#2C3DCD' }}>{t('assignments').days.tomorrow}</Text>
+                          <Text style={{ color: Colors.dark.primaryStrong }}>{t('assignments').days.tomorrow}</Text>
                         ) : (
-                          <Text style={{ color: '#2C3DCD' }}>{nextPeriodInfo.day}</Text>
-                        )} {t('assignments').at} <Text style={{ color: '#2C3DCD' }}>{nextPeriodInfo.time}</Text>
+                          <Text style={{ color: Colors.dark.primaryStrong }}>{nextPeriodInfo.day}</Text>
+                        )} {t('assignments').at} <Text style={{ color: Colors.dark.primaryStrong }}>{nextPeriodInfo.time}</Text>
                       </Text>
                     ) : (
                       <Text style={styles.nextPeriodText}>
@@ -2195,7 +2196,7 @@ export default function NewAssignmentScreen() {
               style={styles.subtasksContainer}
             >
               <View style={styles.subtasksHeader}>
-                <Ionicons name="layers-outline" size={22} color="#2C3DCD" style={styles.subtasksIcon} />
+                <Ionicons name="layers-outline" size={22} color={Colors.dark.primaryStrong} style={styles.subtasksIcon} />
                 <Text style={styles.subtasksTitle}>{t('assignments').subtasks.title}</Text>
               </View>
               
@@ -2229,7 +2230,7 @@ export default function NewAssignmentScreen() {
                             handleRemoveSubtask(task.id);
                           }}
                         >
-                          <Ionicons name="close-circle" size={22} color="#FF3B30" />
+                          <Ionicons name="close-circle" size={22} color={Colors.dark.red} />
                         </TouchableOpacity>
                       </TouchableOpacity>
                     </Animated.View>
@@ -2242,11 +2243,11 @@ export default function NewAssignmentScreen() {
                 { marginTop: subtasks.length > 0 ? 16 : 8 }
               ]}>
                 <View style={styles.subtaskInputContainer}>
-                  <Ionicons name="add-outline" size={24} color="#8A8A8D" style={{ marginRight: 8 }} />
+                  <Ionicons name="add-outline" size={24} color={Colors.dark.neutral500} style={{ marginRight: 8 }} />
                   <TextInput
                     style={styles.subtaskInput}
                     placeholder={subtasks.length === 0 ? t('assignments').subtasks.addFirst : t('assignments').subtasks.add}
-                    placeholderTextColor="#8A8A8D"
+                    placeholderTextColor={Colors.dark.neutral500}
                     value={newSubtaskText}
                     onChangeText={setNewSubtaskText}
                     onSubmitEditing={handleAddButtonPress}
@@ -2260,7 +2261,7 @@ export default function NewAssignmentScreen() {
                       activeOpacity={0.7}
                     >
                       <Animated.View style={animatedAddButtonStyle}>
-                        <Ionicons name="checkmark-circle" size={26} color="#2C3DCD" />
+                        <Ionicons name="checkmark-circle" size={26} color={Colors.dark.primaryStrong} />
                       </Animated.View>
                     </TouchableOpacity>
                   )}
@@ -2403,7 +2404,7 @@ export default function NewAssignmentScreen() {
             icon: <Ionicons 
               name={getTypeSpecificIcon()} 
               size={24}
-              color="#FFFFFF"
+              color={Colors.dark.white}
             />,
             isSelected: type === assignmentType
           };
@@ -2419,7 +2420,7 @@ export default function NewAssignmentScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: Colors.dark.backgroundSecondary,
     position: 'relative',
   },
   scrollContainer: {
@@ -2430,10 +2431,10 @@ const styles = StyleSheet.create({
   header: {
     padding: 20,
     paddingTop: Platform.OS === 'android' ? 40 : 20,
-    backgroundColor: '#141414',
+    backgroundColor: Colors.dark.backgroundTertiary,
     borderBottomLeftRadius: 32,
     borderBottomRightRadius: 32,
-    shadowColor: '#000',
+    shadowColor: Colors.dark.black,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
@@ -2443,7 +2444,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     marginBottom: 16,
     letterSpacing: 0.5,
   },
@@ -2455,28 +2456,28 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   cancelButtonText: {
-    color: '#FF3B30',
+    color: Colors.dark.red,
     fontSize: 17,
     fontWeight: '600',
   },
   saveButton: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
   },
   saveButtonDisabled: {
-    backgroundColor: '#292929',
+    backgroundColor: Colors.dark.disabledBackground,
     borderWidth: 1,
-    borderColor: '#3e3e3e',
+    borderColor: Colors.dark.disabledBorder,
   },
   saveButtonText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 17,
     fontWeight: '600',
   },
   saveButtonTextDisabled: {
-    color: '#6e6e6e',
+    color: Colors.dark.neutral650,
   },
   formContainer: {
     flex: 1,
@@ -2485,18 +2486,18 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     marginBottom: 8,
     marginTop: 16,
   },
   input: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 8,
     padding: 12,
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 16,
     borderWidth: 1,
-    borderColor: '#333333',
+    borderColor: Colors.dark.separatorBackground,
   },
   textArea: {
     height: 100,
@@ -2511,11 +2512,11 @@ const styles = StyleSheet.create({
   },
   segmentedControl: {
     flexDirection: 'row',
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 10,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#333333',
+    borderColor: Colors.dark.separatorBackground,
   },
   segmentButton: {
     flex: 1,
@@ -2525,21 +2526,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   segmentButtonActive: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
     borderRadius: 8,
   },
   segmentButtonText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 14,
     fontWeight: '500',
   },
   segmentButtonTextActive: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontWeight: '600',
   },
   segmentSeparator: {
     width: 1,
-    backgroundColor: '#333333',
+    backgroundColor: Colors.dark.separatorBackground,
     alignSelf: 'stretch',
     marginVertical: 8,
   },
@@ -2551,12 +2552,12 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   nextPeriodContainer: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 8,
     padding: 16,
     marginTop: 16,
     borderWidth: 1,
-    borderColor: '#333333',
+    borderColor: Colors.dark.separatorBackground,
   },
   nextPeriodHeader: {
     flexDirection: 'row',
@@ -2567,10 +2568,10 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: '#333333',
+    borderTopColor: Colors.dark.separatorBackground,
   },
   nextPeriodText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 14,
     marginLeft: 5,
   },
@@ -2578,23 +2579,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 8,
     padding: 12,
     marginTop: 16,
     borderWidth: 1,
-    borderColor: '#333333',
+    borderColor: Colors.dark.separatorBackground,
   },
   advancedOptionsButtonText: {
-    color: '#3478F6',
+    color: Colors.dark.primary,
     fontSize: 16,
     fontWeight: '500',
   },
   pickerContainer: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#333333',
+    borderColor: Colors.dark.separatorBackground,
     overflow: 'hidden',
     minHeight: 100,
     maxHeight: 300,
@@ -2602,17 +2603,17 @@ const styles = StyleSheet.create({
   loadingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 8,
     padding: 20,
     justifyContent: 'center',
   },
   loadingText: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     marginLeft: 8,
   },
   datePickerContainer: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
@@ -2628,7 +2629,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   dateText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '600',
     marginRight: 8,
@@ -2641,7 +2642,7 @@ const styles = StyleSheet.create({
     paddingBottom: 5,
   },
   quickDateButton: {
-    backgroundColor: '#242424',
+    backgroundColor: Colors.dark.surfaceRaisedAlt2,
     paddingVertical: 10,
     paddingHorizontal: 15,
     borderRadius: 8,
@@ -2650,21 +2651,21 @@ const styles = StyleSheet.create({
     minWidth: 80,
   },
   quickDateButtonSelected: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
   },
   quickDateButtonText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 14,
     fontWeight: '500',
     textAlign: 'center', // Ensure text is centered
   },
   quickDateButtonTextSelected: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontWeight: '600',
   },
   calendarContainer: {
     marginTop: 8,
-    backgroundColor: '#242424',
+    backgroundColor: Colors.dark.surfaceRaisedAlt2,
     borderRadius: 12,
     padding: 12,
   },
@@ -2675,7 +2676,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   calendarTitle: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -2685,7 +2686,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   calendarDayHeaderText: {
-    color: '#A0A0A0',
+    color: Colors.dark.neutral300,
     fontSize: 12,
     width: 32,
     textAlign: 'center',
@@ -2708,39 +2709,39 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   calendarDaySelected: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
   },
   calendarDayToday: {
     borderWidth: 1,
-    borderColor: '#2C3DCD',
+    borderColor: Colors.dark.primaryStrong,
   },
   calendarDayOtherMonth: {
     opacity: 0.3,
   },
   calendarDayText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 14,
   },
   calendarDayTextSelected: {
-    color: '#FFFFFF',  // Ensure this is white
+    color: Colors.dark.white,  // Ensure this is white
     fontWeight: '600',
   },
   calendarDayTextToday: {
-    color: '#2C3DCD',
+    color: Colors.dark.primaryStrong,
   },
   calendarDayTextOtherMonth: {
-    color: '#888888',
+    color: Colors.dark.neutral400,
   },
   todayDot: {
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
     position: 'absolute',
     bottom: 2,
   },
   todayButton: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
@@ -2748,20 +2749,20 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   todayButtonText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 12,
     fontWeight: '600',
   },
   
   // Time picker styles
   timePickerContainer: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
   },
   timeDisplay: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 18,
     fontWeight: '600',
     marginBottom: 12,
@@ -2773,17 +2774,17 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   timePresetButton: {
-    backgroundColor: '#242424',
+    backgroundColor: Colors.dark.surfaceRaisedAlt2,
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 8,
     marginRight: 8,
   },
   timePresetButtonSelected: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
   },
   timePresetButtonText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 14,
   },
   timePresetButtonTextSelected: {
@@ -2799,7 +2800,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 8,
   },
   timeWheelLabel: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 12,
     marginBottom: 4,
   },
@@ -2810,26 +2811,26 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   timeWheelText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 20,
     fontWeight: '600',
     marginVertical: 4,
   },
   timeWheelSeparator: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 24,
     fontWeight: '600',
     marginHorizontal: 4,
   },
   amPmToggle: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 8,
     marginTop: 20,
   },
   amPmToggleText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -2839,23 +2840,23 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#333333',
-    backgroundColor: '#1C1C1E',
+    borderBottomColor: Colors.dark.separatorBackground,
+    backgroundColor: Colors.dark.surface,
     marginHorizontal: 2,
     marginVertical: 2,
     borderRadius: 10,
-    shadowColor: '#000',
+    shadowColor: Colors.dark.black,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
     shadowRadius: 1.5,
     elevation: 2,
   },
   subjectCardSelected: {
-    backgroundColor: '#0F1A4A',
-    borderColor: '#2C3DCD',
+    backgroundColor: Colors.dark.cardSelected,
+    borderColor: Colors.dark.primaryStrong,
     borderWidth: 1,
     borderBottomWidth: 1,
-    borderBottomColor: '#2C3DCD',
+    borderBottomColor: Colors.dark.primaryStrong,
   },
   subjectMainInfo: {
     flex: 1,
@@ -2863,13 +2864,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   subjectName: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '500',
   },
   customBadge: {
-    backgroundColor: '#2C3DCD',
-    color: '#FFFFFF',
+    backgroundColor: Colors.dark.primaryStrong,
+    color: Colors.dark.white,
     fontSize: 12,
     paddingHorizontal: 8,
     paddingVertical: 2,
@@ -2878,8 +2879,8 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   customBadgeSmall: {
-    backgroundColor: '#2C3DCD',
-    color: '#FFFFFF',
+    backgroundColor: Colors.dark.primaryStrong,
+    color: Colors.dark.white,
     fontSize: 10,
     paddingHorizontal: 6,
     paddingVertical: 1,
@@ -2894,12 +2895,12 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   searchInput: {
-    backgroundColor: '#242424',
-    color: '#FFFFFF',
+    backgroundColor: Colors.dark.surfaceRaisedAlt2,
+    color: Colors.dark.white,
     padding: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#333333',
+    borderColor: Colors.dark.separatorBackground,
     marginBottom: 8,
   },
   noSubjectsContainer: {
@@ -2909,13 +2910,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   noSubjectsText: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 16,
   },
   customInputContainer: {
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: '#333333',
+    borderTopColor: Colors.dark.separatorBackground,
   },
   courseInputRow: {
     flexDirection: 'row',
@@ -2923,21 +2924,21 @@ const styles = StyleSheet.create({
   },
   courseInput: {
     flex: 1,
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#333333',
+    borderBottomColor: Colors.dark.separatorBackground,
     paddingVertical: 8,
     marginRight: 10,
   },
   addButton: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
   },
   addButtonText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontWeight: '600',
   },
   bottomSpacing: {
@@ -2945,11 +2946,11 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: Colors.dark.overlayBlack50,
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#121214',
+    backgroundColor: Colors.dark.categorySeparatorBackground,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     height: '70%',
@@ -2965,20 +2966,20 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: Colors.dark.white,
   },
   tabsContainer: {
     marginVertical: 12,
     borderRadius: 12,
     overflow: 'hidden',
     padding: 2,
-    backgroundColor: '#1C1C1E',
+    backgroundColor: Colors.dark.surface,
   },
   subjectSelector: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#333333',
+    borderColor: Colors.dark.separatorBackground,
     padding: 12,
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -2989,11 +2990,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   selectedSubjectText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 16,
   },
   subjectPlaceholder: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 16,
   },
   loadingNextPeriod: {
@@ -3002,7 +3003,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   labelDisabled: {
-    color: '#777777',
+    color: Colors.dark.neutral700,
   },
   warningContainer: {
     flexDirection: 'row',
@@ -3010,23 +3011,23 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 4,
     borderTopWidth: 1,
-    borderTopColor: '#333333',
+    borderTopColor: Colors.dark.separatorBackground,
     marginTop: 8,
   },
   warningText: {
-    color: '#FFA500',
+    color: Colors.dark.orange,
     fontSize: 13,
     marginLeft: 6,
     flex: 1,
   },
   activeStatusText: {
-    color: '#2C3DCD',
+    color: Colors.dark.primaryStrong,
   },
   typeSelector: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#333333',
+    borderColor: Colors.dark.separatorBackground,
     padding: 12,
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -3040,7 +3041,7 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   typeText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 16,
   },
   typesList: {
@@ -3055,29 +3056,29 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#333333',
-    backgroundColor: '#1C1C1E',
+    borderBottomColor: Colors.dark.separatorBackground,
+    backgroundColor: Colors.dark.surface,
     marginHorizontal: 2,
     marginVertical: 2,
     borderRadius: 10,
-    shadowColor: '#000',
+    shadowColor: Colors.dark.black,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
     shadowRadius: 1.5,
     elevation: 2,
   },
   typeCardSelected: {
-    backgroundColor: '#0F1A4A',
-    borderColor: '#2C3DCD',
+    backgroundColor: Colors.dark.cardSelected,
+    borderColor: Colors.dark.primaryStrong,
     borderWidth: 1,
     borderBottomWidth: 1,
-    borderBottomColor: '#2C3DCD',
+    borderBottomColor: Colors.dark.primaryStrong,
   },
   typeMainInfo: {
     flex: 1,
   },
   typeName: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '500',
   },
@@ -3085,16 +3086,16 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   typeNameSelected: {
-    color: '#2C3DCD',
+    color: Colors.dark.primaryStrong,
   },
   autoDetectedNote: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 12,
     marginTop: 4,
     fontStyle: 'italic'
   },
   timePickerWrapper: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
@@ -3105,25 +3106,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   emptyListText: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 16,
     textAlign: 'center',
     marginBottom: 12,
   },
   settingsLinkButton: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
     marginTop: 8,
   },
   settingsLinkButtonText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontWeight: '600',
   },
   modalSubtitle: {
     fontSize: 16,
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     marginBottom: 12,
     marginTop: 4,
   },
@@ -3131,7 +3132,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   noPeriods: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 16,
     textAlign: 'center',
     padding: 20,
@@ -3153,15 +3154,15 @@ const styles = StyleSheet.create({
   subtasksTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: Colors.dark.white,
   },
   subtaskInputWrapper: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 12,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#333333',
-    shadowColor: '#000',
+    borderColor: Colors.dark.separatorBackground,
+    shadowColor: Colors.dark.black,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -3172,12 +3173,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
   },
   subtaskInput: {
     flex: 1,
     fontSize: 16,
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     height: 40,
     paddingRight: 8,
     minWidth: '60%', // Ensure there's enough space for text
@@ -3197,12 +3198,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 14,
     paddingHorizontal: 16,
-    backgroundColor: '#1C1C1E',
+    backgroundColor: Colors.dark.surface,
     borderRadius: 12,
     justifyContent: 'space-between',
     borderWidth: 1,
-    borderColor: '#2C3DCD20',
-    shadowColor: '#2C3DCD',
+    borderColor: Colors.dark.primaryHighlight20,
+    shadowColor: Colors.dark.primaryStrong,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
@@ -3212,10 +3213,10 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     marginRight: 8,
-    color: '#FFFFFF',
+    color: Colors.dark.white,
   },
   noSubtasksText: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 14,
     textAlign: 'center',
     padding: 16,
@@ -3225,16 +3226,16 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     marginBottom: 12,
-    color: '#FFFFFF',
+    color: Colors.dark.white,
   },
   sectionContainer: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
     marginTop: 16,
     borderWidth: 1,
-    borderColor: '#333333',
+    borderColor: Colors.dark.separatorBackground,
   },
   sectionTitleContainer: {
     flexDirection: 'row',
@@ -3260,18 +3261,18 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: '#2C3DCD15',
+    backgroundColor: Colors.dark.primaryHighlight15,
     marginRight: 12,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#2C3DCD40',
+    borderColor: Colors.dark.primaryHighlight40,
   },
   subtaskBulletInner: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
   },
   deleteSubtaskButton: {
     padding: 4,
@@ -3285,7 +3286,7 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
   subtasksHintText: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 14,
     textAlign: 'center',
     fontStyle: 'italic',

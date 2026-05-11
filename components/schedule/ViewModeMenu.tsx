@@ -11,6 +11,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { scheduleService, ScheduleView } from '@/services/scheduleService';
 import { useTranslation } from '@/hooks/useTranslation';
+import { Colors } from '@/constants/Colors';
 
 
 interface ViewModeMenuProps {
@@ -131,7 +132,7 @@ export default function ViewModeMenu({ isOpen, onClose, isEvenWeek, weekText, cu
                 <MaterialIcons 
                   name={item.icon as any} 
                   size={24} 
-                  color={currentView === item.id ? '#FFFFFF' : '#8A8A8D'} 
+                  color={currentView === item.id ? Colors.dark.white : Colors.dark.neutral500} 
                 />
                 <Text style={[
                   styles.menuItemText,
@@ -155,25 +156,25 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: Colors.dark.overlayBlack50,
     justifyContent: 'flex-start',
     alignItems: 'flex-end',
     paddingTop: 60, // Add top padding to avoid status bar
     paddingHorizontal: 20,
   },
   menuContainer: {
-    backgroundColor: '#1A1A1A', // Updated to match dates container color
+    backgroundColor: Colors.dark.surfaceSecondary, // Updated to match dates container color
     borderRadius: 16,
     padding: 12,
     width: 200,
-    shadowColor: '#000',
+    shadowColor: Colors.dark.black,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 8,
   },
   weekPill: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 16,
@@ -181,7 +182,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   weekText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontSize: 14,
     fontWeight: '600',
     letterSpacing: 0.3,
@@ -197,14 +198,14 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   menuItemActive: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
   },
   menuItemText: {
-    color: '#8A8A8D',
+    color: Colors.dark.neutral500,
     fontSize: 16,
     fontWeight: '600',
   },
   menuItemTextActive: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
   },
 });

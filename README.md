@@ -1,7 +1,7 @@
 # PlannerITI 📚
 
 <div align="center">
-  <img src="./assets/images/icon.png" alt="PlannerITI Logo" width="128" height="128"/>
+  <img src="./assets/images/adaptive-icon.png" alt="PlannerITI Logo" width="128" height="128"/>
   
   **A comprehensive student planner for CEITI students**
   

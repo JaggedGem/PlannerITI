@@ -24,6 +24,7 @@ import Animated, {
   withSequence,
   useSharedValue
 } from 'react-native-reanimated';
+import { Colors } from '@/constants/Colors';
 
 export type SegmentItem = {
   id: string;
@@ -302,7 +303,7 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
         style={[
           styles.itemContainer,
           isSelected && styles.itemContainerSelected,
-          item.isCustomPeriod && { borderLeftWidth: 4, borderLeftColor: item.color || '#3478F6' }
+          item.isCustomPeriod && { borderLeftWidth: 4, borderLeftColor: item.color || Colors.dark.primary }
         ]}
         onPress={() => handleSelectItem(item)}
         activeOpacity={0.7}
@@ -329,7 +330,7 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
               {(item.badge || item.isCustom || item.isCustomPeriod) && (
                 <View style={[
                   styles.badge, 
-                  { backgroundColor: item.color || '#3478F6' }
+                  { backgroundColor: item.color || Colors.dark.primary }
                 ]}>
                   <Text style={styles.badgeText}>
                     {item.badge || (item.isCustomPeriod ? 'Period' : 'Custom')}
@@ -342,7 +343,7 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
           <View style={styles.itemRightContent}>
             {item.rightComponent}
             {isSelected && (
-              <Ionicons name="checkmark-circle" size={22} color="#3478F6" />
+              <Ionicons name="checkmark-circle" size={22} color={Colors.dark.primary} />
                 )}
               </View>
         </View>
@@ -483,11 +484,11 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
   const renderSearchBar = () => (
     <View style={styles.searchContainer}>
       <View style={styles.searchInputContainer}>
-        <Ionicons name="search" size={16} color="#8A8A8D" style={styles.searchIcon} />
+        <Ionicons name="search" size={16} color={Colors.dark.mutedText} style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
           placeholder={searchPlaceholder}
-          placeholderTextColor="#8A8A8D"
+          placeholderTextColor={Colors.dark.mutedText}
           value={searchText}
           onChangeText={setSearchText}
           returnKeyType="search"
@@ -498,7 +499,7 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
             style={styles.clearButton}
             onPress={() => setSearchText('')}
           >
-            <Ionicons name="close-circle" size={16} color="#8A8A8D" />
+            <Ionicons name="close-circle" size={16} color={Colors.dark.mutedText} />
           </TouchableOpacity>
         )}
       </View>
@@ -508,7 +509,7 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
   // Render loading state
   const renderLoading = () => (
     <View style={styles.loadingContainer}>
-      <ActivityIndicator size="small" color="#3478F6" />
+      <ActivityIndicator size="small" color={Colors.dark.primary} />
       <Text style={styles.loadingText}>{loadingText}</Text>
     </View>
   );
@@ -612,7 +613,7 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
             <View style={styles.headerRightContainer}>
               {headerRightComponent}
               <Pressable onPress={onClose} style={styles.closeButton}>
-                <Ionicons name="close" size={24} color="#8A8A8D" />
+                <Ionicons name="close" size={24} color={Colors.dark.neutral500} />
               </Pressable>
             </View>
           </View>
@@ -677,7 +678,7 @@ const styles = StyleSheet.create({
   // Modal container styles
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        backgroundColor: Colors.dark.overlayBlack50,
         justifyContent: 'flex-end',
         position: 'absolute',
         top: 0,
@@ -688,11 +689,11 @@ const styles = StyleSheet.create({
         elevation: 9999,
     },
     dropdownContainer: {
-        backgroundColor: '#1C1C1E',
+        backgroundColor: Colors.dark.card,
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
         overflow: 'hidden',
-        shadowColor: '#000',
+        shadowColor: Colors.dark.shadow,
         shadowOffset: { width: 0, height: -2 },
         shadowOpacity: 0.25,
         shadowRadius: 3.84,
@@ -720,12 +721,12 @@ const styles = StyleSheet.create({
     paddingTop: 16,
         paddingBottom: 16,
         borderBottomWidth: 1,
-        borderBottomColor: '#2C2C2E',
+        borderBottomColor: Colors.dark.borderMuted,
     },
     dropdownTitle: {
         fontSize: 17,
         fontWeight: '600',
-        color: '#8A8A8D',
+        color: Colors.dark.mutedText,
     },
   headerRightContainer: {
     flexDirection: 'row',
@@ -740,12 +741,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#2C2C2E',
+    borderBottomColor: Colors.dark.borderMuted,
   },
   searchInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#2C2C2E',
+    backgroundColor: Colors.dark.borderMuted,
     borderRadius: 10,
     paddingHorizontal: 12,
     height: 40,
@@ -756,7 +757,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     height: 40,
     padding: 0,
   },
@@ -767,7 +768,7 @@ const styles = StyleSheet.create({
   // Tabs styles
   tabsContainer: {
     borderBottomWidth: 1,
-    borderBottomColor: '#2C2C2E',
+    borderBottomColor: Colors.dark.borderMuted,
     paddingVertical: 8,
   },
   tabsScrollContent: {
@@ -787,15 +788,15 @@ const styles = StyleSheet.create({
     minWidth: 80,
   },
   tabButtonActive: {
-    backgroundColor: '#2C3DCD20',
+    backgroundColor: Colors.dark.primaryHighlight20,
   },
   tabButtonText: {
     fontSize: 15,
     fontWeight: '500',
-    color: '#FFFFFF',
+    color: Colors.dark.white,
   },
   tabButtonTextActive: {
-    color: '#3478F6',
+    color: Colors.dark.primary,
     fontWeight: '600',
   },
   tabContent: {
@@ -803,7 +804,7 @@ const styles = StyleSheet.create({
   },
   tabsWithSearchContainer: {
     borderBottomWidth: 1,
-    borderBottomColor: '#2C2C2E',
+    borderBottomColor: Colors.dark.borderMuted,
   },
   
   // Category styles
@@ -813,38 +814,38 @@ const styles = StyleSheet.create({
   },
   categoryContainer: {
     marginVertical: 4,
-    backgroundColor: '#1C1C1E',
+    backgroundColor: Colors.dark.card,
     borderRadius: 8,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#2C2C2E',
+    borderColor: Colors.dark.borderMuted,
   },
   categoryHeader: {
     paddingHorizontal: 20,
     paddingVertical: 10,
-    backgroundColor: '#242426',
+    backgroundColor: Colors.dark.surfaceNested,
     borderBottomWidth: 1,
-    borderBottomColor: '#2C2C2E',
+    borderBottomColor: Colors.dark.borderMuted,
   },
   categoryTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
     textTransform: 'uppercase',
   },
   categorySeparator: {
     height: 8,
-    backgroundColor: '#121214',
+    backgroundColor: Colors.dark.categorySeparatorBackground,
   },
   
   // Item styles
   itemContainer: {
     paddingVertical: 12,
-        paddingHorizontal: 20,
-    },
+    paddingHorizontal: 20,
+  },
   itemContainerSelected: {
-        backgroundColor: '#2C3DCD20',
-    },
+    backgroundColor: Colors.dark.primaryHighlight20,
+  },
   itemContent: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -856,17 +857,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   itemTextContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
     flex: 1,
-    },
+  },
   itemText: {
     fontSize: 16,
-        color: '#FFFFFF',
+    color: Colors.dark.white,
     flex: 1,
-    },
+  },
   itemTextSelected: {
-        color: '#3478F6',
+        color: Colors.dark.primary,
         fontWeight: '600',
     },
   itemTextWithIcon: {
@@ -883,18 +884,18 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 4,
     marginLeft: 8,
-    backgroundColor: '#3478F6',
+    backgroundColor: Colors.dark.primary,
   },
   badgeText: {
     fontSize: 12,
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontWeight: '500',
   },
   
   // Separator
     separator: {
         height: 0.5,
-        backgroundColor: '#2C2C2E',
+        backgroundColor: Colors.dark.borderMuted,
         marginHorizontal: 16,
     },
   
@@ -907,7 +908,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 8,
     fontSize: 16,
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
     textAlign: 'center',
   },
   emptyContainer: {
@@ -917,7 +918,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
     textAlign: 'center',
   },
   
@@ -925,7 +926,7 @@ const styles = StyleSheet.create({
   footerContainer: {
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: '#2C2C2E',
+    borderTopColor: Colors.dark.borderMuted,
     marginTop: 8,
   },
 });

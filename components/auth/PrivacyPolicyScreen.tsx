@@ -5,7 +5,7 @@ import { ThemedView } from '../ThemedView';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useThemeColor } from '@/hooks/useThemeColor';
 
-const renderContent = (content: string, textColor: string) => {
+const renderContent = (content: string, textColor: string, linkColor: string) => {
   const parts = content.split(/(<link>.*?<\/link>)/);
   return (
     <Text style={[styles.text, { color: textColor }]}>
@@ -15,7 +15,7 @@ const renderContent = (content: string, textColor: string) => {
           return (
             <Text
               key={index}
-              style={styles.link}
+              style={[styles.link, { color: linkColor }]}
               onPress={() => Linking.openURL(`mailto:${email}`)}
             >
               {email}
@@ -32,6 +32,7 @@ export function PrivacyPolicyScreen() {
   const { t } = useTranslation();
   const policy = t('privacyPolicy');
   const textColor = useThemeColor({}, 'text');
+  const linkColor = useThemeColor({}, 'primaryStrong');
 
   return (
     <ThemedView style={styles.container}>
@@ -48,7 +49,7 @@ export function PrivacyPolicyScreen() {
                 </ThemedText>
               ))
             ) : (
-              renderContent(section.content, textColor)
+              renderContent(section.content, textColor, linkColor)
             )}
           </React.Fragment>
         ))}
@@ -86,7 +87,6 @@ const styles = StyleSheet.create({
   link: {
     fontSize: 16,
     lineHeight: 24,
-    color: '#2C3DCD',
     textDecorationLine: 'underline',
   },
 });

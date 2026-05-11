@@ -10,6 +10,7 @@ import Animated, {
   useAnimatedReaction, 
   Easing 
 } from 'react-native-reanimated';
+import { Colors } from '@/constants/Colors';
 
 interface FloatingActionButtonProps {
   onPress: () => void;
@@ -60,12 +61,12 @@ export default function FloatingActionButton({ onPress }: FloatingActionButtonPr
       activeOpacity={1}
     >
       <AnimatedGradient
-        colors={['#3478F6', '#2C3DCD']}
+        colors={[Colors.dark.primary, Colors.dark.primaryStrong]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.gradient}
       >
-        <Ionicons name="add" size={32} color="#FFFFFF" />
+        <Ionicons name="add" size={32} color={Colors.dark.white} />
       </AnimatedGradient>
     </AnimatedTouchable>
   );
@@ -77,7 +78,7 @@ const styles = StyleSheet.create({
     bottom: 24,
     right: 24,
     elevation: 8,
-    shadowColor: '#000',
+    shadowColor: Colors.dark.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,

@@ -16,6 +16,7 @@ import Animated, {
 import { Ionicons } from '@expo/vector-icons';
 import { Period } from '../../services/scheduleService';
 import { useTranslation } from '@/hooks/useTranslation';
+import { Colors } from '@/constants/Colors';
 
 type DaySectionProps = {
   title: string;
@@ -34,25 +35,25 @@ interface EnhancedAssignment extends Assignment {
 // Get day color based on day name - moved outside component
 const getDayColor = (title: string, t: any): [string, string] => {
   if (title.includes(t('assignments').days.today)) {
-    return ['#4A76F1', '#2C3DCD'] as [string, string];
+    return Colors.dark.dayGradients.today as [string, string];
   } else if (title.includes(t('assignments').days.tomorrow)) {
-    return ['#614FE0', '#4A2CD0'] as [string, string];
+    return Colors.dark.dayGradients.tomorrow as [string, string];
   } else if (title.startsWith(t('assignments').days.monday)) {
-    return ['#3A6073', '#16222A'] as [string, string];
+    return Colors.dark.dayGradients.monday as [string, string];
   } else if (title.startsWith(t('assignments').days.tuesday)) {
-    return ['#3F5C6C', '#203A43'] as [string, string];
+    return Colors.dark.dayGradients.tuesday as [string, string];
   } else if (title.startsWith(t('assignments').days.wednesday)) {
-    return ['#5B5F97', '#373860'] as [string, string];
+    return Colors.dark.dayGradients.wednesday as [string, string];
   } else if (title.startsWith(t('assignments').days.thursday)) {
-    return ['#4B6073', '#252f3b'] as [string, string];
+    return Colors.dark.dayGradients.thursday as [string, string];
   } else if (title.startsWith(t('assignments').days.friday)) {
-    return ['#526175', '#2E3951'] as [string, string];
+    return Colors.dark.dayGradients.friday as [string, string];
   } else if (title.startsWith(t('assignments').days.saturday)) {
-    return ['#755B69', '#3F2E38'] as [string, string];
+    return Colors.dark.dayGradients.saturday as [string, string];
   } else if (title.startsWith(t('assignments').days.sunday)) {
-    return ['#5E4266', '#39274A'] as [string, string];
+    return Colors.dark.dayGradients.sunday as [string, string];
   } else {
-    return ['#333440', '#1F1F28'] as [string, string];
+    return Colors.dark.dayGradients.fallback as [string, string];
   }
 };
 
@@ -198,7 +199,7 @@ export default function DaySection({
             <View style={styles.countContainer}>
               <Text style={styles.count}>{assignments.length}</Text>
               <Animated.View style={[styles.chevron, chevronStyle]}>
-                <Ionicons name="chevron-down" size={18} color="#FFFFFF" />
+                <Ionicons name="chevron-down" size={18} color={Colors.dark.white} />
               </Animated.View>
             </View>
           </View>
@@ -244,8 +245,8 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     borderRadius: 16,
     overflow: 'hidden',
-    backgroundColor: '#141414',
-    shadowColor: '#000',
+    backgroundColor: Colors.dark.backgroundApp,
+    shadowColor: Colors.dark.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 3,
@@ -271,12 +272,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 17,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     marginBottom: 2,
   },
   date: {
     fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: Colors.dark.overlayWhite80,
   },
   countContainer: {
     flexDirection: 'row',
@@ -285,7 +286,7 @@ const styles = StyleSheet.create({
   count: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     marginRight: 8,
   },
   chevron: {

@@ -6,6 +6,7 @@ import { ThemedText } from '../ThemedText';
 import { ThemedView } from '../ThemedView';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useThemeColor } from '../../hooks/useThemeColor';
+import { Colors } from '@/constants/Colors';
 import authService from '../../services/authService';
 import { StatusBar } from 'expo-status-bar';
 
@@ -24,6 +25,8 @@ export function ResetPasswordScreen() {
   const textColor = useThemeColor({}, 'text');
   const tintColor = useThemeColor({}, 'tint');
   const backgroundColor = useThemeColor({}, 'background');
+  const placeholderColor = useThemeColor({}, 'placeholder');
+  const actionColor = useThemeColor({}, 'primaryStrong');
 
   const showCustomAlert = (title: string, message: string, success = false) => {
     setAlertTitle(title);
@@ -88,7 +91,7 @@ export function ResetPasswordScreen() {
             <TextInput
               style={[styles.input, { backgroundColor: inputBackground, color: textColor }]}
               placeholder={t('auth').resetPassword.newPassword}
-              placeholderTextColor="#666"
+              placeholderTextColor={placeholderColor}
               value={newPassword}
               onChangeText={setNewPassword}
               secureTextEntry
@@ -101,7 +104,7 @@ export function ResetPasswordScreen() {
             <TextInput
               style={[styles.input, { backgroundColor: inputBackground, color: textColor }]}
               placeholder={t('auth').resetPassword.confirmPassword}
-              placeholderTextColor="#666"
+              placeholderTextColor={placeholderColor}
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               secureTextEntry
@@ -123,7 +126,7 @@ export function ResetPasswordScreen() {
             style={styles.backButton}
             onPress={() => router.replace('/auth')}
           >
-            <ThemedText style={[styles.backButtonText, { color: '#2C3DCD' }]}>
+            <ThemedText style={[styles.backButtonText, { color: actionColor }]}>
               {t('auth').forgotPassword.backToLogin}
             </ThemedText>
           </TouchableOpacity>
@@ -142,7 +145,7 @@ export function ResetPasswordScreen() {
             <ThemedText style={styles.alertTitle}>{alertTitle}</ThemedText>
             <ThemedText style={styles.alertMessage}>{alertMessage}</ThemedText>
             <TouchableOpacity 
-              style={[styles.alertButton, { backgroundColor: '#2C3DCD' }]} 
+              style={[styles.alertButton, { backgroundColor: actionColor }]} 
               onPress={handleAlertConfirm}
             >
               <ThemedText style={styles.alertButtonText}>OK</ThemedText>
@@ -196,7 +199,7 @@ const styles = StyleSheet.create({
   button: {
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
@@ -205,14 +208,14 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   buttonText: {
-    color: '#FFF',
+    color: Colors.dark.white,
     fontSize: 18,
     fontWeight: '600',
   },
   backButton: {
     height: 50,
     borderRadius: 25,
-    backgroundColor: 'transparent',
+    backgroundColor: Colors.dark.transparent,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -222,7 +225,7 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: Colors.dark.overlayBlack50,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -232,7 +235,7 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     alignItems: 'center',
     elevation: 5,
-    shadowColor: '#000',
+    shadowColor: Colors.dark.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
@@ -253,7 +256,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   alertButtonText: {
-    color: 'white',
+    color: Colors.dark.white,
     fontSize: 16,
     fontWeight: '600',
   },

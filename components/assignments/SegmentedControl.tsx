@@ -1,7 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Colors } from '../../constants/Colors';
-import { useColorScheme } from 'react-native';
 
 type SegmentedControlProps = {
   segments: string[];
@@ -14,9 +13,6 @@ export default function SegmentedControl({
   selectedIndex,
   onChange,
 }: SegmentedControlProps) {
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme];
-
   return (
     <View style={styles.container}>
       {segments.map((segment, index) => (
@@ -51,7 +47,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     borderRadius: 10,
     overflow: 'hidden',
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.dark.surfaceSecondary,
     marginTop: 4,
     position: 'relative',
   },
@@ -62,20 +58,20 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   selectedSegment: {
-    backgroundColor: '#2C3DCD',
+    backgroundColor: Colors.dark.primaryStrong,
   },
   segmentText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#8A8A8D',
+    color: Colors.dark.mutedText,
   },
   selectedSegmentText: {
-    color: '#FFFFFF',
+    color: Colors.dark.white,
     fontWeight: '700',
   },
   separator: {
     width: 1,
-    backgroundColor: '#333333',
+    backgroundColor: Colors.dark.separatorBackground,
     alignSelf: 'stretch',
     marginVertical: 8,
   },
