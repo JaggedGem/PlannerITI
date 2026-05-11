@@ -1,15 +1,19 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Assignment } from '../utils/assignmentStorage';
 import { getAssignments, toggleAssignmentCompletion as toggleCompletion, deleteAssignment as deleteAssignmentStorage } from '../utils/assignmentStorage';
 
 export function useAssignments() {
   const [allAssignments, setAllAssignments] = useState<Assignment[]>([]);
   const [archivedAssignments, setArchivedAssignments] = useState<Assignment[]>([]);
+  const isMountedRef = useRef(true);
 
   // Fetch assignments
   const fetchAssignments = useCallback(async () => {
     try {
       const assignments = await getAssignments();
+      if (!isMountedRef.current) {
+        return;
+      }
       
       // Separate current and archived assignments
       const now = new Date();
@@ -29,13 +33,18 @@ export function useAssignments() {
       setAllAssignments(current);
       setArchivedAssignments(archived);
     } catch (error) {
-      console.error('Error fetching assignments:', error);
+      if (isMountedRef.current) {
+        console.error('Error fetching assignments:', error);
+      }
     }
   }, []);
 
   // Load assignments on mount
   useEffect(() => {
     fetchAssignments();
+    return () => {
+      isMountedRef.current = false;
+    };
   }, [fetchAssignments]);
 
   // Toggle assignment completion
@@ -44,7 +53,9 @@ export function useAssignments() {
       await toggleCompletion(id);
       await fetchAssignments(); // Refresh assignments after toggle
     } catch (error) {
-      console.error('Error toggling assignment:', error);
+      if (isMountedRef.current) {
+        console.error('Error toggling assignment:', error);
+      }
     }
   }, [fetchAssignments]);
 
@@ -54,7 +65,9 @@ export function useAssignments() {
       await deleteAssignmentStorage(id);
       await fetchAssignments(); // Refresh assignments after deletion
     } catch (error) {
-      console.error('Error deleting assignment:', error);
+      if (isMountedRef.current) {
+        console.error('Error deleting assignment:', error);
+      }
     }
   }, [fetchAssignments]);
 

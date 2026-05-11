@@ -76,6 +76,7 @@ export const getGravatarHash = (email: string): string => {
 };
 
 export const getGravatarProfile = async (email: string): Promise<GravatarProfile | null> => {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
   try {
     // Check cache first
     const cachedData = await AsyncStorage.getItem(GRAVATAR_CACHE_KEY);
@@ -88,12 +89,15 @@ export const getGravatarProfile = async (email: string): Promise<GravatarProfile
     }
 
     const hash = getGravatarHash(email);
+    const controller = new AbortController();
+    timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
     const response = await fetch(`${GRAVATAR_API_URL}/profiles/${hash}`, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
         'Bearer': envVars.GRAVATAR_API_KEY,
       },
+      signal: controller.signal,
     });
 
     if (!response.ok) {
@@ -121,6 +125,10 @@ export const getGravatarProfile = async (email: string): Promise<GravatarProfile
   } catch (error) {
     console.error('Error fetching Gravatar profile:', error);
     return null;
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
   }
 };
 
@@ -435,7 +443,7 @@ class AuthService {
         return null;
       }
     } catch (error) {
-      // Silent error handling
+      console.error('Error checking skip login status:', error);
     }
 
     // Then check for auth token
@@ -448,6 +456,7 @@ class AuthService {
         }
         this.token = storedToken;
       } catch (error) {
+        console.error('Error loading stored auth token:', error);
         this.isLoading = false;
         return null;
       }

@@ -5,9 +5,6 @@ import { scheduleService as scheduleServiceImport, UserSettings } from './schedu
 import Constants from "expo-constants";
 import { fetchCustomApi } from '../utils/customApi';
 
-// To avoid circular dependency, we'll set this after initialization
-let scheduleService = scheduleServiceImport;
-
 // Get environment variables from Expo Constants
 const getEnvVars = () => {
   const apiKey = Constants.expoConfig?.extra?.apiKey;
@@ -68,6 +65,8 @@ class SettingsService {
   private authStateListener: EmitterSubscription | null = null;
   private initialDownloadDone: boolean = false;
   private applyingServerSettings: boolean = false;
+  private isDestroyed: boolean = false;
+  private scheduleServiceRef: typeof scheduleServiceImport | null = null;
 
   private constructor() {}
 
@@ -90,6 +89,7 @@ class SettingsService {
     if (this.initialDownloadDone) {
       // Only sync to server based on time interval, not from server
       this.syncToServerIfNeeded().catch(error => {
+        console.error('Error checking whether settings sync is needed:', error);
       });
     }
     
@@ -105,6 +105,7 @@ class SettingsService {
         this.notificationSettings = { ...DEFAULT_NOTIFICATION_SETTINGS, ...JSON.parse(savedSettings) };
       }
     } catch (error) {
+      console.error('Error loading notification settings:', error);
     }
   }
 
@@ -113,6 +114,7 @@ class SettingsService {
     try {
       await AsyncStorage.setItem(NOTIFICATION_SETTINGS_KEY, JSON.stringify(this.notificationSettings));
     } catch (error) {
+      console.error('Error saving notification settings:', error);
     }
   }
 
@@ -127,13 +129,14 @@ class SettingsService {
     await this.saveNotificationSettings();
     // Trigger a sync to the server when settings are updated
     this.syncToServer().catch(error => {
+      console.error('Error syncing settings after update:', error);
     });
   }
 
   // Trigger sync to server after any settings update (including schedule settings)
   triggerSync(): void {
     // Skip sync if we're currently applying server settings
-    if (this.applyingServerSettings) {
+    if (this.applyingServerSettings || this.isDestroyed) {
       return;
     }
     
@@ -147,8 +150,9 @@ class SettingsService {
       }
       
       this.syncDebounceTimeout = setTimeout(() => {
-        if (this.pendingSync) {
+        if (this.pendingSync && !this.isDestroyed) {
           this.syncToServer().catch(error => {
+            console.error('Settings debounced sync failed:', error);
           });
           this.pendingSync = false;
         }
@@ -158,18 +162,30 @@ class SettingsService {
 
   // Allow setting scheduleService reference after initialization to avoid circular dependency
   setScheduleService(service: typeof scheduleServiceImport): void {
-    scheduleService = service;
+    if (!service) {
+      throw new Error('scheduleService cannot be null');
+    }
+
+    this.scheduleServiceRef = service;
     // Register callbacks to avoid direct import cycle side-effects
-    scheduleService.registerSettingsSync({
+    service.registerSettingsSync({
       triggerSync: () => this.triggerSync(),
       isApplyingServerSettings: () => this.isApplyingServerSettings()
     });
   }
 
+  private getScheduleService(): typeof scheduleServiceImport {
+    if (!this.scheduleServiceRef) {
+      throw new Error('scheduleService has not been initialized');
+    }
+
+    return this.scheduleServiceRef;
+  }
+
   // Prepare settings for sync
   private prepareSettingsForSync(): SyncableSettings {
     return {
-      userSettings: scheduleService.getSettings(),
+      userSettings: this.getScheduleService().getSettings(),
       notificationSettings: this.notificationSettings,
       version: SETTINGS_SYNC_VERSION,
       lastSyncTimestamp: Date.now(),
@@ -188,6 +204,7 @@ class SettingsService {
       }
       return false;
     } catch (error) {
+      console.error('Error checking settings sync timestamp:', error);
       return false;
     }
   }
@@ -220,6 +237,7 @@ class SettingsService {
       this.isSyncing = false;
       return success;
     } catch (error) {
+      console.error('Error syncing settings to server:', error);
       this.isSyncing = false;
       return false;
     }
@@ -256,6 +274,7 @@ class SettingsService {
 
       return await response.json();
     } catch (error) {
+      console.error(`Error making settings request to ${endpoint}:`, error);
       throw error;
     }
   }
@@ -284,6 +303,7 @@ class SettingsService {
       
       return true;
     } catch (error) {
+      console.error('Error uploading settings:', error);
       return false;
     }
   }
@@ -336,7 +356,7 @@ class SettingsService {
       try {
         // Always apply server settings over local settings
         if (settings.userSettings) {
-          scheduleService.updateSettings(settings.userSettings);
+          this.getScheduleService().updateSettings(settings.userSettings);
         }
         
         if (settings.notificationSettings) {
@@ -354,6 +374,7 @@ class SettingsService {
       
       return true;
     } catch (error) {
+      console.error('Error downloading settings:', error);
       // Make sure the flag is reset even on error
       this.applyingServerSettings = false;
       return false;
@@ -370,6 +391,7 @@ class SettingsService {
       await this.makeAuthRequest(`/secure/delete-encrypted-data/${SETTINGS_DATA_LABEL}`, 'DELETE');
       return true;
     } catch (error) {
+      console.error('Error deleting remote settings:', error);
       return false;
     }
   }
@@ -405,6 +427,7 @@ class SettingsService {
       
       return success;
     } catch (error) {
+      console.error('Error force pushing settings:', error);
       return false;
     }
   }
@@ -468,6 +491,7 @@ class SettingsService {
       this.isSyncing = false;
       return true;
     } catch (error) {
+      console.error('Error syncing settings after login:', error);
       this.isSyncing = false;
       return false;
     }
@@ -482,6 +506,10 @@ class SettingsService {
 
   // Cleanup resources
   cleanup(): void {
+    this.isDestroyed = true;
+    this.pendingSync = false;
+    this.isSyncing = false;
+
     // Remove auth state listener
     if (this.authStateListener) {
       this.authStateListener.remove();

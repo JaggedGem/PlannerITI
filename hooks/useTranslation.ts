@@ -14,16 +14,32 @@ export function useTranslation() {
   const [currentLanguage, setCurrentLanguage] = useState(scheduleService.getSettings().language);
   
   useEffect(() => {
+    let unsubscribe: (() => void) | null = null;
+
     // Initial setup
     setCurrentLanguage(scheduleService.getSettings().language);
     
     // Subscribe to settings changes
-    const unsubscribe = scheduleService.subscribe(() => {
-      setCurrentLanguage(scheduleService.getSettings().language);
-    });
+    try {
+      unsubscribe = scheduleService.subscribe(() => {
+        try {
+          setCurrentLanguage(scheduleService.getSettings().language);
+        } catch (error) {
+          console.error('Error updating current language:', error);
+        }
+      });
+    } catch (error) {
+      console.error('Error subscribing to schedule service:', error);
+    }
 
     return () => {
-      unsubscribe();
+      if (unsubscribe) {
+        try {
+          unsubscribe();
+        } catch (error) {
+          console.error('Error unsubscribing from schedule service:', error);
+        }
+      }
     };
   }, []);
 

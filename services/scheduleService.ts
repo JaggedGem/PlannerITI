@@ -375,7 +375,26 @@ export const scheduleService = {
     this._scheduleRefreshVersion += 1;
     this.notifyListeners();
   },
-  async ready(): Promise<void> { if (this._ready) return; if (this._initializing) { return new Promise(res => { const i = setInterval(()=>{ if(this._ready){ clearInterval(i); res(); }},50); }); } await this.initialize(); },
+  async ready(): Promise<void> {
+    if (this._ready) return;
+    if (this._initializing) {
+      return new Promise((res, rej) => {
+        const i = setInterval(() => {
+          if (this._ready) {
+            clearInterval(i);
+            clearTimeout(timeout);
+            res();
+          }
+        }, 50);
+        // Add timeout to prevent infinite waiting
+        const timeout = setTimeout(() => {
+          clearInterval(i);
+          rej(new Error('Timeout waiting for schedule service initialization'));
+        }, 30000); // 30 second timeout
+      });
+    }
+    await this.initialize();
+  },
   registerSettingsSync(options: { triggerSync: () => void; isApplyingServerSettings: () => boolean }) {
     this._triggerExternalSync = options.triggerSync;
     this._isApplyingServerSettings = options.isApplyingServerSettings;

@@ -133,10 +133,13 @@ const CoursesView = memo(({
     timersRef.current.forEach(timer => clearTimeout(timer));
     timersRef.current = [];
     
+    let frameId: number | null = null;
+    let interaction: any = null;
+    
     // Schedule first batch of work after all current UI work completes
-    const interaction = InteractionManager.runAfterInteractions(() => {
+    interaction = InteractionManager.runAfterInteractions(() => {
       // Then use RAF to schedule the update for next frame
-      const frameId = requestAnimationFrame(() => {
+      frameId = requestAnimationFrame(() => {
         if (!isComponentMountedRef.current) return;
         
         setReadyToRender(true);
@@ -157,15 +160,19 @@ const CoursesView = memo(({
         }, 16);
         timersRef.current.push(timer1);
       });
-      
-      // Store frameId for cleanup
-      return () => cancelAnimationFrame(frameId);
     });
     
     // Cleanup function
     return () => {
       // Cancel the interaction
-      interaction.cancel();
+      if (interaction) {
+        interaction.cancel();
+      }
+      
+      // Cancel animation frame if pending
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId);
+      }
       
       // Clear all timers
       timersRef.current.forEach(timer => clearTimeout(timer));

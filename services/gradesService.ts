@@ -6,6 +6,7 @@
 const LOGIN_URL = 'https://api.ceiti.md/date/login';
 // Info URL for retrieving student data
 const INFO_URL = 'https://api.ceiti.md/index.php/date/info/';
+const REQUEST_TIMEOUT = 15000;
 
 /**
  * Sends a login request with the student's IDNP to the CEITI API
@@ -13,6 +14,18 @@ const INFO_URL = 'https://api.ceiti.md/index.php/date/info/';
  * @returns Promise with the login response
  */
 export const loginWithIdnp = async (idnp: string, signal?: AbortSignal): Promise<any> => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+  const abortListener = () => controller.abort();
+
+  if (signal) {
+    if (signal.aborted) {
+      controller.abort();
+    } else {
+      signal.addEventListener('abort', abortListener, { once: true });
+    }
+  }
+
   try {
     const response = await fetch(LOGIN_URL, {
       method: 'POST',
@@ -20,7 +33,7 @@ export const loginWithIdnp = async (idnp: string, signal?: AbortSignal): Promise
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: `idnp=${idnp}`,
-      signal,
+      signal: controller.signal,
     });
     
     if (!response.ok) {
@@ -31,6 +44,11 @@ export const loginWithIdnp = async (idnp: string, signal?: AbortSignal): Promise
   } catch (error) {
     // Silently handle errors
     throw error;
+  } finally {
+    clearTimeout(timeoutId);
+    if (signal) {
+      signal.removeEventListener('abort', abortListener);
+    }
   }
 };
 
@@ -993,8 +1011,20 @@ export const gradesDataService = {
     return () => gradeListeners.delete(listener);
   },
   notify() {
-    gradeListeners.forEach(l => l());
+    gradeListeners.forEach(l => {
+      try {
+        l();
+      } catch (error) {
+        console.error('Error notifying grades listener:', error);
+      }
+    });
     DeviceEventEmitter.emit(GRADES_UPDATED_EVENT);
+  },
+  clearAllListeners() {
+    gradeListeners.clear();
+  },
+  getListenerCount() {
+    return gradeListeners.size;
   },
   cancelRefresh(idnp?: string) {
     if (idnp) {
