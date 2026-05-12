@@ -248,7 +248,7 @@ The app uses `app.config.js` for configuration. Key settings:
 
 - **App Name**: PlannerITI
 - **Slug**: planneriti
-- **Version**: 1.3.0
+- **Version**: 1.4.0
 - **Orientation**: Portrait (locked)
 - **Splash Screen**: Custom splash with icon
 - **Theme**: Automatic light/dark
