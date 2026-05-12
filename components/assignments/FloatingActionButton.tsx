@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { StyleSheet, TouchableOpacity, View, Text } from 'react-native';
+import { TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { 
@@ -11,6 +11,7 @@ import Animated, {
   Easing 
 } from 'react-native-reanimated';
 import { Colors } from '@/constants/Colors';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 
 interface FloatingActionButtonProps {
   onPress: () => void;
@@ -20,6 +21,8 @@ const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 const AnimatedGradient = Animated.createAnimatedComponent(LinearGradient);
 
 export default function FloatingActionButton({ onPress }: FloatingActionButtonProps) {
+  const { colors, styles } = useThemedStyles(createStyles);
+
   // Animated values
   const scale = useSharedValue(1);
   const opacity = useSharedValue(1);
@@ -61,24 +64,26 @@ export default function FloatingActionButton({ onPress }: FloatingActionButtonPr
       activeOpacity={1}
     >
       <AnimatedGradient
-        colors={[Colors.dark.primary, Colors.dark.primaryStrong]}
+        colors={[colors.primary, colors.primaryStrong]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.gradient}
       >
-        <Ionicons name="add" size={32} color={Colors.dark.white} />
+        <Ionicons name="add" size={32} color={colors.white} />
       </AnimatedGradient>
     </AnimatedTouchable>
   );
 }
 
-const styles = StyleSheet.create({
+type ThemeColors = typeof Colors.light;
+
+const createStyles = (colors: ThemeColors) => ({
   container: {
     position: 'absolute',
     bottom: 24,
     right: 24,
     elevation: 8,
-    shadowColor: Colors.dark.shadow,
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -91,4 +96,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   }
-}); 
+});

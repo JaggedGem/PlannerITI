@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Colors } from '../../constants/Colors';
-import { useColorScheme } from 'react-native';
+import { useColorScheme } from '@/hooks/useColorScheme';
 import CourseAssignment, { CourseAssignmentType } from './CourseAssignment';
 
 type AssignmentDayProps = {

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Colors } from '../../constants/Colors';
-import { useColorScheme } from 'react-native';
+import { useColorScheme } from '@/hooks/useColorScheme';
 import { Feather } from '@expo/vector-icons';
 
 export type ChecklistItemType = {
@@ -28,7 +28,7 @@ export default function ChecklistItem({ item, onToggle }: ChecklistItemProps) {
       >
         {item.isCompleted ? (
           <View style={[styles.checked, { backgroundColor: colors.tint }]}>
-            <Feather name="check" size={14} color={Colors.dark.white} />
+            <Feather name="check" size={14} color={colors.white} />
           </View>
         ) : (
           <View style={[styles.unchecked, { borderColor: colors.text }]} />

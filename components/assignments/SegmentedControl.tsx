@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { Colors } from '../../constants/Colors';
+import { View, Text, TouchableOpacity } from 'react-native';
+import { Colors } from '@/constants/Colors';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 
 type SegmentedControlProps = {
   segments: string[];
@@ -13,6 +14,8 @@ export default function SegmentedControl({
   selectedIndex,
   onChange,
 }: SegmentedControlProps) {
+  const { styles } = useThemedStyles(createStyles);
+
   return (
     <View style={styles.container}>
       {segments.map((segment, index) => (
@@ -42,12 +45,14 @@ export default function SegmentedControl({
   );
 }
 
-const styles = StyleSheet.create({
+type ThemeColors = typeof Colors.light;
+
+const createStyles = (colors: ThemeColors) => ({
   container: {
     flexDirection: 'row',
     borderRadius: 10,
     overflow: 'hidden',
-    backgroundColor: Colors.dark.surfaceSecondary,
+    backgroundColor: colors.surfaceSecondary,
     marginTop: 4,
     position: 'relative',
   },
@@ -58,21 +63,21 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   selectedSegment: {
-    backgroundColor: Colors.dark.primaryStrong,
+    backgroundColor: colors.primaryStrong,
   },
   segmentText: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.dark.mutedText,
+    color: colors.mutedText,
   },
   selectedSegmentText: {
-    color: Colors.dark.white,
+    color: colors.white,
     fontWeight: '700',
   },
   separator: {
     width: 1,
-    backgroundColor: Colors.dark.separatorBackground,
+    backgroundColor: colors.separatorBackground,
     alignSelf: 'stretch',
     marginVertical: 8,
   },
-}); 
+});

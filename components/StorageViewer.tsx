@@ -2,7 +2,6 @@ import React, { useState, useCallback } from 'react';
 import { 
   View, 
   Text, 
-  StyleSheet, 
   Modal, 
   TouchableOpacity, 
   ScrollView
@@ -11,6 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { Colors } from '@/constants/Colors';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 
 type StorageViewerProps = {
   visible: boolean;
@@ -20,6 +20,7 @@ type StorageViewerProps = {
 
 export const StorageViewer = ({ visible, onClose, items }: StorageViewerProps) => {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const { colors, styles } = useThemedStyles(createStyles);
 
   // Function to toggle item expansion
   const toggleItemExpansion = useCallback((key: string) => {
@@ -49,7 +50,7 @@ export const StorageViewer = ({ visible, onClose, items }: StorageViewerProps) =
               style={styles.closeButton}
               onPress={onClose}
             >
-              <MaterialIcons name="close" size={24} color={Colors.dark.white} />
+              <MaterialIcons name="close" size={24} color={colors.white} />
             </TouchableOpacity>
           </View>
           
@@ -64,7 +65,7 @@ export const StorageViewer = ({ visible, onClose, items }: StorageViewerProps) =
                   <MaterialIcons 
                     name={expandedItems.has(key) ? "expand-less" : "expand-more"} 
                     size={18} 
-                    color={Colors.dark.white} 
+                    color={colors.white} 
                   />
                 </TouchableOpacity>
                 
@@ -89,7 +90,9 @@ export const StorageViewer = ({ visible, onClose, items }: StorageViewerProps) =
   );
 };
 
-const styles = StyleSheet.create({
+type ThemeColors = typeof Colors.light;
+
+const createStyles = (_colors: ThemeColors) => ({
   container: {
     flex: 1,
     backgroundColor: Colors.dark.storageContainerBackground,
@@ -157,4 +160,4 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     fontStyle: 'italic',
   },
-}); 
+});

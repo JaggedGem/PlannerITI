@@ -1,7 +1,8 @@
-import { StyleSheet, View, Dimensions } from 'react-native';
+import { View, Dimensions } from 'react-native';
 import { useCallback } from 'react';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { Colors } from '@/constants/Colors';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 
 interface TimeIndicatorProps {
   startTime: string;
@@ -11,6 +12,7 @@ interface TimeIndicatorProps {
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
 export function TimeIndicator({ startTime, endTime }: TimeIndicatorProps) {
+  const { styles } = useThemedStyles(createStyles);
   const animatedStyle = useAnimatedStyle(() => {
     'worklet';
     const now = new Date();
@@ -36,7 +38,7 @@ export function TimeIndicator({ startTime, endTime }: TimeIndicatorProps) {
   });
 
   return (
-    <View style={StyleSheet.absoluteFill}>
+    <View style={styles.fill}>
       <View style={styles.container}>
         <View style={styles.arrow} />
         <Animated.View style={[styles.line, animatedStyle]} />
@@ -45,7 +47,9 @@ export function TimeIndicator({ startTime, endTime }: TimeIndicatorProps) {
   );
 }
 
-const styles = StyleSheet.create({
+type ThemeColors = typeof Colors.light;
+
+const createStyles = (_colors: ThemeColors) => ({
   container: {
     position: 'absolute',
     left: -500,
@@ -54,6 +58,13 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     zIndex: 1,
+  },
+  fill: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
   },
   line: {
     position: 'absolute',

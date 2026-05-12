@@ -1,10 +1,11 @@
 import React, { useMemo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Pressable, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, Pressable, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTranslation } from '@/hooks/useTranslation';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { Colors } from '@/constants/Colors';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 
 interface AssignmentOptionsMenuProps {
   isVisible: boolean;
@@ -23,6 +24,7 @@ export function AssignmentOptionsMenu({
 }: AssignmentOptionsMenuProps) {
   const { t } = useTranslation();
   const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+  const { colors, styles } = useThemedStyles(createStyles);
 
   // Calculate an appropriate position if none provided
   const menuPosition = useMemo(() => {
@@ -83,7 +85,7 @@ export function AssignmentOptionsMenu({
           style={styles.menuItem}
           onPress={handleEdit}
         >
-          <Ionicons name="create-outline" size={18} color={Colors.dark.primary} />
+          <Ionicons name="create-outline" size={18} color={colors.primary} />
           <Text style={styles.menuItemText}>{t('assignments').edit}</Text>
         </TouchableOpacity>
         
@@ -97,7 +99,7 @@ export function AssignmentOptionsMenu({
                 onClose();
               }}
             >
-              <Ionicons name="trash-outline" size={18} color={Colors.dark.red} />
+              <Ionicons name="trash-outline" size={18} color={colors.red} />
               <Text style={[styles.menuItemText, styles.deleteText]}>{t('assignments').delete}</Text>
             </TouchableOpacity>
           </>
@@ -107,31 +109,33 @@ export function AssignmentOptionsMenu({
   );
 }
 
-const styles = StyleSheet.create({
+type ThemeColors = typeof Colors.light;
+
+const createStyles = (colors: ThemeColors) => ({
   overlay: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: Colors.dark.overlayBlack50,
+    backgroundColor: colors.overlayBlack50,
   },
   menuContainer: {
     position: 'absolute',
-    backgroundColor: Colors.dark.borderMuted,
+    backgroundColor: colors.borderMuted,
     borderRadius: 12,
     paddingVertical: 6,
     minWidth: 150,
-    shadowColor: Colors.dark.shadow,
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 10,
     elevation: 8,
     borderWidth: 1,
-    borderColor: Colors.dark.borderStrong,
+    borderColor: colors.borderStrong,
     // Add small drop shadow at the top to simulate a pointer
     borderTopWidth: 1,
-    borderTopColor: Colors.dark.borderStrong,
+    borderTopColor: colors.borderStrong,
   },
   menuItem: {
     flexDirection: 'row',
@@ -142,15 +146,15 @@ const styles = StyleSheet.create({
   menuItemText: {
     fontSize: 15,
     fontWeight: '500',
-    color: Colors.dark.white,
+    color: colors.text,
     marginLeft: 12,
   },
   deleteText: {
-    color: Colors.dark.red,
+    color: colors.red,
   },
   divider: {
     height: 1,
-    backgroundColor: Colors.dark.borderStrong,
+    backgroundColor: colors.borderStrong,
     marginHorizontal: 8,
   }
-}); 
+});

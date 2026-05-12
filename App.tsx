@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { ExpoRoot } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Notifications from 'expo-notifications';
@@ -8,14 +8,20 @@ import { scheduleService } from './services/scheduleService';
 import { gradesDataService } from './services/gradesService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAssignments } from './utils/assignmentStorage';
+import { initializeThemePreference } from './hooks/useColorScheme';
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
 
 export default function App() {
+  const [appReady, setAppReady] = useState(false);
+
   useEffect(() => {
     const init = async () => {
       try {
+        // Resolve persisted theme before mounting route modules.
+        await initializeThemePreference();
+
         // Always attempt to refresh schedule on app open (online -> fetch, offline -> cached)
         try {
           await scheduleService.ready();
@@ -49,6 +55,7 @@ export default function App() {
       } finally {
         // Hide splash screen once the app is ready
         await SplashScreen.hideAsync();
+        setAppReady(true);
       }
     };
     
@@ -69,6 +76,10 @@ export default function App() {
       subscription.remove();
     };
   }, []);
+
+  if (!appReady) {
+    return null;
+  }
 
   return (
     <>

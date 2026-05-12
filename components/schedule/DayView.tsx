@@ -1,4 +1,4 @@
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Dimensions, ViewStyle, TextStyle, ActivityIndicator, InteractionManager } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Dimensions, ViewStyle, TextStyle, ActivityIndicator, InteractionManager } from 'react-native';
 import { SafeAreaView, Edge } from 'react-native-safe-area-context';
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import {
@@ -26,6 +26,7 @@ import {
   thesisMatchesScheduleSlot,
 } from '@/utils/specialScheduleUtils';
 import { Colors } from '@/constants/Colors';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 
 // Key for storing whether the tutorial has been shown
 const TUTORIAL_SHOWN_KEY = 'schedule_tutorial_shown';
@@ -138,6 +139,7 @@ interface ScheduleInfoBadgeProps {
 
 const ScheduleInfoBadge = ({ label, title, reason, details = [] }: ScheduleInfoBadgeProps) => {
   const [showInfo, setShowInfo] = useState(false);
+  const { colors, styles } = useThemedStyles(createStyles);
 
   const popupAnimation = useAnimatedStyle(() => {
     return {
@@ -170,7 +172,7 @@ const ScheduleInfoBadge = ({ label, title, reason, details = [] }: ScheduleInfoB
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <LinearGradient
-            colors={Colors.dark.recoveryInfoGradient}
+            colors={colors.recoveryInfoGradient}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.recoveryDayInfoButtonGradient}
@@ -220,6 +222,7 @@ interface WeekDateInfo {
 }
 
 export default function DayView() {
+  const { colors, styles } = useThemedStyles(createStyles);
   const [scheduleData, setScheduleData] = useState<ApiResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1185,7 +1188,7 @@ export default function DayView() {
                   }}
                   onPress={() => fetchSchedule()}
                 >
-                  <Text style={{ color: Colors.dark.white, fontWeight: '600' }}>
+                  <Text style={{ color: colors.text, fontWeight: '600' }}>
                     Retry
                   </Text>
                 </TouchableOpacity>
@@ -1617,7 +1620,7 @@ export default function DayView() {
                                       <Ionicons 
                                         name={getAssignmentTypeIcon(assignment.assignmentType)} 
                                         size={12} 
-                                        color={Colors.dark.white} 
+                                        color={colors.text} 
                                       />
                                     </View>
                                     <View style={styles.assignmentDetails}>
@@ -1837,17 +1840,19 @@ type Styles = {
   thesisInlineMeta: TextStyle;
 };
 
-const styles = StyleSheet.create<Styles>({
+type ThemeColors = typeof Colors.light;
+
+const createStyles = (colors: ThemeColors): Styles => ({
   container: {
     flex: 1,
-    backgroundColor: Colors.dark.backgroundSecondary, // Darker background for more contrast
+    backgroundColor: colors.backgroundSecondary,
   },
   header: {
     padding: 20,
-    backgroundColor: Colors.dark.backgroundTertiary, // Subtle distinction from background
+    backgroundColor: colors.backgroundTertiary,
     borderBottomRightRadius: 32,
     borderBottomLeftRadius: 32,
-    shadowColor: Colors.dark.black,
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
@@ -1864,30 +1869,30 @@ const styles = StyleSheet.create<Styles>({
   headerTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: Colors.dark.white,
+    color: colors.text,
     textAlign: 'center',
     letterSpacing: 0.5,
   },
   weekInfo: {
-    backgroundColor: Colors.dark.primaryStrong,
+    backgroundColor: colors.primaryStrong,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 16,
   },
   weekText: {
-    color: Colors.dark.white,
+    color: colors.white,
     fontSize: 14,
     fontWeight: '600',
     letterSpacing: 0.3,
   },
   weekInfo2: {
-    backgroundColor: Colors.dark.primaryStrong, // More vibrant blue for consistency
+    backgroundColor: colors.primaryStrong,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 12,
   },
   weekText2: {
-    color: Colors.dark.white,
+    color: colors.white,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -1936,7 +1941,7 @@ const styles = StyleSheet.create<Styles>({
     marginBottom: 6,
   },
   dateNumber: {
-    color: Colors.dark.white,
+    color: colors.text,
     fontSize: 20,
     fontWeight: '700',
     marginBottom: 6, // Increased to make room for today dot
@@ -1994,7 +1999,7 @@ const styles = StyleSheet.create<Styles>({
     padding: 16,
   },
   className: {
-    color: Colors.dark.white,
+    color: colors.text,
     fontSize: 16,
     fontWeight: '600',
     letterSpacing: 0.3,
@@ -2100,7 +2105,7 @@ const styles = StyleSheet.create<Styles>({
     position: 'absolute',
     left: 60,
     backgroundColor: Colors.dark.red,
-    color: Colors.dark.white,
+    color: colors.text,
     fontSize: 12,
     fontWeight: 'bold',
     paddingHorizontal: 6,
@@ -2122,7 +2127,7 @@ const styles = StyleSheet.create<Styles>({
     width: 6,
     height: 6,
     borderRadius: 3,
-    shadowColor: Colors.dark.white,
+    shadowColor: colors.text,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
     shadowRadius: 4,
@@ -2217,12 +2222,12 @@ const styles = StyleSheet.create<Styles>({
     marginVertical: 8,
   },
   recoveryTitle: {
-    color: Colors.dark.white,
+    color: colors.text,
     fontSize: 14,
     fontWeight: '700',
   },
   recoveryInfo: {
-    color: Colors.dark.white,
+    color: colors.text,
     fontSize: 12,
     marginTop: 4,
   },
@@ -2380,7 +2385,7 @@ const styles = StyleSheet.create<Styles>({
     elevation: 5,
   },
   firstTimeIndicatorText: {
-    color: Colors.dark.white,
+    color: colors.text,
     fontSize: 14,
     fontWeight: '600',
     marginHorizontal: 8,
@@ -2571,7 +2576,7 @@ const styles = StyleSheet.create<Styles>({
     fontWeight: '600',
   },
   assessmentSubjectText: {
-    color: Colors.dark.white,
+    color: colors.text,
     fontSize: 15,
     fontWeight: '600',
   },

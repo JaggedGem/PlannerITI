@@ -1,14 +1,17 @@
 import React, { useEffect } from 'react';
-import { StyleSheet, View, Dimensions, BackHandler, Platform, StatusBar } from 'react-native';
+import { View, Dimensions, BackHandler, Platform, StatusBar } from 'react-native';
 import { ModernDropdown, ModernDropdownProps } from './modernDropdown';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/Colors';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 
 /**
  * A wrapper around ModernDropdown that ensures it always renders on top
  * of other content regardless of parent layout or content changes
  */
 export function ModernDropdownPortal(props: ModernDropdownProps) {
+  const { styles } = useThemedStyles(createStyles);
+
   // Handle back button on Android
   useEffect(() => {
     if (!props.isVisible) return;
@@ -52,18 +55,20 @@ export function ModernDropdownPortal(props: ModernDropdownProps) {
   );
 }
 
-const styles = StyleSheet.create({
+type ThemeColors = typeof Colors.light;
+
+const createStyles = (colors: ThemeColors) => ({
   portalContainer: {
     position: 'absolute',
     top: 0,
     left: 0,
     zIndex: 10000,
     elevation: 10000,
-    backgroundColor: Colors.dark.transparent,
+    backgroundColor: colors.transparent,
   },
   modalWrapper: {
     flex: 1,
-    backgroundColor: Colors.dark.transparent,
+    backgroundColor: colors.transparent,
     ...Platform.select({
       ios: {
         zIndex: 10000, 
@@ -73,4 +78,4 @@ const styles = StyleSheet.create({
       }
     }),
   }
-}); 
+});

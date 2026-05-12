@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, Pressable } from 'react-native';
 import CourseSection from './CourseSection';
 import { Assignment, getPeriodById } from '../../utils/assignmentStorage';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Period } from '../../services/scheduleService';
 import { useTranslation } from '@/hooks/useTranslation';
 import { Colors } from '@/constants/Colors';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 
 type DaySectionProps = {
   title: string;
@@ -33,27 +34,29 @@ interface EnhancedAssignment extends Assignment {
 }
 
 // Get day color based on day name - moved outside component
-const getDayColor = (title: string, t: any): [string, string] => {
+type ThemeColors = typeof Colors.light;
+
+const getDayColor = (title: string, t: any, colors: ThemeColors): [string, string] => {
   if (title.includes(t('assignments').days.today)) {
-    return Colors.dark.dayGradients.today as [string, string];
+    return colors.dayGradients.today as [string, string];
   } else if (title.includes(t('assignments').days.tomorrow)) {
-    return Colors.dark.dayGradients.tomorrow as [string, string];
+    return colors.dayGradients.tomorrow as [string, string];
   } else if (title.startsWith(t('assignments').days.monday)) {
-    return Colors.dark.dayGradients.monday as [string, string];
+    return colors.dayGradients.monday as [string, string];
   } else if (title.startsWith(t('assignments').days.tuesday)) {
-    return Colors.dark.dayGradients.tuesday as [string, string];
+    return colors.dayGradients.tuesday as [string, string];
   } else if (title.startsWith(t('assignments').days.wednesday)) {
-    return Colors.dark.dayGradients.wednesday as [string, string];
+    return colors.dayGradients.wednesday as [string, string];
   } else if (title.startsWith(t('assignments').days.thursday)) {
-    return Colors.dark.dayGradients.thursday as [string, string];
+    return colors.dayGradients.thursday as [string, string];
   } else if (title.startsWith(t('assignments').days.friday)) {
-    return Colors.dark.dayGradients.friday as [string, string];
+    return colors.dayGradients.friday as [string, string];
   } else if (title.startsWith(t('assignments').days.saturday)) {
-    return Colors.dark.dayGradients.saturday as [string, string];
+    return colors.dayGradients.saturday as [string, string];
   } else if (title.startsWith(t('assignments').days.sunday)) {
-    return Colors.dark.dayGradients.sunday as [string, string];
+    return colors.dayGradients.sunday as [string, string];
   } else {
-    return Colors.dark.dayGradients.fallback as [string, string];
+    return colors.dayGradients.fallback as [string, string];
   }
 };
 
@@ -72,6 +75,7 @@ export default function DaySection({
   const rotation = useSharedValue(isCollapsed ? 0 : 0.5);
   const [enhancedAssignments, setEnhancedAssignments] = useState<EnhancedAssignment[]>([]);
   const { t } = useTranslation();
+  const { colors, styles } = useThemedStyles(createStyles);
   
   // Memoize the highlight value to prevent re-renders
   const memoizedHighlight = useMemo(() => assignmentToHighlight, [assignmentToHighlight]);
@@ -171,7 +175,7 @@ export default function DaySection({
     };
   });
   
-  const colors = getDayColor(title, t);
+  const dayGradient = getDayColor(title, t, colors);
   
   return (
     <Animated.View 
@@ -186,7 +190,7 @@ export default function DaySection({
         ]}
       >
         <LinearGradient
-          colors={colors}
+          colors={dayGradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
           style={styles.headerGradient}
@@ -199,7 +203,7 @@ export default function DaySection({
             <View style={styles.countContainer}>
               <Text style={styles.count}>{assignments.length}</Text>
               <Animated.View style={[styles.chevron, chevronStyle]}>
-                <Ionicons name="chevron-down" size={18} color={Colors.dark.white} />
+                <Ionicons name="chevron-down" size={18} color={colors.white} />
               </Animated.View>
             </View>
           </View>
@@ -240,13 +244,13 @@ export default function DaySection({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => ({
   container: {
     marginBottom: 14,
     borderRadius: 16,
     overflow: 'hidden',
-    backgroundColor: Colors.dark.backgroundApp,
-    shadowColor: Colors.dark.shadow,
+    backgroundColor: colors.backgroundApp,
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 3,
@@ -272,12 +276,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 17,
     fontWeight: '600',
-    color: Colors.dark.white,
+    color: colors.text,
     marginBottom: 2,
   },
   date: {
     fontSize: 13,
-    color: Colors.dark.overlayWhite80,
+    color: colors.overlayWhite80,
   },
   countContainer: {
     flexDirection: 'row',
@@ -286,7 +290,7 @@ const styles = StyleSheet.create({
   count: {
     fontSize: 16,
     fontWeight: '600',
-    color: Colors.dark.white,
+    color: colors.white,
     marginRight: 8,
   },
   chevron: {
@@ -306,4 +310,4 @@ const styles = StyleSheet.create({
   lastCourseSection: {
     marginBottom: 0,
   }
-}); 
+});

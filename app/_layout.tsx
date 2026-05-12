@@ -3,7 +3,7 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { useFonts } from 'expo-font';
 import { SplashScreen, Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { useColorScheme, StatusBar } from 'react-native';
+import { StatusBar } from 'react-native';
 import { Colors } from '@/constants/Colors';
 import authService from '../services/authService';
 import LoginNotification from '@/components/LoginNotification';
@@ -16,6 +16,7 @@ import { getAssignments } from '@/utils/assignmentStorage';
 import { scheduleAllNotifications } from '@/utils/notificationUtils';
 import { gradesDataService } from '@/services/gradesService';
 import * as SystemUI from 'expo-system-ui';
+import { initializeThemePreference, useColorScheme } from '@/hooks/useColorScheme';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -40,8 +41,19 @@ export default function RootLayout() {
     ...FontAwesome.font,
   });
   const [startupReady, setStartupReady] = useState(false);
+  const [themeReady, setThemeReady] = useState(false);
 
   const colorScheme = useColorScheme();
+  useEffect(() => {
+    initializeThemePreference()
+      .catch(() => {
+        // Fall back to system theme if preference can't be read.
+      })
+      .finally(() => {
+        setThemeReady(true);
+      });
+  }, []);
+
   useEffect(() => {
     const theme = Colors[colorScheme === 'dark' ? 'dark' : 'light'];
     SystemUI.setBackgroundColorAsync(
@@ -184,7 +196,7 @@ export default function RootLayout() {
     }
   }, [loaded, startupReady]);
 
-  if (!loaded || !startupReady) {
+  if (!loaded || !startupReady || !themeReady) {
     return null;
   }
 

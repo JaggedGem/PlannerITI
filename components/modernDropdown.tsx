@@ -5,7 +5,7 @@ import {
   View, 
   Text, 
   Platform, 
-  StyleSheet, 
+  
   ScrollView, 
   Dimensions, 
   TextInput,
@@ -25,6 +25,7 @@ import Animated, {
   useSharedValue
 } from 'react-native-reanimated';
 import { Colors } from '@/constants/Colors';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 
 export type SegmentItem = {
   id: string;
@@ -146,6 +147,7 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
   const [filteredTabs, setFilteredTabs] = useState<Tab[]>(tabs || []);
   const [activeTabId, setActiveTabId] = useState<string>(selectedTabId || (tabs && tabs.length > 0 ? tabs[0].id : ''));
   const [itemPress, setItemPress] = useState<string | null>(null);
+  const { styles } = useThemedStyles(createStyles);
   
   // Animation values
   const buttonScale = useSharedValue(1);
@@ -674,7 +676,9 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
   );
 });
 
-const styles = StyleSheet.create({
+type ThemeColors = typeof Colors.light;
+
+const createStyles = (_colors: ThemeColors) => ({
   // Modal container styles
     modalOverlay: {
         flex: 1,

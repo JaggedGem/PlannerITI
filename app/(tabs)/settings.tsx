@@ -29,6 +29,7 @@ import { initializeNotifications } from '../../utils/notificationUtils';
 import { updateService } from '@/services/updateService';
 import { BottomModalPortal } from '@/components/BottomModalPortal';
 import { Colors } from '@/constants/Colors';
+import { setThemePreference, ThemePreference, useThemePreference } from '@/hooks/useColorScheme';
 
 // Store keys
 const IDNP_KEY = '@planner_idnp';
@@ -460,6 +461,7 @@ export default function Settings() {
   const router = useRouter();
   const flatListRef = useRef<FlatList<Group>>(null);
   const { user, logout, reloadUser, loading } = useAuthContext();
+  const themePreference = useThemePreference();
   
   // State hooks
   const [settings, setSettings] = useState(scheduleService.getSettings());
@@ -507,6 +509,16 @@ export default function Settings() {
   const [isRefreshingSchedule, setIsRefreshingSchedule] = useState(false);
   const [lastScheduleRefresh, setLastScheduleRefresh] = useState<Date | null>(null);
   const [devGradeActive, setDevGradeActive] = useState<boolean>(false);
+  const [isApplyingTheme, setIsApplyingTheme] = useState(false);
+
+  const themeOptionLabels: Record<ThemePreference, string> = useMemo(
+    () => ({
+      system: t('settings').appearance.system,
+      light: t('settings').appearance.light,
+      dark: t('settings').appearance.dark,
+    }),
+    [t]
+  );
 
   // Load last refresh time on mount
   useEffect(() => {
@@ -574,6 +586,29 @@ export default function Settings() {
       Alert.alert('Error', 'Could not toggle grade injection');
     }
   }, [devGradeActive]);
+
+  const handleThemePreferenceChange = useCallback(
+    async (nextPreference: ThemePreference) => {
+      if (isApplyingTheme || nextPreference === themePreference) {
+        return;
+      }
+
+      setIsApplyingTheme(true);
+
+      try {
+        await setThemePreference(nextPreference);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      } catch {
+        Alert.alert(
+          t('settings').appearance.changeFailedTitle,
+          t('settings').appearance.changeFailedMessage
+        );
+      } finally {
+        setIsApplyingTheme(false);
+      }
+    },
+    [isApplyingTheme, t, themePreference]
+  );
 
   // Add useEffect to load IDNP and listen for updates
   useEffect(() => {
@@ -1822,6 +1857,38 @@ export default function Settings() {
           </View>
         )}
 
+        {/* Appearance Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="palette" size={24} color={Colors.dark.primaryStrong} style={styles.sectionIcon} />
+            <Text style={styles.sectionTitle}>{t('settings').appearance.title}</Text>
+          </View>
+          <Text style={styles.sectionSubtitleCompact}>{t('settings').appearance.description}</Text>
+          <View style={styles.optionsContainer}>
+            {(['system', 'light', 'dark'] as ThemePreference[]).map((option) => (
+              <TouchableOpacity
+                key={option}
+                style={[
+                  styles.optionButton,
+                  themePreference === option && styles.selectedOption,
+                  isApplyingTheme && styles.optionButtonDisabled,
+                ]}
+                onPress={() => handleThemePreferenceChange(option)}
+                disabled={isApplyingTheme}
+              >
+                <Text
+                  style={[
+                    styles.optionText,
+                    themePreference === option && styles.selectedOptionText,
+                  ]}
+                >
+                  {themeOptionLabels[option]}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
         {/* Language Selection Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -2582,6 +2649,12 @@ const styles = StyleSheet.create({
     color: Colors.dark.white,
     textAlignVertical: 'center',
   },
+  sectionSubtitleCompact: {
+    color: Colors.dark.mutedText,
+    fontSize: 14,
+    marginBottom: 12,
+    lineHeight: 20,
+  },
   optionsContainer: {
     flexDirection: 'row',
     gap: 12,
@@ -2592,6 +2665,9 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
+  },
+  optionButtonDisabled: {
+    opacity: 0.7,
   },
   selectedOption: {
     backgroundColor: Colors.dark.primaryStrong,

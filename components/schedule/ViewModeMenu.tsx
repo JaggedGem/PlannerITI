@@ -12,6 +12,7 @@ import Animated, {
 import { scheduleService, ScheduleView } from '@/services/scheduleService';
 import { useTranslation } from '@/hooks/useTranslation';
 import { Colors } from '@/constants/Colors';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 
 
 interface ViewModeMenuProps {
@@ -25,6 +26,7 @@ interface ViewModeMenuProps {
 export default function ViewModeMenu({ isOpen, onClose, isEvenWeek, weekText, currentView }: ViewModeMenuProps) {
   const { t } = useTranslation();
   const { width: SCREEN_WIDTH } = Dimensions.get('window');
+  const { styles } = useThemedStyles(createStyles);
 
   // Shared progress value (0 -> closed, 1 -> open)
   const progress = useSharedValue(isOpen ? 1 : 0);
@@ -149,7 +151,9 @@ export default function ViewModeMenu({ isOpen, onClose, isEvenWeek, weekText, cu
   );
 }
 
-const styles = StyleSheet.create({
+type ThemeColors = typeof Colors.light;
+
+const createStyles = (_colors: ThemeColors) => ({
   overlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 1000,

@@ -1,6 +1,5 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { 
-  StyleSheet, 
   View, 
   Text, 
   TouchableOpacity, 
@@ -17,6 +16,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from '@/hooks/useTranslation';
 import { router } from 'expo-router';
 import { Colors } from '@/constants/Colors';
+import { useColorScheme } from '@/hooks/useColorScheme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 
 // Get screen dimensions
 const { width, height } = Dimensions.get('window');
@@ -33,6 +34,8 @@ export default function ArchiveView({
   onDeleteAssignment,
 }: ArchiveViewProps) {
   const { t, formatFullDate } = useTranslation();
+  const colorScheme = useColorScheme() ?? 'light';
+  const { colors, styles } = useThemedStyles(createStyles);
   
   // State for lazy loading
   const [visibleItems, setVisibleItems] = useState(15);
@@ -109,13 +112,13 @@ export default function ArchiveView({
   
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} />
       <View style={styles.header}>
         <TouchableOpacity 
           style={styles.closeButton} 
           onPress={handleClose}
         >
-          <Ionicons name="arrow-back" size={24} color={Colors.dark.white} />
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t('assignments').archive.title}</Text>
         <View style={{width: 40}} />
@@ -161,7 +164,7 @@ export default function ArchiveView({
                         assignment.isCompleted && styles.checkboxCompleted
                       ]}>
                         {assignment.isCompleted && (
-                          <Ionicons name="checkmark" size={16} color={Colors.dark.white} />
+                          <Ionicons name="checkmark" size={16} color={colors.text} />
                         )}
                       </View>
                       
@@ -181,7 +184,7 @@ export default function ArchiveView({
                         style={styles.deleteButton}
                         onPress={() => onDeleteAssignment(assignment.id)}
                       >
-                        <Ionicons name="trash-outline" size={20} color={Colors.dark.red} />
+                        <Ionicons name="trash-outline" size={20} color={colors.red} />
                       </TouchableOpacity>
                     </TouchableOpacity>
                   </Animated.View>
@@ -191,7 +194,7 @@ export default function ArchiveView({
             
             {hasMore && visibleItems < assignments.length && (
               <View style={styles.loadingMoreContainer}>
-                <ActivityIndicator color={Colors.dark.primary} />
+                <ActivityIndicator color={colors.primary} />
                 <Text style={styles.loadingMoreText}>{t('loading')}...</Text>
               </View>
             )}
@@ -202,10 +205,12 @@ export default function ArchiveView({
   );
 }
 
-const styles = StyleSheet.create({
+type ThemeColors = typeof Colors.light;
+
+const createStyles = (colors: ThemeColors) => ({
   container: {
     flex: 1,
-    backgroundColor: Colors.dark.backgroundSecondary,
+    backgroundColor: colors.backgroundSecondary,
   },
   header: {
     flexDirection: 'row',
@@ -214,18 +219,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: Platform.OS === 'ios' ? 80 : 40,
     paddingBottom: 20,
-    backgroundColor: Colors.dark.backgroundApp,
+    backgroundColor: colors.backgroundApp,
   },
   headerTitle: {
     fontSize: 22,
     fontWeight: '600',
-    color: Colors.dark.white,
+    color: colors.text,
   },
   closeButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.dark.overlayWhite10,
+    backgroundColor: colors.overlayWhite10,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -241,17 +246,17 @@ const styles = StyleSheet.create({
     paddingTop: 100,
   },
   emptyTitle: {
-    color: Colors.dark.white,
+    color: colors.text,
     fontSize: 18,
     fontWeight: '600',
     marginBottom: 8,
   },
   emptySubtitle: {
-    color: Colors.dark.mutedText,
+    color: colors.mutedText,
     fontSize: 14,
   },
   assignmentsCount: {
-    color: Colors.dark.white,
+    color: colors.text,
     fontSize: 18,
     marginBottom: 16,
   },
@@ -259,13 +264,13 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   monthTitle: {
-    color: Colors.dark.mutedText,
+    color: colors.mutedText,
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 12,
   },
   assignmentCard: {
-    backgroundColor: Colors.dark.card,
+    backgroundColor: colors.card,
     borderRadius: 12,
     marginBottom: 8,
     overflow: 'hidden',
@@ -280,37 +285,37 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: Colors.dark.primary,
+    borderColor: colors.primary,
     marginRight: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
   checkboxCompleted: {
-    backgroundColor: Colors.dark.primary,
-    borderColor: Colors.dark.primary,
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   assignmentInfo: {
     flex: 1,
   },
   assignmentTitle: {
-    color: Colors.dark.white,
+    color: colors.text,
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 4,
   },
   assignmentTitleCompleted: {
     textDecorationLine: 'line-through',
-    color: Colors.dark.mutedText,
+    color: colors.mutedText,
   },
   assignmentSubtitle: {
-    color: Colors.dark.mutedText,
+    color: colors.mutedText,
     fontSize: 14,
   },
   deleteButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.dark.overlayBlack20,
+    backgroundColor: colors.overlayBlack20,
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 12,
@@ -320,8 +325,8 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   loadingMoreText: {
-    color: Colors.dark.mutedText,
+    color: colors.mutedText,
     fontSize: 14,
     marginTop: 8,
   },
-}); 
+});

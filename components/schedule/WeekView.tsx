@@ -1,4 +1,4 @@
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Dimensions, ViewStyle, TextStyle, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Dimensions, ViewStyle, TextStyle, ActivityIndicator } from 'react-native';
 import React from 'react';
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
@@ -21,6 +21,7 @@ import {
   filterThesisEventsForDate,
 } from '@/utils/specialScheduleUtils';
 import { Colors } from '@/constants/Colors';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 
 // Get week start (Monday) from current date
 const getWeekStart = (date: Date): Date => {
@@ -137,6 +138,8 @@ const TimetableItem = ({
   color, 
   isActive,
 }: TimetableItemProps) => {
+  const { styles } = useThemedStyles(createStyles);
+
   // Safely handle assignment count
   const assignmentCount = item.assignmentCount || 0;
   
@@ -201,6 +204,7 @@ const RecoveryDayInfo = ({
   align?: 'left' | 'center' | 'right';
   details?: string[];
 }) => {
+  const { colors, styles } = useThemedStyles(createStyles);
   const [showInfo, setShowInfo] = useState(false);
   const tooltipPositionStyle = {
     left: align === 'left' ? 0 : align === 'right' ? 'auto' : '50%',
@@ -239,7 +243,7 @@ const RecoveryDayInfo = ({
           hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
         >
           <LinearGradient
-            colors={Colors.dark.recoveryGradient}
+            colors={colors.recoveryGradient as [string, string]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.recoveryDayInfoButtonGradient}
@@ -287,6 +291,7 @@ interface CurrentTimeIndicatorProps {
 }
 
 const CurrentTimeIndicator = ({ hourHeight, firstHour, timestamp, schedule }: CurrentTimeIndicatorProps) => {
+  const { styles } = useThemedStyles(createStyles);
   const currentTime = new Date(timestamp);
   const hours = currentTime.getHours();
   const minutes = currentTime.getMinutes();
@@ -371,6 +376,7 @@ type Styles = {
   todayColumn: ViewStyle;
   currentHourHighlight: ViewStyle;
   recoveryDot: TextStyle;
+  recoveryIndicator: ViewStyle;
   recoveryDayInfo: ViewStyle;
   recoveryDayInfoHeader: ViewStyle;
   recoveryDayInfoIcon: TextStyle;
@@ -420,6 +426,7 @@ const EMPTY_WEEK_SCHEDULE: Record<string, ScheduleItem[]> = {
 };
 
 export default function WeekView() {
+  const { styles } = useThemedStyles(createStyles);
   const [scheduleData, setScheduleData] = useState<ApiResponse | null>(null);
   const [weekSchedule, setWeekSchedule] = useState<Record<string, ScheduleItem[]>>(EMPTY_WEEK_SCHEDULE);
   const [thesisSchedule, setThesisSchedule] = useState<SpecialScheduleResponse | null>(null);
@@ -1320,20 +1327,22 @@ export default function WeekView() {
   );
 }
 
-const styles = StyleSheet.create<Styles>({
+type ThemeColors = typeof Colors.light;
+
+const createStyles = (colors: ThemeColors): Styles => ({
   container: {
     flex: 1,
-    backgroundColor: Colors.dark.backgroundSecondary,
+    backgroundColor: colors.backgroundSecondary,
   },
   content: {
     flex: 1,
   },
   headerContainer: {
-    backgroundColor: Colors.dark.backgroundTertiary,
+    backgroundColor: colors.backgroundTertiary,
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
     paddingBottom: 12,
-    shadowColor: Colors.dark.black,
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
@@ -1349,17 +1358,17 @@ const styles = StyleSheet.create<Styles>({
   pageTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: Colors.dark.white,
+    color: colors.text,
     letterSpacing: 0.5,
   },
   weekInfo: {
-    backgroundColor: Colors.dark.primaryStrong,
+    backgroundColor: colors.primaryStrong,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 16,
   },
   weekText: {
-    color: Colors.dark.white,
+    color: colors.white,
     fontSize: 14,
     fontWeight: '600',
     letterSpacing: 0.3,
@@ -1374,7 +1383,7 @@ const styles = StyleSheet.create<Styles>({
     justifyContent: 'center',
   },
   navButtonText: {
-    color: Colors.dark.primaryStrong,
+    color: colors.primaryStrong,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -1390,7 +1399,7 @@ const styles = StyleSheet.create<Styles>({
     position: 'relative',
   },
   todayColumn: {
-    backgroundColor: Colors.dark.primaryStrong10,
+    backgroundColor: colors.primaryStrong10,
   },
   recoveryIndicator: {
     position: 'absolute',
@@ -1402,7 +1411,7 @@ const styles = StyleSheet.create<Styles>({
   },
   recoveryDot: {
     fontSize: 8,
-    color: Colors.dark.recoveryColor,
+    color: colors.recoveryColor,
   },
   recoveryDayInfo: {
     position: 'absolute',
@@ -1427,7 +1436,7 @@ const styles = StyleSheet.create<Styles>({
     overflow: 'hidden',
     zIndex: 10,
     elevation: 3,
-    shadowColor: Colors.dark.black,
+    shadowColor: colors.black,
     shadowOffset: { width: 1, height: 1 },
     shadowOpacity: 0.3,
     shadowRadius: 2,
@@ -1439,7 +1448,7 @@ const styles = StyleSheet.create<Styles>({
     justifyContent: 'center',
   },
   recoveryDayInfoIcon: {
-    color: Colors.dark.white,
+    color: colors.white,
     fontSize: 10,
     fontWeight: '700',
     textAlign: 'center',
@@ -1460,11 +1469,11 @@ const styles = StyleSheet.create<Styles>({
     shadowRadius: 4,
   },
   recoveryDayTooltip: {
-    backgroundColor: Colors.dark.surface, // Dark background
+    backgroundColor: colors.surface,
     padding: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.dark.borderMuted,
+    borderColor: colors.borderMuted,
   },
   recoveryDayTooltipHeader: {
     flexDirection: 'row',
@@ -1473,7 +1482,7 @@ const styles = StyleSheet.create<Styles>({
     marginBottom: 6,
   },
   recoveryDayTooltipTitle: {
-    color: Colors.dark.recoveryColor,
+    color: colors.recoveryColor,
     fontSize: 14,
     fontWeight: 'bold',
   },
@@ -1481,18 +1490,18 @@ const styles = StyleSheet.create<Styles>({
     padding: 4,
   },
   closeTooltipText: {
-    color: Colors.dark.white,
+    color: colors.text,
     fontSize: 14,
     fontWeight: 'bold',
   } as TextStyle,
   recoveryDayTooltipReason: {
-    color: Colors.dark.white,
+    color: colors.text,
     fontSize: 12,
     lineHeight: 18,
     opacity: 0.8,
   },
   dayName: {
-    color: Colors.dark.neutral500,
+    color: colors.mutedText,
     fontSize: 13,
     fontWeight: '600',
     letterSpacing: 0.5,
@@ -1504,7 +1513,7 @@ const styles = StyleSheet.create<Styles>({
     marginTop: 2,
   },
   dateText: {
-    color: Colors.dark.white,
+    color: colors.text,
     fontSize: 16,
     fontWeight: '700',
     marginTop: 2,
@@ -1523,7 +1532,7 @@ const styles = StyleSheet.create<Styles>({
     right: 2,
   },
   dayAssignmentBadgeText: {
-    color: Colors.dark.white,
+    color: colors.white,
     fontSize: 8,
     fontWeight: 'bold',
     textAlign: 'center',
@@ -1582,13 +1591,13 @@ const styles = StyleSheet.create<Styles>({
     borderTopColor: Colors.dark.overlayWhite05,
   },
   timeHour: {
-    color: Colors.dark.neutral500,
+    color: colors.mutedText,
     fontSize: 14,
     fontWeight: '700',
     textAlign: 'center',
   },
   timePeriod: {
-    color: Colors.dark.neutral500,
+    color: colors.mutedText,
     fontSize: 9,
     fontWeight: '500',
     textAlign: 'center',
@@ -1633,10 +1642,10 @@ const styles = StyleSheet.create<Styles>({
     marginBottom: 2,
   },
   className: {
-    color: Colors.dark.white,
+    color: colors.white,
     fontSize: 11,
     fontWeight: '600',
-    textShadowColor: Colors.dark.overlayBlack50,
+    textShadowColor: colors.overlayBlack50,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
     flex: 1,
@@ -1649,11 +1658,11 @@ const styles = StyleSheet.create<Styles>({
     marginTop: 2,
   },
   roomNumber: {
-    color: Colors.dark.white,
+    color: colors.white,
     fontSize: 9,
     fontWeight: '500',
     opacity: 0.9,
-    textShadowColor: Colors.dark.overlayBlack50,
+    textShadowColor: colors.overlayBlack50,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
     flex: 1,
@@ -1685,7 +1694,7 @@ const styles = StyleSheet.create<Styles>({
     shadowRadius: 4,
 	},
 	emptySchedule: {
-    color: Colors.dark.neutral500,
+    color: colors.mutedText,
     fontSize: 10,
     textAlign: 'center',
     marginTop: 30,
@@ -1697,7 +1706,7 @@ const styles = StyleSheet.create<Styles>({
     alignItems: 'center',
 	},
 	loadingText: {
-    color: Colors.dark.neutral500,
+    color: colors.mutedText,
     fontSize: 16,
     marginTop: 12,
 	},
@@ -1708,20 +1717,20 @@ const styles = StyleSheet.create<Styles>({
     padding: 20,
 	},
 	errorText: {
-    color: Colors.dark.red,
+    color: colors.red,
     fontSize: 16,
     textAlign: 'center',
 	},
 	weekendColumn: {
-    backgroundColor: Colors.dark.overlayRecovery10,
+    backgroundColor: colors.overlayRecovery10,
     borderWidth: 1,
-    borderColor: Colors.dark.overlayRecovery20,
+    borderColor: colors.overlayRecovery20,
 	},
 	currentHourHighlight: {
-		backgroundColor: Colors.dark.overlayPrimary08, // Light blue background for current hour
+    backgroundColor: colors.overlayPrimary08,
 	},
   assignmentBadge: {
-    backgroundColor: Colors.dark.red,
+    backgroundColor: colors.red,
     borderRadius: 10,
     paddingHorizontal: 4,
     paddingVertical: 1,
@@ -1731,7 +1740,7 @@ const styles = StyleSheet.create<Styles>({
     height: 16,
   },
   assignmentBadgeText: {
-    color: Colors.dark.white,
+    color: colors.white,
     fontSize: 9,
     fontWeight: 'bold',
     textAlign: 'center',

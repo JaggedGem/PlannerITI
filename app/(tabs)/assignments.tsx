@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo, memo, useRef, useLayoutEffect, createContext, useContext } from 'react';
-import { StyleSheet, ScrollView, StatusBar, View, Text, ActivityIndicator, Platform, InteractionManager, AppState, TouchableOpacity, Modal, Pressable } from 'react-native';
+import { ScrollView, StatusBar, View, Text, ActivityIndicator, Platform, InteractionManager, AppState, TouchableOpacity, Modal, Pressable } from 'react-native';
 import { SafeAreaView, Edge } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
-import { useColorScheme } from 'react-native';
+import { useColorScheme } from '@/hooks/useColorScheme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { router, useFocusEffect } from 'expo-router';
 import DaySection from '../../components/assignments/DaySection';
 import FloatingActionButton from '../../components/assignments/FloatingActionButton';
@@ -78,27 +79,35 @@ const groupAssignmentsByCourse = (assignments: Assignment[]): {[key: string]: As
 };
 
 // Memoized empty state display
-const EmptyState = memo(({ t }: { t: any }) => (
-  <Animated.View 
-    style={styles.emptyContainer}
-    entering={FadeInDown.duration(150)}
-  >
-    <Text style={styles.emptyText}>
-      {t('assignments').empty}
-    </Text>
-    <Text style={styles.emptySubtext}>
-      {t('assignments').addNew}
-    </Text>
-  </Animated.View>
-));
+const EmptyState = memo(({ t }: { t: any }) => {
+  const { styles } = useThemedStyles(createStyles);
+
+  return (
+    <Animated.View 
+      style={styles.emptyContainer}
+      entering={FadeInDown.duration(150)}
+    >
+      <Text style={styles.emptyText}>
+        {t('assignments').empty}
+      </Text>
+      <Text style={styles.emptySubtext}>
+        {t('assignments').addNew}
+      </Text>
+    </Animated.View>
+  );
+});
 
 // Memoized loading state display
-const LoadingState = memo(({ t }: { t: any }) => (
-  <View style={styles.loadingContainer}>
-    <ActivityIndicator size="large" color={Colors.dark.primary} />
-    <Text style={styles.loadingText}>{t('assignments').loading}</Text>
-  </View>
-));
+const LoadingState = memo(({ t }: { t: any }) => {
+  const { colors, styles } = useThemedStyles(createStyles);
+
+  return (
+    <View style={styles.loadingContainer}>
+      <ActivityIndicator size="large" color={colors.primary} />
+      <Text style={styles.loadingText}>{t('assignments').loading}</Text>
+    </View>
+  );
+});
 
 // Super-optimized CoursesView with on-demand rendering
 const CoursesView = memo(({ 
@@ -112,6 +121,7 @@ const CoursesView = memo(({
 }) => {
   const courseKeys = Object.keys(courseGroups);
   const { t } = useTranslation();
+  const { colors, styles } = useThemedStyles(createStyles);
   
   // State to manage which courses are rendered
   const [readyToRender, setReadyToRender] = useState(false);
@@ -242,7 +252,7 @@ const CoursesView = memo(({
       ))}
       {visibleCourseCount < courseKeys.length && (
         <View style={styles.loadingMoreContainer}>
-          <ActivityIndicator size="small" color={Colors.dark.primary} />
+          <ActivityIndicator size="small" color={colors.primary} />
         </View>
       )}
     </ScrollView>
@@ -261,6 +271,8 @@ const DateGroupedView = memo(({
   onDelete: (id: string) => void,
   isTransitioningFromClasses?: boolean
 }) => {
+  const { styles } = useThemedStyles(createStyles);
+
   // Use a ref to track whether we've rendered once already
   const [isFirstRender, setIsFirstRender] = useState(true);
   const isComponentMountedRef = useRef(true);
@@ -346,6 +358,7 @@ const ArchivedAssignmentsView = memo(({
   onDelete: (id: string) => void
 }) => {
   const { t, formatFullDate } = useTranslation();
+  const { colors, styles } = useThemedStyles(createStyles);
   const [visibleItems, setVisibleItems] = useState(10);
   const [hasMore, setHasMore] = useState(true);
   const isLoadingMoreRef = useRef(false);
@@ -448,7 +461,7 @@ const ArchivedAssignmentsView = memo(({
       ))}
       {hasMore && (
         <View style={styles.loadingMoreContainer}>
-          <ActivityIndicator size="small" color={Colors.dark.primary} />
+          <ActivityIndicator size="small" color={colors.primary} />
         </View>
       )}
     </ScrollView>
@@ -460,12 +473,18 @@ interface ErrorBoundaryProps {
   children: React.ReactNode;
 }
 
+interface ErrorBoundaryInnerProps extends ErrorBoundaryProps {
+  styles: any;
+  colorScheme: 'light' | 'dark';
+  t: any;
+}
+
 interface ErrorBoundaryState {
   hasError: boolean;
   errorCount: number;
 }
 
-class AssignmentsErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+class AssignmentsErrorBoundaryInner extends React.Component<ErrorBoundaryInnerProps, ErrorBoundaryState> {
   state: ErrorBoundaryState = { hasError: false, errorCount: 0 };
   
   static getDerivedStateFromError(error: unknown): Partial<ErrorBoundaryState> {
@@ -503,13 +522,12 @@ class AssignmentsErrorBoundary extends React.Component<ErrorBoundaryProps, Error
 
   render() {
     if (this.state.hasError) {
-      // Use translation directly with useTranslation hook
-      const { t } = useTranslation();
-      
+      const { styles, t, colorScheme } = this.props;
+
       // Fallback UI when an error occurs
       return (
         <SafeAreaView style={styles.container}>
-          <StatusBar barStyle="light-content" />
+          <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} />
           <View style={styles.errorContainer}>
             <Text style={styles.errorTitle}>{t('assignments').errors.somethingWrong}</Text>
             <Text style={styles.errorMessage}>{t('assignments').errors.recovering}</Text>
@@ -526,6 +544,18 @@ class AssignmentsErrorBoundary extends React.Component<ErrorBoundaryProps, Error
     return this.props.children;
   }
 }
+
+const AssignmentsErrorBoundary = ({ children }: ErrorBoundaryProps) => {
+  const { styles } = useThemedStyles(createStyles);
+  const colorScheme = useColorScheme() ?? 'light';
+  const { t } = useTranslation();
+
+  return (
+    <AssignmentsErrorBoundaryInner styles={styles} colorScheme={colorScheme} t={t}>
+      {children}
+    </AssignmentsErrorBoundaryInner>
+  );
+};
 
 // Add this new component before the Assignments component
 const ModernDropdown = memo(({ 
@@ -544,6 +574,7 @@ const ModernDropdown = memo(({
   styles: any;
 }) => {
   const { t } = useTranslation();
+  const { colors } = useThemedStyles(createStyles);
 
   const handleSelect = (index: number) => {
     // Trigger haptic feedback
@@ -560,7 +591,7 @@ const ModernDropdown = memo(({
       <View style={styles.dropdownHeader}>
         <Text style={styles.dropdownTitle}>{t('assignments').title}</Text>
         <Pressable onPress={onClose} style={styles.closeButton}>
-          <Ionicons name="close" size={24} color={Colors.dark.mutedText} />
+          <Ionicons name="close" size={24} color={colors.mutedText} />
         </Pressable>
       </View>
       
@@ -584,7 +615,7 @@ const ModernDropdown = memo(({
               {segment}
             </Text>
             {selectedIndex === index && (
-              <Ionicons name="checkmark" size={20} color={Colors.dark.primary} />
+              <Ionicons name="checkmark" size={20} color={colors.primary} />
             )}
           </View>
         </Pressable>
@@ -645,6 +676,7 @@ const AssignmentOptionsProvider = ({ children }: { children: React.ReactNode }) 
 const Assignments = () => {
   const colorScheme = useColorScheme() ?? 'light';
   const { t, formatDate } = useTranslation();
+  const { colors, styles } = useThemedStyles(createStyles);
   
   const [selectedSegmentIndex, setSelectedSegmentIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -1125,7 +1157,7 @@ const Assignments = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} />
       
       <View style={styles.headerContainer}>
         <View style={styles.header}>
@@ -1137,7 +1169,7 @@ const Assignments = () => {
               onPress={handleArchivePress}
               activeOpacity={0.7}
             >
-              <Ionicons name="folder-open" size={18} color={Colors.dark.white} />
+              <Ionicons name="folder-open" size={18} color={colors.white} />
             </TouchableOpacity>
           </View>
           
@@ -1156,7 +1188,7 @@ const Assignments = () => {
               <Ionicons 
                 name="chevron-down" 
                 size={16} 
-                color={Colors.dark.mutedText} 
+                color={colors.mutedText} 
                 style={[
                   styles.dropdownArrow,
                   isDropdownVisible && styles.dropdownArrowRotated
@@ -1199,7 +1231,9 @@ const AssignmentsWithErrorBoundary = () => (
 
 export default AssignmentsWithErrorBoundary;
 
-const styles = StyleSheet.create({
+type ThemeColors = typeof Colors.light;
+
+const createStyles = (_colors: ThemeColors) => ({
   container: {
     flex: 1,
     backgroundColor: Colors.dark.backgroundSecondary,
@@ -1228,7 +1262,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 28,
     fontWeight: '700',
-    color: Colors.dark.white,
+    color: _colors.text,
     letterSpacing: 0.5,
   },
   archiveButton: {
@@ -1240,7 +1274,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   archiveButtonText: {
-    color: Colors.dark.white,
+    color: _colors.text,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -1279,7 +1313,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '500',
     marginBottom: 8,
-    color: Colors.dark.white,
+    color: _colors.text,
   },
   emptySubtext: {
     fontSize: 14,
@@ -1303,7 +1337,7 @@ const styles = StyleSheet.create({
     paddingVertical: 30,
   },
   simplifiedText: {
-    color: Colors.dark.white,
+    color: _colors.text,
     fontSize: 18,
     fontWeight: '500',
     marginBottom: 20,
@@ -1328,7 +1362,7 @@ const styles = StyleSheet.create({
   safeModeText: {
     fontSize: 18,
     fontWeight: '600',
-    color: Colors.dark.white,
+    color: _colors.text,
     marginBottom: 8,
   },
   safeModeDescription: {
@@ -1354,7 +1388,7 @@ const styles = StyleSheet.create({
   simplifiedTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: Colors.dark.white,
+    color: _colors.text,
     marginBottom: 12,
   },
   simplifiedItem: {
@@ -1373,7 +1407,7 @@ const styles = StyleSheet.create({
   errorTitle: {
     fontSize: 22,
     fontWeight: '700',
-    color: Colors.dark.white,
+    color: _colors.text,
     marginBottom: 12,
   },
   errorMessage: {
@@ -1410,7 +1444,7 @@ const styles = StyleSheet.create({
   dropdownButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: Colors.dark.white,
+    color: _colors.text,
   },
   dropdownArrow: {
     transform: [{ rotate: '0deg' }],
@@ -1469,7 +1503,7 @@ const styles = StyleSheet.create({
   },
   dropdownItemText: {
     fontSize: 17,
-    color: Colors.dark.white,
+    color: _colors.text,
   },
   dropdownItemTextSelected: {
     color: Colors.dark.primary,
@@ -1514,7 +1548,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.dark.primary,
   },
   archivedCheckmark: {
-    color: Colors.dark.white,
+    color: _colors.text,
     fontSize: 14,
     fontWeight: 'bold',
   },
@@ -1524,7 +1558,7 @@ const styles = StyleSheet.create({
   archivedTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: Colors.dark.white,
+    color: _colors.text,
     marginBottom: 4,
   },
   archivedTitleCompleted: {

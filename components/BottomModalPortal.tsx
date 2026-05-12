@@ -1,7 +1,8 @@
 import React, { useEffect } from 'react';
-import { StyleSheet, View, Dimensions, BackHandler, Platform, StatusBar, Pressable, Modal, ViewStyle } from 'react-native';
+import { View, Dimensions, BackHandler, Platform, StatusBar, Pressable, Modal, ViewStyle } from 'react-native';
 import Animated, { FadeIn, FadeOut, SlideInDown, SlideOutDown } from 'react-native-reanimated';
 import { Colors } from '@/constants/Colors';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 
 interface BottomModalPortalProps {
   isVisible: boolean;
@@ -22,9 +23,13 @@ export function BottomModalPortal({
   onClose,
   children,
   maxHeight = '80%',
-  backgroundColor = Colors.dark.backgroundApp,
+  backgroundColor,
   borderRadius = 20,
 }: BottomModalPortalProps) {
+  const { colors, styles } = useThemedStyles(createStyles);
+
+  const resolvedBackgroundColor = backgroundColor ?? colors.backgroundApp;
+
   // Handle back button on Android
   useEffect(() => {
     if (!isVisible) return;
@@ -42,7 +47,7 @@ export function BottomModalPortal({
 
   const modalContentStyle: ViewStyle = {
     maxHeight: maxHeight as any,
-    backgroundColor,
+    backgroundColor: resolvedBackgroundColor,
     borderTopLeftRadius: borderRadius,
     borderTopRightRadius: borderRadius,
   };
@@ -82,11 +87,13 @@ export function BottomModalPortal({
   );
 }
 
-const styles = StyleSheet.create({
+type ThemeColors = typeof Colors.light;
+
+const createStyles = (colors: ThemeColors) => ({
   container: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: Colors.dark.transparent,
+    backgroundColor: colors.transparent,
   },
   overlayContainer: {
     position: 'absolute',
@@ -101,11 +108,11 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: Colors.dark.overlayBlack50,
+    backgroundColor: colors.overlayBlack50,
   },
   modalWrapper: {
     flex: 1,
-    backgroundColor: Colors.dark.transparent,
+    backgroundColor: colors.transparent,
     justifyContent: 'flex-end',
   },
   modalContent: {

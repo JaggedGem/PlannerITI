@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text } from 'react-native';
 import { Assignment } from '../../utils/assignmentStorage';
 import AssignmentItem from './AssignmentItem';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,6 +10,7 @@ import Animated, {
 import { useTranslation } from '@/hooks/useTranslation';
 import { format, isToday, isYesterday, isTomorrow, differenceInDays } from 'date-fns';
 import { Colors } from '@/constants/Colors';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 
 interface CourseSectionProps {
   courseCode: string;
@@ -22,9 +23,11 @@ interface CourseSectionProps {
 }
 
 // Function to get a color for a course code
-const getCourseColor = (courseCode: string, isOrphaned: boolean): string => {
+type ThemeColors = typeof Colors.light;
+
+const getCourseColor = (courseCode: string, isOrphaned: boolean, colors: ThemeColors): string => {
   if (isOrphaned) {
-    return Colors.dark.gray;
+    return colors.gray;
   }
 
   // Simple hash function to generate a consistent color for each course code
@@ -73,6 +76,7 @@ export default function CourseSection({
   assignmentToHighlight = null
 }: CourseSectionProps) {
   const { t } = useTranslation();
+  const { colors, styles } = useThemedStyles(createStyles);
   
   // Determine if the entire course is orphaned (all assignments are orphaned)
   const isCourseOrphaned = useMemo(() => {
@@ -85,8 +89,8 @@ export default function CourseSection({
   
   // Calculate the color based on course code and orphaned status
   const courseColor = useMemo(() => 
-    getCourseColor(courseCode, isCourseOrphaned), 
-  [courseCode, isCourseOrphaned]);
+    getCourseColor(courseCode, isCourseOrphaned, colors), 
+  [courseCode, isCourseOrphaned, colors]);
   
   // Sort assignments by due date
   const sortedAssignments = useMemo(() => {
@@ -182,16 +186,16 @@ export default function CourseSection({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => ({
   container: {
     borderRadius: 12,
     overflow: 'hidden',
-    backgroundColor: Colors.dark.surfaceSecondary,
+    backgroundColor: colors.surfaceSecondary,
   },
   orphanedContainer: {
-    backgroundColor: Colors.dark.surfaceTertiary,
+    backgroundColor: colors.surfaceTertiary,
     borderWidth: 1,
-    borderColor: Colors.dark.border,
+    borderColor: colors.border,
     opacity: 0.9,
   },
   header: {
@@ -210,10 +214,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: Colors.dark.surfaceRaised,
+    backgroundColor: colors.surfaceRaised,
   },
   orphanedHeaderContent: {
-    backgroundColor: Colors.dark.cardMuted,
+    backgroundColor: colors.cardMuted,
   },
   courseInfo: {
     flex: 1,
@@ -221,19 +225,19 @@ const styles = StyleSheet.create({
   courseCode: {
     fontSize: 15,
     fontWeight: '600',
-    color: Colors.dark.white,
+    color: colors.text,
     marginBottom: 2,
   },
   courseName: {
     fontSize: 13,
-    color: Colors.dark.overlayWhite90,
+    color: colors.text,
   },
   orphanedText: {
-    color: Colors.dark.gray,
+    color: colors.gray,
   },
   orphanedDescription: {
     fontSize: 11,
-    color: Colors.dark.danger,
+    color: colors.danger,
     marginTop: 2,
   },
   headerRight: {
@@ -243,11 +247,11 @@ const styles = StyleSheet.create({
   count: {
     fontSize: 15,
     fontWeight: '600',
-    color: Colors.dark.white,
+    color: colors.text,
   },
   content: {
     paddingTop: 8,
     paddingHorizontal: 8,
     paddingBottom: 6,
   }
-}); 
+});

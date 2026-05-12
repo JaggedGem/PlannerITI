@@ -12,6 +12,17 @@ type TranslationType = {
   settings: {
     language: string;
     subGroup: string;
+    appearance: {
+      title: string;
+      description: string;
+      system: string;
+      light: string;
+      dark: string;
+      restartRequiredTitle: string;
+      restartRequiredMessage: string;
+      changeFailedTitle: string;
+      changeFailedMessage: string;
+    };
     account: {
       title: string;
       signIn: string;
@@ -498,6 +509,17 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
     settings: {
       language: 'Language',
       subGroup: 'Subgroup',
+      appearance: {
+        title: 'Appearance',
+        description: 'Choose how the app looks across all screens.',
+        system: 'System',
+        light: 'Light',
+        dark: 'Dark',
+        restartRequiredTitle: 'Restart Required',
+        restartRequiredMessage: 'Please restart the app to apply appearance changes everywhere.',
+        changeFailedTitle: 'Theme Update Failed',
+        changeFailedMessage: 'Could not apply appearance mode. Please try again.',
+      },
       account: {
         title: 'Account',
         signIn: 'Sign In to Your Account',
@@ -1002,6 +1024,17 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
     settings: {
       language: 'Limbă',
       subGroup: 'Subgrupă',
+      appearance: {
+        title: 'Aspect',
+        description: 'Alege cum arată aplicația pe toate ecranele.',
+        system: 'Sistem',
+        light: 'Luminos',
+        dark: 'Întunecat',
+        restartRequiredTitle: 'Repornire Necesară',
+        restartRequiredMessage: 'Te rugăm să repornești aplicația pentru a aplica schimbarea peste tot.',
+        changeFailedTitle: 'Actualizarea Temei a Eșuat',
+        changeFailedMessage: 'Nu am putut aplica modul de aspect. Încearcă din nou.',
+      },
       account: {
         title: 'Cont',
         signIn: 'Conectează-te la Contul Tău',
@@ -1506,6 +1539,17 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
     settings: {
       language: 'Язык',
       subGroup: 'Подгруппа',
+      appearance: {
+        title: 'Оформление',
+        description: 'Выберите внешний вид приложения для всех экранов.',
+        system: 'Система',
+        light: 'Светлая',
+        dark: 'Тёмная',
+        restartRequiredTitle: 'Требуется Перезапуск',
+        restartRequiredMessage: 'Перезапустите приложение, чтобы применить изменения оформления везде.',
+        changeFailedTitle: 'Не удалось Обновить Тему',
+        changeFailedMessage: 'Не удалось применить режим оформления. Попробуйте снова.',
+      },
       account: {
         title: 'Аккаунт',
         signIn: 'Войдите в Ваш Аккаунт',
