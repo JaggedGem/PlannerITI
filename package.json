@@ -68,13 +68,13 @@
     "react-test-renderer": "19.2.0",
     "typescript": "~5.9.2"
   },
-  "overrides": {
-    "react-dom": "19.2.0"
-  },
   "pnpm": {
     "overrides": {
       "react-dom": "19.2.0"
-    }
+    },
+    "onlyBuiltDependencies": [
+      "unrs-resolver"
+    ]
   },
   "packageManager": "pnpm@10.33.0",
   "private": true
