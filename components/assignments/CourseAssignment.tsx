@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Colors } from '../../constants/Colors';
-import { useColorScheme } from 'react-native';
+import { useColorScheme } from '@/hooks/useColorScheme';
 import { Feather } from '@expo/vector-icons';
 import ChecklistItem, { ChecklistItemType } from './ChecklistItem';
 
@@ -24,7 +24,7 @@ export default function CourseAssignment({
   onToggleItem,
   onEditCourse,
 }: CourseAssignmentProps) {
-  const colorScheme = useColorScheme() ?? 'light';
+  const colorScheme = useColorScheme();
   const colors = Colors[colorScheme];
 
   return (

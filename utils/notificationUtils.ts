@@ -162,6 +162,11 @@ async function getDailyDigest(): Promise<AssignmentDigest[]> {
 // Request permissions for notifications
 export async function registerForPushNotificationsAsync() {
   let token;
+  const isPermissionGranted = (permissions: unknown): boolean => {
+    if (!permissions || typeof permissions !== 'object') return false;
+    const permissionRecord = permissions as { granted?: boolean; status?: string };
+    return permissionRecord.granted === true || permissionRecord.status === 'granted';
+  };
 
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('default', {
@@ -191,15 +196,15 @@ export async function registerForPushNotificationsAsync() {
   }
 
   if (Device.isDevice) {
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
+    const existingPermissions = await Notifications.getPermissionsAsync();
+    let hasPermission = isPermissionGranted(existingPermissions);
     
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
+    if (!hasPermission) {
+      const requestedPermissions = await Notifications.requestPermissionsAsync();
+      hasPermission = isPermissionGranted(requestedPermissions);
     }
     
-    if (finalStatus !== 'granted') {
+    if (!hasPermission) {
       return;
     }
 
@@ -920,8 +925,10 @@ export async function checkAndRescheduleNotifications(assignments: Assignment[])
     const scheduledTypes = new Map<string, Set<string>>();
     
     scheduledNotifications.forEach(notification => {
-      const assignmentId = notification.content.data?.assignmentId;
-      const type = notification.content.data?.type;
+      const assignmentIdValue = notification.content.data?.assignmentId;
+      const typeValue = notification.content.data?.type;
+      const assignmentId = typeof assignmentIdValue === 'string' ? assignmentIdValue : null;
+      const type = typeof typeValue === 'string' ? typeValue : null;
       
       if (assignmentId) {
         scheduledAssignmentIds.add(assignmentId);

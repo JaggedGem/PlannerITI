@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Animated, TouchableOpacity, Platform, View, Text, useColorScheme } from 'react-native';
+import { StyleSheet, Animated, TouchableOpacity, Platform, View, Text } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Link, router } from 'expo-router';
 import { ThemedText } from './ThemedText';
@@ -9,13 +9,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useTranslation } from '@/hooks/useTranslation';
 import { Colors } from '@/constants/Colors';
+import { useColorScheme } from '@/hooks/useColorScheme';
 
 const LOGIN_DISMISSED_KEY = '@login_notification_dismissed';
 
 export default function LoginNotification() {
   const [isVisible, setIsVisible] = useState(false);
   const [showOverlay, setShowOverlay] = useState(false);
-  const colorScheme = useColorScheme() ?? 'light';
+  const colorScheme = useColorScheme();
   const theme = Colors[colorScheme];
   const slideAnim = React.useRef(new Animated.Value(-100)).current;
   const scaleAnim = React.useRef(new Animated.Value(0.95)).current;

@@ -112,8 +112,8 @@ Built with React Native, Expo, and Expo Router, PlannerITI offers an offline-fir
 ### Prerequisites
 
 - **Node.js** (v18 or later)
-- **npm** or **yarn**
-- **Expo CLI**: `npm install -g expo-cli`
+- **pnpm** (v10+)
+- **Expo CLI**: use `pnpm exec expo` (or `npx expo`)
 - **iOS Simulator** (Mac only) or **Android Emulator**
 - **Expo Go app** (for testing on physical devices)
 
@@ -127,7 +127,7 @@ Built with React Native, Expo, and Expo Router, PlannerITI offers an offline-fir
 
 2. **Install dependencies**
    ```bash
-   npm install
+   pnpm install
    ```
 
 3. **Set up environment variables**
@@ -154,7 +154,7 @@ Built with React Native, Expo, and Expo Router, PlannerITI offers an offline-fir
 
 1. **Install EAS CLI**
    ```bash
-   npm install -g eas-cli
+   pnpm add -g eas-cli
    ```
 
 2. **Configure EAS**
@@ -164,19 +164,19 @@ Built with React Native, Expo, and Expo Router, PlannerITI offers an offline-fir
 
 3. **Build for Android**
   ```bash
-  npm run build
+  pnpm run build
   ```
 
 4. **Build for iOS**
   ```bash
-  npm run build:ios
+  pnpm run build:ios
   ```
 
 ### OTA Updates
 
 ```bash
-npm run update       # Android
-npm run update:ios   # iOS
+pnpm run update       # Android
+pnpm run update:ios   # iOS
 ```
 
 ### Local Builds
