@@ -316,6 +316,22 @@ type TranslationType = {
       annualAverage: string;
       allGrades: string;
     }
+    pdf: {
+      export: string;
+      exportTitle: string;
+      exportDescription: string;
+      preparing: string;
+      shareTitle: string;
+      shareMessage: string;
+      errorTitle: string;
+      errorMessage: string;
+      generatedOn: string;
+      summaryTitle: string;
+      totalSemesters: string;
+      totalSubjects: string;
+      totalGrades: string;
+      impactedSubjects: string;
+    };
     add: string;
     edit: string;
     form: {
@@ -801,6 +817,22 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         semesterOnly: 'Semester Only',
         annualAverage: 'Annual Average',
         allGrades: 'All Grades',
+      },
+      pdf: {
+        export: 'Export PDF',
+        exportTitle: 'Export grade report',
+        exportDescription: 'Create a polished PDF with every subject, all grades, and exam or thesis impacts.',
+        preparing: 'Preparing PDF...',
+        shareTitle: 'Grade report ready',
+        shareMessage: 'Your PDF is ready to share or save.',
+        errorTitle: 'Export failed',
+        errorMessage: 'We could not create the PDF. Please try again.',
+        generatedOn: 'Generated on',
+        summaryTitle: 'Summary',
+        totalSemesters: 'Semesters',
+        totalSubjects: 'Subjects',
+        totalGrades: 'Grades',
+        impactedSubjects: 'With exam/thesis',
       },
       add: 'Add Grade',
       edit: 'Edit Grade',
@@ -1306,6 +1338,22 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         annualAverage: 'Media Anuală',
         allGrades: 'Toate Notele',
       },
+      pdf: {
+        export: 'Exportă PDF',
+        exportTitle: 'Exportă raportul notelor',
+        exportDescription: 'Creează un PDF elegant cu toate materiile, notele și impactul tezelor sau examenelor.',
+        preparing: 'Se pregătește PDF-ul...',
+        shareTitle: 'Raportul este gata',
+        shareMessage: 'PDF-ul este gata pentru a fi partajat sau salvat.',
+        errorTitle: 'Export eșuat',
+        errorMessage: 'Nu am putut crea PDF-ul. Încercați din nou.',
+        generatedOn: 'Generat la',
+        summaryTitle: 'Rezumat',
+        totalSemesters: 'Semestre',
+        totalSubjects: 'Materii',
+        totalGrades: 'Note',
+        impactedSubjects: 'Cu teză/examen',
+      },
       add: 'Adaugă Notă',
       edit: 'Editează Nota',
       form: {
@@ -1809,6 +1857,22 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         semesterOnly: 'Только семестр',
         annualAverage: 'Средняя оценка за год',
         allGrades: 'Все оценки',
+      },
+      pdf: {
+        export: 'Экспорт PDF',
+        exportTitle: 'Экспорт отчета по оценкам',
+        exportDescription: 'Создайте аккуратный PDF со всеми предметами, оценками и влиянием экзаменов или тез.',
+        preparing: 'Подготовка PDF...',
+        shareTitle: 'Отчет готов',
+        shareMessage: 'PDF готов к отправке или сохранению.',
+        errorTitle: 'Не удалось экспортировать',
+        errorMessage: 'Не удалось создать PDF. Попробуйте еще раз.',
+        generatedOn: 'Сформировано',
+        summaryTitle: 'Сводка',
+        totalSemesters: 'Семестры',
+        totalSubjects: 'Предметы',
+        totalGrades: 'Оценки',
+        impactedSubjects: 'С экзаменом/тезой',
       },
       add: 'Добавить оценку',
       edit: 'Редактировать оценку',

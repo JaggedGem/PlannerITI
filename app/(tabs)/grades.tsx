@@ -1,9 +1,11 @@
-import { StyleSheet, View, Text, TouchableOpacity, FlatList, RefreshControl, Modal, TextInput, Platform, KeyboardAvoidingView, ActivityIndicator, DeviceEventEmitter, ScrollView, Keyboard } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, FlatList, RefreshControl, Modal, TextInput, Platform, KeyboardAvoidingView, ActivityIndicator, DeviceEventEmitter, ScrollView, Keyboard, Alert } from 'react-native';
 import { SafeAreaView, Edge } from 'react-native-safe-area-context';
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { MaterialIcons } from '@expo/vector-icons';
 import Animated, { FadeInUp, Layout, useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from '@/hooks/useTranslation';
 
@@ -111,6 +113,77 @@ const parseNumericGrade = (grade: string): number => {
   const normalized = grade.replace(',', '.').trim();
   const value = parseFloat(normalized);
   return Number.isFinite(value) ? value : NaN;
+};
+
+const resolveAbsoluteSemesterNumber = (
+  semesterNumber: number,
+  options?: {
+    studentYearNumber?: number;
+    currentSemester?: number;
+    semesters?: SemesterGrades[];
+  }
+): number => {
+  if (semesterNumber > 2) return semesterNumber;
+
+  const studentYearNumber = options?.studentYearNumber ?? 1;
+  const currentSemester = options?.currentSemester;
+  const semesterNumbers = options?.semesters?.map((semester) => semester.semester) ?? [];
+  const hasOnlyRelativeSemesters =
+    semesterNumbers.length > 0 && semesterNumbers.every((value) => value >= 1 && value <= 2);
+  const shouldMapRelativeSemesters =
+    hasOnlyRelativeSemesters && (studentYearNumber > 1 || (currentSemester ?? 0) > 2);
+
+  if (!shouldMapRelativeSemesters) {
+    return semesterNumber;
+  }
+
+  if (currentSemester && currentSemester > 2) {
+    const activeSemesterInYear = currentSemester % 2 === 0 ? 2 : 1;
+    const baseOffset = currentSemester - activeSemesterInYear;
+    return baseOffset + semesterNumber;
+  }
+
+  return (studentYearNumber - 1) * 2 + semesterNumber;
+};
+
+const formatSemesterYearLabel = (
+  yearSemesterTemplate: string,
+  semesterNumber: number,
+  options?: {
+    studentYearNumber?: number;
+    currentSemester?: number;
+    semesters?: SemesterGrades[];
+  }
+): string => {
+  const absoluteSemester = resolveAbsoluteSemesterNumber(semesterNumber, options);
+  const year = Math.ceil(absoluteSemester / 2);
+  const semesterInYear = absoluteSemester % 2 === 0 ? 2 : 1;
+
+  return yearSemesterTemplate
+    .replace('{{year}}', year.toString())
+    .replace('{{semester}}', semesterInYear.toString());
+};
+
+const getGradeColor = (grade: string): string => {
+  const normalized = grade.trim().toLowerCase();
+  if (normalized === 'a') return Colors.dark.overlayAbsenceUnexcused65;
+  if (normalized === 'm') return Colors.dark.overlayAbsenceExcused65;
+  const numericGrade = parseNumericGrade(grade);
+  if (Number.isNaN(numericGrade)) return Colors.dark.overlayPrimaryStrong50;
+  if (numericGrade < 5) return Colors.dark.overlayFail50;
+  if (numericGrade >= 9) return Colors.dark.overlaySuccess50;
+  if (numericGrade >= 7) return Colors.dark.overlayGood50;
+  return Colors.dark.overlayPrimaryStrong50;
+};
+
+const getPdfGradeTextColor = (grade: string): string => {
+  const normalized = grade.trim().toLowerCase();
+  if (normalized === 'a' || normalized === 'm') return Colors.dark.white;
+
+  const numericGrade = parseNumericGrade(grade);
+  if (Number.isNaN(numericGrade)) return Colors.dark.white;
+  if (numericGrade >= 7) return '#11181C';
+  return Colors.dark.white;
 };
 
 const cloneStudentGrades = (data: StudentGrades): StudentGrades => ({
@@ -410,6 +483,17 @@ const computeNewGradeHighlights = (
   return highlights;
 };
 
+const escapeHtml = (value: string): string => value.replace(/[&<>"]|'/g, (character) => {
+  switch (character) {
+    case '&': return '&amp;';
+    case '<': return '&lt;';
+    case '>': return '&gt;';
+    case '"': return '&quot;';
+    case "'": return '&#39;';
+    default: return character;
+  }
+});
+
 // Separate the IDNPScreen into its own component to avoid conditional hook rendering
 const IDNPScreen = ({ onSave, errorMessage, isSubmitting }: { 
   onSave: (idnp: string, shouldSave: boolean) => void, 
@@ -534,13 +618,8 @@ const SemesterDropdown = ({
   };
 
   // Helper function to format semester label
-  const formatSemesterLabel = (semesterNumber: number) => {
-    const year = Math.ceil(semesterNumber / 2);
-    const semesterInYear = semesterNumber % 2 === 0 ? 2 : 1;
-    return t('grades').semesters.yearSemester
-      .replace('{{year}}', year.toString())
-      .replace('{{semester}}', semesterInYear.toString());
-  };
+  const formatSemesterLabel = (semesterNumber: number) =>
+    formatSemesterYearLabel(t('grades').semesters.yearSemester, semesterNumber);
 
   return (
     <View style={styles.semesterDropdownContainer}>
@@ -609,19 +688,6 @@ const SubjectCard = ({
 
   // Determine if this subject received any fresh data
   const isRecentlyUpdated = (newGradeIndices && newGradeIndices.length > 0) || hasNewExam;
-
-  // Calculate grade quality color
-  const getGradeColor = (grade: string): string => {
-    const normalized = grade.trim().toLowerCase();
-    if (normalized === 'a') return Colors.dark.overlayAbsenceUnexcused65; // Unexcused absence (dedicated pink-red)
-    if (normalized === 'm') return Colors.dark.overlayAbsenceExcused65; // Excused absence (dedicated teal)
-    const numGrade = parseFloat(grade.replace(',', '.'));
-    if (isNaN(numGrade)) return Colors.dark.overlayPrimaryStrong50; // Default blue for non-numeric
-    if (numGrade < 5) return Colors.dark.overlayFail50; // Red for failing
-    if (numGrade >= 9) return Colors.dark.overlaySuccess50;  // Green for excellent
-    if (numGrade >= 7) return Colors.dark.overlayGood50;  // Orange for good
-    return Colors.dark.overlayPrimaryStrong50;                     // Blue for average
-  };
 
   return (
     <Animated.View
@@ -765,11 +831,11 @@ const ExamsView = ({
   }, [safeExams]);
 
   // Helper function to convert semester number to year and semester
-  const formatSemesterLabel = (semesterNumber: number) => {
-    const year = Math.ceil(semesterNumber / 2);
-    const semesterInYear = semesterNumber % 2 === 0 ? 2 : 1;
-    return t('grades').semesters.yearSemester.replace('{{year}}', year.toString()).replace('{{semester}}', semesterInYear.toString());
-  };
+  const formatSemesterLabel = (semesterNumber: number) =>
+    formatSemesterYearLabel(t('grades').semesters.yearSemester, semesterNumber, {
+      studentYearNumber: studentInfo.yearNumber,
+      currentSemester: studentCurrentSemester,
+    });
 
   // Filter exams by semester if one is selected
   const filteredExams = useMemo(() => {
@@ -1260,19 +1326,6 @@ const GradeCalculatorModal = ({
   const [isAnnualCalculation, setIsAnnualCalculation] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
   
-  // Calculate grade quality color - same as used in SubjectCard
-  const getGradeColor = (grade: string): string => {
-    const normalized = grade.trim().toLowerCase();
-    if (normalized === 'a') return Colors.dark.overlayAbsenceUnexcused65; // Unexcused absence (dedicated pink-red)
-    if (normalized === 'm') return Colors.dark.overlayAbsenceExcused65; // Excused absence (dedicated teal)
-    const numGrade = parseFloat(grade.replace(',', '.'));
-    if (isNaN(numGrade)) return Colors.dark.overlayPrimaryStrong50; // Default blue for non-numeric
-    if (numGrade < 5) return Colors.dark.overlayFail50; // Red for failing
-    if (numGrade >= 9) return Colors.dark.overlaySuccess50;  // Green for excellent
-    if (numGrade >= 7) return Colors.dark.overlayGood50;  // Orange for good
-    return Colors.dark.overlayPrimaryStrong50;                     // Blue for average
-  };
-  
   // Reset state when modal is opened
   useEffect(() => {
     if (isVisible) {
@@ -1685,14 +1738,13 @@ const GradesScreen = ({
     }
   }, [idnp]);
 
-  // Helper function to format semester label
-  const formatSemesterLabel = (semesterNumber: number) => {
-    const year = Math.ceil(semesterNumber / 2);
-    const semesterInYear = semesterNumber % 2 === 0 ? 2 : 1;
-    return t('grades').semesters.yearSemester
-      .replace('{{year}}', year.toString())
-      .replace('{{semester}}', semesterInYear.toString());
-  };
+  // Format semester labels with support for relative 1/2 semester numbering.
+  const formatSemesterLabel = (semesterNumber: number) =>
+    formatSemesterYearLabel(t('grades').semesters.yearSemester, semesterNumber, {
+      studentYearNumber: studentGrades?.studentInfo.yearNumber,
+      currentSemester: studentGrades?.currentSemester,
+      semesters: studentGrades?.currentGrades,
+    });
 
   // Get current semester number based on date
   const currentSemesterNumber = useMemo(() => getCurrentSemester(), []);
@@ -1731,6 +1783,7 @@ const GradesScreen = ({
   
   // Grade calculator modal state
   const [calculatorVisible, setCalculatorVisible] = useState(false);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
   
   // Track expanded semester dropdowns and subjects
   const [expandedSemesters, setExpandedSemesters] = useState<Record<number, boolean>>({});
@@ -1936,6 +1989,409 @@ const GradesScreen = ({
     const date = new Date(lastUpdated);
     return formatFullDate(date, true);
   }, [lastUpdated, formatFullDate]);
+
+  const exportableSubjects = useMemo(() => {
+    if (!studentGrades) return [];
+    return studentGrades.currentGrades.flatMap((semester: SemesterGrades) => semester.subjects);
+  }, [studentGrades]);
+
+  const hasExportableGrades = exportableSubjects.length > 0;
+
+  const handleExportGradesPdf = useCallback(async () => {
+    const gradesData = studentGrades;
+
+    if (!gradesData || !hasExportableGrades) {
+      Alert.alert(t('grades').pdf.errorTitle, t('grades').noGrades);
+      return;
+    }
+
+    setIsExportingPdf(true);
+
+    try {
+      const { studentInfo, currentGrades } = gradesData;
+      const allSubjects = currentGrades.flatMap((semester: SemesterGrades) => semester.subjects);
+      const subjectAverages = allSubjects
+        .map((subject: GradeSubject) => subject.finalAverage ?? subject.average)
+        .filter((value: number | undefined): value is number => typeof value === 'number' && Number.isFinite(value));
+      const overallAverage = subjectAverages.length > 0
+        ? (subjectAverages.reduce((sum: number, value: number) => sum + value, 0) / subjectAverages.length).toFixed(2)
+        : '-';
+      const impactedSubjects = allSubjects.filter((subject: GradeSubject) =>
+        subject.appliedExamGrade !== undefined || !!subject.appliedExamType
+      ).length;
+      const totalGrades = allSubjects.reduce((sum: number, subject: GradeSubject) => sum + subject.grades.length, 0);
+      const now = new Date();
+      const generatedOn = formatFullDate(now, true);
+      const buildSemesterLabel = (semesterNumber: number) =>
+        formatSemesterYearLabel(t('grades').semesters.yearSemester, semesterNumber, {
+          studentYearNumber: studentInfo.yearNumber,
+          currentSemester: gradesData.currentSemester,
+          semesters: currentGrades,
+        });
+      const currentSemesterLabel = gradesData.currentSemester
+        ? buildSemesterLabel(gradesData.currentSemester)
+        : studentInfo.yearNumber
+          ? formatSemesterYearLabel(t('grades').semesters.yearSemester, (studentInfo.yearNumber - 1) * 2 + getCurrentSemester(), {
+              studentYearNumber: studentInfo.yearNumber,
+            })
+          : null;
+
+      const html = `
+        <!doctype html>
+        <html>
+          <head>
+            <meta charset="utf-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            <title>${escapeHtml(t('grades').pdf.exportTitle)}</title>
+            <style>
+              @page {
+                size: A4;
+                margin: 14mm 12mm;
+              }
+
+              :root {
+                color-scheme: light;
+                --surface: #ffffff;
+                --surface-soft: #f3f4f7;
+                --border: #d8dde8;
+                --text: #11181c;
+                --muted: #666666;
+                --accent: #2c3dcd;
+                --accent-soft: rgba(77, 150, 255, 0.14);
+                --success-soft: rgba(44, 205, 93, 0.15);
+              }
+
+              * {
+                box-sizing: border-box;
+              }
+
+              body {
+                margin: 0;
+                color: var(--text);
+                background: #fff;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+                line-height: 1.32;
+                font-size: 12px;
+              }
+
+              .page {
+                padding: 0;
+              }
+
+              .header {
+                border: 1px solid var(--border);
+                border-left: 4px solid var(--accent);
+                border-radius: 10px;
+                padding: 10px 12px;
+                margin-bottom: 0;
+              }
+
+              .eyebrow {
+                font-size: 10px;
+                text-transform: uppercase;
+                letter-spacing: 0.08em;
+                color: var(--muted);
+                margin-bottom: 2px;
+              }
+
+              .title {
+                margin: 0;
+                font-size: 18px;
+                line-height: 1.2;
+              }
+
+              .subhead {
+                margin: 4px 0 0;
+                font-size: 12px;
+                color: var(--muted);
+              }
+
+              .meta-row {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+                margin-top: 8px;
+              }
+
+              .meta-chip {
+                border: 1px solid var(--border);
+                border-radius: 999px;
+                padding: 4px 8px;
+                font-size: 10px;
+                color: var(--muted);
+                background: #fff;
+              }
+
+              .summary-note {
+                margin-top: 3px;
+                color: var(--muted);
+                font-size: 10px;
+              }
+
+              .semester-card {
+                border: 1px solid var(--border);
+                border-radius: 10px;
+                padding: 8px 10px;
+                margin-top: 8px;
+                break-inside: auto;
+                page-break-inside: auto;
+              }
+
+              .semester-head {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                gap: 8px;
+                margin-bottom: 6px;
+              }
+
+              .semester-name {
+                margin: 0;
+                font-size: 13px;
+                font-weight: 800;
+              }
+
+              .semester-average {
+                font-size: 11px;
+                font-weight: 700;
+                color: var(--accent);
+                text-align: right;
+              }
+
+              .subject-card {
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                padding: 7px 8px;
+                margin-top: 6px;
+                background: var(--surface);
+              }
+
+              .subject-head {
+                display: flex;
+                justify-content: space-between;
+                gap: 8px;
+                align-items: flex-start;
+              }
+
+              .subject-name {
+                margin: 0;
+                font-size: 12px;
+                font-weight: 700;
+                line-height: 1.25;
+              }
+
+              .subject-average {
+                flex-shrink: 0;
+                border-radius: 999px;
+                padding: 2px 8px;
+                font-size: 10px;
+                font-weight: 800;
+                color: var(--accent);
+                background: var(--accent-soft);
+              }
+
+              .subject-meta {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 5px;
+                margin-top: 6px;
+              }
+
+              .chip {
+                border-radius: 999px;
+                padding: 2px 8px;
+                font-size: 10px;
+                font-weight: 700;
+                line-height: 1.2;
+                border: 1px solid transparent;
+              }
+
+              .chip-neutral {
+                background: var(--surface-soft);
+                color: var(--text);
+              }
+
+              .chip-accent {
+                background: var(--accent-soft);
+                color: var(--accent);
+              }
+
+              .chip-success {
+                background: var(--success-soft);
+                color: #0f8c3d;
+              }
+
+              .grade-row {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 5px;
+                margin-top: 6px;
+              }
+
+              .grade-pill {
+                min-width: 24px;
+                text-align: center;
+                border-radius: 6px;
+                padding: 3px 7px;
+                font-size: 10px;
+                font-weight: 800;
+                border: 1px solid rgba(0, 0, 0, 0.05);
+              }
+
+              .impact-card {
+                margin-top: 6px;
+                border-radius: 8px;
+                padding: 6px 8px;
+                border: 1px solid var(--border);
+                border-left: 3px solid var(--accent);
+                background: #f9fbff;
+              }
+
+              .impact-label {
+                font-size: 9px;
+                font-weight: 800;
+                letter-spacing: 0.06em;
+                text-transform: uppercase;
+                color: var(--accent);
+              }
+
+              .impact-text {
+                margin-top: 2px;
+                font-size: 11px;
+                color: var(--text);
+              }
+
+              .impact-subtext {
+                margin-top: 2px;
+                font-size: 10px;
+                color: var(--muted);
+              }
+
+              .footer {
+                margin-top: 10px;
+                color: var(--muted);
+                font-size: 9px;
+                text-align: center;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="page">
+              <section class="header">
+                <div class="eyebrow">${escapeHtml(t('grades').pdf.exportTitle)}</div>
+                <h1 class="title">${escapeHtml(`${studentInfo.firstName} ${studentInfo.name}`.trim())}</h1>
+                <p class="subhead">${escapeHtml(studentInfo.group)}${studentInfo.specialization ? ` • ${escapeHtml(studentInfo.specialization)}` : ''}</p>
+                <div class="meta-row">
+                  ${currentSemesterLabel ? `<div class="meta-chip">${escapeHtml(currentSemesterLabel)}</div>` : ''}
+                  <div class="meta-chip">${escapeHtml(t('grades').pdf.generatedOn)} ${escapeHtml(generatedOn)}</div>
+                  <div class="meta-chip">${escapeHtml(t('grades').pdf.totalSemesters)}: ${currentGrades.length}</div>
+                  <div class="meta-chip">${escapeHtml(t('grades').pdf.totalSubjects)}: ${allSubjects.length}</div>
+                  <div class="meta-chip">${escapeHtml(t('grades').average)}: ${escapeHtml(overallAverage)}</div>
+                  <div class="meta-chip">${escapeHtml(t('grades').pdf.totalGrades)}: ${totalGrades}</div>
+                  <div class="meta-chip">${escapeHtml(t('grades').pdf.impactedSubjects)}: ${impactedSubjects}</div>
+                </div>
+              </section>
+
+              ${currentGrades.map((semester: SemesterGrades) => {
+                const semesterAverage = semester.subjects
+                  .map((subject: GradeSubject) => subject.finalAverage ?? subject.average)
+                  .filter((value: number | undefined): value is number => typeof value === 'number' && Number.isFinite(value));
+                const semesterAverageValue = semesterAverage.length > 0
+                  ? (semesterAverage.reduce((sum: number, value: number) => sum + value, 0) / semesterAverage.length).toFixed(2)
+                  : '-';
+
+                return `
+                  <section class="semester-card">
+                    <div class="semester-head">
+                      <div>
+                        <h3 class="semester-name">${escapeHtml(buildSemesterLabel(semester.semester))}</h3>
+                        <div class="summary-note">${escapeHtml(studentInfo.group)}${studentInfo.specialization ? ` • ${escapeHtml(studentInfo.specialization)}` : ''}</div>
+                      </div>
+                      <div class="semester-average">
+                        ${escapeHtml(t('grades').average)}<br />${escapeHtml(semesterAverageValue)}
+                      </div>
+                    </div>
+
+                    ${semester.subjects.map((subject: GradeSubject) => {
+                      const displayedAverage = subject.finalDisplayedAverage || subject.displayedAverage || '-';
+                      const baseAverage = subject.baseDisplayedAverage || subject.displayedAverage || '-';
+                      const isExamImpact = !!subject.appliedExamType;
+                      const appliedExamGrade = typeof subject.appliedExamGrade === 'number' && Number.isFinite(subject.appliedExamGrade)
+                        ? subject.appliedExamGrade.toFixed(2)
+                        : '';
+                      const impactLabel = subject.appliedExamType
+                        ? (() => {
+                            const typeKey = subject.appliedExamType?.toLowerCase() || '';
+                            if (typeKey.includes('teza') || typeKey.includes('thesis')) return escapeHtml(t('grades').subjects.thesis);
+                            if (typeKey.includes('examen') || typeKey.includes('exam')) return escapeHtml(t('grades').subjects.exam);
+                            return escapeHtml(subject.appliedExamType);
+                          })()
+                        : '';
+
+                      return `
+                        <article class="subject-card">
+                          <div class="subject-head">
+                            <h4 class="subject-name">${escapeHtml(subject.name)}</h4>
+                            <div class="subject-average">${escapeHtml(displayedAverage)}</div>
+                          </div>
+
+                          <div class="subject-meta">
+                            <span class="chip chip-neutral">${escapeHtml(t('grades').form.subject)}</span>
+                            <span class="chip chip-accent">${escapeHtml(t('grades').average)}: ${escapeHtml(baseAverage)}</span>
+                            ${subject.finalDisplayedAverage && subject.finalDisplayedAverage !== baseAverage ? `<span class="chip chip-success">${escapeHtml(t('grades').subjects.finalAverage)}: ${escapeHtml(subject.finalDisplayedAverage)}</span>` : ''}
+                            <span class="chip chip-neutral">${escapeHtml(t('grades').pdf.totalGrades)}: ${subject.grades.length}</span>
+                          </div>
+
+                          <div class="grade-row">
+                            ${subject.grades.length > 0 ? subject.grades.map((grade: string) => {
+                              const gradeColor = getGradeColor(grade);
+                              const gradeTextColor = getPdfGradeTextColor(grade);
+                              return `<span class="grade-pill" style="background:${escapeHtml(gradeColor)};color:${escapeHtml(gradeTextColor)};">${escapeHtml(grade)}</span>`;
+                            }).join('') : `<span class="chip chip-neutral">${escapeHtml(t('grades').noGrades)}</span>`}
+                          </div>
+
+                          ${isExamImpact ? `
+                            <div class="impact-card">
+                              <div class="impact-label">${escapeHtml(t('grades').pdf.impactedSubjects)}</div>
+                              <div class="impact-text">${impactLabel} ${appliedExamGrade ? `• ${escapeHtml(appliedExamGrade)}` : ''}</div>
+                              <div class="impact-subtext">${escapeHtml(t('grades').subjects.withoutExam)}: ${escapeHtml(baseAverage)} • ${escapeHtml(t('grades').subjects.finalAverage)}: ${escapeHtml(displayedAverage)}</div>
+                            </div>
+                          ` : ''}
+                        </article>
+                      `;
+                    }).join('')}
+                  </section>
+                `;
+              }).join('')}
+
+              <div class="footer">${escapeHtml(t('grades').pdf.generatedOn)} ${escapeHtml(generatedOn)}</div>
+            </div>
+          </body>
+        </html>
+      `;
+
+      const pdf = await Print.printToFileAsync({ html });
+      const sharingAvailable = await Sharing.isAvailableAsync();
+
+      if (!sharingAvailable) {
+        Alert.alert(t('grades').pdf.shareTitle, t('grades').pdf.shareMessage);
+        return;
+      }
+
+      await Sharing.shareAsync(pdf.uri, {
+        mimeType: 'application/pdf',
+        dialogTitle: t('grades').pdf.shareTitle,
+        UTI: 'com.adobe.pdf',
+      });
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert(t('grades').pdf.errorTitle, t('grades').pdf.errorMessage);
+    } finally {
+      setIsExportingPdf(false);
+    }
+  }, [studentGrades, formatFullDate, hasExportableGrades, t]);
   
   // Toggle subject expand/collapse
   const toggleSubject = useCallback((subjectName: string, semesterNumber: number) => {
@@ -2003,18 +2459,35 @@ const GradesScreen = ({
               <MaterialIcons name="calculate" size={22} color={Colors.dark.white} />
             </TouchableOpacity>
           )}
-          <TouchableOpacity 
-            style={styles.refreshButton}
-            onPress={handleRefresh}
-            disabled={refreshing}
-          >
-            <MaterialIcons 
-              name="refresh" 
-              size={24} 
-              color={Colors.dark.white} 
-              style={[refreshing && styles.refreshingIcon]}
-            />
-          </TouchableOpacity>
+          <View style={styles.headerActionColumn}>
+            <TouchableOpacity 
+              style={styles.refreshButton}
+              onPress={handleRefresh}
+              disabled={refreshing}
+            >
+              <MaterialIcons 
+                name="refresh" 
+                size={24} 
+                color={Colors.dark.white} 
+                style={[refreshing && styles.refreshingIcon]}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.exportIconButton,
+                (!hasExportableGrades || isExportingPdf) && styles.exportIconButtonDisabled,
+              ]}
+              onPress={handleExportGradesPdf}
+              disabled={!hasExportableGrades || isExportingPdf}
+              activeOpacity={0.85}
+            >
+              {isExportingPdf ? (
+                <ActivityIndicator size="small" color={Colors.dark.white} />
+              ) : (
+                <MaterialIcons name="picture-as-pdf" size={20} color={Colors.dark.white} />
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
       
@@ -2069,12 +2542,7 @@ const GradesScreen = ({
                 disabled={refreshing}
               >
                 <Text style={[styles.semesterTitle, textOpacity]}>
-                  {semester.semester === 1 
-                    ? t('grades').semesters.semester.replace('{{semester}}', '1')
-                    : semester.semester === 2 
-                      ? t('grades').semesters.semester.replace('{{semester}}', '2')
-                      : formatSemesterLabel(semester.semester)
-                  }
+                  {formatSemesterLabel(semester.semester)}
                 </Text>
                 <View style={styles.semesterHeaderRight}>
                   {/* Display semester average if available */}
@@ -2246,15 +2714,6 @@ export default function Grades() {
       return next;
     });
   }, [idnp, persistHighlights]);
-
-  // Helper function to format semester label - added to fix reference error
-  const formatSemesterLabel = (semesterNumber: number) => {
-    const year = Math.ceil(semesterNumber / 2);
-    const semesterInYear = semesterNumber % 2 === 0 ? 2 : 1;
-    return t('grades').semesters.yearSemester
-      .replace('{{year}}', year.toString())
-      .replace('{{semester}}', semesterInYear.toString());
-  };
 
   // Load dev injection stage and listen for updates
   // Moved below after recomputeDisplayFromToggle definition
@@ -3728,7 +4187,11 @@ const styles = StyleSheet.create({
   },
   headerButtons: {
     flexDirection: 'row',
-    gap: 12,
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  headerActionColumn: {
+    gap: 8,
   },
   calculatorButton: {
     backgroundColor: Colors.dark.primaryStrong,
@@ -3737,6 +4200,17 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  exportIconButton: {
+    backgroundColor: Colors.dark.primaryStrong,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  exportIconButtonDisabled: {
+    opacity: 0.55,
   },
   subjectSeparator: {
     width: 1,
