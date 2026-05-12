@@ -1,31 +1,58 @@
-import React from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator, FlatList, Modal, TextInput, Switch, Platform, Alert, Animated, ScrollView, Linking, Image } from 'react-native';
-import { SafeAreaView, Edge } from 'react-native-safe-area-context';
-import { useState, useEffect, useRef, useCallback, memo, useMemo } from 'react';
-import { scheduleService, SubGroupType, Language, Group, CustomPeriod } from '@/services/scheduleService';
+import React, {
+    useState,
+    useEffect,
+    useRef,
+    useCallback,
+    memo,
+    useMemo,
+} from 'react';
+import {
+    StyleSheet,
+    View,
+    Text,
+    TouchableOpacity,
+    ActivityIndicator,
+    FlatList,
+    Modal,
+    TextInput,
+    Platform,
+    Alert,
+    Animated,
+    ScrollView,
+    Linking,
+    Image,
+    DeviceEventEmitter,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+    scheduleService,
+    SubGroupType,
+    Language,
+    Group,
+    CustomPeriod,
+} from '@/services/scheduleService';
 import { useTranslation } from '@/hooks/useTranslation';
 import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { DeviceEventEmitter } from 'react-native';
 import { useAuthContext } from '@/components/auth/AuthContext';
-import authService from '@/services/authService';
-import { 
-  handleGroupChange as handleOrphanedAssignments 
+import authService, { getGravatarProfile } from '@/services/authService';
+import {
+    handleGroupChange as handleOrphanedAssignments,
+    getAssignments,
 } from '../../utils/assignmentStorage';
-import { 
-  getNotificationSettings, 
-  saveNotificationSettings, 
-  DEFAULT_NOTIFICATION_SETTINGS, 
-  NotificationSettings, 
-  scheduleAllNotifications,
-  createAndScheduleDailyDigest
+import {
+    getNotificationSettings,
+    saveNotificationSettings,
+    DEFAULT_NOTIFICATION_SETTINGS,
+    NotificationSettings,
+    scheduleAllNotifications,
+    createAndScheduleDailyDigest,
+    areNotificationsAvailable,
+    initializeNotifications,
 } from '../../utils/notificationUtils';
-import { getAssignments, AssignmentType } from '../../utils/assignmentStorage';
 import { StorageViewer } from '../../components/StorageViewer';
-import * as Notifications from 'expo-notifications';
-import { initializeNotifications } from '../../utils/notificationUtils';
 import { updateService } from '@/services/updateService';
 import { BottomModalPortal } from '@/components/BottomModalPortal';
 import { Colors } from '@/constants/Colors';
@@ -35,22 +62,17 @@ const IDNP_KEY = '@planner_idnp';
 const SKIP_LOGIN_KEY = '@planner_skip_login';
 const AUTH_STATE_CHANGE_EVENT = 'auth_state_changed';
 const IDNP_UPDATE_EVENT = 'IDNP_UPDATE';
-const AUTH_TOKEN_KEY = '@auth_token';  // Adding this constant
 const IDNP_SYNC_KEY = '@planner_idnp_sync';
 const DEV_GRADE_TOGGLE_KEY = '@dev_grade_toggle_active';
 const DEV_GRADE_TOGGLE_EVENT = 'dev_grade_toggle_event';
-
-// Import CACHE_KEYS from scheduleService
-// We need to access this directly from scheduleService to use the same keys
-const { SCHEDULE_PREFIX } = scheduleService.CACHE_KEYS;
 
 // Check if app is running in development mode
 const IS_DEV = __DEV__;
 
 const languages = {
-  en: { name: 'English', icon: '🇬🇧' },
-  ro: { name: 'Română', icon: '🇷🇴' },
-  ru: { name: 'Русский', icon: '🇷🇺' }
+    en: { name: 'English', icon: '🇬🇧' },
+    ro: { name: 'Română', icon: '🇷🇴' },
+    ru: { name: 'Русский', icon: '🇷🇺' },
 };
 
 const SUBGROUPS: SubGroupType[] = ['Subgroup 1', 'Subgroup 2'];
@@ -59,639 +81,786 @@ const SUBGROUPS: SubGroupType[] = ['Subgroup 1', 'Subgroup 2'];
 const THEME_COLORS = Colors.dark.randomColors as unknown as string[];
 
 const getRandomColor = () => {
-  return THEME_COLORS[Math.floor(Math.random() * THEME_COLORS.length)];
+    return THEME_COLORS[Math.floor(Math.random() * THEME_COLORS.length)];
 };
 
 // Optimized item comparison function for memo
 const areGroupItemPropsEqual = (prevProps: any, nextProps: any) => {
-  return (
-    prevProps.item._id === nextProps.item._id &&
-    prevProps.item.name === nextProps.item.name &&
-    prevProps.item.diriginte?.name === nextProps.item.diriginte?.name &&
-    prevProps.isSelected === nextProps.isSelected
-  );
+    return (
+        prevProps.item._id === nextProps.item._id &&
+        prevProps.item.name === nextProps.item.name &&
+        prevProps.item.diriginte?.name === nextProps.item.diriginte?.name &&
+        prevProps.isSelected === nextProps.isSelected
+    );
 };
 
 // Memoized group item component for better performance
-const GroupItem = memo(({ 
-  item, 
-  isSelected, 
-  onPress 
-}: { 
-  item: Group; 
-  isSelected: boolean; 
-  onPress: () => void;
-}) => {
-  // Memoize styles to prevent unnecessary recalculations
-  const itemStyle = useMemo(() => [
-    styles.groupItem,
-    isSelected && { ...styles.selectedOption, backgroundColor: Colors.dark.primaryStrong }
-  ], [isSelected]);
+const GroupItem = memo(
+    ({
+        item,
+        isSelected,
+        onPress,
+    }: {
+        item: Group;
+        isSelected: boolean;
+        onPress: () => void;
+    }) => {
+        // Memoize styles to prevent unnecessary recalculations
+        const itemStyle = useMemo(
+            () => [
+                styles.groupItem,
+                isSelected && {
+                    ...styles.selectedOption,
+                    backgroundColor: Colors.dark.primaryStrong,
+                },
+            ],
+            [isSelected],
+        );
 
-  const textStyle = useMemo(() => [
-    styles.groupItemText,
-    isSelected && styles.selectedOptionText
-  ], [isSelected]);
+        const textStyle = useMemo(
+            () => [
+                styles.groupItemText,
+                isSelected && styles.selectedOptionText,
+            ],
+            [isSelected],
+        );
 
-  const teacherStyle = useMemo(() => [
-    styles.teacherText,
-    isSelected && styles.selectedTeacherText
-  ], [isSelected]);
+        const teacherStyle = useMemo(
+            () => [
+                styles.teacherText,
+                isSelected && styles.selectedTeacherText,
+            ],
+            [isSelected],
+        );
 
-  return (
-    <TouchableOpacity
-      style={itemStyle}
-      onPress={onPress}
-    >
-      <Text style={textStyle}>
-        {item.name}
-      </Text>
-      {item.diriginte && (
-        <Text style={teacherStyle}>
-          {item.diriginte.name}
-        </Text>
-      )}
-    </TouchableOpacity>
-  );
-}, areGroupItemPropsEqual);
+        return (
+            <TouchableOpacity style={itemStyle} onPress={onPress}>
+                <Text style={textStyle}>{item.name}</Text>
+                {item.diriginte && (
+                    <Text style={teacherStyle}>{item.diriginte.name}</Text>
+                )}
+            </TouchableOpacity>
+        );
+    },
+    areGroupItemPropsEqual,
+);
 
 GroupItem.displayName = 'GroupItem';
 
 // Custom TimePicker component
-const TimePicker = ({ 
-  value, 
-  onChange, 
-  label,
-  onClose,
-  onConfirm,
-  use12HourFormat = false,
-  translations = { cancel: 'Cancel', confirm: 'Confirm' }
-}: { 
-  value: Date;
-  onChange: (date: Date) => void;
-  label: string;
-  onClose: () => void;
-  onConfirm?: (date: Date) => void;
-  use12HourFormat?: boolean;
-  translations?: { cancel: string; confirm: string };
+const TimePicker = ({
+    value,
+    onChange,
+    label,
+    onClose,
+    onConfirm,
+    use12HourFormat = false,
+    translations = { cancel: 'Cancel', confirm: 'Confirm' },
+}: {
+    value: Date;
+    onChange: (date: Date) => void;
+    label: string;
+    onClose: () => void;
+    onConfirm?: (date: Date) => void;
+    use12HourFormat?: boolean;
+    translations?: { cancel: string; confirm: string };
 }) => {
-  const { formatTimeFromDate } = useTranslation();
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.95)).current;
-  const [localValue, setLocalValue] = useState(value);
-  const [period, setPeriod] = useState(value.getHours() >= 12 ? 'PM' : 'AM');
-  const hoursRef = useRef<ScrollView>(null);
-  const minutesRef = useRef<ScrollView>(null);
-  const itemHeight = 56;
-  const visibleItems = 5;
-  const [isScrolling, setIsScrolling] = useState(false);
+    const { formatTimeFromDate } = useTranslation();
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+    const scaleAnim = useRef(new Animated.Value(0.95)).current;
+    const [localValue, setLocalValue] = useState(value);
+    const [period, setPeriod] = useState(value.getHours() >= 12 ? 'PM' : 'AM');
+    const hoursRef = useRef<ScrollView>(null);
+    const minutesRef = useRef<ScrollView>(null);
+    const itemHeight = 56;
+    const visibleItems = 5;
+    const [, setIsScrolling] = useState(false);
 
-  const hours = useMemo(() => {
-    if (use12HourFormat) {
-      return Array.from({ length: 12 }, (_, i) => i === 0 ? 12 : i);
-    }
-    return Array.from({ length: 24 }, (_, i) => i);
-  }, [use12HourFormat]);
+    const hours = useMemo(() => {
+        if (use12HourFormat) {
+            return Array.from({ length: 12 }, (_, i) => (i === 0 ? 12 : i));
+        }
+        return Array.from({ length: 24 }, (_, i) => i);
+    }, [use12HourFormat]);
 
-  const minutes = useMemo(() => {
-    return Array.from({ length: 60 }, (_, i) => i);
-  }, []);
+    const minutes = useMemo(() => {
+        return Array.from({ length: 60 }, (_, i) => i);
+    }, []);
 
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(scaleAnim, {
-        toValue: 1,
-        duration: 250,
-        useNativeDriver: true,
-      })
-    ]).start();
+    useEffect(() => {
+        Animated.parallel([
+            Animated.timing(fadeAnim, {
+                toValue: 1,
+                duration: 200,
+                useNativeDriver: true,
+            }),
+            Animated.timing(scaleAnim, {
+                toValue: 1,
+                duration: 250,
+                useNativeDriver: true,
+            }),
+        ]).start();
 
-    // Scroll to initial positions
-    setTimeout(() => {
-      let hour = localValue.getHours();
-      if (use12HourFormat) {
-        hour = hour % 12;
-        if (hour === 0) hour = 12;
-      }
-      const minute = localValue.getMinutes();
+        const timeout = setTimeout(() => {
+            let hour = localValue.getHours();
 
-      hoursRef.current?.scrollTo({ y: hour * itemHeight, animated: false });
-      minutesRef.current?.scrollTo({ y: minute * itemHeight, animated: false });
-    }, 50);
-  }, []);
-
-  const formatNumber = (num: number, padLength = 2) => {
-    return num.toString().padStart(padLength, '0');
-  };
-
-  const handleHourScroll = (event: any) => {
-    if (!event.nativeEvent) return;
-    
-    const offsetY = event.nativeEvent.contentOffset.y;
-    const selectedHour = Math.round(offsetY / itemHeight);
-    
-    if (selectedHour >= 0 && selectedHour < (use12HourFormat ? 12 : 24)) {
-      let newHour = selectedHour;
-      if (use12HourFormat) {
-        if (newHour === 12) newHour = 0;
-        if (period === 'PM') newHour += 12;
-      }
-      
-      const newDate = new Date(localValue);
-      if (newDate.getHours() !== newHour) {
-        newDate.setHours(newHour);
-        setLocalValue(newDate);
-      }
-    }
-  };
-
-  const handleMinuteScroll = (event: any) => {
-    if (!event.nativeEvent) return;
-    
-    const offsetY = event.nativeEvent.contentOffset.y;
-    const selectedMinute = Math.round(offsetY / itemHeight);
-    
-    if (selectedMinute >= 0 && selectedMinute < 60) {
-      const newDate = new Date(localValue);
-      if (newDate.getMinutes() !== selectedMinute) {
-        newDate.setMinutes(selectedMinute);
-        setLocalValue(newDate);
-      }
-    }
-  };
-
-  const handleScrollBeginDrag = () => {
-    setIsScrolling(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  };
-
-  const handleScrollEndDrag = (event: any, type: 'hours' | 'minutes') => {
-    setIsScrolling(false);
-    if (type === 'hours') {
-      handleHourScroll(event);
-    } else {
-      handleMinuteScroll(event);
-    }
-  };
-
-  const togglePeriod = () => {
-    const newPeriod = period === 'AM' ? 'PM' : 'AM';
-    setPeriod(newPeriod);
-    
-    const newDate = new Date(localValue);
-    const currentHours = newDate.getHours();
-    const newHours = newPeriod === 'PM' 
-      ? (currentHours + 12) % 24 
-      : (currentHours - 12 + 24) % 24;
-    
-    newDate.setHours(newHours);
-    setLocalValue(newDate);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  };
-
-  const handleConfirm = () => {
-    onChange(localValue);
-    if (onConfirm) {
-      onConfirm(localValue);
-    }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    onClose();
-  };
-
-  return (
-    <Modal
-      transparent
-      visible
-      animationType="none"
-      onRequestClose={onClose}
-    >
-      <View style={styles.timePickerOverlay}>
-        <Animated.View 
-          style={[
-            styles.timePickerContainer,
-            {
-              opacity: fadeAnim,
-              transform: [{ scale: scaleAnim }]
+            if (use12HourFormat) {
+                hour = hour % 12;
+                if (hour === 0) hour = 12;
             }
-          ]}
+
+            const minute = localValue.getMinutes();
+
+            hoursRef.current?.scrollTo({
+                y: hour * itemHeight,
+                animated: false,
+            });
+
+            minutesRef.current?.scrollTo({
+                y: minute * itemHeight,
+                animated: false,
+            });
+        }, 50);
+
+        return () => clearTimeout(timeout);
+    }, [localValue, use12HourFormat, fadeAnim, scaleAnim]);
+
+    const formatNumber = (num: number, padLength = 2) => {
+        return num.toString().padStart(padLength, '0');
+    };
+
+    const handleHourScroll = (event: any) => {
+        if (!event.nativeEvent) return;
+
+        const offsetY = event.nativeEvent.contentOffset.y;
+        const selectedHour = Math.round(offsetY / itemHeight);
+
+        if (selectedHour >= 0 && selectedHour < (use12HourFormat ? 12 : 24)) {
+            let newHour = selectedHour;
+            if (use12HourFormat) {
+                if (newHour === 12) newHour = 0;
+                if (period === 'PM') newHour += 12;
+            }
+
+            const newDate = new Date(localValue);
+            if (newDate.getHours() !== newHour) {
+                newDate.setHours(newHour);
+                setLocalValue(newDate);
+            }
+        }
+    };
+
+    const handleMinuteScroll = (event: any) => {
+        if (!event.nativeEvent) return;
+
+        const offsetY = event.nativeEvent.contentOffset.y;
+        const selectedMinute = Math.round(offsetY / itemHeight);
+
+        if (selectedMinute >= 0 && selectedMinute < 60) {
+            const newDate = new Date(localValue);
+            if (newDate.getMinutes() !== selectedMinute) {
+                newDate.setMinutes(selectedMinute);
+                setLocalValue(newDate);
+            }
+        }
+    };
+
+    const handleScrollBeginDrag = () => {
+        setIsScrolling(true);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    };
+
+    const handleScrollEndDrag = (event: any, type: 'hours' | 'minutes') => {
+        setIsScrolling(false);
+        if (type === 'hours') {
+            handleHourScroll(event);
+        } else {
+            handleMinuteScroll(event);
+        }
+    };
+
+    const togglePeriod = () => {
+        const newPeriod = period === 'AM' ? 'PM' : 'AM';
+        setPeriod(newPeriod);
+
+        const newDate = new Date(localValue);
+        const currentHours = newDate.getHours();
+        const newHours =
+            newPeriod === 'PM' ?
+                (currentHours + 12) % 24
+            :   (currentHours - 12 + 24) % 24;
+
+        newDate.setHours(newHours);
+        setLocalValue(newDate);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    };
+
+    const handleConfirm = () => {
+        onChange(localValue);
+        if (onConfirm) {
+            onConfirm(localValue);
+        }
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        onClose();
+    };
+
+    return (
+        <Modal
+            transparent
+            visible
+            animationType="none"
+            onRequestClose={onClose}
         >
-          <View style={styles.timePickerHeader}>
-            <Text style={styles.timePickerTitle}>{label}</Text>
-            <Text style={styles.timePickerValue}>
-              {formatTimeFromDate(localValue)}
-            </Text>
-          </View>
+            <View style={styles.timePickerOverlay}>
+                <Animated.View
+                    style={[
+                        styles.timePickerContainer,
+                        {
+                            opacity: fadeAnim,
+                            transform: [{ scale: scaleAnim }],
+                        },
+                    ]}
+                >
+                    <View style={styles.timePickerHeader}>
+                        <Text style={styles.timePickerTitle}>{label}</Text>
+                        <Text style={styles.timePickerValue}>
+                            {formatTimeFromDate(localValue)}
+                        </Text>
+                    </View>
 
-          <View style={styles.timePickerContent}>
-            <View style={styles.timePickerColumn}>
-              <ScrollView
-                ref={hoursRef}
-                showsVerticalScrollIndicator={false}
-                snapToInterval={itemHeight}
-                decelerationRate={Platform.select({ ios: 0.992, android: 0.985 })}
-                onScroll={handleHourScroll}
-                onScrollBeginDrag={handleScrollBeginDrag}
-                onScrollEndDrag={(e) => handleScrollEndDrag(e, 'hours')}
-                onMomentumScrollEnd={() => Haptics.selectionAsync()}
-                scrollEventThrottle={16}
-                style={{ height: itemHeight * visibleItems }}
-                contentContainerStyle={{ paddingVertical: itemHeight * 2 }}
-                nestedScrollEnabled={true}
-              >
-                {hours.map((hour) => (
-                  <View key={`hour-${hour}`} style={[styles.timePickerItem, { height: itemHeight }]}>
-                    <Text style={[
-                      styles.timePickerItemText,
-                      hour === (use12HourFormat ? (localValue.getHours() % 12 || 12) : localValue.getHours()) && styles.timePickerItemTextSelected
-                    ]}>
-                      {formatNumber(hour, use12HourFormat ? 1 : 2)}
-                    </Text>
-                  </View>
-                ))}
-              </ScrollView>
+                    <View style={styles.timePickerContent}>
+                        <View style={styles.timePickerColumn}>
+                            <ScrollView
+                                ref={hoursRef}
+                                showsVerticalScrollIndicator={false}
+                                snapToInterval={itemHeight}
+                                decelerationRate={Platform.select({
+                                    ios: 0.992,
+                                    android: 0.985,
+                                })}
+                                onScroll={handleHourScroll}
+                                onScrollBeginDrag={handleScrollBeginDrag}
+                                onScrollEndDrag={(e) =>
+                                    handleScrollEndDrag(e, 'hours')
+                                }
+                                onMomentumScrollEnd={() =>
+                                    Haptics.selectionAsync()
+                                }
+                                scrollEventThrottle={16}
+                                style={{ height: itemHeight * visibleItems }}
+                                contentContainerStyle={{
+                                    paddingVertical: itemHeight * 2,
+                                }}
+                                nestedScrollEnabled={true}
+                            >
+                                {hours.map((hour) => (
+                                    <View
+                                        key={`hour-${hour}`}
+                                        style={[
+                                            styles.timePickerItem,
+                                            { height: itemHeight },
+                                        ]}
+                                    >
+                                        <Text
+                                            style={[
+                                                styles.timePickerItemText,
+                                                hour ===
+                                                    (use12HourFormat ?
+                                                        localValue.getHours() %
+                                                            12 || 12
+                                                    :   localValue.getHours()) &&
+                                                    styles.timePickerItemTextSelected,
+                                            ]}
+                                        >
+                                            {formatNumber(
+                                                hour,
+                                                use12HourFormat ? 1 : 2,
+                                            )}
+                                        </Text>
+                                    </View>
+                                ))}
+                            </ScrollView>
+                        </View>
+
+                        <Text style={styles.timePickerSeparator}>:</Text>
+
+                        <View style={styles.timePickerColumn}>
+                            <ScrollView
+                                ref={minutesRef}
+                                showsVerticalScrollIndicator={false}
+                                snapToInterval={itemHeight}
+                                decelerationRate={Platform.select({
+                                    ios: 0.992,
+                                    android: 0.985,
+                                })}
+                                onScroll={handleMinuteScroll}
+                                onScrollBeginDrag={handleScrollBeginDrag}
+                                onScrollEndDrag={(e) =>
+                                    handleScrollEndDrag(e, 'minutes')
+                                }
+                                onMomentumScrollEnd={() =>
+                                    Haptics.selectionAsync()
+                                }
+                                scrollEventThrottle={16}
+                                style={{ height: itemHeight * visibleItems }}
+                                contentContainerStyle={{
+                                    paddingVertical: itemHeight * 2,
+                                }}
+                                nestedScrollEnabled={true}
+                            >
+                                {minutes.map((minute) => (
+                                    <View
+                                        key={`minute-${minute}`}
+                                        style={[
+                                            styles.timePickerItem,
+                                            { height: itemHeight },
+                                        ]}
+                                    >
+                                        <Text
+                                            style={[
+                                                styles.timePickerItemText,
+                                                minute ===
+                                                    localValue.getMinutes() &&
+                                                    styles.timePickerItemTextSelected,
+                                            ]}
+                                        >
+                                            {formatNumber(minute)}
+                                        </Text>
+                                    </View>
+                                ))}
+                            </ScrollView>
+                        </View>
+
+                        {use12HourFormat && (
+                            <TouchableOpacity
+                                style={styles.timePickerPeriodButton}
+                                onPress={togglePeriod}
+                            >
+                                <Text
+                                    style={[
+                                        styles.timePickerPeriodText,
+                                        {
+                                            color:
+                                                period === 'AM' ?
+                                                    Colors.dark.white
+                                                :   Colors.dark.mutedText,
+                                        },
+                                    ]}
+                                >
+                                    AM
+                                </Text>
+                                <Text
+                                    style={[
+                                        styles.timePickerPeriodText,
+                                        {
+                                            color:
+                                                period === 'PM' ?
+                                                    Colors.dark.white
+                                                :   Colors.dark.mutedText,
+                                        },
+                                    ]}
+                                >
+                                    PM
+                                </Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+
+                    <View style={styles.timePickerActions}>
+                        <TouchableOpacity
+                            style={[
+                                styles.timePickerButton,
+                                styles.timePickerCancelButton,
+                            ]}
+                            onPress={onClose}
+                        >
+                            <Text style={styles.timePickerButtonText}>
+                                {translations.cancel}
+                            </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[
+                                styles.timePickerButton,
+                                styles.timePickerConfirmButton,
+                            ]}
+                            onPress={handleConfirm}
+                        >
+                            <Text
+                                style={[
+                                    styles.timePickerButtonText,
+                                    styles.timePickerConfirmText,
+                                ]}
+                            >
+                                {translations.confirm}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                </Animated.View>
             </View>
-
-            <Text style={styles.timePickerSeparator}>:</Text>
-
-            <View style={styles.timePickerColumn}>
-              <ScrollView
-                ref={minutesRef}
-                showsVerticalScrollIndicator={false}
-                snapToInterval={itemHeight}
-                decelerationRate={Platform.select({ ios: 0.992, android: 0.985 })}
-                onScroll={handleMinuteScroll}
-                onScrollBeginDrag={handleScrollBeginDrag}
-                onScrollEndDrag={(e) => handleScrollEndDrag(e, 'minutes')}
-                onMomentumScrollEnd={() => Haptics.selectionAsync()}
-                scrollEventThrottle={16}
-                style={{ height: itemHeight * visibleItems }}
-                contentContainerStyle={{ paddingVertical: itemHeight * 2 }}
-                nestedScrollEnabled={true}
-              >
-                {minutes.map((minute) => (
-                  <View key={`minute-${minute}`} style={[
-                    styles.timePickerItem, 
-                    { height: itemHeight }
-                  ]}>
-                    <Text style={[
-                      styles.timePickerItemText,
-                      minute === localValue.getMinutes() && styles.timePickerItemTextSelected
-                    ]}>
-                      {formatNumber(minute)}
-                    </Text>
-                  </View>
-                ))}
-              </ScrollView>
-            </View>
-
-            {use12HourFormat && (
-              <TouchableOpacity
-                style={styles.timePickerPeriodButton}
-                onPress={togglePeriod}
-              >
-                <Text style={[
-                  styles.timePickerPeriodText,
-                  { color: period === 'AM' ? Colors.dark.white : Colors.dark.mutedText }
-                ]}>AM</Text>
-                <Text style={[
-                  styles.timePickerPeriodText,
-                  { color: period === 'PM' ? Colors.dark.white : Colors.dark.mutedText }
-                ]}>PM</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          <View style={styles.timePickerActions}>
-            <TouchableOpacity 
-              style={[styles.timePickerButton, styles.timePickerCancelButton]} 
-              onPress={onClose}
-            >
-              <Text style={styles.timePickerButtonText}>{translations.cancel}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.timePickerButton, styles.timePickerConfirmButton]} 
-              onPress={handleConfirm}
-            >
-              <Text style={[styles.timePickerButtonText, styles.timePickerConfirmText]}>{translations.confirm}</Text>
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
-      </View>
-    </Modal>
-  );
+        </Modal>
+    );
 };
 
 // Custom Toggle Switch component
-const CustomToggle = ({ 
-  value, 
-  onValueChange, 
-  activeColor = Colors.dark.primaryStrong,
-  inactiveColor = Colors.dark.surfaceRaisedAlt,
-  thumbColor = Colors.dark.white,
-  disabled = false
-}: { 
-  value: boolean;
-  onValueChange: (value: boolean) => void;
-  activeColor?: string;
-  inactiveColor?: string;
-  thumbColor?: string;
-  disabled?: boolean;
+const CustomToggle = ({
+    value,
+    onValueChange,
+    activeColor = Colors.dark.primaryStrong,
+    inactiveColor = Colors.dark.surfaceRaisedAlt,
+    thumbColor = Colors.dark.white,
+    disabled = false,
+}: {
+    value: boolean;
+    onValueChange: (value: boolean) => void;
+    activeColor?: string;
+    inactiveColor?: string;
+    thumbColor?: string;
+    disabled?: boolean;
 }) => {
-  const translateX = useRef(new Animated.Value(value ? 22 : 2)).current;
-  const backgroundColorAnim = useRef(new Animated.Value(value ? 1 : 0)).current;
-  
-  const backgroundColor = backgroundColorAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [disabled ? Colors.dark.borderStrong : inactiveColor, disabled ? Colors.dark.toggleDisabled : activeColor]
-  });
+    const translateX = useRef(new Animated.Value(value ? 22 : 2)).current;
+    const backgroundColorAnim = useRef(
+        new Animated.Value(value ? 1 : 0),
+    ).current;
 
-  useEffect(() => {
-    Animated.parallel([
-      Animated.spring(translateX, {
-        toValue: value ? 22 : 2,
-        friction: 6,
-        tension: 60,
-        useNativeDriver: false
-      }),
-      Animated.timing(backgroundColorAnim, {
-        toValue: value ? 1 : 0,
-        duration: 200,
-        useNativeDriver: false
-      })
-    ]).start();
-  }, [value]);
+    const backgroundColor = backgroundColorAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: [
+            disabled ? Colors.dark.borderStrong : inactiveColor,
+            disabled ? Colors.dark.toggleDisabled : activeColor,
+        ],
+    });
 
-  const toggleSwitch = () => {
-    if (disabled) return;
-    
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    onValueChange(!value);
-  };
+    useEffect(() => {
+        Animated.parallel([
+            Animated.spring(translateX, {
+                toValue: value ? 22 : 2,
+                friction: 6,
+                tension: 60,
+                useNativeDriver: false,
+            }),
+            Animated.timing(backgroundColorAnim, {
+                toValue: value ? 1 : 0,
+                duration: 200,
+                useNativeDriver: false,
+            }),
+        ]).start();
+    }, [value, backgroundColorAnim, translateX]);
 
-  return (
-    <TouchableOpacity 
-      activeOpacity={disabled ? 1 : 0.8} 
-      onPress={toggleSwitch}
-    >
-      <Animated.View style={[
-        styles.toggleContainer,
-        { backgroundColor, opacity: disabled ? 0.6 : 1 }
-      ]}>
-        <Animated.View style={[
-          styles.toggleThumb,
-            { transform: [{ translateX }], backgroundColor: disabled ? Colors.dark.toggleDisabledAlt : thumbColor }
-        ]}>
-          {value && !disabled && (
-            <MaterialIcons name="check" size={14} color={activeColor} style={styles.toggleIcon} />
-          )}
-        </Animated.View>
-      </Animated.View>
-    </TouchableOpacity>
-  );
+    const toggleSwitch = () => {
+        if (disabled) return;
+
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        onValueChange(!value);
+    };
+
+    return (
+        <TouchableOpacity
+            activeOpacity={disabled ? 1 : 0.8}
+            onPress={toggleSwitch}
+        >
+            <Animated.View
+                style={[
+                    styles.toggleContainer,
+                    { backgroundColor, opacity: disabled ? 0.6 : 1 },
+                ]}
+            >
+                <Animated.View
+                    style={[
+                        styles.toggleThumb,
+                        {
+                            transform: [{ translateX }],
+                            backgroundColor:
+                                disabled ?
+                                    Colors.dark.toggleDisabledAlt
+                                :   thumbColor,
+                        },
+                    ]}
+                >
+                    {value && !disabled && (
+                        <MaterialIcons
+                            name="check"
+                            size={14}
+                            color={activeColor}
+                            style={styles.toggleIcon}
+                        />
+                    )}
+                </Animated.View>
+            </Animated.View>
+        </TouchableOpacity>
+    );
 };
 
 export default function Settings() {
-  const { t, currentLanguage, formatCompactDate, formatTimeFromDate } = useTranslation();
-  const router = useRouter();
-  const flatListRef = useRef<FlatList<Group>>(null);
-  const { user, logout, reloadUser, loading } = useAuthContext();
-  
-  // State hooks
-  const [settings, setSettings] = useState(scheduleService.getSettings());
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [groupsList, setGroupsList] = useState<Group[]>([]);
-  const [filteredGroups, setFilteredGroups] = useState<Group[]>([]);
-  const [showGroupModal, setShowGroupModal] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [initialScrollDone, setInitialScrollDone] = useState(false);
-  const [showPeriodModal, setShowPeriodModal] = useState(false);
-  const [editingPeriod, setEditingPeriod] = useState<CustomPeriod | null>(null);
-  const [periodName, setPeriodName] = useState('');
-  const [startTime, setStartTime] = useState(new Date());
-  const [endTime, setEndTime] = useState(new Date());
-  const [selectedDays, setSelectedDays] = useState<number[]>([]);
-  const [selectedColor, setSelectedColor] = useState(getRandomColor());
-  const [isEnabled, setIsEnabled] = useState(true);
-  const [showStartPicker, setShowStartPicker] = useState(false);
-  const [showEndPicker, setShowEndPicker] = useState(false);
-  const [savedIdnp, setSavedIdnp] = useState<string | null>(null);
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const [confirmDialogType, setConfirmDialogType] = useState<'idnp' | 'period' | 'account'>('idnp');
-  const [periodToDelete, setPeriodToDelete] = useState<string | null>(null);
-  const [showLanguageModal, setShowLanguageModal] = useState(false);
-  const [showAccountActionSheet, setShowAccountActionSheet] = useState(false);
-  const [showDeleteAccountConfirm, setShowDeleteAccountConfirm] = useState(false);
-  const [passwordForDeletion, setPasswordForDeletion] = useState('');
-  const [deletingAccount, setDeletingAccount] = useState(false);
-  const [passwordError, setPasswordError] = useState<string | null>(null);
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [showDeletionSuccessModal, setShowDeletionSuccessModal] = useState(false);
-  const [isRefreshingAccount, setIsRefreshingAccount] = useState(false);
-  // Use a single source of truth for current auth state that can be updated from multiple places
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!user);
-  // Add state for tracking whether the user has skipped login
-  const [skipLogin, setSkipLogin] = useState<boolean>(false);
-  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(DEFAULT_NOTIFICATION_SETTINGS);
-  const [showNotificationTimeModal, setShowNotificationTimeModal] = useState(false);
-  const [tempNotificationTime, setTempNotificationTime] = useState(new Date());
-  const [storageModalVisible, setStorageModalVisible] = useState(false);
-  const [storageItems, setStorageItems] = useState<[string, string | null][]>([]);
-  const [syncIdnp, setSyncIdnp] = useState<boolean>(true);
-  // Schedule refresh state
-  const [isRefreshingSchedule, setIsRefreshingSchedule] = useState(false);
-  const [lastScheduleRefresh, setLastScheduleRefresh] = useState<Date | null>(null);
-  const [devGradeActive, setDevGradeActive] = useState<boolean>(false);
+    const { t, formatCompactDate, formatTimeFromDate } = useTranslation();
+    const router = useRouter();
+    const flatListRef = useRef<FlatList<Group>>(null);
+    const { user, logout, reloadUser } = useAuthContext();
 
-  // Load last refresh time on mount
-  useEffect(() => {
-    (async () => {
-      const last = await scheduleService.getLastScheduleFetchTime();
-      setLastScheduleRefresh(last);
-    })();
-  }, []);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const storedToggle = await AsyncStorage.getItem(DEV_GRADE_TOGGLE_KEY);
-        if (storedToggle === 'true') setDevGradeActive(true);
-      } catch (err) {
-        // ignore
-      }
-    })();
-    return undefined;
-  }, []);
-
-  const handleManualScheduleRefresh = useCallback(async () => {
-    if (isRefreshingSchedule) return;
-    setIsRefreshingSchedule(true);
-    try {
-      const refreshed = await scheduleService.refreshSchedule(true);
-      if (refreshed) {
-        const last = await scheduleService.getLastScheduleFetchTime();
-        setLastScheduleRefresh(last);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } else {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        Alert.alert('Offline', 'Using cached schedule');
-      }
-    } catch (e) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Schedule', 'Failed to refresh schedule');
-    } finally {
-      setIsRefreshingSchedule(false);
-    }
-  }, [isRefreshingSchedule]);
-
-  const handleClearScheduleCache = useCallback(async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await scheduleService.clearScheduleCache();
-    setLastScheduleRefresh(null);
-    Alert.alert('Cache Cleared', 'Schedule cache removed. Refresh to fetch latest data.');
-  }, []);
-
-  const handleDevInjectGrades = useCallback(async () => {
-    try {
-      const next = !devGradeActive;
-      await AsyncStorage.setItem(DEV_GRADE_TOGGLE_KEY, next ? 'true' : 'false');
-      setDevGradeActive(next);
-      DeviceEventEmitter.emit(DEV_GRADE_TOGGLE_EVENT, next);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert(
-        next ? 'Injected' : 'Removed',
-        next
-          ? 'Added 5 random grades immediately. Tap again to remove.'
-          : 'Removed injected grades. Tap again to add back.'
-      );
-    } catch (error) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Error', 'Could not toggle grade injection');
-    }
-  }, [devGradeActive]);
-
-  // Add useEffect to load IDNP and listen for updates
-  useEffect(() => {
-    const loadIdnp = async () => {
-      try {
-        const idnp = await AsyncStorage.getItem(IDNP_KEY);
-        const hasSkipped = await AsyncStorage.getItem(SKIP_LOGIN_KEY);
-        const syncSetting = await AsyncStorage.getItem(IDNP_SYNC_KEY);
-        setSavedIdnp(idnp);
-        setSkipLogin(hasSkipped === 'true');
-        setSyncIdnp(syncSetting !== 'false'); // Default to true if not set
-      } catch (error) {
-        // Silent error handling
-      }
-    };
-    
-    loadIdnp();
-    
-    // Add event listener for IDNP updates using DeviceEventEmitter
-    const idnpSubscription = DeviceEventEmitter.addListener(IDNP_UPDATE_EVENT, (newIdnp: string | null) => {
-      setSavedIdnp(newIdnp);
-    });
-
-    // Add event listener for auth state changes
-    const authSubscription = DeviceEventEmitter.addListener(
-      AUTH_STATE_CHANGE_EVENT, 
-      (authState: { isAuthenticated: boolean; skipped?: boolean }) => {
-        setIsAuthenticated(authState.isAuthenticated);
-        if (typeof authState.skipped === 'boolean') {
-          setSkipLogin(authState.skipped);
-        }
-        // Reload user data when auth state changes to true
-        if (authState.isAuthenticated) {
-          reloadUser();
-        }
-      }
+    // State hooks
+    const [settings, setSettings] = useState(scheduleService.getSettings());
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [groupsList, setGroupsList] = useState<Group[]>([]);
+    const [filteredGroups, setFilteredGroups] = useState<Group[]>([]);
+    const [showGroupModal, setShowGroupModal] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [initialScrollDone, setInitialScrollDone] = useState(false);
+    const [showPeriodModal, setShowPeriodModal] = useState(false);
+    const [editingPeriod, setEditingPeriod] = useState<CustomPeriod | null>(
+        null,
     );
-    
-    // Cleanup event listeners on unmount
-    return () => {
-      idnpSubscription.remove();
-      authSubscription.remove();
-    };
-  }, [reloadUser]);
+    const [periodName, setPeriodName] = useState('');
+    const [startTime, setStartTime] = useState(new Date());
+    const [endTime, setEndTime] = useState(new Date());
+    const [selectedDays, setSelectedDays] = useState<number[]>([]);
+    const [selectedColor, setSelectedColor] = useState(getRandomColor());
+    const [isEnabled, setIsEnabled] = useState(true);
+    const [showStartPicker, setShowStartPicker] = useState(false);
+    const [showEndPicker, setShowEndPicker] = useState(false);
+    const [savedIdnp, setSavedIdnp] = useState<string | null>(null);
+    const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+    const [confirmDialogType, setConfirmDialogType] = useState<
+        'idnp' | 'period' | 'account'
+    >('idnp');
+    const [periodToDelete, setPeriodToDelete] = useState<string | null>(null);
+    const [showLanguageModal, setShowLanguageModal] = useState(false);
+    const [showAccountActionSheet, setShowAccountActionSheet] = useState(false);
+    const [showDeleteAccountConfirm, setShowDeleteAccountConfirm] =
+        useState(false);
+    const [passwordForDeletion, setPasswordForDeletion] = useState('');
+    const [deletingAccount, setDeletingAccount] = useState(false);
+    const [passwordError, setPasswordError] = useState<string | null>(null);
+    const [showPasswordModal, setShowPasswordModal] = useState(false);
+    const [showDeletionSuccessModal, setShowDeletionSuccessModal] =
+        useState(false);
+    // Use a single source of truth for current auth state that can be updated from multiple places
+    const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!user);
+    // Add state for tracking whether the user has skipped login
+    const [, setSkipLogin] = useState<boolean>(false);
+    const [notificationSettings, setNotificationSettings] =
+        useState<NotificationSettings>(DEFAULT_NOTIFICATION_SETTINGS);
+    const [showNotificationTimeModal, setShowNotificationTimeModal] =
+        useState(false);
+    const [tempNotificationTime, setTempNotificationTime] = useState(
+        new Date(),
+    );
+    const [storageModalVisible, setStorageModalVisible] = useState(false);
+    const [storageItems, setStorageItems] = useState<[string, string | null][]>(
+        [],
+    );
+    const [, setSyncIdnp] = useState<boolean>(true);
+    // Schedule refresh state
+    const [isRefreshingSchedule, setIsRefreshingSchedule] = useState(false);
+    const [lastScheduleRefresh, setLastScheduleRefresh] = useState<Date | null>(
+        null,
+    );
+    const [devGradeActive, setDevGradeActive] = useState<boolean>(false);
 
-  // Update authentication state when user changes
-  useEffect(() => {
-    setIsAuthenticated(!!user);
-  }, [user]);
+    // Load last refresh time on mount
+    useEffect(() => {
+        (async () => {
+            const last = await scheduleService.getLastScheduleFetchTime();
+            setLastScheduleRefresh(last);
+        })();
+    }, []);
 
-  // Use useFocusEffect to check auth state when screen becomes focused
-  useFocusEffect(
-    useCallback(() => {
-      const checkAuthState = async () => {
+    useEffect(() => {
+        (async () => {
+            try {
+                const storedToggle =
+                    await AsyncStorage.getItem(DEV_GRADE_TOGGLE_KEY);
+                if (storedToggle === 'true') setDevGradeActive(true);
+            } catch {
+                // ignore
+            }
+        })();
+        return undefined;
+    }, []);
+
+    const handleManualScheduleRefresh = useCallback(async () => {
+        if (isRefreshingSchedule) return;
+        setIsRefreshingSchedule(true);
         try {
-          // Check if the skip login flag is set
-          const hasSkipped = await AsyncStorage.getItem(SKIP_LOGIN_KEY);
-          setSkipLogin(hasSkipped === 'true');
-        } catch (error) {
-          // Silent error handling
+            const refreshed = await scheduleService.refreshSchedule(true);
+            if (refreshed) {
+                const last = await scheduleService.getLastScheduleFetchTime();
+                setLastScheduleRefresh(last);
+                Haptics.notificationAsync(
+                    Haptics.NotificationFeedbackType.Success,
+                );
+            } else {
+                Haptics.notificationAsync(
+                    Haptics.NotificationFeedbackType.Warning,
+                );
+                Alert.alert('Offline', 'Using cached schedule');
+            }
+        } catch {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            Alert.alert('Schedule', 'Failed to refresh schedule');
+        } finally {
+            setIsRefreshingSchedule(false);
         }
-      };
+    }, [isRefreshingSchedule]);
 
-      checkAuthState();
-    }, [])
-  );
+    // todo: Handle orphaned assignments when changing groups - either move them to the new group if they have the same subject, or delete them with confirmation
+    // const handleClearScheduleCache = useCallback(async () => {
+    //     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    //     await scheduleService.clearScheduleCache();
+    //     setLastScheduleRefresh(null);
+    //     Alert.alert(
+    //         'Cache Cleared',
+    //         'Schedule cache removed. Refresh to fetch latest data.',
+    //     );
+    // }, []);
 
-  // Use useFocusEffect to ensure settings are up to date when the screen is focused
-  useFocusEffect(
-    useCallback(() => {
-      // Update settings from the service when the screen comes into focus
-      setSettings(scheduleService.getSettings());
-      
-      // Check auth state
-      const checkAuthState = async () => {
+    const handleDevInjectGrades = useCallback(async () => {
         try {
-          // Check if the skip login flag is set
-          const hasSkipped = await AsyncStorage.getItem(SKIP_LOGIN_KEY);
-          setSkipLogin(hasSkipped === 'true');
-        } catch (error) {
-          // Silent error handling
+            const next = !devGradeActive;
+            await AsyncStorage.setItem(
+                DEV_GRADE_TOGGLE_KEY,
+                next ? 'true' : 'false',
+            );
+            setDevGradeActive(next);
+            DeviceEventEmitter.emit(DEV_GRADE_TOGGLE_EVENT, next);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            Alert.alert(
+                next ? 'Injected' : 'Removed',
+                next ?
+                    'Added 5 random grades immediately. Tap again to remove.'
+                :   'Removed injected grades. Tap again to add back.',
+            );
+        } catch {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            Alert.alert('Error', 'Could not toggle grade injection');
         }
-      };
+    }, [devGradeActive]);
 
-      checkAuthState();
-    }, [])
-  );
+    // Add useEffect to load IDNP and listen for updates
+    useEffect(() => {
+        const loadIdnp = async () => {
+            try {
+                const idnp = await AsyncStorage.getItem(IDNP_KEY);
+                const hasSkipped = await AsyncStorage.getItem(SKIP_LOGIN_KEY);
+                const syncSetting = await AsyncStorage.getItem(IDNP_SYNC_KEY);
+                setSavedIdnp(idnp);
+                setSkipLogin(hasSkipped === 'true');
+                setSyncIdnp(syncSetting !== 'false'); // Default to true if not set
+            } catch {
+                // Silent error handling
+            }
+        };
 
-  // Custom clear IDNP function
-  const handleClearIdnp = useCallback(() => {
-    setConfirmDialogType('idnp');
-    setShowConfirmDialog(true);
-  }, []);
+        loadIdnp();
 
-  // Handle IDNP confirmation
-  const handleConfirmClearIdnp = useCallback(async () => {
-    try {
-      const currentIdnp = await AsyncStorage.getItem(IDNP_KEY);
-      
-      // Remove local IDNP
-      await AsyncStorage.removeItem(IDNP_KEY);
-      setSavedIdnp(null);
-      
-      // Clear ALL grades-related cached data (legacy and new cache keys)
-      await AsyncStorage.removeItem('@planner_grades_data');
-      await AsyncStorage.removeItem('@planner_grades_timestamp');
-      
-      // Clear the new gradesService cache keys if we have an IDNP
-      if (currentIdnp) {
-        await AsyncStorage.removeItem(`@grades_cache_html_${currentIdnp}`);
-        await AsyncStorage.removeItem(`@grades_cache_time_${currentIdnp}`);
-      }
-      
-      // Emit null to notify that IDNP has been cleared
-      DeviceEventEmitter.emit(IDNP_UPDATE_EVENT, null);
-      
-      // Delete from server if sync is enabled and user is authenticated - Temporarily disabled
-      /* if (syncIdnp && isAuthenticated) {
+        // Add event listener for IDNP updates using DeviceEventEmitter
+        const idnpSubscription = DeviceEventEmitter.addListener(
+            IDNP_UPDATE_EVENT,
+            (newIdnp: string | null) => {
+                setSavedIdnp(newIdnp);
+            },
+        );
+
+        // Add event listener for auth state changes
+        const authSubscription = DeviceEventEmitter.addListener(
+            AUTH_STATE_CHANGE_EVENT,
+            (authState: { isAuthenticated: boolean; skipped?: boolean }) => {
+                setIsAuthenticated(authState.isAuthenticated);
+                if (typeof authState.skipped === 'boolean') {
+                    setSkipLogin(authState.skipped);
+                }
+                // Reload user data when auth state changes to true
+                if (authState.isAuthenticated) {
+                    reloadUser();
+                }
+            },
+        );
+
+        // Cleanup event listeners on unmount
+        return () => {
+            idnpSubscription.remove();
+            authSubscription.remove();
+        };
+    }, [reloadUser]);
+
+    // Update authentication state when user changes
+    useEffect(() => {
+        setIsAuthenticated(!!user);
+    }, [user]);
+
+    // Use useFocusEffect to check auth state when screen becomes focused
+    useFocusEffect(
+        useCallback(() => {
+            const checkAuthState = async () => {
+                try {
+                    // Check if the skip login flag is set
+                    const hasSkipped =
+                        await AsyncStorage.getItem(SKIP_LOGIN_KEY);
+                    setSkipLogin(hasSkipped === 'true');
+                } catch {
+                    // Silent error handling
+                }
+            };
+
+            checkAuthState();
+        }, []),
+    );
+
+    // Use useFocusEffect to ensure settings are up to date when the screen is focused
+    useFocusEffect(
+        useCallback(() => {
+            // Update settings from the service when the screen comes into focus
+            setSettings(scheduleService.getSettings());
+
+            // Check auth state
+            const checkAuthState = async () => {
+                try {
+                    // Check if the skip login flag is set
+                    const hasSkipped =
+                        await AsyncStorage.getItem(SKIP_LOGIN_KEY);
+                    setSkipLogin(hasSkipped === 'true');
+                } catch {
+                    // Silent error handling
+                }
+            };
+
+            checkAuthState();
+        }, []),
+    );
+
+    // Custom clear IDNP function
+    const handleClearIdnp = useCallback(() => {
+        setConfirmDialogType('idnp');
+        setShowConfirmDialog(true);
+    }, []);
+
+    // Handle IDNP confirmation
+    const handleConfirmClearIdnp = useCallback(async () => {
+        try {
+            const currentIdnp = await AsyncStorage.getItem(IDNP_KEY);
+
+            // Remove local IDNP
+            await AsyncStorage.removeItem(IDNP_KEY);
+            setSavedIdnp(null);
+
+            // Clear ALL grades-related cached data (legacy and new cache keys)
+            await AsyncStorage.removeItem('@planner_grades_data');
+            await AsyncStorage.removeItem('@planner_grades_timestamp');
+
+            // Clear the new gradesService cache keys if we have an IDNP
+            if (currentIdnp) {
+                await AsyncStorage.removeItem(
+                    `@grades_cache_html_${currentIdnp}`,
+                );
+                await AsyncStorage.removeItem(
+                    `@grades_cache_time_${currentIdnp}`,
+                );
+            }
+
+            // Emit null to notify that IDNP has been cleared
+            DeviceEventEmitter.emit(IDNP_UPDATE_EVENT, null);
+
+            // Delete from server if sync is enabled and user is authenticated - Temporarily disabled
+            /* if (syncIdnp && isAuthenticated) {
         try {
           await authService.deleteEncryptedData('idnp');
         } catch (error) {
@@ -699,1018 +868,1477 @@ export default function Settings() {
           // Continue even if server deletion fails - local data is already cleared
         }
       } */
-      
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setShowConfirmDialog(false);
-      
-      // Use replace instead of push to force a screen refresh
-      router.replace('/grades');
-    } catch (error) {
-      console.error('Error clearing IDNP:', error);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-    }
-  }, [router, syncIdnp, isAuthenticated]);
 
-  const handleDeletePeriod = useCallback((periodId: string) => {
-    setPeriodToDelete(periodId);
-    setConfirmDialogType('period');
-    setShowConfirmDialog(true);
-  }, []);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            setShowConfirmDialog(false);
 
-  const handleConfirmDeletePeriod = useCallback(() => {
-    if (periodToDelete) {
-      scheduleService.deleteCustomPeriod(periodToDelete);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    }
-    setShowConfirmDialog(false);
-    setPeriodToDelete(null);
-  }, [periodToDelete]);
-
-  // Callback functions
-  const handleLanguageChange = useCallback((language: Language) => {
-    scheduleService.updateSettings({ language });
-  }, []);
-
-  const handleGroupChange = useCallback((group: SubGroupType) => {
-    scheduleService.updateSettings({ group });
-  }, []);
-
-  const handleGroupSelection = useCallback(async (group: Group) => {
-    // Get the current settings to preserve the subgroup selection
-    const currentSettings = scheduleService.getSettings();
-    
-    // Update the group settings - maintain the current subgroup or set default if not set
-    scheduleService.updateSettings({ 
-      selectedGroupId: group._id,
-      selectedGroupName: group.name,
-      group: currentSettings.group || SUBGROUPS[0]
-    });
-    
-    // Update the last refresh timestamp to current time
-    setLastScheduleRefresh(new Date());
-    
-    // Handle orphaned assignments asynchronously after settings update
-    setTimeout(async () => {
-      try {
-        // Pass the group ID (string) to handle orphaned assignments
-        await handleOrphanedAssignments(group._id);
-      } catch (error) {
-        console.error("Error handling group change for assignments:", error);
-      }
-    }, 100);
-    
-    setShowGroupModal(false);
-    setSearchQuery('');
-  }, []);
-
-  const handleSearchClear = useCallback(() => {
-    setSearchQuery('');
-  }, []);
-
-  const keyExtractor = useCallback((item: Group) => item._id, []);
-
-  const getItemLayout = useCallback((data: ArrayLike<Group> | null | undefined, index: number) => ({
-    length: 82,
-    offset: 82 * index,
-    index,
-  }), []);
-
-  const renderGroupItem = useCallback(({ item }: { item: Group }) => {
-    const isSelected = settings.selectedGroupId === item._id;
-    const onItemPress = () => handleGroupSelection(item);
-    
-    return (
-      <GroupItem
-        item={item}
-        isSelected={isSelected}
-        onPress={onItemPress}
-      />
-    );
-  }, [settings.selectedGroupId, handleGroupSelection]);
-
-  const onScrollToIndexFailed = useCallback((info: {
-    index: number;
-    highestMeasuredFrameIndex: number;
-    averageItemLength: number;
-  }) => {
-    if (flatListRef.current) {
-      flatListRef.current.scrollToOffset({
-        offset: 0,
-        animated: false
-      });
-      
-      setTimeout(() => {
-        if (flatListRef.current && info.index < filteredGroups.length) {
-          const approximateOffset = info.index * info.averageItemLength;
-          flatListRef.current.scrollToOffset({
-            offset: approximateOffset,
-            animated: true
-          });
-          setInitialScrollDone(true);
+            // Use replace instead of push to force a screen refresh
+            router.replace('/(tabs)/grades');
+        } catch (error) {
+            console.error('Error clearing IDNP:', error);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         }
-      }, 100);
-    }
-  }, [filteredGroups.length]);
+    }, [router]);
 
-  // Normalize text helper
-  const normalizeText = useCallback((text: string): string => {
-    return text.toLowerCase().replace(/[-\s]/g, '');
-  }, []);
-
-  // Effect hooks
-  useEffect(() => {
-    const unsubscribe = scheduleService.subscribe(() => {
-      const updatedSettings = scheduleService.getSettings();
-      setSettings(updatedSettings);
-    });
-
-    const fetchGroups = async () => {
-      try {
-        setIsLoading(true);
-        const groups = await scheduleService.getGroups();
-        setGroupsList(groups);
-        setFilteredGroups(groups);
-      } catch (err) {
-        setError(t('settings').group.failed);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchGroups();
-    
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (searchQuery.trim() === '') {
-      setFilteredGroups(groupsList);
-    } else {
-      const normalizedQuery = normalizeText(searchQuery);
-      const filtered = groupsList.filter(group => {
-        const normalizedName = normalizeText(group.name);
-        return normalizedName.includes(normalizedQuery);
-      });
-      setFilteredGroups(filtered);
-    }
-    setInitialScrollDone(false);
-  }, [searchQuery, groupsList, normalizeText]);
-
-  useEffect(() => {
-    if (!showGroupModal) {
-      setInitialScrollDone(false);
-    }
-  }, [showGroupModal]);
-
-  useEffect(() => {
-    if (showGroupModal && !isLoading && flatListRef.current && !initialScrollDone && filteredGroups.length > 0) {
-      const selectedIndex = filteredGroups.findIndex(group => group._id === settings.selectedGroupId);
-      
-      if (selectedIndex !== -1) {
-        setTimeout(() => {
-          if (flatListRef.current && selectedIndex >= 0) {
-            flatListRef.current.scrollToOffset({
-              offset: 0,
-              animated: false
-            });
-            
-            requestAnimationFrame(() => {
-              if (flatListRef.current) {
-                try {
-                  flatListRef.current.scrollToIndex({
-                    index: selectedIndex,
-                    animated: true,
-                    viewPosition: 0.5
-                  });
-                } catch (e) {
-                  const itemHeight = 82;
-                  flatListRef.current.scrollToOffset({
-                    offset: selectedIndex * itemHeight,
-                    animated: true
-                  });
-                }
-                setInitialScrollDone(true);
-              }
-            });
-          }
-        }, 600);
-      } else {
-        setInitialScrollDone(true);
-      }
-    }
-  }, [showGroupModal, isLoading, filteredGroups, settings.selectedGroupId, initialScrollDone]);
-
-  // Memoize empty component for FlatList
-  const ListEmptyComponent = useCallback(() => (
-    <View style={styles.errorContainer}>
-      <Text style={styles.loadingText}>{t('settings').group.notFound} "{searchQuery}"</Text>
-    </View>
-  ), [searchQuery]);
-
-  const resetPeriodForm = useCallback(() => {
-    setPeriodName('');
-    setStartTime(new Date());
-    setEndTime(new Date());
-    setSelectedDays([]);
-    setSelectedColor(getRandomColor());
-    setIsEnabled(true);
-    setEditingPeriod(null);
-  }, []);
-
-  const handleAddPeriod = useCallback(() => {
-    resetPeriodForm();
-    setShowPeriodModal(true);
-  }, [resetPeriodForm]);
-
-  const handleEditPeriod = useCallback((period: CustomPeriod) => {
-    setEditingPeriod(period);
-    setPeriodName(period.name || '');
-    setStartTime(new Date(`2000-01-01T${period.starttime}`));
-    setEndTime(new Date(`2000-01-01T${period.endtime}`));
-    setSelectedDays(period.daysOfWeek || []);
-    setSelectedColor(period.color || Colors.dark.primaryStrong);
-    setIsEnabled(period.isEnabled);
-    setShowPeriodModal(true);
-  }, []);
-
-  const handleSavePeriod = useCallback(() => {
-    const periodData = {
-      name: periodName,
-      starttime: startTime.toTimeString().slice(0, 5),
-      endtime: endTime.toTimeString().slice(0, 5),
-      daysOfWeek: selectedDays,
-      color: selectedColor,
-      isEnabled,
-      isCustom: true
-    };
-
-    if (editingPeriod) {
-      scheduleService.updateCustomPeriod(editingPeriod._id, periodData);
-    } else {
-      scheduleService.addCustomPeriod(periodData);
-    }
-
-    setShowPeriodModal(false);
-    resetPeriodForm();
-  }, [periodName, startTime, endTime, selectedDays, selectedColor, isEnabled, editingPeriod, resetPeriodForm]);
-
-  const toggleDay = useCallback((day: number) => {
-    setSelectedDays(prev => 
-      prev.includes(day) 
-        ? prev.filter(d => d !== day)
-        : [...prev, day].sort()
-    );
-  }, []);
-
-  const handleTimePickerChange = useCallback((type: 'start' | 'end') => (date: Date) => {
-    type === 'start' ? setStartTime(date) : setEndTime(date);
-  }, []);
-
-  const handleLogout = async () => {
-    setShowAccountActionSheet(false);
-    try {
-      // Clear the skip login flag as well when explicitly logging out
-      await AsyncStorage.removeItem(SKIP_LOGIN_KEY);
-      await logout();
-      // Immediately update local state
-      setIsAuthenticated(false);
-      setSkipLogin(false);
-      // Broadcast auth state change to all components
-      DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, { 
-        isAuthenticated: false,
-        skipped: false 
-      });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (error) {
-      console.error("Logout error:", error);
-    }
-  };
-
-  const handleDeleteAccount = useCallback(async () => {
-    const AUTH_TOKEN_KEY = '@auth_token';
-    // Reset any previous errors
-    setPasswordError(null);
-    
-    if (!passwordForDeletion.trim()) {
-      setPasswordError("Please enter your password");
-      return;
-    }
-    
-    setDeletingAccount(true);
-    try {
-      await authService.deleteAccount(passwordForDeletion);
-      
-      // Properly clean up user data
-      await AsyncStorage.removeItem(AUTH_TOKEN_KEY); // Clear cached user data
-      await logout(); // This will clear the user state internally
-      
-      // Immediately update local state
-      setIsAuthenticated(false);
-      setSkipLogin(false);
-      
-      // Broadcast auth state change with complete reset
-      DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, { 
-        isAuthenticated: false,
-        skipped: false 
-      });
-      
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      
-      // Show success modal instead of navigating away immediately
-      setShowPasswordModal(false);
-      setShowDeletionSuccessModal(true);
-      setPasswordForDeletion('');
-    } catch (error) {
-      // Check if it's a network error or authentication error
-      if (error instanceof Error) {
-        if (error.message === 'Request timeout' || error.message.includes('network')) {
-          setPasswordError("Network error. Please check your connection.");
-        } else {
-          setPasswordError("Incorrect password. Please try again.");
-        }
-      } else {
-        setPasswordError("Something went wrong. Please try again.");
-      }
-    } finally {
-      setDeletingAccount(false);
-    }
-  }, [t, router, passwordForDeletion, logout]);
-
-  const openEmailApp = useCallback(() => {
-    // Try to open the default email app
-    Linking.canOpenURL('mailto:')
-      .then(supported => {
-        if (supported) {
-          Linking.openURL('mailto:');
-        } else {
-          // If generic mailto doesn't work, try popular email apps
-          Linking.openURL('gmail://')
-            .catch(() => Linking.openURL('mailto:'));
-        }
-      })
-      .catch(() => {
-        // Silently fail
-      });
-  }, []);
-
-  const completeAccountDeletion = useCallback(() => {
-    setShowDeletionSuccessModal(false);
-    router.replace('/auth');
-  }, [router]);
-
-  const handleRefreshAccount = async () => {
-    setIsRefreshingAccount(true);
-    try {
-      await reloadUser();
-      // Immediately update local state based on user context
-      setIsAuthenticated(!!user);
-      // Broadcast auth state change
-      DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, { isAuthenticated: !!user });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (error) {
-      console.error("Refresh error:", error);
-    } finally {
-      setIsRefreshingAccount(false);
-    }
-  };
-
-  // Function to render the account section based on authentication state
-  const renderAccountSection = useCallback(() => {
-    // Use MemoizedGravatarProfile component instead of creating state inside render function
-    if (!isAuthenticated) {
-      return (
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <MaterialIcons name="account-circle" size={24} color={Colors.dark.primaryStrong} style={styles.sectionIcon} />
-            <Text style={styles.sectionTitle}>{t('settings').account.title}</Text>
-          </View>
-          <TouchableOpacity style={styles.signInButton} onPress={() => router.push('/auth')}>
-            <Text style={styles.signInButtonText}>{t('settings').account.signIn}</Text>
-          </TouchableOpacity>
-        </View>
-      );
-    }
-  
-    return (
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <MaterialIcons name="account-circle" size={24} color={Colors.dark.primaryStrong} style={styles.sectionIcon} />
-          <Text style={styles.sectionTitle}>{t('settings').account.title}</Text>
-        </View>
-        <View style={styles.accountInfo}>
-          <MemoizedGravatarProfile />
-        </View>
-      </View>
-    );
-  }, [isAuthenticated, router, t]);
-  
-  // Separate component for Gravatar profile to handle its own state
-  const MemoizedGravatarProfile = memo(() => {
-    const [gravatarProfile, setGravatarProfile] = useState<{ display_name?: string; avatar_url?: string } | null>(null);
-    
-    useEffect(() => {
-      const loadGravatarProfile = async () => {
-        if (user?.email) {
-          const profile = await authService.getGravatarProfile(user.email);
-          setGravatarProfile(profile);
-        }
-      };
-      loadGravatarProfile();
+    const handleDeletePeriod = useCallback((periodId: string) => {
+        setPeriodToDelete(periodId);
+        setConfirmDialogType('period');
+        setShowConfirmDialog(true);
     }, []);
-    
-    return (
-      <>
-        <TouchableOpacity 
-          style={styles.accountAvatar}
-          onPress={() => Linking.openURL('https://gravatar.com')}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          {gravatarProfile?.avatar_url ? (
-            <Image 
-              source={{ uri: gravatarProfile.avatar_url }} 
-              style={styles.avatarImage}
-              defaultSource={require('../../assets/images/default-avatar.jpg')}
-            />
-          ) : (
-            <Text style={styles.avatarText}>
-              {user?.email.charAt(0).toUpperCase()}
-            </Text>
-          )}
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={styles.accountDetails}
-          onPress={() => setShowAccountActionSheet(true)}
-          activeOpacity={0.7}
-        >
-          <View style={styles.accountDetailsContent}>
-            <Text style={styles.accountEmail} numberOfLines={1}>
-              {gravatarProfile?.display_name || user?.email}
-            </Text>
-            {!user?.is_verified && (
-              <View style={styles.verificationBadge}>
-                <MaterialIcons name="warning" size={14} color={Colors.dark.orange} />
-                <Text style={styles.verificationText}>
-                  {t('settings').account.notVerified}
-                </Text>
-              </View>
-            )}
-          </View>
-          <MaterialIcons name="chevron-right" size={24} color={Colors.dark.mutedText} />
-        </TouchableOpacity>
-      </>
+
+    const handleConfirmDeletePeriod = useCallback(() => {
+        if (periodToDelete) {
+            scheduleService.deleteCustomPeriod(periodToDelete);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+        setShowConfirmDialog(false);
+        setPeriodToDelete(null);
+    }, [periodToDelete]);
+
+    // Callback functions
+    const handleLanguageChange = useCallback((language: Language) => {
+        scheduleService.updateSettings({ language });
+    }, []);
+
+    const handleGroupChange = useCallback((group: SubGroupType) => {
+        scheduleService.updateSettings({ group });
+    }, []);
+
+    const handleGroupSelection = useCallback(async (group: Group) => {
+        // Get the current settings to preserve the subgroup selection
+        const currentSettings = scheduleService.getSettings();
+
+        // Update the group settings - maintain the current subgroup or set default if not set
+        scheduleService.updateSettings({
+            selectedGroupId: group._id,
+            selectedGroupName: group.name,
+            group: currentSettings.group || SUBGROUPS[0],
+        });
+
+        // Update the last refresh timestamp to current time
+        setLastScheduleRefresh(new Date());
+
+        // Handle orphaned assignments asynchronously after settings update
+        setTimeout(async () => {
+            try {
+                // Pass the group ID (string) to handle orphaned assignments
+                await handleOrphanedAssignments(group._id);
+            } catch (error) {
+                console.error(
+                    'Error handling group change for assignments:',
+                    error,
+                );
+            }
+        }, 100);
+
+        setShowGroupModal(false);
+        setSearchQuery('');
+    }, []);
+
+    const handleSearchClear = useCallback(() => {
+        setSearchQuery('');
+    }, []);
+
+    const keyExtractor = useCallback((item: Group) => item._id, []);
+
+    const getItemLayout = useCallback(
+        (data: ArrayLike<Group> | null | undefined, index: number) => ({
+            length: 82,
+            offset: 82 * index,
+            index,
+        }),
+        [],
     );
-  });
 
-  // Function to render the developer section
-  const renderDeveloperSection = () => {
-    if (!IS_DEV) return null;
+    const renderGroupItem = useCallback(
+        ({ item }: { item: Group }) => {
+            const isSelected = settings.selectedGroupId === item._id;
+            const onItemPress = () => handleGroupSelection(item);
 
-    return (
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <MaterialIcons name="bug-report" size={24} color={Colors.dark.purple} style={styles.sectionIcon} />
-          <Text style={styles.sectionTitle}>Developer Tools</Text>
-        </View>
-        
-        <View style={styles.devToolsList}>
-          <TouchableOpacity
-            style={styles.devToolButton}
-            onPress={async () => {
-              await AsyncStorage.clear();
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              Alert.alert('Success', 'AsyncStorage has been cleared');
-            }}
-          >
-            <MaterialIcons name="delete-sweep" size={24} color={Colors.dark.red} />
-            <Text style={styles.devToolText}>Clear AsyncStorage</Text>
-          </TouchableOpacity>
+            return (
+                <GroupItem
+                    item={item}
+                    isSelected={isSelected}
+                    onPress={onItemPress}
+                />
+            );
+        },
+        [settings.selectedGroupId, handleGroupSelection],
+    );
 
-          <TouchableOpacity
-            style={styles.devToolButton}
-            onPress={() => {
-              scheduleService.resetSettings();
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              Alert.alert('Success', 'Schedule settings have been reset');
-            }}
-          >
-            <MaterialIcons name="restart-alt" size={24} color={Colors.dark.yellow} />
-            <Text style={styles.devToolText}>Reset Schedule Settings</Text>
-          </TouchableOpacity>
+    const onScrollToIndexFailed = useCallback(
+        (info: {
+            index: number;
+            highestMeasuredFrameIndex: number;
+            averageItemLength: number;
+        }) => {
+            if (flatListRef.current) {
+                flatListRef.current.scrollToOffset({
+                    offset: 0,
+                    animated: false,
+                });
 
-          <TouchableOpacity
-            style={styles.devToolButton}
-            onPress={async () => {
-              try {
-                // Cancel all existing notifications
-                await Notifications.cancelAllScheduledNotificationsAsync();
-                
-                // Reset notification channels (Android only)
-                if (Platform.OS === 'android') {
-                  try {
-                    await Notifications.deleteNotificationChannelAsync('assignments');
-                  } catch (e) {
-                    // Channel may not exist, ignore error
-                  }
+                setTimeout(() => {
+                    if (
+                        flatListRef.current &&
+                        info.index < filteredGroups.length
+                    ) {
+                        const approximateOffset =
+                            info.index * info.averageItemLength;
+                        flatListRef.current.scrollToOffset({
+                            offset: approximateOffset,
+                            animated: true,
+                        });
+                        setInitialScrollDone(true);
+                    }
+                }, 100);
+            }
+        },
+        [filteredGroups.length],
+    );
+
+    // Normalize text helper
+    const normalizeText = useCallback((text: string): string => {
+        return text.toLowerCase().replace(/[-\s]/g, '');
+    }, []);
+
+    // Effect hooks
+    useEffect(() => {
+        const unsubscribe = scheduleService.subscribe(() => {
+            const updatedSettings = scheduleService.getSettings();
+            setSettings(updatedSettings);
+        });
+
+        const fetchGroups = async () => {
+            try {
+                setIsLoading(true);
+                const groups = await scheduleService.getGroups();
+                setGroupsList(groups);
+                setFilteredGroups(groups);
+            } catch {
+                setError(t('settings').group.failed);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchGroups();
+
+        return () => unsubscribe();
+    }, [t]);
+
+    useEffect(() => {
+        if (searchQuery.trim() === '') {
+            setFilteredGroups(groupsList);
+        } else {
+            const normalizedQuery = normalizeText(searchQuery);
+            const filtered = groupsList.filter((group) => {
+                const normalizedName = normalizeText(group.name);
+                return normalizedName.includes(normalizedQuery);
+            });
+            setFilteredGroups(filtered);
+        }
+        setInitialScrollDone(false);
+    }, [searchQuery, groupsList, normalizeText]);
+
+    useEffect(() => {
+        if (!showGroupModal) {
+            setInitialScrollDone(false);
+        }
+    }, [showGroupModal]);
+
+    useEffect(() => {
+        if (
+            showGroupModal &&
+            !isLoading &&
+            flatListRef.current &&
+            !initialScrollDone &&
+            filteredGroups.length > 0
+        ) {
+            const selectedIndex = filteredGroups.findIndex(
+                (group) => group._id === settings.selectedGroupId,
+            );
+
+            if (selectedIndex !== -1) {
+                setTimeout(() => {
+                    if (flatListRef.current && selectedIndex >= 0) {
+                        flatListRef.current.scrollToOffset({
+                            offset: 0,
+                            animated: false,
+                        });
+
+                        requestAnimationFrame(() => {
+                            if (flatListRef.current) {
+                                try {
+                                    flatListRef.current.scrollToIndex({
+                                        index: selectedIndex,
+                                        animated: true,
+                                        viewPosition: 0.5,
+                                    });
+                                } catch {
+                                    const itemHeight = 82;
+                                    flatListRef.current.scrollToOffset({
+                                        offset: selectedIndex * itemHeight,
+                                        animated: true,
+                                    });
+                                }
+                                setInitialScrollDone(true);
+                            }
+                        });
+                    }
+                }, 600);
+            } else {
+                setInitialScrollDone(true);
+            }
+        }
+    }, [
+        showGroupModal,
+        isLoading,
+        filteredGroups,
+        settings.selectedGroupId,
+        initialScrollDone,
+    ]);
+
+    // Memoize empty component for FlatList
+    const ListEmptyComponent = useCallback(
+        () => (
+            <View style={styles.errorContainer}>
+                <Text
+                    style={styles.loadingText}
+                >{`${t('settings').group.notFound} "${searchQuery}"`}</Text>
+            </View>
+        ),
+        [searchQuery, t],
+    );
+
+    const resetPeriodForm = useCallback(() => {
+        setPeriodName('');
+        setStartTime(new Date());
+        setEndTime(new Date());
+        setSelectedDays([]);
+        setSelectedColor(getRandomColor());
+        setIsEnabled(true);
+        setEditingPeriod(null);
+    }, []);
+
+    const handleAddPeriod = useCallback(() => {
+        resetPeriodForm();
+        setShowPeriodModal(true);
+    }, [resetPeriodForm]);
+
+    const handleEditPeriod = useCallback((period: CustomPeriod) => {
+        setEditingPeriod(period);
+        setPeriodName(period.name || '');
+        setStartTime(new Date(`2000-01-01T${period.starttime}`));
+        setEndTime(new Date(`2000-01-01T${period.endtime}`));
+        setSelectedDays(period.daysOfWeek || []);
+        setSelectedColor(period.color || Colors.dark.primaryStrong);
+        setIsEnabled(period.isEnabled);
+        setShowPeriodModal(true);
+    }, []);
+
+    const handleSavePeriod = useCallback(() => {
+        const periodData = {
+            name: periodName,
+            starttime: startTime.toTimeString().slice(0, 5),
+            endtime: endTime.toTimeString().slice(0, 5),
+            daysOfWeek: selectedDays,
+            color: selectedColor,
+            isEnabled,
+            isCustom: true,
+        };
+
+        if (editingPeriod) {
+            scheduleService.updateCustomPeriod(editingPeriod._id, periodData);
+        } else {
+            scheduleService.addCustomPeriod(periodData);
+        }
+
+        setShowPeriodModal(false);
+        resetPeriodForm();
+    }, [
+        periodName,
+        startTime,
+        endTime,
+        selectedDays,
+        selectedColor,
+        isEnabled,
+        editingPeriod,
+        resetPeriodForm,
+    ]);
+
+    const toggleDay = useCallback((day: number) => {
+        setSelectedDays((prev) =>
+            prev.includes(day) ?
+                prev.filter((d) => d !== day)
+            :   [...prev, day].sort(),
+        );
+    }, []);
+
+    const handleTimePickerChange = useCallback(
+        (type: 'start' | 'end') => (date: Date) => {
+            if (type === 'start') {
+                setStartTime(date);
+            } else {
+                setEndTime(date);
+            }
+        },
+        [],
+    );
+
+    const handleLogout = async () => {
+        setShowAccountActionSheet(false);
+        try {
+            // Clear the skip login flag as well when explicitly logging out
+            await AsyncStorage.removeItem(SKIP_LOGIN_KEY);
+            await logout();
+            // Immediately update local state
+            setIsAuthenticated(false);
+            setSkipLogin(false);
+            // Broadcast auth state change to all components
+            DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, {
+                isAuthenticated: false,
+                skipped: false,
+            });
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } catch (error) {
+            console.error('Logout error:', error);
+        }
+    };
+
+    const handleDeleteAccount = useCallback(async () => {
+        const AUTH_TOKEN_KEY = '@auth_token';
+        // Reset any previous errors
+        setPasswordError(null);
+
+        if (!passwordForDeletion.trim()) {
+            setPasswordError('Please enter your password');
+            return;
+        }
+
+        setDeletingAccount(true);
+        try {
+            await authService.deleteAccount(passwordForDeletion);
+
+            // Properly clean up user data
+            await AsyncStorage.removeItem(AUTH_TOKEN_KEY); // Clear cached user data
+            await logout(); // This will clear the user state internally
+
+            // Immediately update local state
+            setIsAuthenticated(false);
+            setSkipLogin(false);
+
+            // Broadcast auth state change with complete reset
+            DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, {
+                isAuthenticated: false,
+                skipped: false,
+            });
+
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+            // Show success modal instead of navigating away immediately
+            setShowPasswordModal(false);
+            setShowDeletionSuccessModal(true);
+            setPasswordForDeletion('');
+        } catch (error) {
+            // Check if it's a network error or authentication error
+            if (error instanceof Error) {
+                if (
+                    error.message === 'Request timeout' ||
+                    error.message.includes('network')
+                ) {
+                    setPasswordError(
+                        'Network error. Please check your connection.',
+                    );
+                } else {
+                    setPasswordError('Incorrect password. Please try again.');
                 }
-                
-                // Re-initialize the notification system
-                await initializeNotifications();
-                
-                // Refresh all notifications
+            } else {
+                setPasswordError('Something went wrong. Please try again.');
+            }
+        } finally {
+            setDeletingAccount(false);
+        }
+    }, [passwordForDeletion, logout]);
+
+    const openEmailApp = useCallback(() => {
+        // Try to open the default email app
+        Linking.canOpenURL('mailto:')
+            .then((supported) => {
+                if (supported) {
+                    Linking.openURL('mailto:');
+                } else {
+                    // If generic mailto doesn't work, try popular email apps
+                    Linking.openURL('gmail://').catch(() =>
+                        Linking.openURL('mailto:'),
+                    );
+                }
+            })
+            .catch(() => {
+                // Silently fail
+            });
+    }, []);
+
+    const completeAccountDeletion = useCallback(() => {
+        setShowDeletionSuccessModal(false);
+        router.replace('/auth');
+    }, [router]);
+
+    // todo: Add "Refresh Account" button that calls reloadUser to sync with server - useful for users who choose to skip login but later want to log in without restarting the app. This will ensure we have the latest user data and auth state without needing a full app restart. We can place this button in the account section when the user is authenticated but has limited functionality due to skipping login.
+    // const handleRefreshAccount = async () => {
+    //     setIsRefreshingAccount(true);
+    //     try {
+    //         await reloadUser();
+    //         // Immediately update local state based on user context
+    //         setIsAuthenticated(!!user);
+    //         // Broadcast auth state change
+    //         DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, {
+    //             isAuthenticated: !!user,
+    //         });
+    //         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    //     } catch (error) {
+    //         console.error('Refresh error:', error);
+    //     } finally {
+    //         setIsRefreshingAccount(false);
+    //     }
+    // };
+
+    // Function to render the account section based on authentication state
+    const renderAccountSection = () => {
+        // Use MemoizedGravatarProfile component instead of creating state inside render function
+        if (!isAuthenticated) {
+            return (
+                <View style={styles.section}>
+                    <View style={styles.sectionHeader}>
+                        <MaterialIcons
+                            name="account-circle"
+                            size={24}
+                            color={Colors.dark.primaryStrong}
+                            style={styles.sectionIcon}
+                        />
+                        <Text style={styles.sectionTitle}>
+                            {t('settings').account.title}
+                        </Text>
+                    </View>
+                    <TouchableOpacity
+                        style={styles.signInButton}
+                        onPress={() => router.push('/auth')}
+                    >
+                        <Text style={styles.signInButtonText}>
+                            {t('settings').account.signIn}
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+            );
+        }
+
+        return (
+            <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                    <MaterialIcons
+                        name="account-circle"
+                        size={24}
+                        color={Colors.dark.primaryStrong}
+                        style={styles.sectionIcon}
+                    />
+                    <Text style={styles.sectionTitle}>
+                        {t('settings').account.title}
+                    </Text>
+                </View>
+                <View style={styles.accountInfo}>
+                    <MemoizedGravatarProfile />
+                </View>
+            </View>
+        );
+    };
+
+    // Separate component for Gravatar profile to handle its own state
+    const MemoizedGravatarProfile = memo(() => {
+        const [gravatarProfile, setGravatarProfile] = useState<{
+            display_name?: string;
+            avatar_url?: string;
+        } | null>(null);
+
+        useEffect(() => {
+            const loadGravatarProfile = async () => {
+                if (user?.email) {
+                    const profile = await getGravatarProfile(user.email);
+                    setGravatarProfile(profile);
+                }
+            };
+            void loadGravatarProfile();
+        }, []);
+
+        return (
+            <>
+                <TouchableOpacity
+                    style={styles.accountAvatar}
+                    onPress={() => Linking.openURL('https://gravatar.com')}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                    {gravatarProfile?.avatar_url ?
+                        <Image
+                            source={{ uri: gravatarProfile.avatar_url }}
+                            style={styles.avatarImage}
+                            defaultSource={require('../../assets/images/default-avatar.jpg')}
+                        />
+                    :   <Text style={styles.avatarText}>
+                            {user?.email.charAt(0).toUpperCase()}
+                        </Text>
+                    }
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={styles.accountDetails}
+                    onPress={() => setShowAccountActionSheet(true)}
+                    activeOpacity={0.7}
+                >
+                    <View style={styles.accountDetailsContent}>
+                        <Text style={styles.accountEmail} numberOfLines={1}>
+                            {gravatarProfile?.display_name || user?.email}
+                        </Text>
+                        {!user?.is_verified && (
+                            <View style={styles.verificationBadge}>
+                                <MaterialIcons
+                                    name="warning"
+                                    size={14}
+                                    color={Colors.dark.orange}
+                                />
+                                <Text style={styles.verificationText}>
+                                    {t('settings').account.notVerified}
+                                </Text>
+                            </View>
+                        )}
+                    </View>
+                    <MaterialIcons
+                        name="chevron-right"
+                        size={24}
+                        color={Colors.dark.mutedText}
+                    />
+                </TouchableOpacity>
+            </>
+        );
+    });
+    MemoizedGravatarProfile.displayName = 'MemoizedGravatarProfile';
+
+    // Function to render the developer section
+    const renderDeveloperSection = () => {
+        if (!IS_DEV) return null;
+
+        return (
+            <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                    <MaterialIcons
+                        name="bug-report"
+                        size={24}
+                        color={Colors.dark.purple}
+                        style={styles.sectionIcon}
+                    />
+                    <Text style={styles.sectionTitle}>Developer Tools</Text>
+                </View>
+
+                <View style={styles.devToolsList}>
+                    <TouchableOpacity
+                        style={styles.devToolButton}
+                        onPress={async () => {
+                            await AsyncStorage.clear();
+                            Haptics.notificationAsync(
+                                Haptics.NotificationFeedbackType.Success,
+                            );
+                            Alert.alert(
+                                'Success',
+                                'AsyncStorage has been cleared',
+                            );
+                        }}
+                    >
+                        <MaterialIcons
+                            name="delete-sweep"
+                            size={24}
+                            color={Colors.dark.red}
+                        />
+                        <Text style={styles.devToolText}>
+                            Clear AsyncStorage
+                        </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.devToolButton}
+                        onPress={() => {
+                            scheduleService.resetSettings();
+                            Haptics.notificationAsync(
+                                Haptics.NotificationFeedbackType.Success,
+                            );
+                            Alert.alert(
+                                'Success',
+                                'Schedule settings have been reset',
+                            );
+                        }}
+                    >
+                        <MaterialIcons
+                            name="restart-alt"
+                            size={24}
+                            color={Colors.dark.yellow}
+                        />
+                        <Text style={styles.devToolText}>
+                            Reset Schedule Settings
+                        </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.devToolButton}
+                        onPress={async () => {
+                            try {
+                                if (!areNotificationsAvailable()) {
+                                    Alert.alert(
+                                        'Unavailable in Expo Go',
+                                        'Notifications are disabled in Expo Go. Use a development build to test notifications.',
+                                    );
+                                    return;
+                                }
+
+                                const Notifications =
+                                    await import('expo-notifications');
+
+                                // Cancel all existing notifications
+                                await Notifications.cancelAllScheduledNotificationsAsync();
+
+                                // Reset notification channels (Android only)
+                                if (Platform.OS === 'android') {
+                                    try {
+                                        await Notifications.deleteNotificationChannelAsync(
+                                            'assignments',
+                                        );
+                                    } catch {
+                                        // Channel may not exist, ignore error
+                                    }
+                                }
+
+                                // Re-initialize the notification system
+                                await initializeNotifications();
+
+                                // Refresh all notifications
+                                const assignments = await getAssignments();
+                                await scheduleAllNotifications(assignments);
+
+                                Haptics.notificationAsync(
+                                    Haptics.NotificationFeedbackType.Success,
+                                );
+                                Alert.alert(
+                                    'Success',
+                                    'Notification system reset. This can resolve issues with timing.',
+                                );
+                            } catch (error) {
+                                console.error(
+                                    'Error resetting notification system:',
+                                    error,
+                                );
+                                Alert.alert(
+                                    'Error',
+                                    'Failed to reset notification system',
+                                );
+                            }
+                        }}
+                    >
+                        <MaterialIcons
+                            name="refresh"
+                            size={24}
+                            color={Colors.dark.purple}
+                        />
+                        <Text style={styles.devToolText}>
+                            Reset Notification System
+                        </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.devToolButton}
+                        onPress={async () => {
+                            try {
+                                // Get all keys
+                                const keys = await AsyncStorage.getAllKeys();
+
+                                // Get all values for the keys
+                                const results =
+                                    await AsyncStorage.multiGet(keys);
+
+                                // Save storage items and show modal
+                                setStorageItems([...results]);
+                                setStorageModalVisible(true);
+
+                                Haptics.notificationAsync(
+                                    Haptics.NotificationFeedbackType.Success,
+                                );
+                            } catch (error) {
+                                console.error(
+                                    'Error viewing AsyncStorage:',
+                                    error,
+                                );
+                                Alert.alert(
+                                    'Error',
+                                    'Failed to view AsyncStorage contents',
+                                );
+                            }
+                        }}
+                    >
+                        <MaterialIcons
+                            name="storage"
+                            size={24}
+                            color={Colors.dark.randomColors[5]}
+                        />
+                        <Text style={styles.devToolText}>
+                            View AsyncStorage
+                        </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[styles.devToolButton, styles.devToolButtonRow]}
+                        onPress={handleDevInjectGrades}
+                    >
+                        <MaterialIcons
+                            name="insert-chart"
+                            size={24}
+                            color={
+                                devGradeActive ?
+                                    Colors.dark.green
+                                :   Colors.dark.yellow
+                            }
+                        />
+                        <View style={styles.devToolTextGroup}>
+                            <Text
+                                style={[
+                                    styles.devToolText,
+                                    styles.devToolTextLeft,
+                                ]}
+                            >
+                                {devGradeActive ?
+                                    'Remove injected grades'
+                                :   'Inject 5 random grades'}
+                            </Text>
+                            <Text style={styles.devToolSubtext}>
+                                {devGradeActive ?
+                                    'Injected now • tap to remove'
+                                :   'Tap to add instantly'}
+                            </Text>
+                        </View>
+                    </TouchableOpacity>
+                </View>
+            </View>
+        );
+    };
+
+    // Load notification settings
+    useEffect(() => {
+        const loadNotificationSettings = async () => {
+            try {
+                const settings = await getNotificationSettings();
+                setNotificationSettings(settings);
+
+                // Set up temp notification time from stored settings
+                const notificationTime = new Date();
+                const timeFromSettings = new Date(settings.notificationTime);
+                notificationTime.setHours(timeFromSettings.getHours());
+                notificationTime.setMinutes(timeFromSettings.getMinutes());
+                setTempNotificationTime(notificationTime);
+            } catch (error) {
+                console.error('Error loading notification settings:', error);
+            }
+        };
+
+        loadNotificationSettings();
+    }, []);
+
+    // Handle notification toggle
+    const handleToggleNotifications = useCallback(
+        async (value: boolean) => {
+            try {
+                const updatedSettings = {
+                    ...notificationSettings,
+                    enabled: value,
+                };
+                setNotificationSettings(updatedSettings);
+                await saveNotificationSettings(updatedSettings);
+
+                // If enabling notifications, schedule them for all assignments
+                if (value) {
+                    const assignments = await getAssignments();
+                    await scheduleAllNotifications(assignments);
+                }
+            } catch (error) {
+                console.error('Error toggling notifications:', error);
+            }
+        },
+        [notificationSettings],
+    );
+
+    // todo: Handle saving notification time
+    // const handleSaveNotificationTime = useCallback(async () => {
+    //     try {
+    //         // Create a new date object with just the time component
+    //         const updatedTime = new Date();
+    //         updatedTime.setHours(tempNotificationTime.getHours());
+    //         updatedTime.setMinutes(tempNotificationTime.getMinutes());
+    //         updatedTime.setSeconds(0);
+    //         updatedTime.setMilliseconds(0);
+
+    //         const updatedSettings = {
+    //             ...notificationSettings,
+    //             notificationTime: updatedTime.toISOString(),
+    //         };
+
+    //         setNotificationSettings(updatedSettings);
+    //         await saveNotificationSettings(updatedSettings);
+
+    //         // Reschedule notifications with the new time
+    //         const assignments = await getAssignments();
+    //         await scheduleAllNotifications(assignments);
+
+    //         setShowNotificationTimeModal(false);
+    //     } catch (error) {
+    //         console.error('Error saving notification time:', error);
+    //     }
+    // }, [notificationSettings, tempNotificationTime]);
+
+    // Handle updating reminder days setting
+    const handleUpdateReminderDays = useCallback(
+        async (setting: keyof NotificationSettings, value: number) => {
+            try {
+                if (value < 0) return; // Prevent negative values
+
+                const updatedSettings = {
+                    ...notificationSettings,
+                    [setting]: value,
+                };
+                setNotificationSettings(updatedSettings);
+                await saveNotificationSettings(updatedSettings);
+
+                // Reschedule notifications with the new settings
                 const assignments = await getAssignments();
                 await scheduleAllNotifications(assignments);
-                
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                Alert.alert('Success', 'Notification system reset. This can resolve issues with timing.');
-              } catch (error) {
-                console.error('Error resetting notification system:', error);
-                Alert.alert('Error', 'Failed to reset notification system');
-              }
-            }}
-          >
-            <MaterialIcons name="refresh" size={24} color={Colors.dark.purple} />
-            <Text style={styles.devToolText}>Reset Notification System</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.devToolButton}
-            onPress={async () => {
-              try {
-                // Get all keys
-                const keys = await AsyncStorage.getAllKeys();
-                
-                // Get all values for the keys
-                const results = await AsyncStorage.multiGet(keys);
-                
-                // Save storage items and show modal
-                setStorageItems([...results]);
-                setStorageModalVisible(true);
-                
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              } catch (error) {
-                console.error('Error viewing AsyncStorage:', error);
-                Alert.alert('Error', 'Failed to view AsyncStorage contents');
-              }
-            }}
-          >
-            <MaterialIcons name="storage" size={24} color={Colors.dark.randomColors[5]} />
-            <Text style={styles.devToolText}>View AsyncStorage</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.devToolButton, styles.devToolButtonRow]}
-            onPress={handleDevInjectGrades}
-          >
-            <MaterialIcons name="insert-chart" size={24} color={devGradeActive ? Colors.dark.green : Colors.dark.yellow} />
-            <View style={styles.devToolTextGroup}>
-              <Text style={[styles.devToolText, styles.devToolTextLeft]}>
-                {devGradeActive ? 'Remove injected grades' : 'Inject 5 random grades'}
-              </Text>
-              <Text style={styles.devToolSubtext}>
-                {devGradeActive ? 'Injected now • tap to remove' : 'Tap to add instantly'}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-      </View>
+            } catch (error) {
+                console.error('Error updating reminder days:', error);
+            }
+        },
+        [notificationSettings],
     );
-  };
 
-  // Load notification settings
-  useEffect(() => {
-    const loadNotificationSettings = async () => {
-      try {
-        const settings = await getNotificationSettings();
-        setNotificationSettings(settings);
-        
-        // Set up temp notification time from stored settings
-        const notificationTime = new Date();
-        const timeFromSettings = new Date(settings.notificationTime);
-        notificationTime.setHours(timeFromSettings.getHours());
-        notificationTime.setMinutes(timeFromSettings.getMinutes());
-        setTempNotificationTime(notificationTime);
-      } catch (error) {
-        console.error('Error loading notification settings:', error);
-      }
+    // Handle daily reminders toggle
+    const handleToggleDailyReminders = useCallback(
+        async (setting: keyof NotificationSettings, value: boolean) => {
+            try {
+                const updatedSettings = {
+                    ...notificationSettings,
+                    [setting]: value,
+                };
+                setNotificationSettings(updatedSettings);
+                await saveNotificationSettings(updatedSettings);
+
+                // Reschedule notifications with the new settings
+                const assignments = await getAssignments();
+                await scheduleAllNotifications(assignments);
+            } catch (error) {
+                console.error('Error toggling daily reminders:', error);
+            }
+        },
+        [notificationSettings],
+    );
+
+    // Format time for display with centralized locale handling
+    const formatTimeDisplay = useCallback(
+        (date: Date) => {
+            return formatTimeFromDate(date);
+        },
+        [formatTimeFromDate],
+    );
+
+    // Show notification time picker
+    const handleShowNotificationTimePicker = useCallback(() => {
+        // Create a date object from the stored notification time
+        const date = new Date(notificationSettings.notificationTime);
+        setTempNotificationTime(date);
+        setShowNotificationTimeModal(true);
+    }, [notificationSettings]);
+
+    // Render notification settings section
+    const renderNotificationSettings = () => {
+        return (
+            <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                    <MaterialIcons
+                        name="notifications"
+                        size={24}
+                        color={Colors.dark.primary}
+                        style={styles.sectionIcon}
+                    />
+                    <Text style={styles.sectionTitle}>
+                        {t('settings').notifications.title}
+                    </Text>
+                </View>
+
+                {/* Master toggle card */}
+                <View style={styles.card}>
+                    <View style={styles.settingItem}>
+                        <View style={styles.settingLabelContainer}>
+                            <Text style={styles.settingLabel}>
+                                {t('settings').notifications.enabled}
+                            </Text>
+                            <Text style={styles.settingDescription}>
+                                {notificationSettings.enabled ?
+                                    t('settings').notifications
+                                        .enabledDescription
+                                :   t('settings').notifications
+                                        .disabledDescription
+                                }
+                            </Text>
+                        </View>
+                        <CustomToggle
+                            value={notificationSettings.enabled}
+                            onValueChange={handleToggleNotifications}
+                            activeColor={Colors.dark.primary}
+                        />
+                    </View>
+                </View>
+
+                {notificationSettings.enabled && (
+                    <>
+                        {/* Time settings card */}
+                        <View style={styles.card}>
+                            <View style={styles.cardHeader}>
+                                <MaterialIcons
+                                    name="access-time"
+                                    size={20}
+                                    color={Colors.dark.primary}
+                                />
+                                <Text style={styles.cardTitle}>
+                                    {t('settings').notifications.timeSettings}
+                                </Text>
+                            </View>
+
+                            <View style={styles.settingItem}>
+                                <View style={styles.settingLabelContainer}>
+                                    <Text style={styles.settingLabel}>
+                                        {t('settings').notifications.time}
+                                    </Text>
+                                    <Text style={styles.settingDescription}>
+                                        {
+                                            t('settings').notifications
+                                                .timeDescription
+                                        }
+                                    </Text>
+                                </View>
+                                <TouchableOpacity
+                                    style={styles.timeButton}
+                                    onPress={handleShowNotificationTimePicker}
+                                >
+                                    <Text style={styles.timeButtonText}>
+                                        {formatTimeDisplay(
+                                            new Date(
+                                                notificationSettings.notificationTime,
+                                            ),
+                                        )}
+                                    </Text>
+                                    <MaterialIcons
+                                        name="edit"
+                                        size={16}
+                                        color={Colors.dark.primary}
+                                        style={styles.timeButtonIcon}
+                                    />
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+
+                        {/* Reminder days card */}
+                        <View style={styles.card}>
+                            <View style={styles.cardHeader}>
+                                <MaterialIcons
+                                    name="event"
+                                    size={20}
+                                    color={Colors.dark.primary}
+                                />
+                                <Text style={styles.cardTitle}>
+                                    {t('settings').notifications.reminderDays}
+                                </Text>
+                            </View>
+
+                            <Text style={styles.cardDescription}>
+                                {
+                                    t('settings').notifications
+                                        .reminderDaysDescription
+                                }
+                            </Text>
+
+                            {/* Important assignments group */}
+                            <View style={styles.reminderGroup}>
+                                <Text style={styles.reminderGroupTitle}>
+                                    {
+                                        t('settings').notifications
+                                            .importantAssignments
+                                    }
+                                </Text>
+
+                                <ReminderSetting
+                                    label={t('settings').notifications.exams}
+                                    value={
+                                        notificationSettings.examReminderDays
+                                    }
+                                    onDecrease={() =>
+                                        handleUpdateReminderDays(
+                                            'examReminderDays',
+                                            notificationSettings.examReminderDays -
+                                                1,
+                                        )
+                                    }
+                                    onIncrease={() =>
+                                        handleUpdateReminderDays(
+                                            'examReminderDays',
+                                            notificationSettings.examReminderDays +
+                                                1,
+                                        )
+                                    }
+                                    isMinValue={
+                                        notificationSettings.examReminderDays <=
+                                        1
+                                    }
+                                    icon="school"
+                                    accentColor={Colors.dark.danger}
+                                />
+
+                                <ReminderSetting
+                                    label={t('settings').notifications.tests}
+                                    value={
+                                        notificationSettings.testReminderDays
+                                    }
+                                    onDecrease={() =>
+                                        handleUpdateReminderDays(
+                                            'testReminderDays',
+                                            notificationSettings.testReminderDays -
+                                                1,
+                                        )
+                                    }
+                                    onIncrease={() =>
+                                        handleUpdateReminderDays(
+                                            'testReminderDays',
+                                            notificationSettings.testReminderDays +
+                                                1,
+                                        )
+                                    }
+                                    isMinValue={
+                                        notificationSettings.testReminderDays <=
+                                        1
+                                    }
+                                    icon="assignment"
+                                    accentColor={Colors.dark.primary}
+                                />
+
+                                <ReminderSetting
+                                    label={t('settings').notifications.quizzes}
+                                    value={
+                                        notificationSettings.quizReminderDays
+                                    }
+                                    onDecrease={() =>
+                                        handleUpdateReminderDays(
+                                            'quizReminderDays',
+                                            notificationSettings.quizReminderDays -
+                                                1,
+                                        )
+                                    }
+                                    onIncrease={() =>
+                                        handleUpdateReminderDays(
+                                            'quizReminderDays',
+                                            notificationSettings.quizReminderDays +
+                                                1,
+                                        )
+                                    }
+                                    isMinValue={
+                                        notificationSettings.quizReminderDays <=
+                                        1
+                                    }
+                                    icon="quiz"
+                                    accentColor={Colors.dark.yellow}
+                                />
+                            </View>
+
+                            {/* Other assignments group */}
+                            <View style={styles.reminderGroup}>
+                                <Text style={styles.reminderGroupTitle}>
+                                    {
+                                        t('settings').notifications
+                                            .otherAssignments
+                                    }
+                                </Text>
+
+                                <ReminderSetting
+                                    label={t('settings').notifications.projects}
+                                    value={
+                                        notificationSettings.projectReminderDays
+                                    }
+                                    onDecrease={() =>
+                                        handleUpdateReminderDays(
+                                            'projectReminderDays',
+                                            notificationSettings.projectReminderDays -
+                                                1,
+                                        )
+                                    }
+                                    onIncrease={() =>
+                                        handleUpdateReminderDays(
+                                            'projectReminderDays',
+                                            notificationSettings.projectReminderDays +
+                                                1,
+                                        )
+                                    }
+                                    isMinValue={
+                                        notificationSettings.projectReminderDays <=
+                                        1
+                                    }
+                                    icon="category"
+                                    accentColor={Colors.dark.green}
+                                />
+
+                                <ReminderSetting
+                                    label={t('settings').notifications.homework}
+                                    value={
+                                        notificationSettings.homeworkReminderDays
+                                    }
+                                    onDecrease={() =>
+                                        handleUpdateReminderDays(
+                                            'homeworkReminderDays',
+                                            notificationSettings.homeworkReminderDays -
+                                                1,
+                                        )
+                                    }
+                                    onIncrease={() =>
+                                        handleUpdateReminderDays(
+                                            'homeworkReminderDays',
+                                            notificationSettings.homeworkReminderDays +
+                                                1,
+                                        )
+                                    }
+                                    isMinValue={
+                                        notificationSettings.homeworkReminderDays <=
+                                        1
+                                    }
+                                    icon="book"
+                                    accentColor={Colors.dark.lightPurple}
+                                />
+
+                                <ReminderSetting
+                                    label={t('settings').notifications.other}
+                                    value={
+                                        notificationSettings.otherReminderDays
+                                    }
+                                    onDecrease={() =>
+                                        handleUpdateReminderDays(
+                                            'otherReminderDays',
+                                            notificationSettings.otherReminderDays -
+                                                1,
+                                        )
+                                    }
+                                    onIncrease={() =>
+                                        handleUpdateReminderDays(
+                                            'otherReminderDays',
+                                            notificationSettings.otherReminderDays +
+                                                1,
+                                        )
+                                    }
+                                    isMinValue={
+                                        notificationSettings.otherReminderDays <=
+                                        1
+                                    }
+                                    icon="more-horiz"
+                                    accentColor={Colors.dark.neutral500}
+                                />
+                            </View>
+                        </View>
+
+                        {/* Daily reminders card */}
+                        <View style={styles.card}>
+                            <View style={styles.cardHeader}>
+                                <MaterialIcons
+                                    name="update"
+                                    size={20}
+                                    color={Colors.dark.primary}
+                                />
+                                <Text style={styles.cardTitle}>
+                                    {t('settings').notifications.dailyReminders}
+                                </Text>
+                            </View>
+
+                            <Text style={styles.cardDescription}>
+                                {
+                                    t('settings').notifications
+                                        .dailyRemindersDescription
+                                }
+                            </Text>
+
+                            <View style={styles.settingItem}>
+                                <View style={styles.settingLabelContainer}>
+                                    <View style={styles.settingLabelWithIcon}>
+                                        <MaterialIcons
+                                            name="school"
+                                            size={18}
+                                            color={Colors.dark.danger}
+                                            style={styles.settingItemIcon}
+                                        />
+                                        <Text style={styles.settingLabel}>
+                                            {
+                                                t('settings').notifications
+                                                    .dailyExams
+                                            }
+                                        </Text>
+                                    </View>
+                                </View>
+                                <CustomToggle
+                                    value={
+                                        notificationSettings.dailyRemindersForExams
+                                    }
+                                    onValueChange={(value) =>
+                                        handleToggleDailyReminders(
+                                            'dailyRemindersForExams',
+                                            value,
+                                        )
+                                    }
+                                    activeColor={Colors.dark.danger}
+                                />
+                            </View>
+
+                            <View style={styles.settingItem}>
+                                <View style={styles.settingLabelContainer}>
+                                    <View style={styles.settingLabelWithIcon}>
+                                        <MaterialIcons
+                                            name="assignment"
+                                            size={18}
+                                            color={Colors.dark.primary}
+                                            style={styles.settingItemIcon}
+                                        />
+                                        <Text style={styles.settingLabel}>
+                                            {
+                                                t('settings').notifications
+                                                    .dailyTests
+                                            }
+                                        </Text>
+                                    </View>
+                                </View>
+                                <CustomToggle
+                                    value={
+                                        notificationSettings.dailyRemindersForTests
+                                    }
+                                    onValueChange={(value) =>
+                                        handleToggleDailyReminders(
+                                            'dailyRemindersForTests',
+                                            value,
+                                        )
+                                    }
+                                    activeColor={Colors.dark.primary}
+                                />
+                            </View>
+
+                            <View style={styles.settingItem}>
+                                <View style={styles.settingLabelContainer}>
+                                    <View style={styles.settingLabelWithIcon}>
+                                        <MaterialIcons
+                                            name="quiz"
+                                            size={18}
+                                            color={Colors.dark.yellow}
+                                            style={styles.settingItemIcon}
+                                        />
+                                        <Text style={styles.settingLabel}>
+                                            {
+                                                t('settings').notifications
+                                                    .dailyQuizzes
+                                            }
+                                        </Text>
+                                    </View>
+                                </View>
+                                <CustomToggle
+                                    value={
+                                        notificationSettings.dailyRemindersForQuizzes
+                                    }
+                                    onValueChange={(value) =>
+                                        handleToggleDailyReminders(
+                                            'dailyRemindersForQuizzes',
+                                            value,
+                                        )
+                                    }
+                                    activeColor={Colors.dark.yellow}
+                                />
+                            </View>
+                        </View>
+
+                        {/* Send daily digest now button */}
+                        {IS_DEV && (
+                            <TouchableOpacity
+                                style={[
+                                    styles.testNotificationButton,
+                                    {
+                                        backgroundColor: Colors.dark.green,
+                                        marginTop: 8,
+                                    },
+                                ]}
+                                onPress={async () => {
+                                    try {
+                                        Haptics.impactAsync(
+                                            Haptics.ImpactFeedbackStyle.Medium,
+                                        );
+                                        const assignments =
+                                            await getAssignments();
+                                        await createAndScheduleDailyDigest(
+                                            assignments,
+                                            true,
+                                        );
+                                        Haptics.notificationAsync(
+                                            Haptics.NotificationFeedbackType
+                                                .Success,
+                                        );
+                                        Alert.alert(
+                                            t('settings').notifications
+                                                .digestSentTitle,
+                                            t('settings').notifications
+                                                .digestSentMessage,
+                                        );
+                                    } catch (error) {
+                                        Haptics.notificationAsync(
+                                            Haptics.NotificationFeedbackType
+                                                .Error,
+                                        );
+                                        Alert.alert(
+                                            t('settings').notifications
+                                                .errorTitle,
+                                            t('settings').notifications
+                                                .digestErrorMessage,
+                                        );
+                                        console.error(
+                                            'Daily digest error:',
+                                            error,
+                                        );
+                                    }
+                                }}
+                            >
+                                <MaterialIcons
+                                    name="calendar-today"
+                                    size={20}
+                                    color={Colors.dark.white}
+                                    style={styles.testNotificationIcon}
+                                />
+                                <Text style={styles.testNotificationText}>
+                                    {t('settings').notifications.sendDigestNow}
+                                </Text>
+                            </TouchableOpacity>
+                        )}
+                    </>
+                )}
+            </View>
+        );
     };
-    
-    loadNotificationSettings();
-  }, []);
-  
-  // Handle notification toggle
-  const handleToggleNotifications = useCallback(async (value: boolean) => {
-    try {
-      const updatedSettings = { ...notificationSettings, enabled: value };
-      setNotificationSettings(updatedSettings);
-      await saveNotificationSettings(updatedSettings);
-      
-      // If enabling notifications, schedule them for all assignments
-      if (value) {
-        const assignments = await getAssignments();
-        await scheduleAllNotifications(assignments);
-      }
-    } catch (error) {
-      console.error('Error toggling notifications:', error);
-    }
-  }, [notificationSettings]);
-  
-  // Handle saving notification time
-  const handleSaveNotificationTime = useCallback(async () => {
-    try {
-      // Create a new date object with just the time component
-      const updatedTime = new Date();
-      updatedTime.setHours(tempNotificationTime.getHours());
-      updatedTime.setMinutes(tempNotificationTime.getMinutes());
-      updatedTime.setSeconds(0);
-      updatedTime.setMilliseconds(0);
-      
-      const updatedSettings = { 
-        ...notificationSettings, 
-        notificationTime: updatedTime.toISOString() 
-      };
-      
-      setNotificationSettings(updatedSettings);
-      await saveNotificationSettings(updatedSettings);
-      
-      // Reschedule notifications with the new time
-      const assignments = await getAssignments();
-      await scheduleAllNotifications(assignments);
-      
-      setShowNotificationTimeModal(false);
-    } catch (error) {
-      console.error('Error saving notification time:', error);
-    }
-  }, [notificationSettings, tempNotificationTime]);
-  
-  // Handle updating reminder days setting
-  const handleUpdateReminderDays = useCallback(async (setting: keyof NotificationSettings, value: number) => {
-    try {
-      if (value < 0) return; // Prevent negative values
-      
-      const updatedSettings = { ...notificationSettings, [setting]: value };
-      setNotificationSettings(updatedSettings);
-      await saveNotificationSettings(updatedSettings);
-      
-      // Reschedule notifications with the new settings
-      const assignments = await getAssignments();
-      await scheduleAllNotifications(assignments);
-    } catch (error) {
-      console.error('Error updating reminder days:', error);
-    }
-  }, [notificationSettings]);
-  
-  // Handle daily reminders toggle
-  const handleToggleDailyReminders = useCallback(async (setting: keyof NotificationSettings, value: boolean) => {
-    try {
-      const updatedSettings = { ...notificationSettings, [setting]: value };
-      setNotificationSettings(updatedSettings);
-      await saveNotificationSettings(updatedSettings);
-      
-      // Reschedule notifications with the new settings
-      const assignments = await getAssignments();
-      await scheduleAllNotifications(assignments);
-    } catch (error) {
-      console.error('Error toggling daily reminders:', error);
-    }
-  }, [notificationSettings]);
-  
-  // Format time for display with centralized locale handling
-  const formatTimeDisplay = useCallback((date: Date) => {
-    return formatTimeFromDate(date);
-  }, [formatTimeFromDate]);
-  
-  // Show notification time picker
-  const handleShowNotificationTimePicker = useCallback(() => {
-    // Create a date object from the stored notification time
-    const date = new Date(notificationSettings.notificationTime);
-    setTempNotificationTime(date);
-    setShowNotificationTimeModal(true);
-  }, [notificationSettings]);
-  
-  // Render notification settings section
-  const renderNotificationSettings = useCallback(() => {
-    return (
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <MaterialIcons name="notifications" size={24} color={Colors.dark.primary} style={styles.sectionIcon} />
-          <Text style={styles.sectionTitle}>{t('settings').notifications.title}</Text>
-        </View>
-        
-        {/* Master toggle card */}
-        <View style={styles.card}>
-          <View style={styles.settingItem}>
-            <View style={styles.settingLabelContainer}>
-              <Text style={styles.settingLabel}>{t('settings').notifications.enabled}</Text>
-              <Text style={styles.settingDescription}>
-                {notificationSettings.enabled 
-                  ? t('settings').notifications.enabledDescription 
-                  : t('settings').notifications.disabledDescription}
-              </Text>
+
+    // Component for reminder day settings with consistent styling
+    const ReminderSetting = ({
+        label,
+        value,
+        onDecrease,
+        onIncrease,
+        isMinValue,
+        icon,
+        accentColor = Colors.dark.primary,
+    }: {
+        label: string;
+        value: number;
+        onDecrease: () => void;
+        onIncrease: () => void;
+        isMinValue: boolean;
+        icon: keyof typeof MaterialIcons.glyphMap;
+        accentColor?: string;
+    }) => (
+        <View style={styles.reminderSettingItem}>
+            <View style={styles.settingLabelWithIcon}>
+                <MaterialIcons
+                    name={icon}
+                    size={18}
+                    color={accentColor}
+                    style={styles.settingItemIcon}
+                />
+                <Text style={styles.settingLabel}>{label}</Text>
             </View>
-            <CustomToggle
-              value={notificationSettings.enabled}
-              onValueChange={handleToggleNotifications}
-              activeColor={Colors.dark.primary}
-            />
-          </View>
-        </View>
-        
-        {notificationSettings.enabled && (
-          <>
-            {/* Time settings card */}
-            <View style={styles.card}>
-              <View style={styles.cardHeader}>
-                <MaterialIcons name="access-time" size={20} color={Colors.dark.primary} />
-                <Text style={styles.cardTitle}>{t('settings').notifications.timeSettings}</Text>
-              </View>
-              
-              <View style={styles.settingItem}>
-                <View style={styles.settingLabelContainer}>
-                  <Text style={styles.settingLabel}>{t('settings').notifications.time}</Text>
-                  <Text style={styles.settingDescription}>
-                    {t('settings').notifications.timeDescription}
-                  </Text>
-                </View>
-          <TouchableOpacity
-                  style={styles.timeButton}
-                  onPress={handleShowNotificationTimePicker}
+            <View style={styles.dayCounter}>
+                <TouchableOpacity
+                    style={[
+                        styles.counterButton,
+                        isMinValue && styles.counterButtonDisabled,
+                    ]}
+                    onPress={onDecrease}
+                    disabled={isMinValue}
                 >
-                  <Text style={styles.timeButtonText}>
-                    {formatTimeDisplay(new Date(notificationSettings.notificationTime))}
-                  </Text>
-                  <MaterialIcons name="edit" size={16} color={Colors.dark.primary} style={styles.timeButtonIcon} />
-          </TouchableOpacity>
-              </View>
-            </View>
-            
-            {/* Reminder days card */}
-            <View style={styles.card}>
-              <View style={styles.cardHeader}>
-                <MaterialIcons name="event" size={20} color={Colors.dark.primary} />
-                <Text style={styles.cardTitle}>{t('settings').notifications.reminderDays}</Text>
-              </View>
-              
-              <Text style={styles.cardDescription}>
-                {t('settings').notifications.reminderDaysDescription}
-              </Text>
-              
-              {/* Important assignments group */}
-              <View style={styles.reminderGroup}>
-                <Text style={styles.reminderGroupTitle}>{t('settings').notifications.importantAssignments}</Text>
-                
-                <ReminderSetting
-                  label={t('settings').notifications.exams}
-                  value={notificationSettings.examReminderDays}
-                  onDecrease={() => handleUpdateReminderDays('examReminderDays', notificationSettings.examReminderDays - 1)}
-                  onIncrease={() => handleUpdateReminderDays('examReminderDays', notificationSettings.examReminderDays + 1)}
-                  isMinValue={notificationSettings.examReminderDays <= 1}
-                  icon="school"
-                  accentColor={Colors.dark.danger}
-                />
-                
-                <ReminderSetting
-                  label={t('settings').notifications.tests}
-                  value={notificationSettings.testReminderDays}
-                  onDecrease={() => handleUpdateReminderDays('testReminderDays', notificationSettings.testReminderDays - 1)}
-                  onIncrease={() => handleUpdateReminderDays('testReminderDays', notificationSettings.testReminderDays + 1)}
-                  isMinValue={notificationSettings.testReminderDays <= 1}
-                  icon="assignment"
-                  accentColor={Colors.dark.primary}
-                />
-                
-                <ReminderSetting
-                  label={t('settings').notifications.quizzes}
-                  value={notificationSettings.quizReminderDays}
-                  onDecrease={() => handleUpdateReminderDays('quizReminderDays', notificationSettings.quizReminderDays - 1)}
-                  onIncrease={() => handleUpdateReminderDays('quizReminderDays', notificationSettings.quizReminderDays + 1)}
-                  isMinValue={notificationSettings.quizReminderDays <= 1}
-                  icon="quiz"
-                  accentColor={Colors.dark.yellow}
-                />
-              </View>
-              
-              {/* Other assignments group */}
-              <View style={styles.reminderGroup}>
-                <Text style={styles.reminderGroupTitle}>{t('settings').notifications.otherAssignments}</Text>
-                
-                <ReminderSetting
-                  label={t('settings').notifications.projects}
-                  value={notificationSettings.projectReminderDays}
-                  onDecrease={() => handleUpdateReminderDays('projectReminderDays', notificationSettings.projectReminderDays - 1)}
-                  onIncrease={() => handleUpdateReminderDays('projectReminderDays', notificationSettings.projectReminderDays + 1)}
-                  isMinValue={notificationSettings.projectReminderDays <= 1}
-                  icon="category"
-                  accentColor={Colors.dark.green}
-                />
-                
-                <ReminderSetting
-                  label={t('settings').notifications.homework}
-                  value={notificationSettings.homeworkReminderDays}
-                  onDecrease={() => handleUpdateReminderDays('homeworkReminderDays', notificationSettings.homeworkReminderDays - 1)}
-                  onIncrease={() => handleUpdateReminderDays('homeworkReminderDays', notificationSettings.homeworkReminderDays + 1)}
-                  isMinValue={notificationSettings.homeworkReminderDays <= 1}
-                  icon="book"
-                  accentColor={Colors.dark.lightPurple}
-                />
-                
-                <ReminderSetting
-                  label={t('settings').notifications.other}
-                  value={notificationSettings.otherReminderDays}
-                  onDecrease={() => handleUpdateReminderDays('otherReminderDays', notificationSettings.otherReminderDays - 1)}
-                  onIncrease={() => handleUpdateReminderDays('otherReminderDays', notificationSettings.otherReminderDays + 1)}
-                  isMinValue={notificationSettings.otherReminderDays <= 1}
-                  icon="more-horiz"
-                  accentColor={Colors.dark.neutral500}
-                />
-              </View>
-            </View>
-            
-            {/* Daily reminders card */}
-            <View style={styles.card}>
-              <View style={styles.cardHeader}>
-                <MaterialIcons name="update" size={20} color={Colors.dark.primary} />
-                <Text style={styles.cardTitle}>{t('settings').notifications.dailyReminders}</Text>
-              </View>
-              
-              <Text style={styles.cardDescription}>
-                {t('settings').notifications.dailyRemindersDescription}
-              </Text>
-              
-              <View style={styles.settingItem}>
-                <View style={styles.settingLabelContainer}>
-                  <View style={styles.settingLabelWithIcon}>
-                    <MaterialIcons name="school" size={18} color={Colors.dark.danger} style={styles.settingItemIcon} />
-                    <Text style={styles.settingLabel}>{t('settings').notifications.dailyExams}</Text>
-                  </View>
-                </View>
-                <CustomToggle
-                  value={notificationSettings.dailyRemindersForExams}
-                  onValueChange={(value) => handleToggleDailyReminders('dailyRemindersForExams', value)}
-                  activeColor={Colors.dark.danger}
-                />
-              </View>
-              
-              <View style={styles.settingItem}>
-                <View style={styles.settingLabelContainer}>
-                  <View style={styles.settingLabelWithIcon}>
-                    <MaterialIcons name="assignment" size={18} color={Colors.dark.primary} style={styles.settingItemIcon} />
-                    <Text style={styles.settingLabel}>{t('settings').notifications.dailyTests}</Text>
-                  </View>
-                </View>
-                <CustomToggle
-                  value={notificationSettings.dailyRemindersForTests}
-                  onValueChange={(value) => handleToggleDailyReminders('dailyRemindersForTests', value)}
-                  activeColor={Colors.dark.primary}
-                />
-              </View>
-              
-              <View style={styles.settingItem}>
-                <View style={styles.settingLabelContainer}>
-                  <View style={styles.settingLabelWithIcon}>
-                    <MaterialIcons name="quiz" size={18} color={Colors.dark.yellow} style={styles.settingItemIcon} />
-                    <Text style={styles.settingLabel}>{t('settings').notifications.dailyQuizzes}</Text>
-                  </View>
-                </View>
-                <CustomToggle
-                  value={notificationSettings.dailyRemindersForQuizzes}
-                  onValueChange={(value) => handleToggleDailyReminders('dailyRemindersForQuizzes', value)}
-                  activeColor={Colors.dark.yellow}
-                />
-              </View>
-            </View>
+                    <MaterialIcons
+                        name="remove"
+                        size={18}
+                        color={
+                            isMinValue ? Colors.dark.neutral650 : accentColor
+                        }
+                    />
+                </TouchableOpacity>
 
-            {/* Send daily digest now button */}
-            {IS_DEV && (
-              <TouchableOpacity
-                style={[styles.testNotificationButton, { backgroundColor: Colors.dark.green, marginTop: 8 }]}
-                onPress={async () => {
-                  try {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                    const assignments = await getAssignments();
-                    await createAndScheduleDailyDigest(assignments, true);
-                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                    Alert.alert(
-                      t('settings').notifications.digestSentTitle,
-                      t('settings').notifications.digestSentMessage
-                    );
-                  } catch (error) {
-                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-                    Alert.alert(
-                      t('settings').notifications.errorTitle,
-                      t('settings').notifications.digestErrorMessage
-                    );
-                    console.error('Daily digest error:', error);
-                  }
-                }}
-              >
-                <MaterialIcons name="calendar-today" size={20} color={Colors.dark.white} style={styles.testNotificationIcon} />
-                <Text style={styles.testNotificationText}>
-                  {t('settings').notifications.sendDigestNow}
-                </Text>
-              </TouchableOpacity>
-            )}
-          </>
-        )}
-      </View>
-    );
-  }, [
-    t, 
-    notificationSettings, 
-    handleToggleNotifications, 
-    handleUpdateReminderDays, 
-    handleToggleDailyReminders, 
-    handleShowNotificationTimePicker,
-    formatTimeDisplay
-  ]);
+                <View
+                    style={[
+                        styles.counterValueContainer,
+                        { borderColor: accentColor },
+                    ]}
+                >
+                    <Text style={styles.counterValue}>{value}</Text>
+                    <Text style={styles.counterUnit}>
+                        {t('settings').notifications.days}
+                    </Text>
+                </View>
 
-  // Component for reminder day settings with consistent styling
-  const ReminderSetting = ({
-    label,
-    value,
-    onDecrease,
-    onIncrease,
-    isMinValue,
-    icon,
-    accentColor = Colors.dark.primary
-  }: {
-    label: string;
-    value: number;
-    onDecrease: () => void;
-    onIncrease: () => void;
-    isMinValue: boolean;
-    icon: keyof typeof MaterialIcons.glyphMap;
-    accentColor?: string;
-  }) => (
-    <View style={styles.reminderSettingItem}>
-      <View style={styles.settingLabelWithIcon}>
-        <MaterialIcons name={icon} size={18} color={accentColor} style={styles.settingItemIcon} />
-        <Text style={styles.settingLabel}>{label}</Text>
-      </View>
-      <View style={styles.dayCounter}>
-          <TouchableOpacity
-          style={[styles.counterButton, isMinValue && styles.counterButtonDisabled]}
-          onPress={onDecrease}
-          disabled={isMinValue}
-        >
-          <MaterialIcons name="remove" size={18} color={isMinValue ? Colors.dark.neutral650 : accentColor} />
-          </TouchableOpacity>
-        
-        <View style={[styles.counterValueContainer, { borderColor: accentColor }]}>
-          <Text style={styles.counterValue}>{value}</Text>
-          <Text style={styles.counterUnit}>{t('settings').notifications.days}</Text>
+                <TouchableOpacity
+                    style={styles.counterButton}
+                    onPress={onIncrease}
+                >
+                    <MaterialIcons name="add" size={18} color={accentColor} />
+                </TouchableOpacity>
+            </View>
         </View>
-        
-        <TouchableOpacity 
-          style={styles.counterButton}
-          onPress={onIncrease}
-        >
-          <MaterialIcons name="add" size={18} color={accentColor} />
-        </TouchableOpacity>
-        </View>
-      </View>
     );
 
-  // Handle notification time change 
-  const handleNotificationTimeChange = useCallback((date: Date) => {
-    setTempNotificationTime(date);
-  }, []);
+    // Handle notification time change
+    const handleNotificationTimeChange = useCallback((date: Date) => {
+        setTempNotificationTime(date);
+    }, []);
 
-  const handleCloseTimePicker = useCallback(() => {
-    setShowNotificationTimeModal(false);
-  }, []);
+    const handleCloseTimePicker = useCallback(() => {
+        setShowNotificationTimeModal(false);
+    }, []);
 
-  const handleConfirmTimePicker = useCallback(async (date: Date) => {
-    try {
-      // Create a new date object with just the time component
-      const updatedTime = new Date();
-      updatedTime.setHours(date.getHours());
-      updatedTime.setMinutes(date.getMinutes());
-      updatedTime.setSeconds(0);
-      updatedTime.setMilliseconds(0);
-      
-      const updatedSettings = { 
-        ...notificationSettings, 
-        notificationTime: updatedTime.toISOString() 
-      };
-      
-      setNotificationSettings(updatedSettings);
-      await saveNotificationSettings(updatedSettings);
-      
-      // Reschedule notifications with the new time
-      const assignments = await getAssignments();
-      await scheduleAllNotifications(assignments);
-      
-      // Close the modal
-      setShowNotificationTimeModal(false);
-      
-      // Debugging
-    } catch (error) {
-      console.error('Error saving notification time:', error);
-    }
-  }, [notificationSettings]);
+    const handleConfirmTimePicker = useCallback(
+        async (date: Date) => {
+            try {
+                // Create a new date object with just the time component
+                const updatedTime = new Date();
+                updatedTime.setHours(date.getHours());
+                updatedTime.setMinutes(date.getMinutes());
+                updatedTime.setSeconds(0);
+                updatedTime.setMilliseconds(0);
 
-  // Handle IDNP sync toggle - Temporarily disabled - To be implemented later
-  /* const handleIdnpSyncToggle = useCallback(async (value: boolean) => {
+                const updatedSettings = {
+                    ...notificationSettings,
+                    notificationTime: updatedTime.toISOString(),
+                };
+
+                setNotificationSettings(updatedSettings);
+                await saveNotificationSettings(updatedSettings);
+
+                // Reschedule notifications with the new time
+                const assignments = await getAssignments();
+                await scheduleAllNotifications(assignments);
+
+                // Close the modal
+                setShowNotificationTimeModal(false);
+
+                // Debugging
+            } catch (error) {
+                console.error('Error saving notification time:', error);
+            }
+        },
+        [notificationSettings],
+    );
+
+    // Handle IDNP sync toggle - Temporarily disabled - To be implemented later
+    /* const handleIdnpSyncToggle = useCallback(async (value: boolean) => {
     try {
       // Check if user is authenticated before proceeding
       if (!isAuthenticated) {
@@ -1740,14 +2368,17 @@ export default function Settings() {
     }
   }, [savedIdnp, isAuthenticated, router]); */
 
-  return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        {/* Account Section */}
-        {renderAccountSection()}
+    return (
+        <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+            <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.scrollContent}
+            >
+                {/* Account Section */}
+                {renderAccountSection()}
 
-        {/* IDNP Sync Settings - Temporarily disabled - To be implemented later */}
-        {/* <View style={styles.section}>
+                {/* IDNP Sync Settings - Temporarily disabled - To be implemented later */}
+                {/* <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('settings').idnp.syncTitle}</Text>
           
           <View style={styles.elevatedContainer}>
@@ -1800,1889 +2431,2163 @@ export default function Settings() {
           </View>
         </View> */}
 
-        {/* Add IDNP management section when IDNP is saved */}
-        {savedIdnp && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <MaterialIcons name="security" size={24} color={Colors.dark.orange} style={styles.sectionIcon} />
-              <Text style={styles.sectionTitle}>{t('settings').idnp.title}</Text>
-            </View>
-            <View style={styles.idnpInfo}>
-              <Text style={styles.idnpValue}>
-                {savedIdnp.substring(0, 4) + '••••••' + savedIdnp.substring(10)}
-              </Text>
-              <TouchableOpacity
-                style={styles.clearIdnpButton}
-                onPress={handleClearIdnp}
-              >
-                <MaterialIcons name="delete-outline" size={24} color={Colors.dark.lightPink} />
-                <Text style={styles.clearIdnpText}>{t('settings').idnp.clearButton}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
+                {/* Add IDNP management section when IDNP is saved */}
+                {savedIdnp && (
+                    <View style={styles.section}>
+                        <View style={styles.sectionHeader}>
+                            <MaterialIcons
+                                name="security"
+                                size={24}
+                                color={Colors.dark.orange}
+                                style={styles.sectionIcon}
+                            />
+                            <Text style={styles.sectionTitle}>
+                                {t('settings').idnp.title}
+                            </Text>
+                        </View>
+                        <View style={styles.idnpInfo}>
+                            <Text style={styles.idnpValue}>
+                                {savedIdnp.substring(0, 4) +
+                                    '••••••' +
+                                    savedIdnp.substring(10)}
+                            </Text>
+                            <TouchableOpacity
+                                style={styles.clearIdnpButton}
+                                onPress={handleClearIdnp}
+                            >
+                                <MaterialIcons
+                                    name="delete-outline"
+                                    size={24}
+                                    color={Colors.dark.lightPink}
+                                />
+                                <Text style={styles.clearIdnpText}>
+                                    {t('settings').idnp.clearButton}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                )}
 
-        {/* Language Selection Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <MaterialIcons name="language" size={24} color={Colors.dark.lightBlue} style={styles.sectionIcon} />
-            <Text style={styles.sectionTitle}>{t('settings').language}</Text>
-          </View>
-          <TouchableOpacity
-            style={styles.languageSelector}
-            onPress={() => setShowLanguageModal(true)}
-          >
-            <View style={styles.languageSelectorContent}>
-              <Text style={styles.selectedLanguageIcon}>{languages[settings.language].icon}</Text>
-              <Text style={styles.selectedLanguageName}>{languages[settings.language].name}</Text>
-              <MaterialIcons name="keyboard-arrow-down" size={24} color={Colors.dark.neutral500} />
-            </View>
-          </TouchableOpacity>
-        </View>
+                {/* Language Selection Section */}
+                <View style={styles.section}>
+                    <View style={styles.sectionHeader}>
+                        <MaterialIcons
+                            name="language"
+                            size={24}
+                            color={Colors.dark.lightBlue}
+                            style={styles.sectionIcon}
+                        />
+                        <Text style={styles.sectionTitle}>
+                            {t('settings').language}
+                        </Text>
+                    </View>
+                    <TouchableOpacity
+                        style={styles.languageSelector}
+                        onPress={() => setShowLanguageModal(true)}
+                    >
+                        <View style={styles.languageSelectorContent}>
+                            <Text style={styles.selectedLanguageIcon}>
+                                {languages[settings.language].icon}
+                            </Text>
+                            <Text style={styles.selectedLanguageName}>
+                                {languages[settings.language].name}
+                            </Text>
+                            <MaterialIcons
+                                name="keyboard-arrow-down"
+                                size={24}
+                                color={Colors.dark.neutral500}
+                            />
+                        </View>
+                    </TouchableOpacity>
+                </View>
 
-        {/* Manual Schedule Refresh Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <MaterialIcons name="schedule" size={24} color={Colors.dark.primaryStrong} style={styles.sectionIcon} />
-            <Text style={styles.sectionTitle}>{t('settings').schedule.title}</Text>
-          </View>
-          <View style={[styles.card, styles.scheduleCard]}>
-            <View style={styles.scheduleDetails}>
-              {/* Group Selection Dropdown */}
-              <TouchableOpacity
-                style={styles.scheduleDetailRow}
-                onPress={() => setShowGroupModal(true)}
-                activeOpacity={0.7}
-              >
-                <MaterialIcons
-                  name="group"
-                  size={20}
-                  color={Colors.dark.neutral500}
-                  style={styles.scheduleDetailIcon}
-                />
-                <View style={styles.scheduleDetailTextGroup}>
-                  <Text style={styles.scheduleDetailLabel}>{t('settings').schedule.group}</Text>
-                  <View style={styles.scheduleGroupValueContainer}>
-                    <Text style={styles.scheduleDetailValue} numberOfLines={1}>
-                      {settings.selectedGroupName || t('settings').group.select}
+                {/* Manual Schedule Refresh Section */}
+                <View style={styles.section}>
+                    <View style={styles.sectionHeader}>
+                        <MaterialIcons
+                            name="schedule"
+                            size={24}
+                            color={Colors.dark.primaryStrong}
+                            style={styles.sectionIcon}
+                        />
+                        <Text style={styles.sectionTitle}>
+                            {t('settings').schedule.title}
+                        </Text>
+                    </View>
+                    <View style={[styles.card, styles.scheduleCard]}>
+                        <View style={styles.scheduleDetails}>
+                            {/* Group Selection Dropdown */}
+                            <TouchableOpacity
+                                style={styles.scheduleDetailRow}
+                                onPress={() => setShowGroupModal(true)}
+                                activeOpacity={0.7}
+                            >
+                                <MaterialIcons
+                                    name="group"
+                                    size={20}
+                                    color={Colors.dark.neutral500}
+                                    style={styles.scheduleDetailIcon}
+                                />
+                                <View style={styles.scheduleDetailTextGroup}>
+                                    <Text style={styles.scheduleDetailLabel}>
+                                        {t('settings').schedule.group}
+                                    </Text>
+                                    <View
+                                        style={
+                                            styles.scheduleGroupValueContainer
+                                        }
+                                    >
+                                        <Text
+                                            style={styles.scheduleDetailValue}
+                                            numberOfLines={1}
+                                        >
+                                            {settings.selectedGroupName ||
+                                                t('settings').group.select}
+                                        </Text>
+                                        <MaterialIcons
+                                            name="arrow-drop-down"
+                                            size={20}
+                                            color={Colors.dark.neutral500}
+                                        />
+                                    </View>
+                                </View>
+                            </TouchableOpacity>
+
+                            {/* Last Updated */}
+                            <View
+                                style={[
+                                    styles.scheduleDetailRow,
+                                    styles.scheduleDetailRowLast,
+                                ]}
+                            >
+                                <MaterialIcons
+                                    name="update"
+                                    size={20}
+                                    color={Colors.dark.neutral500}
+                                    style={styles.scheduleDetailIcon}
+                                />
+                                <View style={styles.scheduleDetailTextGroup}>
+                                    <Text style={styles.scheduleDetailLabel}>
+                                        {t('settings').schedule.lastUpdated}
+                                    </Text>
+                                    <Text style={styles.scheduleDetailValue}>
+                                        {lastScheduleRefresh ?
+                                            formatCompactDate(
+                                                lastScheduleRefresh,
+                                                true,
+                                            )
+                                        :   t('settings').schedule
+                                                .noRecentRefresh
+                                        }
+                                    </Text>
+                                </View>
+                            </View>
+                        </View>
+
+                        <TouchableOpacity
+                            style={[
+                                styles.refreshButton,
+                                styles.scheduleRefreshButton,
+                                isRefreshingSchedule && { opacity: 0.7 },
+                            ]}
+                            onPress={handleManualScheduleRefresh}
+                            disabled={isRefreshingSchedule}
+                        >
+                            {isRefreshingSchedule ?
+                                <ActivityIndicator
+                                    size="small"
+                                    color={Colors.dark.white}
+                                />
+                            :   <MaterialIcons
+                                    name="refresh"
+                                    size={20}
+                                    color={Colors.dark.white}
+                                />
+                            }
+                            <Text
+                                style={[
+                                    styles.refreshButtonText,
+                                    styles.scheduleRefreshButtonText,
+                                ]}
+                            >
+                                {isRefreshingSchedule ?
+                                    t('settings').schedule.refreshing
+                                :   t('settings').schedule.refresh}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+
+                {/* App Updates Section */}
+                <View style={styles.section}>
+                    <View style={styles.sectionHeader}>
+                        <MaterialIcons
+                            name="system-update"
+                            size={24}
+                            color={Colors.dark.primaryStrong}
+                            style={styles.sectionIcon}
+                        />
+                        <Text style={styles.sectionTitle}>
+                            App Version & OTA
+                        </Text>
+                    </View>
+                    <View style={[styles.card, styles.updateCard]}>
+                        <View style={styles.updateDetails}>
+                            <View style={styles.updateDetailRow}>
+                                <MaterialIcons
+                                    name="info-outline"
+                                    size={20}
+                                    color={Colors.dark.neutral500}
+                                    style={styles.scheduleDetailIcon}
+                                />
+                                <View style={styles.scheduleDetailTextGroup}>
+                                    <Text style={styles.scheduleDetailLabel}>
+                                        Current Version
+                                    </Text>
+                                    <Text style={styles.scheduleDetailValue}>
+                                        {updateService.getCurrentVersion()}
+                                    </Text>
+                                </View>
+                            </View>
+
+                            <View style={styles.updateDetailRow}>
+                                <MaterialIcons
+                                    name="fingerprint"
+                                    size={20}
+                                    color={Colors.dark.neutral500}
+                                    style={styles.scheduleDetailIcon}
+                                />
+                                <View style={styles.scheduleDetailTextGroup}>
+                                    <Text style={styles.scheduleDetailLabel}>
+                                        Current OTA Version
+                                    </Text>
+                                    <Text style={styles.scheduleDetailValue}>
+                                        {updateService.getCurrentOtaVersionShort()}
+                                    </Text>
+                                </View>
+                            </View>
+
+                            <View
+                                style={[
+                                    styles.updateDetailRow,
+                                    styles.scheduleDetailRowLast,
+                                ]}
+                            >
+                                <MaterialIcons
+                                    name="label-outline"
+                                    size={20}
+                                    color={Colors.dark.neutral500}
+                                    style={styles.scheduleDetailIcon}
+                                />
+                                <View style={styles.scheduleDetailTextGroup}>
+                                    <Text style={styles.scheduleDetailLabel}>
+                                        Release Channel
+                                    </Text>
+                                    <Text
+                                        style={[
+                                            styles.scheduleDetailValue,
+                                            styles.channelBadge,
+                                        ]}
+                                    >
+                                        {updateService.getChannelDisplay()}
+                                    </Text>
+                                </View>
+                            </View>
+                        </View>
+
+                        <Text style={styles.updateNote}>
+                            App binaries are distributed through Play Store and
+                            manual GitHub release installs. OTA content updates
+                            continue to be applied by Expo Updates.
+                        </Text>
+                    </View>
+                </View>
+
+                {/* Subgroup Selection Section */}
+                <View style={styles.section}>
+                    <View style={styles.sectionHeader}>
+                        <MaterialIcons
+                            name="groups"
+                            size={24}
+                            color={Colors.dark.green}
+                            style={styles.sectionIcon}
+                        />
+                        <Text style={styles.sectionTitle}>
+                            {t('settings').subGroup}
+                        </Text>
+                    </View>
+                    <View style={styles.optionsContainer}>
+                        {SUBGROUPS.map((group) => (
+                            <TouchableOpacity
+                                key={group}
+                                style={[
+                                    styles.optionButton,
+                                    settings.group === group &&
+                                        styles.selectedOption,
+                                ]}
+                                onPress={() => handleGroupChange(group)}
+                            >
+                                <Text
+                                    style={[
+                                        styles.optionText,
+                                        settings.group === group &&
+                                            styles.selectedOptionText,
+                                    ]}
+                                >
+                                    {group === 'Subgroup 1' ?
+                                        t('subgroup').group1
+                                    :   t('subgroup').group2}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                </View>
+
+                {/* Custom Periods Section */}
+                <View style={styles.section}>
+                    <View style={styles.sectionHeaderWithAction}>
+                        <View style={styles.sectionHeaderContent}>
+                            <MaterialIcons
+                                name="event"
+                                size={24}
+                                color={Colors.dark.lightPink}
+                                style={styles.sectionIcon}
+                            />
+                            <Text style={styles.sectionTitle}>
+                                {t('settings').customPeriods.title}
+                            </Text>
+                        </View>
+                        <TouchableOpacity
+                            style={styles.addButton}
+                            onPress={handleAddPeriod}
+                        >
+                            <MaterialIcons
+                                name="add"
+                                size={24}
+                                color={Colors.dark.white}
+                            />
+                        </TouchableOpacity>
+                    </View>
+
+                    <View style={styles.periodsListContainer}>
+                        {settings.customPeriods.map((period) => (
+                            <View key={period._id} style={styles.periodItem}>
+                                <View style={styles.periodItemHeader}>
+                                    <View
+                                        style={[
+                                            styles.colorDot,
+                                            {
+                                                backgroundColor:
+                                                    period.color ||
+                                                    Colors.dark.primaryStrong,
+                                            },
+                                        ]}
+                                    />
+                                    <Text style={styles.periodName}>
+                                        {period.name || 'Custom Period'}
+                                    </Text>
+                                    <CustomToggle
+                                        value={period.isEnabled}
+                                        onValueChange={(value) => {
+                                            scheduleService.updateCustomPeriod(
+                                                period._id,
+                                                { isEnabled: value },
+                                            );
+                                        }}
+                                    />
+                                </View>
+
+                                <View style={styles.periodItemContent}>
+                                    <Text style={styles.periodTime}>
+                                        {period.starttime} - {period.endtime}
+                                    </Text>
+                                    <Text style={styles.periodDays}>
+                                        {period.daysOfWeek
+                                            ?.map(
+                                                (day) =>
+                                                    t('weekdays').long[day],
+                                            )
+                                            .join(', ') || 'All weekdays'}
+                                    </Text>
+                                </View>
+
+                                <View style={styles.periodItemActions}>
+                                    <TouchableOpacity
+                                        style={styles.periodAction}
+                                        onPress={() => handleEditPeriod(period)}
+                                    >
+                                        <MaterialIcons
+                                            name="edit"
+                                            size={20}
+                                            color={Colors.dark.neutral500}
+                                        />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={styles.periodAction}
+                                        onPress={() =>
+                                            handleDeletePeriod(period._id)
+                                        }
+                                    >
+                                        <MaterialIcons
+                                            name="delete"
+                                            size={20}
+                                            color={Colors.dark.lightPink}
+                                        />
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        ))}
+
+                        {settings.customPeriods.length === 0 && (
+                            <Text style={styles.noPeriods}>
+                                {t('settings').customPeriods.noPeriodsYet}
+                            </Text>
+                        )}
+                    </View>
+                </View>
+
+                {/* Developer Section */}
+                {renderDeveloperSection()}
+
+                {/* Notification Settings Section */}
+                {renderNotificationSettings()}
+            </ScrollView>
+
+            {/* Language Selection Modal */}
+            <BottomModalPortal
+                isVisible={showLanguageModal}
+                onClose={() => setShowLanguageModal(false)}
+            >
+                <View style={styles.modalHeader}>
+                    <Text style={styles.modalTitle}>
+                        {t('settings').language}
                     </Text>
-                    <MaterialIcons name="arrow-drop-down" size={20} color={Colors.dark.neutral500} />
-                  </View>
+                    <TouchableOpacity
+                        onPress={() => setShowLanguageModal(false)}
+                    >
+                        <MaterialIcons
+                            name="close"
+                            size={24}
+                            color={Colors.dark.white}
+                        />
+                    </TouchableOpacity>
                 </View>
-              </TouchableOpacity>
-
-              {/* Last Updated */}
-              <View style={[styles.scheduleDetailRow, styles.scheduleDetailRowLast]}>
-                <MaterialIcons
-                  name="update"
-                  size={20}
-                  color={Colors.dark.neutral500}
-                  style={styles.scheduleDetailIcon}
-                />
-                <View style={styles.scheduleDetailTextGroup}>
-                  <Text style={styles.scheduleDetailLabel}>{t('settings').schedule.lastUpdated}</Text>
-                  <Text style={styles.scheduleDetailValue}>
-                    {lastScheduleRefresh
-                      ? formatCompactDate(lastScheduleRefresh, true)
-                      : t('settings').schedule.noRecentRefresh}
-                  </Text>
+                <View style={styles.languagesList}>
+                    {Object.entries(languages).map(([code, { name, icon }]) => (
+                        <TouchableOpacity
+                            key={code}
+                            style={[
+                                styles.languageOption,
+                                settings.language === code &&
+                                    styles.selectedLanguageOption,
+                            ]}
+                            onPress={() => {
+                                handleLanguageChange(
+                                    code as keyof typeof languages,
+                                );
+                                setShowLanguageModal(false);
+                                Haptics.impactAsync(
+                                    Haptics.ImpactFeedbackStyle.Light,
+                                );
+                            }}
+                        >
+                            <Text style={styles.languageIcon}>{icon}</Text>
+                            <Text
+                                style={[
+                                    styles.languageOptionText,
+                                    settings.language === code &&
+                                        styles.selectedLanguageOptionText,
+                                ]}
+                            >
+                                {name}
+                            </Text>
+                            {settings.language === code && (
+                                <MaterialIcons
+                                    name="check"
+                                    size={24}
+                                    color={Colors.dark.white}
+                                />
+                            )}
+                        </TouchableOpacity>
+                    ))}
                 </View>
-              </View>
-            </View>
+            </BottomModalPortal>
 
-            <TouchableOpacity
-              style={[
-                styles.refreshButton,
-                styles.scheduleRefreshButton,
-                isRefreshingSchedule && { opacity: 0.7 }
-              ]}
-              onPress={handleManualScheduleRefresh}
-              disabled={isRefreshingSchedule}
-            >
-              {isRefreshingSchedule ? (
-                <ActivityIndicator size="small" color={Colors.dark.white} />
-              ) : (
-                <MaterialIcons name="refresh" size={20} color={Colors.dark.white} />
-              )}
-              <Text style={[styles.refreshButtonText, styles.scheduleRefreshButtonText]}>
-                {isRefreshingSchedule ? t('settings').schedule.refreshing : t('settings').schedule.refresh}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* App Updates Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <MaterialIcons name="system-update" size={24} color={Colors.dark.primaryStrong} style={styles.sectionIcon} />
-            <Text style={styles.sectionTitle}>App Version & OTA</Text>
-          </View>
-          <View style={[styles.card, styles.updateCard]}>
-            <View style={styles.updateDetails}>
-              <View style={styles.updateDetailRow}>
-                <MaterialIcons
-                  name="info-outline"
-                  size={20}
-                  color={Colors.dark.neutral500}
-                  style={styles.scheduleDetailIcon}
-                />
-                <View style={styles.scheduleDetailTextGroup}>
-                  <Text style={styles.scheduleDetailLabel}>Current Version</Text>
-                  <Text style={styles.scheduleDetailValue}>
-                    {updateService.getCurrentVersion()}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.updateDetailRow}>
-                <MaterialIcons
-                  name="fingerprint"
-                  size={20}
-                  color={Colors.dark.neutral500}
-                  style={styles.scheduleDetailIcon}
-                />
-                <View style={styles.scheduleDetailTextGroup}>
-                  <Text style={styles.scheduleDetailLabel}>Current OTA Version</Text>
-                  <Text style={styles.scheduleDetailValue}>
-                    {updateService.getCurrentOtaVersionShort()}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={[styles.updateDetailRow, styles.scheduleDetailRowLast]}>
-                <MaterialIcons
-                  name="label-outline"
-                  size={20}
-                  color={Colors.dark.neutral500}
-                  style={styles.scheduleDetailIcon}
-                />
-                <View style={styles.scheduleDetailTextGroup}>
-                  <Text style={styles.scheduleDetailLabel}>Release Channel</Text>
-                  <Text style={[styles.scheduleDetailValue, styles.channelBadge]}>
-                    {updateService.getChannelDisplay()}
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            <Text style={styles.updateNote}>
-              App binaries are distributed through Play Store and manual GitHub release installs.
-              OTA content updates continue to be applied by Expo Updates.
-            </Text>
-          </View>
-        </View>
-
-        {/* Subgroup Selection Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <MaterialIcons name="groups" size={24} color={Colors.dark.green} style={styles.sectionIcon} />
-            <Text style={styles.sectionTitle}>{t('settings').subGroup}</Text>
-          </View>
-          <View style={styles.optionsContainer}>
-            {SUBGROUPS.map(group => (
-              <TouchableOpacity
-                key={group}
-                style={[
-                  styles.optionButton,
-                  settings.group === group && styles.selectedOption
-                ]}
-                onPress={() => handleGroupChange(group)}
-              >
-                <Text style={[
-                  styles.optionText,
-                  settings.group === group && styles.selectedOptionText
-                ]}>
-                  {group === 'Subgroup 1' ? t('subgroup').group1 : t('subgroup').group2}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Custom Periods Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeaderWithAction}>
-            <View style={styles.sectionHeaderContent}>
-              <MaterialIcons name="event" size={24} color={Colors.dark.lightPink} style={styles.sectionIcon} />
-              <Text style={styles.sectionTitle}>{t('settings').customPeriods.title}</Text>
-            </View>
-            <TouchableOpacity
-              style={styles.addButton}
-              onPress={handleAddPeriod}
-            >
-              <MaterialIcons name="add" size={24} color={Colors.dark.white} />
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.periodsListContainer}>
-            {settings.customPeriods.map((period) => (
-              <View key={period._id} style={styles.periodItem}>
-                <View style={styles.periodItemHeader}>
-                  <View style={[styles.colorDot, { backgroundColor: period.color || Colors.dark.primaryStrong }]} />
-                  <Text style={styles.periodName}>{period.name || 'Custom Period'}</Text>
-                  <CustomToggle
-                    value={period.isEnabled}
-                    onValueChange={(value) => {
-                      scheduleService.updateCustomPeriod(period._id, { isEnabled: value });
+            {/* Time Pickers */}
+            {showStartPicker && (
+                <TimePicker
+                    value={startTime}
+                    onChange={handleTimePickerChange('start')}
+                    label={t('settings').customPeriods.time}
+                    onClose={() => setShowStartPicker(false)}
+                    onConfirm={handleTimePickerChange('start')}
+                    use12HourFormat={settings.language === 'en'}
+                    translations={{
+                        cancel: t('settings').customPeriods.cancel,
+                        confirm: t('settings').customPeriods.confirm,
                     }}
-                  />
-                </View>
-                
-                <View style={styles.periodItemContent}>
-                  <Text style={styles.periodTime}>
-                    {period.starttime} - {period.endtime}
-                  </Text>
-                  <Text style={styles.periodDays}>
-                    {period.daysOfWeek?.map(day => t('weekdays').long[day]).join(', ') || 'All weekdays'}
-                  </Text>
-                </View>
-
-                <View style={styles.periodItemActions}>
-                  <TouchableOpacity
-                    style={styles.periodAction}
-                    onPress={() => handleEditPeriod(period)}
-                  >
-                    <MaterialIcons name="edit" size={20} color={Colors.dark.neutral500} />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.periodAction}
-                    onPress={() => handleDeletePeriod(period._id)}
-                  >
-                    <MaterialIcons name="delete" size={20} color={Colors.dark.lightPink} />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))}
-            
-            {settings.customPeriods.length === 0 && (
-              <Text style={styles.noPeriods}>{t('settings').customPeriods.noPeriodsYet}</Text>
+                />
             )}
-          </View>
-        </View>
+            {showEndPicker && (
+                <TimePicker
+                    value={endTime}
+                    onChange={handleTimePickerChange('end')}
+                    label={t('settings').customPeriods.time}
+                    onClose={() => setShowEndPicker(false)}
+                    onConfirm={handleTimePickerChange('end')}
+                    use12HourFormat={settings.language === 'en'}
+                    translations={{
+                        cancel: t('settings').customPeriods.cancel,
+                        confirm: t('settings').customPeriods.confirm,
+                    }}
+                />
+            )}
 
-        {/* Developer Section */}
-        {renderDeveloperSection()}
-
-        {/* Notification Settings Section */}
-        {renderNotificationSettings()}
-      </ScrollView>
-
-      {/* Language Selection Modal */}
-      <BottomModalPortal
-        isVisible={showLanguageModal}
-        onClose={() => setShowLanguageModal(false)}
-      >
-        <View style={styles.modalHeader}>
-          <Text style={styles.modalTitle}>{t('settings').language}</Text>
-          <TouchableOpacity onPress={() => setShowLanguageModal(false)}>
-            <MaterialIcons name="close" size={24} color={Colors.dark.white} />
-          </TouchableOpacity>
-        </View>
-        <View style={styles.languagesList}>
-          {Object.entries(languages).map(([code, { name, icon }]) => (
-            <TouchableOpacity
-              key={code}
-              style={[
-                styles.languageOption,
-                settings.language === code && styles.selectedLanguageOption
-              ]}
-              onPress={() => {
-                handleLanguageChange(code as keyof typeof languages);
-                setShowLanguageModal(false);
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              }}
+            {/* Groups Selection Modal */}
+            <BottomModalPortal
+                isVisible={showGroupModal}
+                onClose={() => {
+                    setShowGroupModal(false);
+                    setSearchQuery('');
+                }}
             >
-              <Text style={styles.languageIcon}>{icon}</Text>
-              <Text style={[
-                styles.languageOptionText,
-                settings.language === code && styles.selectedLanguageOptionText
-              ]}>
-                {name}
-              </Text>
-              {settings.language === code && (
-                <MaterialIcons name="check" size={24} color={Colors.dark.white} />
-              )}
-            </TouchableOpacity>
-          ))}
-        </View>
-      </BottomModalPortal>
+                <View style={styles.modalHeader}>
+                    <Text style={styles.modalTitle}>
+                        {t('settings').group.select}
+                    </Text>
+                    <TouchableOpacity
+                        onPress={() => {
+                            setShowGroupModal(false);
+                            setSearchQuery('');
+                        }}
+                    >
+                        <MaterialIcons
+                            name="close"
+                            size={24}
+                            color={Colors.dark.white}
+                        />
+                    </TouchableOpacity>
+                </View>
 
-      {/* Time Pickers */}
-      {showStartPicker && (
-        <TimePicker
-          value={startTime}
-          onChange={handleTimePickerChange('start')}
-          label={t('settings').customPeriods.time}
-          onClose={() => setShowStartPicker(false)}
-          onConfirm={handleTimePickerChange('start')}
-          use12HourFormat={settings.language === 'en'}
-          translations={{ cancel: t('settings').customPeriods.cancel, confirm: t('settings').customPeriods.confirm }}
-        />
-      )}
-      {showEndPicker && (
-        <TimePicker
-          value={endTime}
-          onChange={handleTimePickerChange('end')}
-          label={t('settings').customPeriods.time}
-          onClose={() => setShowEndPicker(false)}
-          onConfirm={handleTimePickerChange('end')}
-          use12HourFormat={settings.language === 'en'}
-          translations={{ cancel: t('settings').customPeriods.cancel, confirm: t('settings').customPeriods.confirm }}
-        />
-      )}
+                {/* Search Bar */}
+                <View style={styles.searchContainer}>
+                    <MaterialIcons
+                        name="search"
+                        size={20}
+                        color={Colors.dark.neutral500}
+                        style={styles.searchIcon}
+                    />
+                    <TextInput
+                        style={styles.searchInput}
+                        placeholder={t('settings').group.search}
+                        placeholderTextColor={Colors.dark.neutral500}
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                        autoCapitalize="none"
+                    />
+                    {searchQuery.length > 0 && (
+                        <TouchableOpacity
+                            onPress={handleSearchClear}
+                            style={styles.searchClearButton}
+                        >
+                            <MaterialIcons
+                                name="clear"
+                                size={20}
+                                color={Colors.dark.neutral500}
+                            />
+                        </TouchableOpacity>
+                    )}
+                </View>
 
-      {/* Groups Selection Modal */}
-      <BottomModalPortal
-        isVisible={showGroupModal}
-        onClose={() => {
-          setShowGroupModal(false);
-          setSearchQuery('');
-        }}
-      >
-        <View style={styles.modalHeader}>
-          <Text style={styles.modalTitle}>{t('settings').group.select}</Text>
-          <TouchableOpacity onPress={() => {
-            setShowGroupModal(false);
-            setSearchQuery('');
-          }}>
-            <MaterialIcons name="close" size={24} color={Colors.dark.white} />
-          </TouchableOpacity>
-        </View>
-        
-        {/* Search Bar */}
-        <View style={styles.searchContainer}>
-          <MaterialIcons name="search" size={20} color={Colors.dark.neutral500} style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder={t('settings').group.search}
-            placeholderTextColor={Colors.dark.neutral500}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            autoCapitalize="none"
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={handleSearchClear} style={styles.searchClearButton}>
-              <MaterialIcons name="clear" size={20} color={Colors.dark.neutral500} />
-            </TouchableOpacity>
-          )}
-        </View>
+                {isLoading ?
+                    <View style={styles.loadingContainer}>
+                        <ActivityIndicator
+                            size="large"
+                            color={Colors.dark.primary}
+                        />
+                        <Text style={styles.loadingText}>
+                            {t('settings').group.searching}
+                        </Text>
+                    </View>
+                : error ?
+                    <View style={styles.errorContainer}>
+                        <Text style={styles.errorText}>{error}</Text>
+                    </View>
+                : filteredGroups.length === 0 ?
+                    <ListEmptyComponent />
+                :   <FlatList
+                        ref={flatListRef}
+                        data={filteredGroups}
+                        renderItem={renderGroupItem}
+                        keyExtractor={keyExtractor}
+                        style={styles.groupsList}
+                        contentContainerStyle={styles.groupsListContent}
+                        onScrollToIndexFailed={onScrollToIndexFailed}
+                        keyboardShouldPersistTaps="handled"
+                        initialNumToRender={10}
+                        maxToRenderPerBatch={10}
+                        updateCellsBatchingPeriod={50}
+                        windowSize={5}
+                        removeClippedSubviews={true}
+                        getItemLayout={getItemLayout}
+                        ListEmptyComponent={ListEmptyComponent}
+                        showsVerticalScrollIndicator={false}
+                        maintainVisibleContentPosition={{
+                            minIndexForVisible: 0,
+                            autoscrollToTopThreshold: 10,
+                        }}
+                        // Performance optimizations
+                        bounces={false}
+                        scrollEventThrottle={16}
+                        directionalLockEnabled={true}
+                        disableIntervalMomentum={true}
+                        decelerationRate="fast"
+                    />
+                }
+            </BottomModalPortal>
 
-        {isLoading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={Colors.dark.primary} />
-            <Text style={styles.loadingText}>{t('settings').group.searching}</Text>
-          </View>
-        ) : error ? (
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        ) : filteredGroups.length === 0 ? (
-          <ListEmptyComponent />
-        ) : (
-          <FlatList
-            ref={flatListRef}
-            data={filteredGroups}
-            renderItem={renderGroupItem}
-            keyExtractor={keyExtractor}
-            style={styles.groupsList}
-            contentContainerStyle={styles.groupsListContent}
-            onScrollToIndexFailed={onScrollToIndexFailed}
-            keyboardShouldPersistTaps="handled"
-            initialNumToRender={10}
-            maxToRenderPerBatch={10}
-            updateCellsBatchingPeriod={50}
-            windowSize={5}
-            removeClippedSubviews={true}
-            getItemLayout={getItemLayout}
-            ListEmptyComponent={ListEmptyComponent}
-            showsVerticalScrollIndicator={false}
-            maintainVisibleContentPosition={{
-              minIndexForVisible: 0,
-              autoscrollToTopThreshold: 10
-            }}
-            // Performance optimizations
-            bounces={false}
-            scrollEventThrottle={16}
-            directionalLockEnabled={true}
-            disableIntervalMomentum={true}
-            decelerationRate="fast"
-          />
-        )}
-      </BottomModalPortal>
+            {/* Custom Period Modal */}
+            <BottomModalPortal
+                isVisible={showPeriodModal}
+                onClose={() => {
+                    setShowPeriodModal(false);
+                    resetPeriodForm();
+                }}
+            >
+                <View style={styles.modalHeader}>
+                    <Text style={styles.modalTitle}>
+                        {editingPeriod ?
+                            t('settings').customPeriods.edit
+                        :   t('settings').customPeriods.add}
+                    </Text>
+                    <TouchableOpacity
+                        onPress={() => {
+                            setShowPeriodModal(false);
+                            resetPeriodForm();
+                        }}
+                    >
+                        <MaterialIcons
+                            name="close"
+                            size={24}
+                            color={Colors.dark.white}
+                        />
+                    </TouchableOpacity>
+                </View>
 
-      {/* Custom Period Modal */}
-      <BottomModalPortal
-        isVisible={showPeriodModal}
-        onClose={() => {
-          setShowPeriodModal(false);
-          resetPeriodForm();
-        }}
-      >
-        <View style={styles.modalHeader}>
-          <Text style={styles.modalTitle}>
-            {editingPeriod ? t('settings').customPeriods.edit : t('settings').customPeriods.add}
-          </Text>
-          <TouchableOpacity onPress={() => {
-            setShowPeriodModal(false);
-            resetPeriodForm();
-          }}>
-            <MaterialIcons name="close" size={24} color={Colors.dark.white} />
-          </TouchableOpacity>
-        </View>
+                <View style={styles.formContainer}>
+                    {/* Name Input */}
+                    <View style={styles.formGroup}>
+                        <Text style={styles.formLabel}>
+                            {t('settings').customPeriods.name}
+                        </Text>
+                        <TextInput
+                            style={styles.formInput}
+                            value={periodName}
+                            onChangeText={setPeriodName}
+                            placeholder={t('settings').customPeriods.name}
+                            placeholderTextColor={Colors.dark.neutral500}
+                        />
+                    </View>
 
-        <View style={styles.formContainer}>
-          {/* Name Input */}
-          <View style={styles.formGroup}>
-            <Text style={styles.formLabel}>{t('settings').customPeriods.name}</Text>
-            <TextInput
-              style={styles.formInput}
-              value={periodName}
-              onChangeText={setPeriodName}
-              placeholder={t('settings').customPeriods.name}
-              placeholderTextColor={Colors.dark.neutral500}
-            />
-          </View>
+                    {/* Time Selection */}
+                    <View style={styles.formGroup}>
+                        <Text style={styles.formLabel}>
+                            {t('settings').customPeriods.time}
+                        </Text>
+                        <View style={styles.timeContainer}>
+                            <TouchableOpacity
+                                style={styles.timeButton}
+                                onPress={() => setShowStartPicker(true)}
+                            >
+                                <Text style={styles.timeButtonText}>
+                                    {startTime.toTimeString().slice(0, 5)}
+                                </Text>
+                            </TouchableOpacity>
+                            <Text style={styles.timeSeparator}>-</Text>
+                            <TouchableOpacity
+                                style={styles.timeButton}
+                                onPress={() => setShowEndPicker(true)}
+                            >
+                                <Text style={styles.timeButtonText}>
+                                    {endTime.toTimeString().slice(0, 5)}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
 
-          {/* Time Selection */}
-          <View style={styles.formGroup}>
-            <Text style={styles.formLabel}>{t('settings').customPeriods.time}</Text>
-            <View style={styles.timeContainer}>
-              <TouchableOpacity
-                style={styles.timeButton}
-                onPress={() => setShowStartPicker(true)}
-              >
-                <Text style={styles.timeButtonText}>
-                  {startTime.toTimeString().slice(0, 5)}
-                </Text>
-              </TouchableOpacity>
-              <Text style={styles.timeSeparator}>-</Text>
-              <TouchableOpacity
-                style={styles.timeButton}
-                onPress={() => setShowEndPicker(true)}
-              >
-                <Text style={styles.timeButtonText}>
-                  {endTime.toTimeString().slice(0, 5)}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+                    {/* Days Selection */}
+                    <View style={styles.formGroup}>
+                        <Text style={styles.formLabel}>
+                            {t('settings').customPeriods.days}
+                        </Text>
+                        <View style={styles.daysContainer}>
+                            {[1, 2, 3, 4, 5].map((day) => (
+                                <TouchableOpacity
+                                    key={day}
+                                    style={[
+                                        styles.dayButton,
+                                        selectedDays.includes(day) &&
+                                            styles.selectedDayButton,
+                                    ]}
+                                    onPress={() => toggleDay(day)}
+                                >
+                                    <Text
+                                        style={[
+                                            styles.dayButtonText,
+                                            selectedDays.includes(day) &&
+                                                styles.selectedDayButtonText,
+                                        ]}
+                                    >
+                                        {t('weekdays').short[day]}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </View>
 
-          {/* Days Selection */}
-          <View style={styles.formGroup}>
-            <Text style={styles.formLabel}>{t('settings').customPeriods.days}</Text>
-            <View style={styles.daysContainer}>
-              {[1, 2, 3, 4, 5].map((day) => (
+                    {/* Enabled Toggle */}
+                    <View style={styles.formGroup}>
+                        <View style={styles.switchContainer}>
+                            <Text style={styles.formLabel}>
+                                {t('settings').customPeriods.enabled}
+                            </Text>
+                            <CustomToggle
+                                value={isEnabled}
+                                onValueChange={setIsEnabled}
+                            />
+                        </View>
+                    </View>
+
+                    {/* Save Button */}
+                    <TouchableOpacity
+                        style={styles.saveButton}
+                        onPress={handleSavePeriod}
+                    >
+                        <Text style={styles.saveButtonText}>
+                            {t('settings').customPeriods.save}
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+            </BottomModalPortal>
+
+            {/* Custom Confirmation Dialog */}
+            <BottomModalPortal
+                isVisible={showConfirmDialog}
+                onClose={() => {
+                    setShowConfirmDialog(false);
+                    setPeriodToDelete(null);
+                }}
+            >
+                <View style={styles.confirmDialogContent}>
+                    <Text style={styles.confirmTitle}>
+                        {confirmDialogType === 'idnp' ?
+                            t('settings').idnp.clearConfirmTitle
+                        :   t('settings').customPeriods.deleteConfirmTitle}
+                    </Text>
+                    <Text style={styles.confirmMessage}>
+                        {confirmDialogType === 'idnp' ?
+                            t('settings').idnp.clearConfirmMessage
+                        :   t('settings').customPeriods.deleteConfirmMessage}
+                    </Text>
+
+                    <View style={styles.confirmButtons}>
+                        <TouchableOpacity
+                            style={[styles.confirmButton, styles.cancelButton]}
+                            onPress={() => {
+                                setShowConfirmDialog(false);
+                                setPeriodToDelete(null);
+                            }}
+                        >
+                            <Text style={styles.cancelButtonText}>
+                                {confirmDialogType === 'idnp' ?
+                                    t('settings').idnp.clearConfirmCancel
+                                :   t('settings').customPeriods.cancel}
+                            </Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.confirmButton, styles.clearButton]}
+                            onPress={
+                                confirmDialogType === 'idnp' ?
+                                    handleConfirmClearIdnp
+                                :   handleConfirmDeletePeriod
+                            }
+                        >
+                            <Text style={styles.clearButtonText}>
+                                {confirmDialogType === 'idnp' ?
+                                    t('settings').idnp.clearConfirmConfirm
+                                :   t('settings').customPeriods.delete}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </BottomModalPortal>
+
+            {/* Account Action Sheet */}
+            <BottomModalPortal
+                isVisible={showAccountActionSheet}
+                onClose={() => setShowAccountActionSheet(false)}
+            >
+                <View style={styles.actionSheetHeader}>
+                    <Text style={styles.actionSheetTitle}>
+                        {t('settings').account.actions.title}
+                    </Text>
+                    <TouchableOpacity
+                        style={styles.actionSheetClose}
+                        onPress={() => setShowAccountActionSheet(false)}
+                    >
+                        <MaterialIcons
+                            name="close"
+                            size={24}
+                            color={Colors.dark.white}
+                        />
+                    </TouchableOpacity>
+                </View>
+
                 <TouchableOpacity
-                  key={day}
-                  style={[
-                    styles.dayButton,
-                    selectedDays.includes(day) && styles.selectedDayButton
-                  ]}
-                  onPress={() => toggleDay(day)}
+                    style={styles.actionSheetButton}
+                    onPress={handleLogout}
                 >
-                  <Text style={[
-                    styles.dayButtonText,
-                    selectedDays.includes(day) && styles.selectedDayButtonText
-                  ]}>
-                    {t('weekdays').short[day]}
-                  </Text>
+                    <MaterialIcons
+                        name="logout"
+                        size={24}
+                        color={Colors.dark.lightPink}
+                    />
+                    <Text
+                        style={[
+                            styles.actionSheetButtonText,
+                            { color: Colors.dark.lightPink },
+                        ]}
+                    >
+                        {t('settings').account.actions.logout}
+                    </Text>
                 </TouchableOpacity>
-              ))}
-            </View>
-          </View>
 
-          {/* Enabled Toggle */}
-          <View style={styles.formGroup}>
-            <View style={styles.switchContainer}>
-              <Text style={styles.formLabel}>{t('settings').customPeriods.enabled}</Text>
-              <CustomToggle
-                value={isEnabled}
-                onValueChange={setIsEnabled}
-              />
-            </View>
-          </View>
+                <TouchableOpacity
+                    style={styles.actionSheetButton}
+                    onPress={() => {
+                        setShowAccountActionSheet(false);
+                        setShowDeleteAccountConfirm(true);
+                    }}
+                >
+                    <MaterialIcons
+                        name="delete-forever"
+                        size={24}
+                        color={Colors.dark.lightPink}
+                    />
+                    <Text
+                        style={[
+                            styles.actionSheetButtonText,
+                            { color: Colors.dark.lightPink },
+                        ]}
+                    >
+                        {t('settings').account.actions.delete}
+                    </Text>
+                </TouchableOpacity>
+            </BottomModalPortal>
 
-          {/* Save Button */}
-          <TouchableOpacity
-            style={styles.saveButton}
-            onPress={handleSavePeriod}
-          >
-            <Text style={styles.saveButtonText}>{t('settings').customPeriods.save}</Text>
-          </TouchableOpacity>
-        </View>
-      </BottomModalPortal>
-
-      {/* Custom Confirmation Dialog */}
-      <BottomModalPortal
-        isVisible={showConfirmDialog}
-        onClose={() => {
-          setShowConfirmDialog(false);
-          setPeriodToDelete(null);
-        }}
-      >
-        <View style={styles.confirmDialogContent}>
-          <Text style={styles.confirmTitle}>
-            {confirmDialogType === 'idnp' 
-              ? t('settings').idnp.clearConfirmTitle 
-              : t('settings').customPeriods.deleteConfirmTitle}
-          </Text>
-          <Text style={styles.confirmMessage}>
-            {confirmDialogType === 'idnp'
-              ? t('settings').idnp.clearConfirmMessage
-              : t('settings').customPeriods.deleteConfirmMessage}
-          </Text>
-          
-          <View style={styles.confirmButtons}>
-            <TouchableOpacity
-              style={[styles.confirmButton, styles.cancelButton]}
-              onPress={() => {
-                setShowConfirmDialog(false);
-                setPeriodToDelete(null);
-              }}
+            {/* Delete Account Confirmation */}
+            <BottomModalPortal
+                isVisible={showDeleteAccountConfirm}
+                onClose={() => setShowDeleteAccountConfirm(false)}
             >
-              <Text style={styles.cancelButtonText}>
-                {confirmDialogType === 'idnp'
-                  ? t('settings').idnp.clearConfirmCancel
-                  : t('settings').customPeriods.cancel}
-              </Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[styles.confirmButton, styles.clearButton]}
-              onPress={confirmDialogType === 'idnp' ? handleConfirmClearIdnp : handleConfirmDeletePeriod}
+                <View style={styles.confirmDialogContent}>
+                    <Text style={styles.confirmTitle}>
+                        {t('settings').account.deleteConfirm.title}
+                    </Text>
+                    <Text style={styles.confirmMessage}>
+                        {t('settings').account.deleteConfirm.message}
+                    </Text>
+
+                    <View style={styles.confirmButtons}>
+                        <TouchableOpacity
+                            style={[styles.confirmButton, styles.cancelButton]}
+                            onPress={() => setShowDeleteAccountConfirm(false)}
+                        >
+                            <Text style={styles.cancelButtonText}>
+                                {t('settings').account.deleteConfirm.cancel}
+                            </Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.confirmButton, styles.deleteButton]}
+                            onPress={() => {
+                                setShowDeleteAccountConfirm(false);
+                                setShowPasswordModal(true);
+                            }}
+                        >
+                            <Text style={styles.deleteButtonText}>
+                                {t('settings').account.deleteConfirm.confirm}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </BottomModalPortal>
+
+            {/* Password Confirmation Modal */}
+            <BottomModalPortal
+                isVisible={showPasswordModal}
+                onClose={() => {
+                    setShowPasswordModal(false);
+                    setPasswordForDeletion('');
+                    setPasswordError(null);
+                }}
             >
-              <Text style={styles.clearButtonText}>
-                {confirmDialogType === 'idnp'
-                  ? t('settings').idnp.clearConfirmConfirm
-                  : t('settings').customPeriods.delete}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </BottomModalPortal>
+                <View style={styles.confirmDialogContent}>
+                    <Text style={styles.confirmTitle}>
+                        Confirm Account Deletion
+                    </Text>
+                    <Text style={styles.confirmMessage}>
+                        Please enter your password to confirm account deletion.
+                    </Text>
 
-      {/* Account Action Sheet */}
-      <BottomModalPortal
-        isVisible={showAccountActionSheet}
-        onClose={() => setShowAccountActionSheet(false)}
-      >
-        <View style={styles.actionSheetHeader}>
-          <Text style={styles.actionSheetTitle}>
-            {t('settings').account.actions.title}
-          </Text>
-          <TouchableOpacity 
-            style={styles.actionSheetClose}
-            onPress={() => setShowAccountActionSheet(false)}
-          >
-            <MaterialIcons name="close" size={24} color={Colors.dark.white} />
-          </TouchableOpacity>
-        </View>
+                    <View
+                        style={[
+                            styles.passwordInputContainer,
+                            passwordError ? styles.passwordInputError : null,
+                        ]}
+                    >
+                        <TextInput
+                            style={styles.passwordInput}
+                            placeholder="Your password"
+                            placeholderTextColor={Colors.dark.neutral500}
+                            secureTextEntry
+                            value={passwordForDeletion}
+                            onChangeText={(text) => {
+                                setPasswordForDeletion(text);
+                                if (passwordError) setPasswordError(null);
+                            }}
+                            editable={!deletingAccount}
+                        />
+                    </View>
 
-        <TouchableOpacity
-          style={styles.actionSheetButton}
-          onPress={handleLogout}
-        >
-          <MaterialIcons name="logout" size={24} color={Colors.dark.lightPink} />
-          <Text style={[styles.actionSheetButtonText, { color: Colors.dark.lightPink }]}>
-            {t('settings').account.actions.logout}
-          </Text>
-        </TouchableOpacity>
+                    {passwordError && (
+                        <Text style={styles.errorText}>{passwordError}</Text>
+                    )}
 
-        <TouchableOpacity
-          style={styles.actionSheetButton}
-          onPress={() => {
-            setShowAccountActionSheet(false);
-            setShowDeleteAccountConfirm(true);
-          }}
-        >
-          <MaterialIcons name="delete-forever" size={24} color={Colors.dark.lightPink} />
-          <Text style={[styles.actionSheetButtonText, { color: Colors.dark.lightPink }]}>
-            {t('settings').account.actions.delete}
-          </Text>
-        </TouchableOpacity>
-      </BottomModalPortal>
+                    <View style={styles.confirmButtons}>
+                        <TouchableOpacity
+                            style={[styles.confirmButton, styles.cancelButton]}
+                            onPress={() => {
+                                setShowPasswordModal(false);
+                                setPasswordForDeletion('');
+                                setPasswordError(null);
+                            }}
+                            disabled={deletingAccount}
+                        >
+                            <Text style={styles.cancelButtonText}>Cancel</Text>
+                        </TouchableOpacity>
 
-      {/* Delete Account Confirmation */}
-      <BottomModalPortal
-        isVisible={showDeleteAccountConfirm}
-        onClose={() => setShowDeleteAccountConfirm(false)}
-      >
-        <View style={styles.confirmDialogContent}>
-          <Text style={styles.confirmTitle}>
-            {t('settings').account.deleteConfirm.title}
-          </Text>
-          <Text style={styles.confirmMessage}>
-            {t('settings').account.deleteConfirm.message}
-          </Text>
-          
-          <View style={styles.confirmButtons}>
-            <TouchableOpacity
-              style={[styles.confirmButton, styles.cancelButton]}
-              onPress={() => setShowDeleteAccountConfirm(false)}
+                        <TouchableOpacity
+                            style={[styles.confirmButton, styles.deleteButton]}
+                            onPress={handleDeleteAccount}
+                            disabled={deletingAccount}
+                        >
+                            {deletingAccount ?
+                                <ActivityIndicator
+                                    size="small"
+                                    color={Colors.dark.white}
+                                />
+                            :   <Text style={styles.deleteButtonText}>
+                                    Delete
+                                </Text>
+                            }
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </BottomModalPortal>
+
+            {/* Deletion Success Modal */}
+            <BottomModalPortal
+                isVisible={showDeletionSuccessModal}
+                onClose={() => completeAccountDeletion()}
             >
-              <Text style={styles.cancelButtonText}>
-                {t('settings').account.deleteConfirm.cancel}
-              </Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[styles.confirmButton, styles.deleteButton]}
-              onPress={() => {
-                setShowDeleteAccountConfirm(false);
-                setShowPasswordModal(true);
-              }}
-            >
-              <Text style={styles.deleteButtonText}>
-                {t('settings').account.deleteConfirm.confirm}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </BottomModalPortal>
-      
-      {/* Password Confirmation Modal */}
-      <BottomModalPortal
-        isVisible={showPasswordModal}
-        onClose={() => {
-          setShowPasswordModal(false);
-          setPasswordForDeletion('');
-          setPasswordError(null);
-        }}
-      >
-        <View style={styles.confirmDialogContent}>
-          <Text style={styles.confirmTitle}>Confirm Account Deletion</Text>
-          <Text style={styles.confirmMessage}>
-            Please enter your password to confirm account deletion.
-          </Text>
-          
-          <View style={[
-            styles.passwordInputContainer,
-            passwordError ? styles.passwordInputError : null
-          ]}>
-            <TextInput
-              style={styles.passwordInput}
-              placeholder="Your password"
-              placeholderTextColor={Colors.dark.neutral500}
-              secureTextEntry
-              value={passwordForDeletion}
-              onChangeText={(text) => {
-                setPasswordForDeletion(text);
-                if (passwordError) setPasswordError(null);
-              }}
-              editable={!deletingAccount}
+                <View style={styles.confirmDialogContent}>
+                    <View style={styles.successIconContainer}>
+                        <MaterialIcons
+                            name="check-circle"
+                            size={64}
+                            color={Colors.dark.green}
+                        />
+                    </View>
+
+                    <Text style={styles.confirmTitle}>
+                        Deletion Request Sent
+                    </Text>
+                    <Text style={styles.confirmMessage}>
+                        {
+                            "We've sent a confirmation email to verify your account deletion request. Please check your email inbox and follow the instructions to complete the process."
+                        }
+                    </Text>
+
+                    <TouchableOpacity
+                        style={styles.emailButton}
+                        onPress={openEmailApp}
+                    >
+                        <MaterialIcons
+                            name="email"
+                            size={20}
+                            color={Colors.dark.white}
+                        />
+                        <Text style={styles.emailButtonText}>
+                            Open Email App
+                        </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.doneButton}
+                        onPress={completeAccountDeletion}
+                    >
+                        <Text style={styles.doneButtonText}>Done</Text>
+                    </TouchableOpacity>
+                </View>
+            </BottomModalPortal>
+
+            {/* Notification time picker modal */}
+            {showNotificationTimeModal && (
+                <TimePicker
+                    value={tempNotificationTime}
+                    onChange={handleNotificationTimeChange}
+                    label={t('settings').notifications.selectTime}
+                    onClose={handleCloseTimePicker}
+                    onConfirm={handleConfirmTimePicker}
+                    use12HourFormat={true}
+                    translations={{
+                        cancel: t('settings').customPeriods.cancel,
+                        confirm: t('settings').customPeriods.confirm,
+                    }}
+                />
+            )}
+
+            {/* Storage Content Modal */}
+            <StorageViewer
+                visible={storageModalVisible}
+                onClose={() => setStorageModalVisible(false)}
+                items={storageItems}
             />
-          </View>
-          
-          {passwordError && (
-            <Text style={styles.errorText}>{passwordError}</Text>
-          )}
-          
-          <View style={styles.confirmButtons}>
-            <TouchableOpacity
-              style={[styles.confirmButton, styles.cancelButton]}
-              onPress={() => {
-                setShowPasswordModal(false);
-                setPasswordForDeletion('');
-                setPasswordError(null);
-              }}
-              disabled={deletingAccount}
-            >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[styles.confirmButton, styles.deleteButton]}
-              onPress={handleDeleteAccount}
-              disabled={deletingAccount}
-            >
-              {deletingAccount ? (
-                <ActivityIndicator size="small" color={Colors.dark.white} />
-              ) : (
-                <Text style={styles.deleteButtonText}>Delete</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-      </BottomModalPortal>
-
-      {/* Deletion Success Modal */}
-      <BottomModalPortal
-        isVisible={showDeletionSuccessModal}
-        onClose={() => completeAccountDeletion()}
-      >
-        <View style={styles.confirmDialogContent}>
-          <View style={styles.successIconContainer}>
-            <MaterialIcons name="check-circle" size={64} color={Colors.dark.green} />
-          </View>
-          
-          <Text style={styles.confirmTitle}>Deletion Request Sent</Text>
-          <Text style={styles.confirmMessage}>
-            We've sent a confirmation email to verify your account deletion request. 
-            Please check your email inbox and follow the instructions to complete the process.
-          </Text>
-          
-          <TouchableOpacity
-            style={styles.emailButton}
-            onPress={openEmailApp}
-          >
-            <MaterialIcons name="email" size={20} color={Colors.dark.white} />
-            <Text style={styles.emailButtonText}>Open Email App</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={styles.doneButton}
-            onPress={completeAccountDeletion}
-          >
-            <Text style={styles.doneButtonText}>Done</Text>
-          </TouchableOpacity>
-        </View>
-      </BottomModalPortal>
-
-      {/* Notification time picker modal */}
-      {showNotificationTimeModal && (
-        <TimePicker 
-          value={tempNotificationTime}
-          onChange={handleNotificationTimeChange}
-          label={t('settings').notifications.selectTime}
-          onClose={handleCloseTimePicker}
-          onConfirm={handleConfirmTimePicker}
-          use12HourFormat={true}
-          translations={{
-            cancel: t('settings').customPeriods.cancel,
-            confirm: t('settings').customPeriods.confirm
-          }}
-        />
-      )}
-
-      {/* Storage Content Modal */}
-      <StorageViewer 
-        visible={storageModalVisible}
-        onClose={() => setStorageModalVisible(false)}
-        items={storageItems}
-      />
-    </SafeAreaView>
-  );
+        </SafeAreaView>
+    );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.dark.backgroundTertiary,
-  },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 100,
-  },
-  section: {
-    marginBottom: 32,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: Colors.dark.white,
-    textAlignVertical: 'center',
-  },
-  optionsContainer: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  optionButton: {
-    flex: 1,
-    backgroundColor: Colors.dark.surfaceSecondary,
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  selectedOption: {
-    backgroundColor: Colors.dark.primaryStrong,
-  },
-  optionText: {
-    color: Colors.dark.mutedText,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  selectedOptionText: {
-    color: Colors.dark.white,
-  },
-  classSelector: {
-    backgroundColor: Colors.dark.surfaceSecondary,
-    padding: 16,
-    borderRadius: 12,
-  },
-  classSelectorContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  selectedClassName: {
-    color: Colors.dark.white,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: Colors.dark.overlayBlack70,
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: Colors.dark.backgroundTertiary,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    maxHeight: '80%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.dark.modalBorderColor,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: Colors.dark.white,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    backgroundColor: Colors.dark.surfaceSecondary,
-    borderRadius: 12,
-    marginBottom: 16,
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-    alignItems: 'center',
-  },
-  searchIcon: {
-    marginRight: 10,
-  },
-  searchInput: {
-    flex: 1,
-    color: Colors.dark.white,
-    fontSize: 16,
-    padding: 0,
-  },
-  searchClearButton: {
-    padding: 5,
-  },
-  groupsList: {
-    width: '100%',
-  },
-  groupsListContent: {
-    paddingBottom: 20,
-  },
-  groupItem: {
-    backgroundColor: Colors.dark.surfaceSecondary,
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 10,
-  },
-  selectedGroupItem: {
-    backgroundColor: Colors.dark.primary,
-  },
-  groupItemText: {
-    color: Colors.dark.white,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  teacherText: {
-    color: Colors.dark.mutedText,
-    fontSize: 14,
-    marginTop: 4,
-  },
-  selectedTeacherText: {
-    color: Colors.dark.overlayWhite80,
-  },
-  loadingContainer: {
-    padding: 30,
-    alignItems: 'center',
-  },
-  loadingText: {
-    color: Colors.dark.mutedText,
-    marginTop: 10,
-    fontSize: 16,
-  },
-  errorContainer: {
-    padding: 30,
-    alignItems: 'center',
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    justifyContent: 'flex-start',
-  },
-  sectionHeaderWithAction: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    justifyContent: 'space-between',
-  },
-  sectionHeaderContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  sectionIcon: {
-    marginRight: 8,
-  },
-  addButton: {
-    backgroundColor: Colors.dark.primaryStrong,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  periodsListContainer: {
-    gap: 12,
-  },
-  periodItem: {
-    backgroundColor: Colors.dark.surfaceSecondary,
-    borderRadius: 12,
-    padding: 16,
-  },
-  periodItemHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  colorDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 8,
-  },
-  periodName: {
-    color: Colors.dark.white,
-    fontSize: 16,
-    fontWeight: '600',
-    flex: 1,
-  },
-  periodItemContent: {
-    marginBottom: 12,
-  },
-  periodTime: {
-    color: Colors.dark.mutedText,
-    fontSize: 14,
-    marginBottom: 4,
-  },
-  periodDays: {
-    color: Colors.dark.mutedText,
-    fontSize: 14,
-  },
-  periodItemActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 16,
-  },
-  periodAction: {
-    padding: 4,
-  },
-  noPeriods: {
-    color: Colors.dark.mutedText,
-    textAlign: 'center',
-    padding: 20,
-  },
-  formContainer: {
-    gap: 20,
-  },
-  formGroup: {
-    gap: 8,
-  },
-  formLabel: {
-    color: Colors.dark.white,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  formInput: {
-    backgroundColor: Colors.dark.surfaceSecondary,
-    borderRadius: 12,
-    padding: 16,
-    color: Colors.dark.white,
-    fontSize: 16,
-  },
-  timeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  timeButton: {
-    flexDirection: 'row',
-    backgroundColor: Colors.dark.surfaceSecondary,
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-  },
-  timeButtonText: {
-    color: Colors.dark.white,
-    fontSize: 16,
-  },
-  timeButtonIcon: {
-    marginLeft: 8,
-  },
-  timeSeparator: {
-    color: Colors.dark.white,
-    fontSize: 20,
-  },
-  daysContainer: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  dayButton: {
-    flex: 1,
-    backgroundColor: Colors.dark.surfaceSecondary,
-    borderRadius: 12,
-    padding: 12,
-    alignItems: 'center',
-  },
-  selectedDayButton: {
-    backgroundColor: Colors.dark.primaryStrong,
-  },
-  dayButtonText: {
-    color: Colors.dark.mutedText,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  selectedDayButtonText: {
-    color: Colors.dark.white,
-  },
-  colorPreview: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: Colors.dark.surfaceSecondary,
-  },
-  switchContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  saveButton: {
-    backgroundColor: Colors.dark.primaryStrong,
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  saveButtonText: {
-    color: Colors.dark.white,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  clearIdnpButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.dark.surfaceSecondary,
-    padding: 16,
-    borderRadius: 12,
-  },
-  clearIdnpText: {
-    color: Colors.dark.lightPink,
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  confirmOverlay: {
-    flex: 1,
-    backgroundColor: Colors.dark.overlayBlack70,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  confirmDialog: {
-    backgroundColor: Colors.dark.backgroundTertiary,
-    borderRadius: 20,
-    padding: 20,
-    width: '80%',
-    maxWidth: 400,
-  },
-  confirmDialogContent: {
-    paddingHorizontal: 16,
-    paddingVertical: 20,
-  },
-  confirmTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: Colors.dark.white,
-    marginBottom: 12,
-  },
-  confirmMessage: {
-    color: Colors.dark.mutedText,
-    fontSize: 16,
-    marginBottom: 16,
-    marginTop: 8,
-  },
-  confirmButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 20,
-    gap: 12,
-  },
-  confirmButton: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  cancelButton: {
-    backgroundColor: Colors.dark.surfaceSecondary,
-  },
-  clearButton: {
-    backgroundColor: Colors.dark.lightPink,
-  },
-  cancelButtonText: {
-    color: Colors.dark.white,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  clearButtonText: {
-    color: Colors.dark.white,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  timePickerOverlay: {
-    flex: 1,
-    backgroundColor: Colors.dark.overlayBlack70,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  timePickerContainer: {
-    backgroundColor: Colors.dark.backgroundTertiary,
-    borderRadius: 20,
-    padding: 24,
-    width: '90%',
-    maxWidth: 400,
-    elevation: 5,
-    shadowColor: Colors.dark.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-  },
-  timePickerHeader: {
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  timePickerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: Colors.dark.white,
-    marginBottom: 8,
-  },
-  timePickerValue: {
-    fontSize: 16,
-    color: Colors.dark.mutedText,
-  },
-  timePickerContent: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24,
-    marginTop: 12,
-  },
-  timePickerColumn: {
-    flex: 1,
-    alignItems: 'center',
-    backgroundColor: Colors.dark.surfaceSecondary,
-    borderRadius: 12,
-    overflow: 'hidden',
-    minWidth: 100,
-  },
-  timePickerItem: {
-    height: 56,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  timePickerItemText: {
-    fontSize: 38,
-    color: Colors.dark.mutedText,
-    opacity: 0.15,
-    fontWeight: '400',
-  },
-  timePickerItemTextSelected: {
-    fontSize: 44,
-    color: Colors.dark.white,
-    opacity: 1,
-    fontWeight: '600',
-  },
-  timePickerSeparator: {
-    fontSize: 52,
-    color: Colors.dark.white,
-    marginHorizontal: 20,
-    opacity: 0.8,
-    fontWeight: '300',
-  },
-  timePickerPeriodButton: {
-    marginLeft: 20,
-    backgroundColor: Colors.dark.surfaceSecondary,
-    borderRadius: 12,
-    padding: 12,
-    width: 60,
-    height: 80,
-    justifyContent: 'space-evenly',
-  },
-  timePickerPeriodText: {
-    fontSize: 20,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  timePickerActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 12,
-    marginTop: 20,
-  },
-  timePickerButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-  },
-  timePickerCancelButton: {
-    backgroundColor: Colors.dark.surfaceSecondary,
-  },
-  timePickerConfirmButton: {
-    backgroundColor: Colors.dark.primaryStrong,
-  },
-  timePickerButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.dark.white,
-  },
-  timePickerConfirmText: {
-    color: Colors.dark.white,
-    fontWeight: '600',
-  },
-  periodSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  toggleContainer: {
-    width: 50,
-    height: 30,
-    borderRadius: 15,
-    padding: 2,
-    justifyContent: 'center',
-  },
-  toggleThumb: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: Colors.dark.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  toggleIcon: {
-    position: 'absolute',
-    top: 6,
-    left: 6,
-  },
-  languageSelector: {
-    backgroundColor: Colors.dark.surfaceSecondary,
-    padding: 16,
-    borderRadius: 12,
-  },
-  languageSelectorContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  selectedLanguageIcon: {
-    fontSize: 20,
-    marginRight: 12,
-  },
-  selectedLanguageName: {
-    color: Colors.dark.white,
-    fontSize: 16,
-    fontWeight: '600',
-    flex: 1,
-  },
-  languagesList: {
-    gap: 8,
-  },
-  languageOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.dark.surfaceSecondary,
-    padding: 16,
-    borderRadius: 12,
-  },
-  selectedLanguageOption: {
-    backgroundColor: Colors.dark.primaryStrong,
-  },
-  languageIcon: {
-    fontSize: 20,
-    marginRight: 12,
-  },
-  languageOptionText: {
-    color: Colors.dark.mutedText,
-    fontSize: 16,
-    fontWeight: '600',
-    flex: 1,
-  },
-  selectedLanguageOptionText: {
-    color: Colors.dark.white,
-  },
-  // Account section styles
-  accountInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.dark.surfaceSecondary,
-    padding: 16,
-    borderRadius: 12,
-  },
-  accountAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.dark.primaryStrong,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  avatarText: {
-    color: Colors.dark.white,
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  accountDetails: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginRight: 4,
-  },
-  accountDetailsContent: {
-    flex: 1,
-    marginRight: 12,
-  },
-  accountEmail: {
-    color: Colors.dark.white,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  verificationBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  verificationText: {
-    color: Colors.dark.orange,
-    fontSize: 14,
-    marginLeft: 4,
-  },
-  accountActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 16,
-  },
-  accountAction: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.dark.backgroundTertiary,
-    padding: 12,
-    borderRadius: 12,
-    flex: 1,
-    marginRight: 8,
-  },
-  accountActionText: {
-    color: Colors.dark.primaryStrong,
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  signInButton: {
-    backgroundColor: Colors.dark.primaryStrong,
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  signInButtonText: {
-    color: Colors.dark.white,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  actionSheetOverlay: {
-    flex: 1,
-    backgroundColor: Colors.dark.overlayBlack70,
-    justifyContent: 'flex-end',
-  },
-  actionSheet: {
-    backgroundColor: Colors.dark.backgroundTertiary,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-  },
-  actionSheetHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  actionSheetTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: Colors.dark.white,
-  },
-  actionSheetClose: {
-    padding: 5,
-  },
-  actionSheetButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    backgroundColor: Colors.dark.surfaceSecondary,
-  },
-  actionSheetButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 12,
-  },
-  deleteButton: {
-    backgroundColor: Colors.dark.lightPink,
-  },
-  deleteButtonText: {
-    color: Colors.dark.white,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  passwordInputContainer: {
-    width: '100%',
-    backgroundColor: Colors.dark.surfaceSecondary,
-    borderRadius: 10,
-    marginTop: 10,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: Colors.dark.transparent,
-  },
-  
-  passwordInputError: {
-    borderColor: Colors.dark.lightPink,
-  },
-  
-  passwordInput: {
-    height: 50,
-    paddingHorizontal: 15,
-    color: Colors.dark.white,
-  },
-  
-  errorText: {
-    color: Colors.dark.lightPink,
-    fontSize: 14,
-    marginBottom: 12,
-    paddingHorizontal: 5,
-  },
-  
-  successIconContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: Colors.dark.successIconColor,
-    justifyContent: 'center',
-    alignItems: 'center',
-    alignSelf: 'center',
-    marginBottom: 16,
-  },
-  
-  emailButton: {
-    flexDirection: 'row',
-    backgroundColor: Colors.dark.primaryStrong,
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 16,
-    marginBottom: 8,
-    gap: 8,
-  },
-  
-  emailButtonText: {
-    color: Colors.dark.white,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  
-  doneButton: {
-    backgroundColor: Colors.dark.surfaceSecondary,
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-  },
-  
-  doneButtonText: {
-    color: Colors.dark.mutedText,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-    devToolsList: {
-    gap: 12,
-  },
-  devToolButton: {
-    backgroundColor: Colors.dark.surfaceSecondary,
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-    devToolButtonRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
+    container: {
+        flex: 1,
+        backgroundColor: Colors.dark.backgroundTertiary,
     },
-  devToolText: {
-    color: Colors.dark.white,
-    fontSize: 14,
-    fontWeight: '600',
-    marginTop: 8,
-    textAlign: 'center',
-  },
+    scrollContent: {
+        padding: 20,
+        paddingBottom: 100,
+    },
+    section: {
+        marginBottom: 32,
+    },
+    sectionTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: Colors.dark.white,
+        textAlignVertical: 'center',
+    },
+    optionsContainer: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    optionButton: {
+        flex: 1,
+        backgroundColor: Colors.dark.surfaceSecondary,
+        padding: 16,
+        borderRadius: 12,
+        alignItems: 'center',
+    },
+    selectedOption: {
+        backgroundColor: Colors.dark.primaryStrong,
+    },
+    optionText: {
+        color: Colors.dark.mutedText,
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    selectedOptionText: {
+        color: Colors.dark.white,
+    },
+    classSelector: {
+        backgroundColor: Colors.dark.surfaceSecondary,
+        padding: 16,
+        borderRadius: 12,
+    },
+    classSelectorContent: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    selectedClassName: {
+        color: Colors.dark.white,
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: Colors.dark.overlayBlack70,
+        justifyContent: 'flex-end',
+    },
+    modalContent: {
+        backgroundColor: Colors.dark.backgroundTertiary,
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        padding: 20,
+        maxHeight: '80%',
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 20,
+        paddingBottom: 15,
+        borderBottomWidth: 1,
+        borderBottomColor: Colors.dark.modalBorderColor,
+    },
+    modalTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: Colors.dark.white,
+    },
+    searchContainer: {
+        flexDirection: 'row',
+        backgroundColor: Colors.dark.surfaceSecondary,
+        borderRadius: 12,
+        marginBottom: 16,
+        paddingVertical: 10,
+        paddingHorizontal: 15,
+        alignItems: 'center',
+    },
+    searchIcon: {
+        marginRight: 10,
+    },
+    searchInput: {
+        flex: 1,
+        color: Colors.dark.white,
+        fontSize: 16,
+        padding: 0,
+    },
+    searchClearButton: {
+        padding: 5,
+    },
+    groupsList: {
+        width: '100%',
+    },
+    groupsListContent: {
+        paddingBottom: 20,
+    },
+    groupItem: {
+        backgroundColor: Colors.dark.surfaceSecondary,
+        padding: 16,
+        borderRadius: 12,
+        marginBottom: 10,
+    },
+    selectedGroupItem: {
+        backgroundColor: Colors.dark.primary,
+    },
+    groupItemText: {
+        color: Colors.dark.white,
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    teacherText: {
+        color: Colors.dark.mutedText,
+        fontSize: 14,
+        marginTop: 4,
+    },
+    selectedTeacherText: {
+        color: Colors.dark.overlayWhite80,
+    },
+    loadingContainer: {
+        padding: 30,
+        alignItems: 'center',
+    },
+    loadingText: {
+        color: Colors.dark.mutedText,
+        marginTop: 10,
+        fontSize: 16,
+    },
+    errorContainer: {
+        padding: 30,
+        alignItems: 'center',
+    },
+    sectionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 12,
+        justifyContent: 'flex-start',
+    },
+    sectionHeaderWithAction: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 12,
+        justifyContent: 'space-between',
+    },
+    sectionHeaderContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+    },
+    sectionIcon: {
+        marginRight: 8,
+    },
+    addButton: {
+        backgroundColor: Colors.dark.primaryStrong,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    periodsListContainer: {
+        gap: 12,
+    },
+    periodItem: {
+        backgroundColor: Colors.dark.surfaceSecondary,
+        borderRadius: 12,
+        padding: 16,
+    },
+    periodItemHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    colorDot: {
+        width: 12,
+        height: 12,
+        borderRadius: 6,
+        marginRight: 8,
+    },
+    periodName: {
+        color: Colors.dark.white,
+        fontSize: 16,
+        fontWeight: '600',
+        flex: 1,
+    },
+    periodItemContent: {
+        marginBottom: 12,
+    },
+    periodTime: {
+        color: Colors.dark.mutedText,
+        fontSize: 14,
+        marginBottom: 4,
+    },
+    periodDays: {
+        color: Colors.dark.mutedText,
+        fontSize: 14,
+    },
+    periodItemActions: {
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        gap: 16,
+    },
+    periodAction: {
+        padding: 4,
+    },
+    noPeriods: {
+        color: Colors.dark.mutedText,
+        textAlign: 'center',
+        padding: 20,
+    },
+    formContainer: {
+        gap: 20,
+    },
+    formGroup: {
+        gap: 8,
+    },
+    formLabel: {
+        color: Colors.dark.white,
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    formInput: {
+        backgroundColor: Colors.dark.surfaceSecondary,
+        borderRadius: 12,
+        padding: 16,
+        color: Colors.dark.white,
+        fontSize: 16,
+    },
+    timeContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    timeButton: {
+        flexDirection: 'row',
+        backgroundColor: Colors.dark.surfaceSecondary,
+        alignItems: 'center',
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+    },
+    timeButtonText: {
+        color: Colors.dark.white,
+        fontSize: 16,
+    },
+    timeButtonIcon: {
+        marginLeft: 8,
+    },
+    timeSeparator: {
+        color: Colors.dark.white,
+        fontSize: 20,
+    },
+    daysContainer: {
+        flexDirection: 'row',
+        gap: 8,
+    },
+    dayButton: {
+        flex: 1,
+        backgroundColor: Colors.dark.surfaceSecondary,
+        borderRadius: 12,
+        padding: 12,
+        alignItems: 'center',
+    },
+    selectedDayButton: {
+        backgroundColor: Colors.dark.primaryStrong,
+    },
+    dayButtonText: {
+        color: Colors.dark.mutedText,
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    selectedDayButtonText: {
+        color: Colors.dark.white,
+    },
+    colorPreview: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        borderWidth: 2,
+        borderColor: Colors.dark.surfaceSecondary,
+    },
+    switchContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    saveButton: {
+        backgroundColor: Colors.dark.primaryStrong,
+        borderRadius: 12,
+        padding: 16,
+        alignItems: 'center',
+        marginTop: 20,
+    },
+    saveButtonText: {
+        color: Colors.dark.white,
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    clearIdnpButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: Colors.dark.surfaceSecondary,
+        padding: 16,
+        borderRadius: 12,
+    },
+    clearIdnpText: {
+        color: Colors.dark.lightPink,
+        fontSize: 16,
+        fontWeight: '600',
+        marginLeft: 8,
+    },
+    confirmOverlay: {
+        flex: 1,
+        backgroundColor: Colors.dark.overlayBlack70,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    confirmDialog: {
+        backgroundColor: Colors.dark.backgroundTertiary,
+        borderRadius: 20,
+        padding: 20,
+        width: '80%',
+        maxWidth: 400,
+    },
+    confirmDialogContent: {
+        paddingHorizontal: 16,
+        paddingVertical: 20,
+    },
+    confirmTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: Colors.dark.white,
+        marginBottom: 12,
+    },
+    confirmMessage: {
+        color: Colors.dark.mutedText,
+        fontSize: 16,
+        marginBottom: 16,
+        marginTop: 8,
+    },
+    confirmButtons: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 20,
+        gap: 12,
+    },
+    confirmButton: {
+        flex: 1,
+        padding: 12,
+        borderRadius: 12,
+        alignItems: 'center',
+    },
+    cancelButton: {
+        backgroundColor: Colors.dark.surfaceSecondary,
+    },
+    clearButton: {
+        backgroundColor: Colors.dark.lightPink,
+    },
+    cancelButtonText: {
+        color: Colors.dark.white,
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    clearButtonText: {
+        color: Colors.dark.white,
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    timePickerOverlay: {
+        flex: 1,
+        backgroundColor: Colors.dark.overlayBlack70,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    timePickerContainer: {
+        backgroundColor: Colors.dark.backgroundTertiary,
+        borderRadius: 20,
+        padding: 24,
+        width: '90%',
+        maxWidth: 400,
+        elevation: 5,
+        shadowColor: Colors.dark.black,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 8,
+    },
+    timePickerHeader: {
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    timePickerTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: Colors.dark.white,
+        marginBottom: 8,
+    },
+    timePickerValue: {
+        fontSize: 16,
+        color: Colors.dark.mutedText,
+    },
+    timePickerContent: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 24,
+        marginTop: 12,
+    },
+    timePickerColumn: {
+        flex: 1,
+        alignItems: 'center',
+        backgroundColor: Colors.dark.surfaceSecondary,
+        borderRadius: 12,
+        overflow: 'hidden',
+        minWidth: 100,
+    },
+    timePickerItem: {
+        height: 56,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    timePickerItemText: {
+        fontSize: 38,
+        color: Colors.dark.mutedText,
+        opacity: 0.15,
+        fontWeight: '400',
+    },
+    timePickerItemTextSelected: {
+        fontSize: 44,
+        color: Colors.dark.white,
+        opacity: 1,
+        fontWeight: '600',
+    },
+    timePickerSeparator: {
+        fontSize: 52,
+        color: Colors.dark.white,
+        marginHorizontal: 20,
+        opacity: 0.8,
+        fontWeight: '300',
+    },
+    timePickerPeriodButton: {
+        marginLeft: 20,
+        backgroundColor: Colors.dark.surfaceSecondary,
+        borderRadius: 12,
+        padding: 12,
+        width: 60,
+        height: 80,
+        justifyContent: 'space-evenly',
+    },
+    timePickerPeriodText: {
+        fontSize: 20,
+        fontWeight: '600',
+        textAlign: 'center',
+    },
+    timePickerActions: {
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        gap: 12,
+        marginTop: 20,
+    },
+    timePickerButton: {
+        paddingVertical: 12,
+        paddingHorizontal: 20,
+        borderRadius: 12,
+    },
+    timePickerCancelButton: {
+        backgroundColor: Colors.dark.surfaceSecondary,
+    },
+    timePickerConfirmButton: {
+        backgroundColor: Colors.dark.primaryStrong,
+    },
+    timePickerButtonText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: Colors.dark.white,
+    },
+    timePickerConfirmText: {
+        color: Colors.dark.white,
+        fontWeight: '600',
+    },
+    periodSelector: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 10,
+    },
+    toggleContainer: {
+        width: 50,
+        height: 30,
+        borderRadius: 15,
+        padding: 2,
+        justifyContent: 'center',
+    },
+    toggleThumb: {
+        width: 26,
+        height: 26,
+        borderRadius: 13,
+        backgroundColor: Colors.dark.white,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    toggleIcon: {
+        position: 'absolute',
+        top: 6,
+        left: 6,
+    },
+    languageSelector: {
+        backgroundColor: Colors.dark.surfaceSecondary,
+        padding: 16,
+        borderRadius: 12,
+    },
+    languageSelectorContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    selectedLanguageIcon: {
+        fontSize: 20,
+        marginRight: 12,
+    },
+    selectedLanguageName: {
+        color: Colors.dark.white,
+        fontSize: 16,
+        fontWeight: '600',
+        flex: 1,
+    },
+    languagesList: {
+        gap: 8,
+    },
+    languageOption: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: Colors.dark.surfaceSecondary,
+        padding: 16,
+        borderRadius: 12,
+    },
+    selectedLanguageOption: {
+        backgroundColor: Colors.dark.primaryStrong,
+    },
+    languageIcon: {
+        fontSize: 20,
+        marginRight: 12,
+    },
+    languageOptionText: {
+        color: Colors.dark.mutedText,
+        fontSize: 16,
+        fontWeight: '600',
+        flex: 1,
+    },
+    selectedLanguageOptionText: {
+        color: Colors.dark.white,
+    },
+    // Account section styles
+    accountInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: Colors.dark.surfaceSecondary,
+        padding: 16,
+        borderRadius: 12,
+    },
+    accountAvatar: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: Colors.dark.primaryStrong,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+    },
+    avatarText: {
+        color: Colors.dark.white,
+        fontSize: 18,
+        fontWeight: 'bold',
+    },
+    accountDetails: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginRight: 4,
+    },
+    accountDetailsContent: {
+        flex: 1,
+        marginRight: 12,
+    },
+    accountEmail: {
+        color: Colors.dark.white,
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    verificationBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 4,
+    },
+    verificationText: {
+        color: Colors.dark.orange,
+        fontSize: 14,
+        marginLeft: 4,
+    },
+    accountActions: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 16,
+    },
+    accountAction: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: Colors.dark.backgroundTertiary,
+        padding: 12,
+        borderRadius: 12,
+        flex: 1,
+        marginRight: 8,
+    },
+    accountActionText: {
+        color: Colors.dark.primaryStrong,
+        fontSize: 16,
+        fontWeight: '600',
+        marginLeft: 8,
+    },
+    signInButton: {
+        backgroundColor: Colors.dark.primaryStrong,
+        padding: 16,
+        borderRadius: 12,
+        alignItems: 'center',
+    },
+    signInButtonText: {
+        color: Colors.dark.white,
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    actionSheetOverlay: {
+        flex: 1,
+        backgroundColor: Colors.dark.overlayBlack70,
+        justifyContent: 'flex-end',
+    },
+    actionSheet: {
+        backgroundColor: Colors.dark.backgroundTertiary,
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        padding: 20,
+    },
+    actionSheetHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    actionSheetTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: Colors.dark.white,
+    },
+    actionSheetClose: {
+        padding: 5,
+    },
+    actionSheetButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 16,
+        borderRadius: 12,
+        marginBottom: 12,
+        backgroundColor: Colors.dark.surfaceSecondary,
+    },
+    actionSheetButtonText: {
+        fontSize: 16,
+        fontWeight: '600',
+        marginLeft: 12,
+    },
+    deleteButton: {
+        backgroundColor: Colors.dark.lightPink,
+    },
+    deleteButtonText: {
+        color: Colors.dark.white,
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    passwordInputContainer: {
+        width: '100%',
+        backgroundColor: Colors.dark.surfaceSecondary,
+        borderRadius: 10,
+        marginTop: 10,
+        marginBottom: 8,
+        borderWidth: 1,
+        borderColor: Colors.dark.transparent,
+    },
+
+    passwordInputError: {
+        borderColor: Colors.dark.lightPink,
+    },
+
+    passwordInput: {
+        height: 50,
+        paddingHorizontal: 15,
+        color: Colors.dark.white,
+    },
+
+    errorText: {
+        color: Colors.dark.lightPink,
+        fontSize: 14,
+        marginBottom: 12,
+        paddingHorizontal: 5,
+    },
+
+    successIconContainer: {
+        width: 100,
+        height: 100,
+        borderRadius: 50,
+        backgroundColor: Colors.dark.successIconColor,
+        justifyContent: 'center',
+        alignItems: 'center',
+        alignSelf: 'center',
+        marginBottom: 16,
+    },
+
+    emailButton: {
+        flexDirection: 'row',
+        backgroundColor: Colors.dark.primaryStrong,
+        borderRadius: 12,
+        padding: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 16,
+        marginBottom: 8,
+        gap: 8,
+    },
+
+    emailButtonText: {
+        color: Colors.dark.white,
+        fontSize: 16,
+        fontWeight: '600',
+    },
+
+    doneButton: {
+        backgroundColor: Colors.dark.surfaceSecondary,
+        borderRadius: 12,
+        padding: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 8,
+    },
+
+    doneButtonText: {
+        color: Colors.dark.mutedText,
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    devToolsList: {
+        gap: 12,
+    },
+    devToolButton: {
+        backgroundColor: Colors.dark.surfaceSecondary,
+        padding: 16,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    devToolButtonRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    devToolText: {
+        color: Colors.dark.white,
+        fontSize: 14,
+        fontWeight: '600',
+        marginTop: 8,
+        textAlign: 'center',
+    },
     devToolTextLeft: {
-      textAlign: 'left',
-      marginTop: 0,
+        textAlign: 'left',
+        marginTop: 0,
     },
     devToolTextGroup: {
-      flex: 1,
-      alignItems: 'flex-start',
-      gap: 2,
+        flex: 1,
+        alignItems: 'flex-start',
+        gap: 2,
     },
     devToolSubtext: {
-      color: Colors.dark.mutedText,
-      fontSize: 12,
-      textAlign: 'left',
+        color: Colors.dark.mutedText,
+        fontSize: 12,
+        textAlign: 'left',
     },
-  avatarImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-  },
-  settingItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  settingLabel: {
-    color: Colors.dark.white,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  settingButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  settingValue: {
-    color: Colors.dark.mutedText,
-    fontSize: 16,
-    marginRight: 8,
-  },
-  sectionSubtitle: {
-    color: Colors.dark.mutedText,
-    fontSize: 14,
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  counterContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  counterButton: {
-    padding: 4,
-    marginHorizontal: 4,
-    borderRadius: 4,
-    backgroundColor: Colors.dark.surfaceSecondary,
-  },
-  counterValue: {
-    color: Colors.dark.white,
-    fontSize: 16,
-    marginHorizontal: 8,
-  },
-  card: {
-    backgroundColor: Colors.dark.surfaceSecondary,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-  },
-  scheduleCard: {
-    paddingBottom: 20,
-  },
-  scheduleCardTitle: {
-    color: Colors.dark.white,
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 12,
-  },
-  scheduleDetails: {
-    marginBottom: 16,
-  },
-  scheduleDetailRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  scheduleDetailRowLast: {
-    marginBottom: 0,
-  },
-  scheduleDetailIcon: {
-    marginRight: 12,
-    marginTop: 2,
-  },
-  scheduleDetailTextGroup: {
-    flex: 1,
-  },
-  scheduleDetailLabel: {
-    color: Colors.dark.mutedText,
-    fontSize: 12,
-    marginBottom: 2,
-  },
-  scheduleDetailValue: {
-    color: Colors.dark.white,
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: '500',
-  },
-  scheduleGroupValueContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: Colors.dark.white,
-    marginLeft: 8,
-  },
-  cardDescription: {
-    color: Colors.dark.mutedText,
-    fontSize: 14,
-    marginBottom: 16,
-    lineHeight: 20,
-  },
-  settingLabelContainer: {
-    flex: 1,
-    marginRight: 8,
-  },
-  settingDescription: {
-    color: Colors.dark.mutedText,
-    fontSize: 14,
-    marginTop: 2,
-  },
-  settingLabelWithIcon: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  settingItemIcon: {
-    marginRight: 8,
-  },
-  reminderGroup: {
-    marginBottom: 16,
-    borderTopWidth: 1,
-    borderTopColor: Colors.dark.overlayWhite10,
-    paddingTop: 12,
-  },
-  reminderGroupTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.dark.neutral250,
-    marginBottom: 12,
-  },
-  reminderSettingItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-    paddingVertical: 4,
-  },
-  dayCounter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-  },
-  counterValueContainer: {
-    borderWidth: 1.5,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    marginHorizontal: 8,
-    minWidth: 45,
-    alignItems: 'center',
-  },
-  counterUnit: {
-    color: Colors.dark.mutedText,
-    fontSize: 10,
-    fontWeight: '500',
-  },
-  counterButtonDisabled: {
-    opacity: 0.5,
-  },
-  testNotificationButton: {
-    flexDirection: 'row',
-    backgroundColor: Colors.dark.primary,
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-    marginBottom: 8,
-  },
-  testNotificationIcon: {
-    marginRight: 8,
-  },
-  testNotificationText: {
-    color: Colors.dark.white,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  elevatedContainer: {
-    backgroundColor: Colors.dark.surfaceSecondary,
-    borderRadius: 12,
-    padding: 16,
-    marginVertical: 8,
-    shadowColor: Colors.dark.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  infoText: {
-    color: Colors.dark.neutral200,
-    fontSize: 14,
-    marginTop: 12,
-    lineHeight: 20,
-  },
-  idnpInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  idnpValue: {
-    color: Colors.dark.mutedText,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  syncHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  syncIconContainer: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: Colors.dark.primaryStrong,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  syncLabel: {
-    color: Colors.dark.white,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  syncStatusIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 12,
-    padding: 8,
-    backgroundColor: Colors.dark.successIconColor,
-    borderRadius: 8,
-  },
-  syncStatusText: {
-    color: Colors.dark.lightGreen,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  syncContent: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  loginPromptContainer: {
-    marginVertical: 12,
-  },
-  loginPromptContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.dark.loginPromptBackground,
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  loginPromptText: {
-    color: Colors.dark.orange,
-    fontSize: 14,
-    flex: 1,
-    lineHeight: 20,
-  },
-  loginButton: {
-    backgroundColor: Colors.dark.primaryStrong,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  loginButtonText: {
-    color: Colors.dark.white,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  refreshButton: {
-    flexDirection: 'row',
-    backgroundColor: Colors.dark.primaryStrong,
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    alignItems: 'center',
-    gap: 6,
-  },
-  scheduleRefreshButton: {
-    marginTop: 4,
-    alignSelf: 'stretch',
-    justifyContent: 'center',
-  },
-  refreshButtonText: {
-    color: Colors.dark.white,
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 6,
-  },
-  scheduleRefreshButtonText: {
-    flexShrink: 1,
-  },
-  // Update section styles
-  updateCard: {
-    paddingBottom: 12,
-  },
-  updateDetails: {
-    marginBottom: 16,
-  },
-  updateDetailRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  channelBadge: {
-    textTransform: 'uppercase',
-    color: Colors.dark.primary,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  updateNote: {
-    fontSize: 12,
-    color: Colors.dark.neutral600,
-    textAlign: 'left',
-    marginTop: 12,
-    lineHeight: 18,
-  },
+    avatarImage: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+    },
+    settingItem: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    settingLabel: {
+        color: Colors.dark.white,
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    settingButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    settingValue: {
+        color: Colors.dark.mutedText,
+        fontSize: 16,
+        marginRight: 8,
+    },
+    sectionSubtitle: {
+        color: Colors.dark.mutedText,
+        fontSize: 14,
+        marginTop: 16,
+        marginBottom: 8,
+    },
+    counterContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    counterButton: {
+        padding: 4,
+        marginHorizontal: 4,
+        borderRadius: 4,
+        backgroundColor: Colors.dark.surfaceSecondary,
+    },
+    counterValue: {
+        color: Colors.dark.white,
+        fontSize: 16,
+        marginHorizontal: 8,
+    },
+    card: {
+        backgroundColor: Colors.dark.surfaceSecondary,
+        borderRadius: 12,
+        padding: 16,
+        marginBottom: 16,
+    },
+    scheduleCard: {
+        paddingBottom: 20,
+    },
+    scheduleCardTitle: {
+        color: Colors.dark.white,
+        fontSize: 16,
+        fontWeight: '600',
+        marginBottom: 12,
+    },
+    scheduleDetails: {
+        marginBottom: 16,
+    },
+    scheduleDetailRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        marginBottom: 12,
+    },
+    scheduleDetailRowLast: {
+        marginBottom: 0,
+    },
+    scheduleDetailIcon: {
+        marginRight: 12,
+        marginTop: 2,
+    },
+    scheduleDetailTextGroup: {
+        flex: 1,
+    },
+    scheduleDetailLabel: {
+        color: Colors.dark.mutedText,
+        fontSize: 12,
+        marginBottom: 2,
+    },
+    scheduleDetailValue: {
+        color: Colors.dark.white,
+        fontSize: 14,
+        lineHeight: 20,
+        fontWeight: '500',
+    },
+    scheduleGroupValueContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+    },
+    cardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    cardTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: Colors.dark.white,
+        marginLeft: 8,
+    },
+    cardDescription: {
+        color: Colors.dark.mutedText,
+        fontSize: 14,
+        marginBottom: 16,
+        lineHeight: 20,
+    },
+    settingLabelContainer: {
+        flex: 1,
+        marginRight: 8,
+    },
+    settingDescription: {
+        color: Colors.dark.mutedText,
+        fontSize: 14,
+        marginTop: 2,
+    },
+    settingLabelWithIcon: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    settingItemIcon: {
+        marginRight: 8,
+    },
+    reminderGroup: {
+        marginBottom: 16,
+        borderTopWidth: 1,
+        borderTopColor: Colors.dark.overlayWhite10,
+        paddingTop: 12,
+    },
+    reminderGroupTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: Colors.dark.neutral250,
+        marginBottom: 12,
+    },
+    reminderSettingItem: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 12,
+        paddingVertical: 4,
+    },
+    dayCounter: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'flex-end',
+    },
+    counterValueContainer: {
+        borderWidth: 1.5,
+        borderRadius: 8,
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        marginHorizontal: 8,
+        minWidth: 45,
+        alignItems: 'center',
+    },
+    counterUnit: {
+        color: Colors.dark.mutedText,
+        fontSize: 10,
+        fontWeight: '500',
+    },
+    counterButtonDisabled: {
+        opacity: 0.5,
+    },
+    testNotificationButton: {
+        flexDirection: 'row',
+        backgroundColor: Colors.dark.primary,
+        borderRadius: 12,
+        padding: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 8,
+        marginBottom: 8,
+    },
+    testNotificationIcon: {
+        marginRight: 8,
+    },
+    testNotificationText: {
+        color: Colors.dark.white,
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    elevatedContainer: {
+        backgroundColor: Colors.dark.surfaceSecondary,
+        borderRadius: 12,
+        padding: 16,
+        marginVertical: 8,
+        shadowColor: Colors.dark.black,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    infoText: {
+        color: Colors.dark.neutral200,
+        fontSize: 14,
+        marginTop: 12,
+        lineHeight: 20,
+    },
+    idnpInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 16,
+    },
+    idnpValue: {
+        color: Colors.dark.mutedText,
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    syncHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    syncIconContainer: {
+        width: 38,
+        height: 38,
+        borderRadius: 19,
+        backgroundColor: Colors.dark.primaryStrong,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+    },
+    syncLabel: {
+        color: Colors.dark.white,
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    syncStatusIndicator: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 12,
+        padding: 8,
+        backgroundColor: Colors.dark.successIconColor,
+        borderRadius: 8,
+    },
+    syncStatusText: {
+        color: Colors.dark.lightGreen,
+        fontSize: 14,
+        fontWeight: '500',
+    },
+    syncContent: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    loginPromptContainer: {
+        marginVertical: 12,
+    },
+    loginPromptContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: Colors.dark.loginPromptBackground,
+        padding: 12,
+        borderRadius: 8,
+        marginBottom: 12,
+    },
+    loginPromptText: {
+        color: Colors.dark.orange,
+        fontSize: 14,
+        flex: 1,
+        lineHeight: 20,
+    },
+    loginButton: {
+        backgroundColor: Colors.dark.primaryStrong,
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        borderRadius: 8,
+        alignItems: 'center',
+    },
+    loginButtonText: {
+        color: Colors.dark.white,
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    refreshButton: {
+        flexDirection: 'row',
+        backgroundColor: Colors.dark.primaryStrong,
+        borderRadius: 10,
+        paddingVertical: 10,
+        paddingHorizontal: 14,
+        alignItems: 'center',
+        gap: 6,
+    },
+    scheduleRefreshButton: {
+        marginTop: 4,
+        alignSelf: 'stretch',
+        justifyContent: 'center',
+    },
+    refreshButtonText: {
+        color: Colors.dark.white,
+        fontSize: 14,
+        fontWeight: '600',
+        marginLeft: 6,
+    },
+    scheduleRefreshButtonText: {
+        flexShrink: 1,
+    },
+    // Update section styles
+    updateCard: {
+        paddingBottom: 12,
+    },
+    updateDetails: {
+        marginBottom: 16,
+    },
+    updateDetailRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        marginBottom: 12,
+    },
+    channelBadge: {
+        textTransform: 'uppercase',
+        color: Colors.dark.primary,
+        fontWeight: '700',
+        letterSpacing: 0.5,
+    },
+    updateNote: {
+        fontSize: 12,
+        color: Colors.dark.neutral600,
+        textAlign: 'left',
+        marginTop: 12,
+        lineHeight: 18,
+    },
 });

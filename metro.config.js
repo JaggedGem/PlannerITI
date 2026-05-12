@@ -4,8 +4,8 @@ const config = getDefaultConfig(__dirname);
 
 // Add global variable definitions to silence warnings
 config.transformer = {
-  ...config.transformer,
-  globalScope: `
+    ...config.transformer,
+    globalScope: `
     global.SharedArrayBuffer = global.SharedArrayBuffer || Object;
     global.DebuggerInternal = global.DebuggerInternal || {};
     global.setTimeout = global.setTimeout || (() => {});

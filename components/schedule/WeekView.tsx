@@ -1,1739 +1,2213 @@
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Dimensions, ViewStyle, TextStyle, ActivityIndicator } from 'react-native';
-import React from 'react';
-import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
-  scheduleService,
-  DAYS_MAP,
-  ApiResponse,
-  RecoveryDay,
-  ThesisScheduleEvent,
-  ExamScheduleEvent,
-  SpecialScheduleResponse,
+    StyleSheet,
+    View,
+    Text,
+    ScrollView,
+    TouchableOpacity,
+    Dimensions,
+    ViewStyle,
+    TextStyle,
+    ActivityIndicator,
+} from 'react-native';
+import React, {
+    useEffect,
+    useState,
+    useRef,
+    useCallback,
+    useMemo,
+} from 'react';
+import {
+    scheduleService,
+    DAYS_MAP,
+    ApiResponse,
+    ThesisScheduleEvent,
+    ExamScheduleEvent,
+    SpecialScheduleResponse,
 } from '@/services/scheduleService';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useTimeUpdate } from '@/hooks/useTimeUpdate';
-import Animated, { useAnimatedStyle, withTiming, withSpring, FadeIn, FadeOut, Layout, useSharedValue } from 'react-native-reanimated';
+import Animated, {
+    useAnimatedStyle,
+    withTiming,
+    FadeIn,
+    FadeOut,
+    useSharedValue,
+} from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import ViewModeMenu from './ViewModeMenu';
-import { SafeAreaView, Edge } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
-  filterExamEventsForDate,
-  filterThesisEventsForDate,
+    filterExamEventsForDate,
+    filterThesisEventsForDate,
 } from '@/utils/specialScheduleUtils';
 import { Colors } from '@/constants/Colors';
 
 // Get week start (Monday) from current date
 const getWeekStart = (date: Date): Date => {
-  const result = new Date(date);
-  const day = result.getDay(); // 0 is Sunday, 1 is Monday, etc.
-  
-  // Calculate days to Monday
-  let daysToMonday;
-  if (day === 0) { // Sunday
-    daysToMonday = -6; // Go back to last week's Monday
-  } else if (day === 6) { // Saturday
-    daysToMonday = -5; // Go back to this week's Monday
-  } else {
-    daysToMonday = 1 - day; // Regular case: calculate days to Monday
-  }
-  
-  result.setDate(result.getDate() + daysToMonday);
-  return result;
+    const result = new Date(date);
+    const day = result.getDay(); // 0 is Sunday, 1 is Monday, etc.
+
+    // Calculate days to Monday
+    let daysToMonday;
+    if (day === 0) {
+        // Sunday
+        daysToMonday = -6; // Go back to last week's Monday
+    } else if (day === 6) {
+        // Saturday
+        daysToMonday = -5; // Go back to this week's Monday
+    } else {
+        daysToMonday = 1 - day; // Regular case: calculate days to Monday
+    }
+
+    result.setDate(result.getDate() + daysToMonday);
+    return result;
 };
 
-
-
 // Get minimum and maximum hours from all periods
-const getTimeRange = (schedule: Record<string, any[]>): { min: number, max: number } => {
-  let min = 24;
-  let max = 0;
+const getTimeRange = (
+    schedule: Record<string, any[]>,
+): { min: number; max: number } => {
+    let min = 24;
+    let max = 0;
 
-  // Add null check for schedule and its values
-  if (schedule) {
-    Object.values(schedule).forEach(dayItems => {
-      // Add null check for dayItems before calling forEach
-      if (dayItems && Array.isArray(dayItems)) {
-        dayItems.forEach(item => {
-          // Add null check for item and its properties
-          if (item && item.startTime && item.endTime) {
-            const startHour = parseInt(item.startTime.split(':')[0]);
-            const endHour = parseInt(item.endTime.split(':')[0]);
-            if (startHour < min) min = startHour;
-            if (endHour > max) max = endHour;
-          }
+    // Add null check for schedule and its values
+    if (schedule) {
+        Object.values(schedule).forEach((dayItems) => {
+            // Add null check for dayItems before calling forEach
+            if (dayItems && Array.isArray(dayItems)) {
+                dayItems.forEach((item) => {
+                    // Add null check for item and its properties
+                    if (item && item.startTime && item.endTime) {
+                        const startHour = parseInt(
+                            item.startTime.split(':')[0],
+                        );
+                        const endHour = parseInt(item.endTime.split(':')[0]);
+                        if (startHour < min) min = startHour;
+                        if (endHour > max) max = endHour;
+                    }
+                });
+            }
         });
-      }
-    });
-  }
+    }
 
-  // Add padding
-  return { min: Math.max(7, min - 1), max: Math.min(22, max + 1) };
+    // Add padding
+    return { min: Math.max(7, min - 1), max: Math.min(22, max + 1) };
 };
 
 // Calculate position and height for a schedule item
 const calculateItemPosition = (
-  startTime: string,
-  endTime: string,
-  hourHeight: number,
-  firstHour: number
-): { top: number, height: number } => {
-  const [startHours, startMinutes] = startTime.split(':').map(Number);
-  const [endHours, endMinutes] = endTime.split(':').map(Number);
+    startTime: string,
+    endTime: string,
+    hourHeight: number,
+    firstHour: number,
+): { top: number; height: number } => {
+    const [startHours, startMinutes] = startTime.split(':').map(Number);
+    const [endHours, endMinutes] = endTime.split(':').map(Number);
 
-  const startTimeInMinutes = (startHours - firstHour) * 60 + startMinutes;
-  const endTimeInMinutes = (endHours - firstHour) * 60 + endMinutes;
-  const durationInMinutes = endTimeInMinutes - startTimeInMinutes;
+    const startTimeInMinutes = (startHours - firstHour) * 60 + startMinutes;
+    const endTimeInMinutes = (endHours - firstHour) * 60 + endMinutes;
+    const durationInMinutes = endTimeInMinutes - startTimeInMinutes;
 
-  const top = (startTimeInMinutes / 60) * hourHeight;
-  const height = (durationInMinutes / 60) * hourHeight;
-  
-  return { top, height };
+    const top = (startTimeInMinutes / 60) * hourHeight;
+    const height = (durationInMinutes / 60) * hourHeight;
+
+    return { top, height };
 };
 
 // Generate time slots for the timetable
 const generateTimeSlots = (startHour: number, endHour: number): number[] => {
-  const slots = [];
-  for (let hour = startHour; hour <= endHour; hour++) {
-    slots.push(hour);
-  }
-  return slots;
+    const slots = [];
+    for (let hour = startHour; hour <= endHour; hour++) {
+        slots.push(hour);
+    }
+    return slots;
 };
 
 // Add isCurrentTimeSlot helper function
 const isCurrentTimeSlot = (startTime: string, endTime: string): boolean => {
-  const now = new Date();
-  const currentHour = now.getHours();
-  const currentMinute = now.getMinutes();
-  
-  const [startHour, startMinute] = startTime.split(':').map(Number);
-  const [endHour, endMinute] = endTime.split(':').map(Number);
-  
-  const currentTimeInMinutes = currentHour * 60 + currentMinute;
-  const startTimeInMinutes = startHour * 60 + startMinute;
-  const endTimeInMinutes = endHour * 60 + endMinute;
-  
-  return currentTimeInMinutes >= startTimeInMinutes && currentTimeInMinutes < endTimeInMinutes;
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+
+    const [startHour, startMinute] = startTime.split(':').map(Number);
+    const [endHour, endMinute] = endTime.split(':').map(Number);
+
+    const currentTimeInMinutes = currentHour * 60 + currentMinute;
+    const startTimeInMinutes = startHour * 60 + startMinute;
+    const endTimeInMinutes = endHour * 60 + endMinute;
+
+    return (
+        currentTimeInMinutes >= startTimeInMinutes &&
+        currentTimeInMinutes < endTimeInMinutes
+    );
 };
 
 interface TimetableItemProps {
-  item: {
-    period?: string;
-    startTime: string;
-    endTime: string;
-    className: string;
-    roomNumber: string;
-    assignmentCount?: number;
-  };
-  top: number;
-  height: number;
-  color: string;
-  isActive: boolean;
+    item: {
+        period?: string;
+        startTime: string;
+        endTime: string;
+        className: string;
+        roomNumber: string;
+        assignmentCount?: number;
+    };
+    top: number;
+    height: number;
+    color: string;
+    isActive: boolean;
 }
 
-const TimetableItem = ({ 
-  item, 
-  top, 
-  height, 
-  color, 
-  isActive,
+const TimetableItem = ({
+    item,
+    top,
+    height,
+    color,
+    isActive,
 }: TimetableItemProps) => {
-  // Safely handle assignment count
-  const assignmentCount = item.assignmentCount || 0;
-  
-  return (
-    <Animated.View 
-      style={[
-        styles.timetableItem, 
-        { 
-          top, 
-          height: Math.max(height, 35), // Slightly taller minimum height
-        }
-      ]}
-      entering={FadeIn
-        .duration(200)
-        .springify()
-        .delay(50)}
-      exiting={FadeOut.duration(150)}
-    >
-      <LinearGradient
-        colors={isActive 
-          ? [color, `${color}CC`] // More opacity for active
-          : [`${color}99`, `${color}66`]} // Less opacity for inactive
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.itemGradient}
-      >
-        <View style={styles.itemHeader}>
-          <Text style={styles.className} numberOfLines={1}>
-            {item.className}
-          </Text>
-        </View>
-        
-        <View style={styles.itemFooter}>
-          <Text style={styles.roomNumber} numberOfLines={1}>
-            {item.roomNumber}
-          </Text>
-          
-          {/* Assignment count badge moved to footer */}
-          {assignmentCount > 0 && (
-            <View style={styles.assignmentBadge}>
-              <Text style={styles.assignmentBadgeText}>
-                {assignmentCount}
-              </Text>
-            </View>
-          )}
-        </View>
-      </LinearGradient>
-    </Animated.View>
-  );
+    // Safely handle assignment count
+    const assignmentCount = item.assignmentCount || 0;
+
+    return (
+        <Animated.View
+            style={[
+                styles.timetableItem,
+                {
+                    top,
+                    height: Math.max(height, 35), // Slightly taller minimum height
+                },
+            ]}
+            entering={FadeIn.duration(200).springify().delay(50)}
+            exiting={FadeOut.duration(150)}
+        >
+            <LinearGradient
+                colors={
+                    isActive ?
+                        [color, `${color}CC`] // More opacity for active
+                    :   [`${color}99`, `${color}66`]
+                } // Less opacity for inactive
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.itemGradient}
+            >
+                <View style={styles.itemHeader}>
+                    <Text style={styles.className} numberOfLines={1}>
+                        {item.className}
+                    </Text>
+                </View>
+
+                <View style={styles.itemFooter}>
+                    <Text style={styles.roomNumber} numberOfLines={1}>
+                        {item.roomNumber}
+                    </Text>
+
+                    {/* Assignment count badge moved to footer */}
+                    {assignmentCount > 0 && (
+                        <View style={styles.assignmentBadge}>
+                            <Text style={styles.assignmentBadgeText}>
+                                {assignmentCount}
+                            </Text>
+                        </View>
+                    )}
+                </View>
+            </LinearGradient>
+        </Animated.View>
+    );
 };
 
 const RecoveryDayInfo = ({
-  label,
-  title,
-  reason,
-  align = 'center',
-  details = []
+    label,
+    title,
+    reason,
+    align = 'center',
+    details = [],
 }: {
-  label: string;
-  title: string;
-  reason: string;
-  align?: 'left' | 'center' | 'right';
-  details?: string[];
+    label: string;
+    title: string;
+    reason: string;
+    align?: 'left' | 'center' | 'right';
+    details?: string[];
 }) => {
-  const [showInfo, setShowInfo] = useState(false);
-  const tooltipPositionStyle = {
-    left: align === 'left' ? 0 : align === 'right' ? 'auto' : '50%',
-    right: align === 'right' ? 0 : 'auto',
-    marginLeft: align === 'center' ? -90 : 0,
-  } as const;
-  
-  const popupAnimation = useAnimatedStyle(() => {
-    return {
-      opacity: withTiming(showInfo ? 1 : 0, { duration: 120 }),
-      transform: [
-        { 
-          translateY: withTiming(showInfo ? 0 : -6, { duration: 120 })
-        }
-      ],
-    };
-  }, [showInfo]);
+    const [showInfo, setShowInfo] = useState(false);
+    const tooltipPositionStyle = {
+        left:
+            align === 'left' ? 0
+            : align === 'right' ? 'auto'
+            : '50%',
+        right: align === 'right' ? 0 : 'auto',
+        marginLeft: align === 'center' ? -90 : 0,
+    } as const;
 
-  const buttonAnimation = useAnimatedStyle(() => {
-    return {
-      transform: [
-        {
-          scale: withTiming(showInfo ? 0.98 : 1, { duration: 100 })
-        }
-      ]
-    };
-  }, [showInfo]);
+    const popupAnimation = useAnimatedStyle(() => {
+        return {
+            opacity: withTiming(showInfo ? 1 : 0, { duration: 120 }),
+            transform: [
+                {
+                    translateY: withTiming(showInfo ? 0 : -6, {
+                        duration: 120,
+                    }),
+                },
+            ],
+        };
+    }, [showInfo]);
 
-  return (
-    <>
-      <Animated.View style={buttonAnimation}>
-        <TouchableOpacity 
-          style={styles.recoveryDayInfoButton}
-          onPress={() => setShowInfo(!showInfo)}
-          activeOpacity={0.7}
-          hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
-        >
-          <LinearGradient
-            colors={Colors.dark.recoveryGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.recoveryDayInfoButtonGradient}
-          >
-            <Text style={styles.recoveryDayInfoIcon}>{label}</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-      </Animated.View>
-      
-      {/* Reason tooltip that appears when info button is pressed */}
-      <Animated.View 
-        style={[styles.recoveryDayTooltipContainer, tooltipPositionStyle, popupAnimation]}
-        pointerEvents={showInfo ? 'auto' : 'none'}
-      >
-        <View style={styles.recoveryDayTooltip}>
-          <View style={styles.recoveryDayTooltipHeader}>
-            <Text style={styles.recoveryDayTooltipTitle}>{title}</Text>
-            <TouchableOpacity 
-              style={styles.closeTooltipButton}
-              onPress={() => setShowInfo(false)}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+    const buttonAnimation = useAnimatedStyle(() => {
+        return {
+            transform: [
+                {
+                    scale: withTiming(showInfo ? 0.98 : 1, { duration: 100 }),
+                },
+            ],
+        };
+    }, [showInfo]);
+
+    return (
+        <>
+            <Animated.View style={buttonAnimation}>
+                <TouchableOpacity
+                    style={styles.recoveryDayInfoButton}
+                    onPress={() => setShowInfo(!showInfo)}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
+                >
+                    <LinearGradient
+                        colors={Colors.dark.recoveryGradient}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.recoveryDayInfoButtonGradient}
+                    >
+                        <Text style={styles.recoveryDayInfoIcon}>{label}</Text>
+                    </LinearGradient>
+                </TouchableOpacity>
+            </Animated.View>
+
+            {/* Reason tooltip that appears when info button is pressed */}
+            <Animated.View
+                style={[
+                    styles.recoveryDayTooltipContainer,
+                    tooltipPositionStyle,
+                    popupAnimation,
+                ]}
+                pointerEvents={showInfo ? 'auto' : 'none'}
             >
-              <Text style={styles.closeTooltipText as TextStyle}>✕</Text>
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.recoveryDayTooltipReason}>
-            {reason || 'No reason provided'}
-          </Text>
-          {details.map((detail, idx) => (
-            <Text key={idx} style={styles.recoveryDayTooltipReason}>
-              {detail}
-            </Text>
-          ))}
-        </View>
-      </Animated.View>
-    </>
-  );
+                <View style={styles.recoveryDayTooltip}>
+                    <View style={styles.recoveryDayTooltipHeader}>
+                        <Text style={styles.recoveryDayTooltipTitle}>
+                            {title}
+                        </Text>
+                        <TouchableOpacity
+                            style={styles.closeTooltipButton}
+                            onPress={() => setShowInfo(false)}
+                            hitSlop={{
+                                top: 10,
+                                bottom: 10,
+                                left: 10,
+                                right: 10,
+                            }}
+                        >
+                            <Text style={styles.closeTooltipText as TextStyle}>
+                                ✕
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                    <Text style={styles.recoveryDayTooltipReason}>
+                        {reason || 'No reason provided'}
+                    </Text>
+                    {details.map((detail, idx) => (
+                        <Text key={idx} style={styles.recoveryDayTooltipReason}>
+                            {detail}
+                        </Text>
+                    ))}
+                </View>
+            </Animated.View>
+        </>
+    );
 };
 
 interface CurrentTimeIndicatorProps {
-  hourHeight: number;
-  firstHour: number;
-  timestamp: number;
-  schedule: Record<string, any[]>;
+    hourHeight: number;
+    firstHour: number;
+    timestamp: number;
+    schedule: Record<string, any[]>;
 }
 
-const CurrentTimeIndicator = ({ hourHeight, firstHour, timestamp, schedule }: CurrentTimeIndicatorProps) => {
-  const currentTime = new Date(timestamp);
-  const hours = currentTime.getHours();
-  const minutes = currentTime.getMinutes();
-  
-  const totalMinutesSinceFirstHour = (hours - firstHour) * 60 + minutes;
-  const position = (totalMinutesSinceFirstHour / 60) * hourHeight;
+const CurrentTimeIndicator = ({
+    hourHeight,
+    firstHour,
+    timestamp,
+    schedule,
+}: CurrentTimeIndicatorProps) => {
+    const currentTime = new Date(timestamp);
+    const hours = currentTime.getHours();
+    const minutes = currentTime.getMinutes();
 
-  // Don't show indicator if before first hour
-  if (hours < firstHour) return null;
-  
-  // Get latest end time for the day
-  const now = new Date();
-  const currentDay = DAYS_MAP[now.getDay() as keyof typeof DAYS_MAP];
-  const todaySchedule = schedule[currentDay as keyof typeof schedule] || [];
-  
-  if (todaySchedule.length > 0) {
-    const latestEndTime = todaySchedule.reduce((latest: number, item: { endTime: string }) => {
-      const [endHour, endMinute] = item.endTime.split(':').map(Number);
-      const endTimeInMinutes = endHour * 60 + endMinute;
-      return Math.max(latest, endTimeInMinutes);
-    }, 0);
-    
-    const currentTimeInMinutes = hours * 60 + minutes;
-    if (currentTimeInMinutes > latestEndTime) return null;
-  }
+    const totalMinutesSinceFirstHour = (hours - firstHour) * 60 + minutes;
+    const position = (totalMinutesSinceFirstHour / 60) * hourHeight;
 
-  return (
-    <View style={[styles.currentTimeIndicator, { top: position }]}>
-      <View style={styles.currentTimeIndicatorDot} />
-      <View style={styles.currentTimeIndicatorLine} />
-    </View>
-  );
+    // Don't show indicator if before first hour
+    if (hours < firstHour) return null;
+
+    // Get latest end time for the day
+    const now = new Date();
+    const currentDay = DAYS_MAP[now.getDay() as keyof typeof DAYS_MAP];
+    const todaySchedule = schedule[currentDay as keyof typeof schedule] || [];
+
+    if (todaySchedule.length > 0) {
+        const latestEndTime = todaySchedule.reduce(
+            (latest: number, item: { endTime: string }) => {
+                const [endHour, endMinute] = item.endTime
+                    .split(':')
+                    .map(Number);
+                const endTimeInMinutes = endHour * 60 + endMinute;
+                return Math.max(latest, endTimeInMinutes);
+            },
+            0,
+        );
+
+        const currentTimeInMinutes = hours * 60 + minutes;
+        if (currentTimeInMinutes > latestEndTime) return null;
+    }
+
+    return (
+        <View style={[styles.currentTimeIndicator, { top: position }]}>
+            <View style={styles.currentTimeIndicatorDot} />
+            <View style={styles.currentTimeIndicatorLine} />
+        </View>
+    );
 };
 
 type Styles = {
-  container: ViewStyle;
-  content: ViewStyle;
-  headerContainer: ViewStyle;
-  header: ViewStyle;
-  pageTitle: TextStyle;
-  weekInfo: ViewStyle;
-  weekText: TextStyle;
-  daysHeader: ViewStyle;
-  dayColumn: ViewStyle;
-  dayName: TextStyle;
-  dateText: TextStyle;
-  dateContainer: ViewStyle;
-  dayAssignmentBadge: ViewStyle;
-  dayAssignmentBadgeText: TextStyle;
-  daySpecialBadges: ViewStyle;
-  daySpecialBadge: ViewStyle;
-  daySpecialBadgeExam: ViewStyle;
-  daySpecialBadgeThesis: ViewStyle;
-  daySpecialBadgeLoading: ViewStyle;
-  daySpecialBadgeText: TextStyle;
-  dayColumnExam: ViewStyle;
-  dayColumnThesis: ViewStyle;
-  timetableContainer: ViewStyle;
-  timeColumn: ViewStyle;
-  timeSlot: ViewStyle;
-  timeHour: TextStyle;
-  timePeriod: TextStyle;
-  gridContainer: ViewStyle;
-  dayContent: ViewStyle;
-  timetableItem: ViewStyle;
-  itemGradient: ViewStyle;
-  itemHeader: ViewStyle;
-  className: TextStyle;
-  roomNumber: TextStyle;
-  itemFooter: ViewStyle;
-  navigationControls: ViewStyle;
-  navButton: ViewStyle;
-  navButtonText: TextStyle;
-  currentTimeIndicator: ViewStyle;
-  currentTimeIndicatorLine: ViewStyle;
-  currentTimeIndicatorDot: ViewStyle;
-  emptySchedule: TextStyle;
-  loadingContainer: ViewStyle;
-  loadingText: TextStyle;
-  errorContainer: ViewStyle;
-  errorText: TextStyle;
-  todayColumn: ViewStyle;
-  currentHourHighlight: ViewStyle;
-  recoveryDot: TextStyle;
-  recoveryDayInfo: ViewStyle;
-  recoveryDayInfoHeader: ViewStyle;
-  recoveryDayInfoIcon: TextStyle;
-  recoveryDayInfoButton: ViewStyle;
-  recoveryDayInfoButtonGradient: ViewStyle;
-  recoveryDayTooltipContainer: ViewStyle;
-  recoveryDayTooltip: ViewStyle;
-  recoveryDayTooltipHeader: ViewStyle;
-  recoveryDayTooltipTitle: TextStyle;
-  closeTooltipButton: ViewStyle;
-  closeTooltipText: TextStyle;
-  recoveryDayTooltipReason: TextStyle;
-  weekendColumn: ViewStyle;
-  dayContentExam: ViewStyle;
-  dayContentThesis: ViewStyle;
-  gridLine: ViewStyle;
-  assignmentBadge: ViewStyle;
-  assignmentBadgeText: TextStyle;
+    container: ViewStyle;
+    content: ViewStyle;
+    headerContainer: ViewStyle;
+    header: ViewStyle;
+    pageTitle: TextStyle;
+    weekInfo: ViewStyle;
+    weekText: TextStyle;
+    daysHeader: ViewStyle;
+    dayColumn: ViewStyle;
+    dayName: TextStyle;
+    dateText: TextStyle;
+    dateContainer: ViewStyle;
+    dayAssignmentBadge: ViewStyle;
+    dayAssignmentBadgeText: TextStyle;
+    daySpecialBadges: ViewStyle;
+    daySpecialBadge: ViewStyle;
+    daySpecialBadgeExam: ViewStyle;
+    daySpecialBadgeThesis: ViewStyle;
+    daySpecialBadgeLoading: ViewStyle;
+    daySpecialBadgeText: TextStyle;
+    dayColumnExam: ViewStyle;
+    dayColumnThesis: ViewStyle;
+    timetableContainer: ViewStyle;
+    timeColumn: ViewStyle;
+    timeSlot: ViewStyle;
+    timeHour: TextStyle;
+    timePeriod: TextStyle;
+    gridContainer: ViewStyle;
+    dayContent: ViewStyle;
+    timetableItem: ViewStyle;
+    itemGradient: ViewStyle;
+    itemHeader: ViewStyle;
+    className: TextStyle;
+    roomNumber: TextStyle;
+    itemFooter: ViewStyle;
+    navigationControls: ViewStyle;
+    navButton: ViewStyle;
+    navButtonText: TextStyle;
+    currentTimeIndicator: ViewStyle;
+    currentTimeIndicatorLine: ViewStyle;
+    currentTimeIndicatorDot: ViewStyle;
+    emptySchedule: TextStyle;
+    loadingContainer: ViewStyle;
+    loadingText: TextStyle;
+    errorContainer: ViewStyle;
+    errorText: TextStyle;
+    todayColumn: ViewStyle;
+    currentHourHighlight: ViewStyle;
+    recoveryDot: TextStyle;
+    recoveryDayInfo: ViewStyle;
+    recoveryDayInfoHeader: ViewStyle;
+    recoveryDayInfoIcon: TextStyle;
+    recoveryDayInfoButton: ViewStyle;
+    recoveryDayInfoButtonGradient: ViewStyle;
+    recoveryDayTooltipContainer: ViewStyle;
+    recoveryDayTooltip: ViewStyle;
+    recoveryDayTooltipHeader: ViewStyle;
+    recoveryDayTooltipTitle: TextStyle;
+    closeTooltipButton: ViewStyle;
+    closeTooltipText: TextStyle;
+    recoveryDayTooltipReason: TextStyle;
+    weekendColumn: ViewStyle;
+    dayContentExam: ViewStyle;
+    dayContentThesis: ViewStyle;
+    gridLine: ViewStyle;
+    assignmentBadge: ViewStyle;
+    assignmentBadgeText: TextStyle;
 };
 
 // Define a type for schedule items
 type ScheduleItem = {
-  period?: string;
-  startTime: string;
-  endTime: string;
-  className: string;
-  teacherName: string;
-  roomNumber: string;
-  isEvenWeek?: boolean;
-  group?: string;
-  _height?: number;
-  hasNextItem?: boolean;
-  isCustom?: boolean;
-  color?: string;
-  isRecoveryDay?: boolean;
-  recoveryReason?: string;
-  replacedDayName?: string;
-  assignmentCount?: number;
+    period?: string;
+    startTime: string;
+    endTime: string;
+    className: string;
+    teacherName: string;
+    roomNumber: string;
+    isEvenWeek?: boolean;
+    group?: string;
+    _height?: number;
+    hasNextItem?: boolean;
+    isCustom?: boolean;
+    color?: string;
+    isRecoveryDay?: boolean;
+    recoveryReason?: string;
+    replacedDayName?: string;
+    assignmentCount?: number;
 };
 
 const EMPTY_WEEK_SCHEDULE: Record<string, ScheduleItem[]> = {
-  monday: [],
-  tuesday: [],
-  wednesday: [],
-  thursday: [],
-  friday: [],
+    monday: [],
+    tuesday: [],
+    wednesday: [],
+    thursday: [],
+    friday: [],
 };
 
 export default function WeekView() {
-  const [scheduleData, setScheduleData] = useState<ApiResponse | null>(null);
-  const [weekSchedule, setWeekSchedule] = useState<Record<string, ScheduleItem[]>>(EMPTY_WEEK_SCHEDULE);
-  const [thesisSchedule, setThesisSchedule] = useState<SpecialScheduleResponse | null>(null);
-  const [examSchedule, setExamSchedule] = useState<SpecialScheduleResponse | null>(null);
-  const [isSpecialScheduleLoading, setIsSpecialScheduleLoading] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [settings, setSettings] = useState(scheduleService.getSettings());
-  const now = new Date();
-  const currentDay = now.getDay();
-  const isWeekend = currentDay === 0 || currentDay === 6;
-  
-  // Check if current Saturday is a recovery day
-  const currentSaturday = new Date(now);
-  if (currentDay === 0) { // If Sunday
-    currentSaturday.setDate(now.getDate() - 1); // Yesterday was Saturday
-  }
-  const saturdayIsRecovery = scheduleService.isRecoveryDay(currentSaturday) !== null;
-  
-  // Initialize weekOffset based on recovery days and weekend status
-  const [weekOffset, setWeekOffset] = useState(() => {
-    if (isWeekend) {
-      if ((currentDay === 6 && saturdayIsRecovery) || // Saturday and it's a recovery day
-          (currentDay === 0 && saturdayIsRecovery)) { // Sunday and yesterday was recovery
-        return 0; // Stay on current week
-      }
-      return 1; // Go to next week
+    const [scheduleData, setScheduleData] = useState<ApiResponse | null>(null);
+    const [weekSchedule, setWeekSchedule] =
+        useState<Record<string, ScheduleItem[]>>(EMPTY_WEEK_SCHEDULE);
+    const [thesisSchedule, setThesisSchedule] =
+        useState<SpecialScheduleResponse | null>(null);
+    const [examSchedule, setExamSchedule] =
+        useState<SpecialScheduleResponse | null>(null);
+    const [isSpecialScheduleLoading, setIsSpecialScheduleLoading] =
+        useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [settings, setSettings] = useState(scheduleService.getSettings());
+    const now = new Date();
+    const currentDay = now.getDay();
+    const isWeekend = currentDay === 0 || currentDay === 6;
+
+    // Check if current Saturday is a recovery day
+    const currentSaturday = new Date(now);
+    if (currentDay === 0) {
+        // If Sunday
+        currentSaturday.setDate(now.getDate() - 1); // Yesterday was Saturday
     }
-    return 0; // Weekday - stay on current week
-  });
-  const { t, formatDate, formatHour } = useTranslation();
-  const currentTime = useTimeUpdate();
-  const verticalScrollRef = useRef<ScrollView>(null);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [slideDirection, setSlideDirection] = useState<'left' | 'right' | null>(null);
-  const fadeAnim = useSharedValue(1);
-  const slideAnim = useSharedValue(0);
-  
-  // Initialize settings ref at the top level
-  const settingsRef = useRef(scheduleService.getSettings());
-  const refreshVersionRef = useRef(scheduleService.getScheduleRefreshVersion());
-  const thesisEvents = useMemo(
-    () => (thesisSchedule?.events || []).filter((event): event is ThesisScheduleEvent => event.type === 'thesis'),
-    [thesisSchedule]
-  );
-  const examEvents = useMemo(
-    () => (examSchedule?.events || []).filter((event): event is ExamScheduleEvent => event.type === 'exam'),
-    [examSchedule]
-  );
+    const saturdayIsRecovery =
+        scheduleService.isRecoveryDay(currentSaturday) !== null;
 
-  // Calculate current week start date (Monday)
-  const weekStartDate = new Date();
-  weekStartDate.setDate(weekStartDate.getDate() + (weekOffset * 7));
-  const weekStart = getWeekStart(weekStartDate);
-  
-  // Check if current week is even
-  const isEvenWeek = scheduleService.isEvenWeek(weekStartDate);
-
-  // Helper to get date for specific day in week
-  const getDateForDay = (weekStartDate: Date, dayOffset: number) => {
-    const date = new Date(weekStartDate);
-    date.setDate(weekStartDate.getDate() + dayOffset);
-    return date;
-  };
-
-  const loadCachedSpecialSchedules = useCallback(
-    async (groupName?: string) => {
-      const resolvedGroupName = String(groupName || scheduleService.getSettings().selectedGroupName || '').trim();
-
-      if (!resolvedGroupName) {
-        setThesisSchedule(null);
-        setExamSchedule(null);
-        return;
-      }
-
-      setIsSpecialScheduleLoading(true);
-      try {
-        const { thesis, exam } = await scheduleService.getCachedExamAndThesisSchedule(resolvedGroupName);
-        setThesisSchedule(thesis);
-        setExamSchedule(exam);
-      } catch (specialError) {
-        setThesisSchedule(
-          scheduleService.buildUnavailableSpecialSchedule(
-            'thesis',
-            resolvedGroupName,
-            'cache_read_failed',
-            'Unable to load cached thesis schedule'
-          )
-        );
-        setExamSchedule(
-          scheduleService.buildUnavailableSpecialSchedule(
-            'exam',
-            resolvedGroupName,
-            'cache_read_failed',
-            'Unable to load cached exam schedule'
-          )
-        );
-      } finally {
-        setIsSpecialScheduleLoading(false);
-      }
-    },
-    []
-  );
-
-  // Make fetchSchedule and updateWeekSchedule use useCallback
-  const fetchSchedule = useCallback(async (groupId?: string, targetWeekOffset?: number, forceSync: boolean = false) => {
-    const resolvedWeekOffset = targetWeekOffset ?? weekOffset;
-    const targetWeekStartDate = new Date();
-    targetWeekStartDate.setDate(targetWeekStartDate.getDate() + (resolvedWeekOffset * 7));
-    const targetWeekStart = getWeekStart(targetWeekStartDate);
-
-    try {
-      setIsLoading(true);
-      setError(null);
-      await scheduleService.syncPeriodTimesForWeek(new Date(), resolvedWeekOffset, forceSync);
-      const data = await scheduleService.getClassSchedule(groupId);
-      setScheduleData(data);
-      
-      // Process recovery days for this week
-      const recoveryDays = Array.isArray(data.recoveryDays) ? data.recoveryDays : [];
-      
-      // Get weekend recovery days for current week
-      const weekendRecoveryDays = recoveryDays.filter(rd => {
-        const rdDate = new Date(rd.date);
-        const startOfWeek = new Date(targetWeekStart);
-        const endOfWeek = new Date(targetWeekStart);
-        endOfWeek.setDate(targetWeekStart.getDate() + 6);
-        
-        return rdDate >= startOfWeek && 
-               rdDate <= endOfWeek && 
-               (rdDate.getDay() === 0 || rdDate.getDay() === 6) &&
-               rd.isActive && 
-               (rd.groupId === '' || rd.groupId === settings.selectedGroupId);
-      });
-
-      // Build the schedule object with async/await
-      const newWeekSchedule: Record<string, ScheduleItem[]> = {
-        monday: await scheduleService.getScheduleForDay(data, 'monday', getDateForDay(targetWeekStart, 0)),
-        tuesday: await scheduleService.getScheduleForDay(data, 'tuesday', getDateForDay(targetWeekStart, 1)),
-        wednesday: await scheduleService.getScheduleForDay(data, 'wednesday', getDateForDay(targetWeekStart, 2)),
-        thursday: await scheduleService.getScheduleForDay(data, 'thursday', getDateForDay(targetWeekStart, 3)),
-        friday: await scheduleService.getScheduleForDay(data, 'friday', getDateForDay(targetWeekStart, 4))
-      };
-      
-      // Add recovery days if any
-      if (weekendRecoveryDays.length > 0) {
-        // Process each weekend recovery day one by one
-        for (const rd of weekendRecoveryDays) {
-          const dayKey = `weekend_${rd.date}`;
-          newWeekSchedule[dayKey] = await scheduleService.getScheduleForDay(
-            data, 
-            undefined,
-            new Date(rd.date)
-          );
+    // Initialize weekOffset based on recovery days and weekend status
+    const [weekOffset, setWeekOffset] = useState(() => {
+        if (isWeekend) {
+            if (
+                (currentDay === 6 && saturdayIsRecovery) || // Saturday and it's a recovery day
+                (currentDay === 0 && saturdayIsRecovery)
+            ) {
+                // Sunday and yesterday was recovery
+                return 0; // Stay on current week
+            }
+            return 1; // Go to next week
         }
-      }
-      
-      setWeekSchedule(newWeekSchedule);
-      await loadCachedSpecialSchedules(scheduleService.getSettings().selectedGroupName);
-      setIsLoading(false);
-    } catch (error) {
-      setError(t('schedule').error || 'Failed to load schedule');
-      setIsLoading(false);
-    }
-  }, [t, settings.selectedGroupId, weekOffset, loadCachedSpecialSchedules]);
+        return 0; // Weekday - stay on current week
+    });
+    const { t, formatDate, formatHour } = useTranslation();
+    const currentTime = useTimeUpdate();
+    const verticalScrollRef = useRef<ScrollView>(null);
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [, setSlideDirection] = useState<'left' | 'right' | null>(null);
+    const fadeAnim = useSharedValue(1);
+    const slideAnim = useSharedValue(0);
 
-  // Schedule update function wrapped in useCallback
-  const updateWeekSchedule = useCallback(async () => {
-    if (scheduleData) {
-      const recoveryDays = Array.isArray(scheduleData.recoveryDays) ? scheduleData.recoveryDays : [];
-      const weekendRecoveryDays = recoveryDays.filter(rd => {
+    // Initialize settings ref at the top level
+    const settingsRef = useRef(scheduleService.getSettings());
+    const refreshVersionRef = useRef(
+        scheduleService.getScheduleRefreshVersion(),
+    );
+    const thesisEvents = useMemo(
+        () =>
+            (thesisSchedule?.events || []).filter(
+                (event): event is ThesisScheduleEvent =>
+                    event.type === 'thesis',
+            ),
+        [thesisSchedule],
+    );
+    const examEvents = useMemo(
+        () =>
+            (examSchedule?.events || []).filter(
+                (event): event is ExamScheduleEvent => event.type === 'exam',
+            ),
+        [examSchedule],
+    );
+
+    // Calculate current week start date (Monday)
+    const weekStartDate = new Date();
+    weekStartDate.setDate(weekStartDate.getDate() + weekOffset * 7);
+    const weekStart = getWeekStart(weekStartDate);
+
+    // Check if current week is even
+    const isEvenWeek = scheduleService.isEvenWeek(weekStartDate);
+
+    // Helper to get date for specific day in week
+    const getDateForDay = useCallback(
+        (weekStartDate: Date, dayOffset: number) => {
+            const date = new Date(weekStartDate);
+            date.setDate(weekStartDate.getDate() + dayOffset);
+            return date;
+        },
+        [],
+    );
+
+    const loadCachedSpecialSchedules = useCallback(
+        async (groupName?: string) => {
+            const resolvedGroupName = String(
+                groupName ||
+                    scheduleService.getSettings().selectedGroupName ||
+                    '',
+            ).trim();
+
+            if (!resolvedGroupName) {
+                setThesisSchedule(null);
+                setExamSchedule(null);
+                return;
+            }
+
+            setIsSpecialScheduleLoading(true);
+            try {
+                const { thesis, exam } =
+                    await scheduleService.getCachedExamAndThesisSchedule(
+                        resolvedGroupName,
+                    );
+                setThesisSchedule(thesis);
+                setExamSchedule(exam);
+            } catch {
+                setThesisSchedule(
+                    scheduleService.buildUnavailableSpecialSchedule(
+                        'thesis',
+                        resolvedGroupName,
+                        'cache_read_failed',
+                        'Unable to load cached thesis schedule',
+                    ),
+                );
+                setExamSchedule(
+                    scheduleService.buildUnavailableSpecialSchedule(
+                        'exam',
+                        resolvedGroupName,
+                        'cache_read_failed',
+                        'Unable to load cached exam schedule',
+                    ),
+                );
+            } finally {
+                setIsSpecialScheduleLoading(false);
+            }
+        },
+        [],
+    );
+
+    // Make fetchSchedule and updateWeekSchedule use useCallback
+    const fetchSchedule = useCallback(
+        async (
+            groupId?: string,
+            targetWeekOffset?: number,
+            forceSync: boolean = false,
+        ) => {
+            const resolvedWeekOffset = targetWeekOffset ?? weekOffset;
+            const targetWeekStartDate = new Date();
+            targetWeekStartDate.setDate(
+                targetWeekStartDate.getDate() + resolvedWeekOffset * 7,
+            );
+            const targetWeekStart = getWeekStart(targetWeekStartDate);
+
+            try {
+                setIsLoading(true);
+                setError(null);
+                await scheduleService.syncPeriodTimesForWeek(
+                    new Date(),
+                    resolvedWeekOffset,
+                    forceSync,
+                );
+                const data = await scheduleService.getClassSchedule(groupId);
+                setScheduleData(data);
+
+                // Process recovery days for this week
+                const recoveryDays =
+                    Array.isArray(data.recoveryDays) ? data.recoveryDays : [];
+
+                // Get weekend recovery days for current week
+                const weekendRecoveryDays = recoveryDays.filter((rd) => {
+                    const rdDate = new Date(rd.date);
+                    const startOfWeek = new Date(targetWeekStart);
+                    const endOfWeek = new Date(targetWeekStart);
+                    endOfWeek.setDate(targetWeekStart.getDate() + 6);
+
+                    return (
+                        rdDate >= startOfWeek &&
+                        rdDate <= endOfWeek &&
+                        (rdDate.getDay() === 0 || rdDate.getDay() === 6) &&
+                        rd.isActive &&
+                        (rd.groupId === '' ||
+                            rd.groupId === settings.selectedGroupId)
+                    );
+                });
+
+                // Build the schedule object with async/await
+                const newWeekSchedule: Record<string, ScheduleItem[]> = {
+                    monday: await scheduleService.getScheduleForDay(
+                        data,
+                        'monday',
+                        getDateForDay(targetWeekStart, 0),
+                    ),
+                    tuesday: await scheduleService.getScheduleForDay(
+                        data,
+                        'tuesday',
+                        getDateForDay(targetWeekStart, 1),
+                    ),
+                    wednesday: await scheduleService.getScheduleForDay(
+                        data,
+                        'wednesday',
+                        getDateForDay(targetWeekStart, 2),
+                    ),
+                    thursday: await scheduleService.getScheduleForDay(
+                        data,
+                        'thursday',
+                        getDateForDay(targetWeekStart, 3),
+                    ),
+                    friday: await scheduleService.getScheduleForDay(
+                        data,
+                        'friday',
+                        getDateForDay(targetWeekStart, 4),
+                    ),
+                };
+
+                // Add recovery days if any
+                if (weekendRecoveryDays.length > 0) {
+                    // Process each weekend recovery day one by one
+                    for (const rd of weekendRecoveryDays) {
+                        const dayKey = `weekend_${rd.date}`;
+                        newWeekSchedule[dayKey] =
+                            await scheduleService.getScheduleForDay(
+                                data,
+                                undefined,
+                                new Date(rd.date),
+                            );
+                    }
+                }
+
+                setWeekSchedule(newWeekSchedule);
+                await loadCachedSpecialSchedules(
+                    scheduleService.getSettings().selectedGroupName,
+                );
+                setIsLoading(false);
+            } catch {
+                setError(t('schedule').error || 'Failed to load schedule');
+                setIsLoading(false);
+            }
+        },
+        [
+            t,
+            settings.selectedGroupId,
+            weekOffset,
+            loadCachedSpecialSchedules,
+            getDateForDay,
+        ],
+    );
+
+    // Schedule update function wrapped in useCallback
+    const updateWeekSchedule = useCallback(async () => {
+        if (scheduleData) {
+            const recoveryDays =
+                Array.isArray(scheduleData.recoveryDays) ?
+                    scheduleData.recoveryDays
+                :   [];
+            const weekendRecoveryDays = recoveryDays.filter((rd) => {
+                const rdDate = new Date(rd.date);
+                const startOfWeek = new Date(weekStart);
+                const endOfWeek = new Date(weekStart);
+                endOfWeek.setDate(weekStart.getDate() + 6);
+
+                return (
+                    rdDate >= startOfWeek &&
+                    rdDate <= endOfWeek &&
+                    (rdDate.getDay() === 0 || rdDate.getDay() === 6) &&
+                    rd.isActive &&
+                    (rd.groupId === '' ||
+                        rd.groupId === settings.selectedGroupId)
+                );
+            });
+
+            // Build the schedule object with async/await
+            const newWeekSchedule: Record<string, ScheduleItem[]> = {
+                monday: await scheduleService.getScheduleForDay(
+                    scheduleData,
+                    'monday',
+                    getDateForDay(weekStart, 0),
+                ),
+                tuesday: await scheduleService.getScheduleForDay(
+                    scheduleData,
+                    'tuesday',
+                    getDateForDay(weekStart, 1),
+                ),
+                wednesday: await scheduleService.getScheduleForDay(
+                    scheduleData,
+                    'wednesday',
+                    getDateForDay(weekStart, 2),
+                ),
+                thursday: await scheduleService.getScheduleForDay(
+                    scheduleData,
+                    'thursday',
+                    getDateForDay(weekStart, 3),
+                ),
+                friday: await scheduleService.getScheduleForDay(
+                    scheduleData,
+                    'friday',
+                    getDateForDay(weekStart, 4),
+                ),
+            };
+
+            // Add recovery days if any
+            if (weekendRecoveryDays.length > 0) {
+                // Process each weekend recovery day one by one
+                for (const rd of weekendRecoveryDays) {
+                    const dayKey = `weekend_${rd.date}`;
+                    const recoveryDate = new Date(rd.date);
+                    newWeekSchedule[dayKey] =
+                        await scheduleService.getScheduleForDay(
+                            scheduleData,
+                            undefined,
+                            recoveryDate,
+                        );
+                }
+            }
+
+            setWeekSchedule(newWeekSchedule);
+            await loadCachedSpecialSchedules(
+                scheduleService.getSettings().selectedGroupName,
+            );
+        }
+    }, [
+        scheduleData,
+        weekStart,
+        settings.selectedGroupId,
+        getDateForDay,
+        loadCachedSpecialSchedules,
+    ]);
+
+    // Add useEffect for initial schedule load
+    useEffect(() => {
+        // Call the async fetchSchedule function
+        const initializeSchedule = async () => {
+            await fetchSchedule();
+        };
+
+        initializeSchedule();
+    }, [fetchSchedule]);
+
+    useEffect(() => {
+        void loadCachedSpecialSchedules(settings.selectedGroupName);
+    }, [settings.selectedGroupName, loadCachedSpecialSchedules]);
+
+    // Settings subscription effect for updates when settings change
+    useEffect(() => {
+        // Capture current references to avoid stale closures
+        const currUpdateWeekSchedule = updateWeekSchedule;
+        const currFetchSchedule = fetchSchedule;
+        const currScheduleData = scheduleData;
+
+        const updateHandler = async () => {
+            // Get latest settings
+            const newSettings = scheduleService.getSettings();
+            const prevSettings = settingsRef.current;
+            const latestRefreshVersion =
+                scheduleService.getScheduleRefreshVersion();
+
+            // Update the ref and state
+            settingsRef.current = newSettings;
+            setSettings(newSettings);
+
+            // If a full schedule refresh was triggered, clear week state and reload current week.
+            if (latestRefreshVersion !== refreshVersionRef.current) {
+                refreshVersionRef.current = latestRefreshVersion;
+                setWeekOffset(0);
+                setWeekSchedule({ ...EMPTY_WEEK_SCHEDULE });
+                await currFetchSchedule(newSettings.selectedGroupId, 0, true);
+                await loadCachedSpecialSchedules(newSettings.selectedGroupName);
+                return;
+            }
+
+            // Handle group ID change (full refetch needed)
+            if (newSettings.selectedGroupId !== prevSettings.selectedGroupId) {
+                await currFetchSchedule(newSettings.selectedGroupId);
+                await loadCachedSpecialSchedules(newSettings.selectedGroupName);
+                return;
+            }
+
+            // Check if custom periods have changed
+            const oldCustomPeriods = JSON.stringify(prevSettings.customPeriods);
+            const newCustomPeriods = JSON.stringify(newSettings.customPeriods);
+
+            if (oldCustomPeriods !== newCustomPeriods) {
+                // Force update by calling updateWeekSchedule directly - now with await
+                await currUpdateWeekSchedule();
+                return;
+            }
+
+            // For all other changes including manual refresh, refetch fresh data and update
+            // This ensures that when schedule is refreshed in settings, the UI updates
+            if (!currScheduleData) {
+                await currFetchSchedule();
+                return;
+            }
+
+            // Refetch to pick up any changes from manual refresh
+            await scheduleService.syncPeriodTimesForWeek(
+                new Date(),
+                weekOffset,
+            );
+            const freshData = await scheduleService.getClassSchedule(
+                newSettings.selectedGroupId,
+            );
+            if (freshData) {
+                setScheduleData(freshData);
+
+                const recoveryDays =
+                    Array.isArray(freshData.recoveryDays) ?
+                        freshData.recoveryDays
+                    :   [];
+                const weekendRecoveryDays = recoveryDays.filter((rd) => {
+                    const rdDate = new Date(rd.date);
+                    const startOfWeek = new Date(weekStart);
+                    const endOfWeek = new Date(weekStart);
+                    endOfWeek.setDate(weekStart.getDate() + 6);
+
+                    return (
+                        rdDate >= startOfWeek &&
+                        rdDate <= endOfWeek &&
+                        (rdDate.getDay() === 0 || rdDate.getDay() === 6) &&
+                        rd.isActive &&
+                        (rd.groupId === '' ||
+                            rd.groupId === newSettings.selectedGroupId)
+                    );
+                });
+
+                const newWeekSchedule: Record<string, ScheduleItem[]> = {
+                    monday: await scheduleService.getScheduleForDay(
+                        freshData,
+                        'monday',
+                        getDateForDay(weekStart, 0),
+                    ),
+                    tuesday: await scheduleService.getScheduleForDay(
+                        freshData,
+                        'tuesday',
+                        getDateForDay(weekStart, 1),
+                    ),
+                    wednesday: await scheduleService.getScheduleForDay(
+                        freshData,
+                        'wednesday',
+                        getDateForDay(weekStart, 2),
+                    ),
+                    thursday: await scheduleService.getScheduleForDay(
+                        freshData,
+                        'thursday',
+                        getDateForDay(weekStart, 3),
+                    ),
+                    friday: await scheduleService.getScheduleForDay(
+                        freshData,
+                        'friday',
+                        getDateForDay(weekStart, 4),
+                    ),
+                };
+
+                if (weekendRecoveryDays.length > 0) {
+                    for (const rd of weekendRecoveryDays) {
+                        const dayKey = `weekend_${rd.date}`;
+                        newWeekSchedule[dayKey] =
+                            await scheduleService.getScheduleForDay(
+                                freshData,
+                                undefined,
+                                new Date(rd.date),
+                            );
+                    }
+                }
+
+                setWeekSchedule(newWeekSchedule);
+            }
+        };
+
+        // Subscribe to settings changes
+        const unsubscribe = scheduleService.subscribe(updateHandler);
+
+        return () => unsubscribe();
+    }, [
+        scheduleData,
+        updateWeekSchedule,
+        fetchSchedule,
+        weekStart,
+        getDateForDay,
+        weekOffset,
+        loadCachedSpecialSchedules,
+    ]);
+
+    // Calculate day dates for the week, including weekend recovery days if they exist
+    const normalDayCount = 5; // Monday-Friday
+    const recoveryDays =
+        Array.isArray(scheduleData?.recoveryDays) ?
+            scheduleData.recoveryDays
+        :   [];
+    const weekendRecoveryDays = recoveryDays.filter((rd) => {
         const rdDate = new Date(rd.date);
         const startOfWeek = new Date(weekStart);
         const endOfWeek = new Date(weekStart);
         endOfWeek.setDate(weekStart.getDate() + 6);
-        
-        return rdDate >= startOfWeek && 
-               rdDate <= endOfWeek && 
-               (rdDate.getDay() === 0 || rdDate.getDay() === 6) &&
-               rd.isActive && 
-               (rd.groupId === '' || rd.groupId === settings.selectedGroupId);
-      });
 
-      // Build the schedule object with async/await
-      const newWeekSchedule: Record<string, ScheduleItem[]> = {
-        monday: await scheduleService.getScheduleForDay(scheduleData, 'monday', getDateForDay(weekStart, 0)),
-        tuesday: await scheduleService.getScheduleForDay(scheduleData, 'tuesday', getDateForDay(weekStart, 1)),
-        wednesday: await scheduleService.getScheduleForDay(scheduleData, 'wednesday', getDateForDay(weekStart, 2)),
-        thursday: await scheduleService.getScheduleForDay(scheduleData, 'thursday', getDateForDay(weekStart, 3)),
-        friday: await scheduleService.getScheduleForDay(scheduleData, 'friday', getDateForDay(weekStart, 4))
-      };
-      
-      // Add recovery days if any
-      if (weekendRecoveryDays.length > 0) {
-        // Process each weekend recovery day one by one
-        for (const rd of weekendRecoveryDays) {
-          const dayKey = `weekend_${rd.date}`;
-          const recoveryDate = new Date(rd.date);
-          newWeekSchedule[dayKey] = await scheduleService.getScheduleForDay(
-            scheduleData, 
-            undefined,
-            recoveryDate
-          );
+        return (
+            rdDate >= startOfWeek &&
+            rdDate <= endOfWeek &&
+            (rdDate.getDay() === 0 || rdDate.getDay() === 6) &&
+            rd.isActive &&
+            (rd.groupId === '' || rd.groupId === settings.selectedGroupId)
+        );
+    });
+
+    const totalDays = normalDayCount + weekendRecoveryDays.length;
+
+    const dayDates = Array.from({ length: totalDays }, (_, i) => {
+        // First 5 days are the normal weekdays
+        if (i < normalDayCount) {
+            const date = new Date(weekStart);
+            date.setDate(weekStart.getDate() + i);
+
+            // Check if this is a recovery day
+            const recoveryDay = recoveryDays.find((rd) => {
+                const rdDate = rd.date.split('-').map(Number);
+                return (
+                    date.getFullYear() === rdDate[0] &&
+                    date.getMonth() + 1 === rdDate[1] &&
+                    date.getDate() === rdDate[2] &&
+                    rd.isActive &&
+                    (rd.groupId === '' ||
+                        rd.groupId === settings.selectedGroupId)
+                );
+            });
+
+            return {
+                date,
+                dayName: t('weekdays').short[date.getDay()],
+                dayNumber: date.getDate(),
+                isToday: date.toDateString() === new Date().toDateString(),
+                recoveryDay: recoveryDay,
+                isWeekend: false,
+                dayKey: DAYS_MAP[date.getDay() as keyof typeof DAYS_MAP],
+            };
+        } else {
+            // Weekend recovery days
+            const weekendIndex = i - normalDayCount;
+            const recoveryDay = weekendRecoveryDays[weekendIndex];
+            const date = new Date(recoveryDay.date);
+
+            return {
+                date,
+                dayName: t('weekdays').short[date.getDay()],
+                dayNumber: date.getDate(),
+                isToday: date.toDateString() === new Date().toDateString(),
+                recoveryDay: recoveryDay,
+                isWeekend: true,
+                dayKey: `weekend_${recoveryDay.date}`,
+            };
         }
-      }
-      
-      setWeekSchedule(newWeekSchedule);
-      await loadCachedSpecialSchedules(scheduleService.getSettings().selectedGroupName);
-    }
-  }, [scheduleData, weekStart, settings.selectedGroupId, getDateForDay, loadCachedSpecialSchedules]);
+    });
 
-  // Add useEffect for initial schedule load
-  useEffect(() => {
-    // Call the async fetchSchedule function
-    const initializeSchedule = async () => {
-      await fetchSchedule();
+    // Calculate time range
+    const { min: firstHour, max: lastHour } =
+        scheduleData ? getTimeRange(weekSchedule) : { min: 8, max: 17 };
+
+    // Generate time slots
+    const timeSlots = generateTimeSlots(firstHour, lastHour);
+
+    // Calculate timetable dimensions
+    const windowWidth = Dimensions.get('window').width;
+    const hourHeight = 65; // Slightly more compact
+    const timeColumnWidth = 30; // Even narrower time column
+    const dayColumnWidth =
+        (windowWidth - timeColumnWidth - 8) / Math.min(totalDays, 6); // Limit to 6 columns max for readability
+    const timetableHeight = (lastHour - firstHour + 1) * hourHeight;
+
+    // Get current hour for highlighting
+    const nowHour = new Date().getHours();
+
+    // Create animated styles
+    const containerStyle = useAnimatedStyle(() => {
+        return {
+            opacity: fadeAnim.value,
+            transform: [{ translateX: slideAnim.value }],
+        };
+    });
+
+    // Function to navigate between weeks with smooth transitions
+    const navigateWeek = (direction: number) => {
+        // Immediately clear current week's data and start transition
+        fadeAnim.value = withTiming(0, { duration: 150 });
+        slideAnim.value = withTiming(direction * 50, { duration: 150 });
+
+        // Set slide direction for animation
+        setSlideDirection(direction > 0 ? 'right' : 'left');
+
+        // Update week offset
+        setWeekOffset((prev) => prev + direction);
+
+        // Force an update of the week schedule with the new date
+        if (scheduleData) {
+            const newWeekStart = new Date(weekStart);
+            newWeekStart.setDate(weekStart.getDate() + direction * 7);
+
+            const updateScheduleForNewWeek = async () => {
+                try {
+                    const targetWeekOffset = weekOffset + direction;
+                    await scheduleService.syncPeriodTimesForWeek(
+                        new Date(),
+                        targetWeekOffset,
+                    );
+                    // Fetch fresh data for the new week
+                    const data = await scheduleService.getClassSchedule(
+                        settings.selectedGroupId,
+                    );
+
+                    // Process recovery days for the new week
+                    const recoveryDays =
+                        Array.isArray(data.recoveryDays) ?
+                            data.recoveryDays
+                        :   [];
+                    const weekendRecoveryDays = recoveryDays.filter((rd) => {
+                        const rdDate = new Date(rd.date);
+                        const startOfWeek = new Date(newWeekStart);
+                        const endOfWeek = new Date(newWeekStart);
+                        endOfWeek.setDate(newWeekStart.getDate() + 6);
+
+                        return (
+                            rdDate >= startOfWeek &&
+                            rdDate <= endOfWeek &&
+                            (rdDate.getDay() === 0 || rdDate.getDay() === 6) &&
+                            rd.isActive &&
+                            (rd.groupId === '' ||
+                                rd.groupId === settings.selectedGroupId)
+                        );
+                    });
+
+                    // Build the schedule object for the new week with fresh data
+                    const newWeekSchedule: Record<string, ScheduleItem[]> = {
+                        monday: await scheduleService.getScheduleForDay(
+                            data,
+                            'monday',
+                            getDateForDay(newWeekStart, 0),
+                        ),
+                        tuesday: await scheduleService.getScheduleForDay(
+                            data,
+                            'tuesday',
+                            getDateForDay(newWeekStart, 1),
+                        ),
+                        wednesday: await scheduleService.getScheduleForDay(
+                            data,
+                            'wednesday',
+                            getDateForDay(newWeekStart, 2),
+                        ),
+                        thursday: await scheduleService.getScheduleForDay(
+                            data,
+                            'thursday',
+                            getDateForDay(newWeekStart, 3),
+                        ),
+                        friday: await scheduleService.getScheduleForDay(
+                            data,
+                            'friday',
+                            getDateForDay(newWeekStart, 4),
+                        ),
+                    };
+
+                    // Add recovery days if any
+                    if (weekendRecoveryDays.length > 0) {
+                        for (const rd of weekendRecoveryDays) {
+                            const dayKey = `weekend_${rd.date}`;
+                            newWeekSchedule[dayKey] =
+                                await scheduleService.getScheduleForDay(
+                                    data,
+                                    undefined,
+                                    new Date(rd.date),
+                                );
+                        }
+                    }
+
+                    // Update the data
+                    setScheduleData(data);
+                    setWeekSchedule(newWeekSchedule);
+
+                    // Animate in the new content
+                    slideAnim.value = withTiming(0, { duration: 150 });
+                    fadeAnim.value = withTiming(1, { duration: 150 });
+                } catch {
+                    setError(t('schedule').error || 'Failed to load schedule');
+                    // Reset animations on error
+                    slideAnim.value = withTiming(0, { duration: 150 });
+                    fadeAnim.value = withTiming(1, { duration: 150 });
+                }
+            };
+
+            updateScheduleForNewWeek();
+        }
     };
-    
-    initializeSchedule();
-  }, []);
 
-  useEffect(() => {
-    void loadCachedSpecialSchedules(settings.selectedGroupName);
-  }, [settings.selectedGroupName, loadCachedSpecialSchedules]);
+    // Fix goToCurrentWeek to use the same smooth transitions
+    const goToCurrentWeek = () => {
+        if (weekOffset === 0) return; // Don't do anything if already on current week
 
-  // Settings subscription effect for updates when settings change
-  useEffect(() => {
-    // Capture current references to avoid stale closures
-    const currUpdateWeekSchedule = updateWeekSchedule;
-    const currFetchSchedule = fetchSchedule;
-    const currScheduleData = scheduleData;
-    
-    const updateHandler = async () => {
-      // Get latest settings
-      const newSettings = scheduleService.getSettings();
-      const prevSettings = settingsRef.current;
-      const latestRefreshVersion = scheduleService.getScheduleRefreshVersion();
-      
-      // Update the ref and state
-      settingsRef.current = newSettings;
-      setSettings(newSettings);
-
-      // If a full schedule refresh was triggered, clear week state and reload current week.
-      if (latestRefreshVersion !== refreshVersionRef.current) {
-        refreshVersionRef.current = latestRefreshVersion;
-        setWeekOffset(0);
-        setWeekSchedule({ ...EMPTY_WEEK_SCHEDULE });
-        await currFetchSchedule(newSettings.selectedGroupId, 0, true);
-        await loadCachedSpecialSchedules(newSettings.selectedGroupName);
-        return;
-      }
-      
-      // Handle group ID change (full refetch needed)
-      if (newSettings.selectedGroupId !== prevSettings.selectedGroupId) {
-        await currFetchSchedule(newSettings.selectedGroupId);
-        await loadCachedSpecialSchedules(newSettings.selectedGroupName);
-        return;
-      }
-      
-      // Check if custom periods have changed
-      const oldCustomPeriods = JSON.stringify(prevSettings.customPeriods);
-      const newCustomPeriods = JSON.stringify(newSettings.customPeriods);
-      
-      if (oldCustomPeriods !== newCustomPeriods) {
-        // Force update by calling updateWeekSchedule directly - now with await
-        await currUpdateWeekSchedule();
-        return;
-      }
-      
-      // For all other changes including manual refresh, refetch fresh data and update
-      // This ensures that when schedule is refreshed in settings, the UI updates
-      if (!currScheduleData) {
-        await currFetchSchedule();
-        return;
-      }
-      
-      // Refetch to pick up any changes from manual refresh
-      await scheduleService.syncPeriodTimesForWeek(new Date(), weekOffset);
-      const freshData = await scheduleService.getClassSchedule(newSettings.selectedGroupId);
-      if (freshData) {
-        setScheduleData(freshData);
-        
-        const recoveryDays = Array.isArray(freshData.recoveryDays) ? freshData.recoveryDays : [];
-        const weekendRecoveryDays = recoveryDays.filter(rd => {
-          const rdDate = new Date(rd.date);
-          const startOfWeek = new Date(weekStart);
-          const endOfWeek = new Date(weekStart);
-          endOfWeek.setDate(weekStart.getDate() + 6);
-          
-          return rdDate >= startOfWeek && 
-                 rdDate <= endOfWeek && 
-                 (rdDate.getDay() === 0 || rdDate.getDay() === 6) &&
-                 rd.isActive && 
-                 (rd.groupId === '' || rd.groupId === newSettings.selectedGroupId);
+        // Immediately clear current week's data and start transition
+        fadeAnim.value = withTiming(0, { duration: 150 });
+        slideAnim.value = withTiming(weekOffset > 0 ? -50 : 50, {
+            duration: 150,
         });
 
-        const newWeekSchedule: Record<string, ScheduleItem[]> = {
-          monday: await scheduleService.getScheduleForDay(freshData, 'monday', getDateForDay(weekStart, 0)),
-          tuesday: await scheduleService.getScheduleForDay(freshData, 'tuesday', getDateForDay(weekStart, 1)),
-          wednesday: await scheduleService.getScheduleForDay(freshData, 'wednesday', getDateForDay(weekStart, 2)),
-          thursday: await scheduleService.getScheduleForDay(freshData, 'thursday', getDateForDay(weekStart, 3)),
-          friday: await scheduleService.getScheduleForDay(freshData, 'friday', getDateForDay(weekStart, 4))
-        };
-        
-        if (weekendRecoveryDays.length > 0) {
-          for (const rd of weekendRecoveryDays) {
-            const dayKey = `weekend_${rd.date}`;
-            newWeekSchedule[dayKey] = await scheduleService.getScheduleForDay(
-              freshData, 
-              undefined,
-              new Date(rd.date)
-            );
-          }
+        // Set slide direction for animation
+        setSlideDirection(weekOffset > 0 ? 'left' : 'right');
+
+        setWeekOffset(0);
+
+        // Force an update of the week schedule
+        if (scheduleData) {
+            const updateCurrentWeek = async () => {
+                try {
+                    await scheduleService.syncPeriodTimesForWeek(new Date(), 0);
+                    // Fetch fresh data for the current week
+                    const data = await scheduleService.getClassSchedule(
+                        settings.selectedGroupId,
+                    );
+
+                    const now = new Date();
+                    const currentWeekStart = getWeekStart(now);
+
+                    // Process recovery days for current week
+                    const recoveryDays =
+                        Array.isArray(data.recoveryDays) ?
+                            data.recoveryDays
+                        :   [];
+                    const weekendRecoveryDays = recoveryDays.filter((rd) => {
+                        const rdDate = new Date(rd.date);
+                        const startOfWeek = new Date(currentWeekStart);
+                        const endOfWeek = new Date(currentWeekStart);
+                        endOfWeek.setDate(currentWeekStart.getDate() + 6);
+
+                        return (
+                            rdDate >= startOfWeek &&
+                            rdDate <= endOfWeek &&
+                            (rdDate.getDay() === 0 || rdDate.getDay() === 6) &&
+                            rd.isActive &&
+                            (rd.groupId === '' ||
+                                rd.groupId === settings.selectedGroupId)
+                        );
+                    });
+
+                    // Build the schedule object for current week with fresh data
+                    const newWeekSchedule: Record<string, ScheduleItem[]> = {
+                        monday: await scheduleService.getScheduleForDay(
+                            data,
+                            'monday',
+                            getDateForDay(currentWeekStart, 0),
+                        ),
+                        tuesday: await scheduleService.getScheduleForDay(
+                            data,
+                            'tuesday',
+                            getDateForDay(currentWeekStart, 1),
+                        ),
+                        wednesday: await scheduleService.getScheduleForDay(
+                            data,
+                            'wednesday',
+                            getDateForDay(currentWeekStart, 2),
+                        ),
+                        thursday: await scheduleService.getScheduleForDay(
+                            data,
+                            'thursday',
+                            getDateForDay(currentWeekStart, 3),
+                        ),
+                        friday: await scheduleService.getScheduleForDay(
+                            data,
+                            'friday',
+                            getDateForDay(currentWeekStart, 4),
+                        ),
+                    };
+
+                    // Add recovery days if any
+                    if (weekendRecoveryDays.length > 0) {
+                        for (const rd of weekendRecoveryDays) {
+                            const dayKey = `weekend_${rd.date}`;
+                            newWeekSchedule[dayKey] =
+                                await scheduleService.getScheduleForDay(
+                                    data,
+                                    undefined,
+                                    new Date(rd.date),
+                                );
+                        }
+                    }
+
+                    // Update the data
+                    setScheduleData(data);
+                    setWeekSchedule(newWeekSchedule);
+
+                    // Animate in the new content
+                    slideAnim.value = withTiming(0, { duration: 150 });
+                    fadeAnim.value = withTiming(1, { duration: 150 });
+                } catch {
+                    setError(t('schedule').error || 'Failed to load schedule');
+                    // Reset animations on error
+                    slideAnim.value = withTiming(0, { duration: 150 });
+                    fadeAnim.value = withTiming(1, { duration: 150 });
+                }
+            };
+
+            updateCurrentWeek();
         }
-        
-        setWeekSchedule(newWeekSchedule);
-      }
     };
-    
-    // Subscribe to settings changes
-    const unsubscribe = scheduleService.subscribe(updateHandler);
-    
-    return () => unsubscribe();
-  }, [scheduleData, updateWeekSchedule, fetchSchedule, weekStart, getDateForDay, weekOffset, loadCachedSpecialSchedules]);
 
-  // Calculate day dates for the week, including weekend recovery days if they exist
-  const normalDayCount = 5; // Monday-Friday
-  const recoveryDays = Array.isArray(scheduleData?.recoveryDays) ? scheduleData.recoveryDays : [];
-  const weekendRecoveryDays = recoveryDays.filter(rd => {
-    const rdDate = new Date(rd.date);
-    const startOfWeek = new Date(weekStart);
-    const endOfWeek = new Date(weekStart);
-    endOfWeek.setDate(weekStart.getDate() + 6);
-    
-    return rdDate >= startOfWeek && 
-           rdDate <= endOfWeek && 
-           (rdDate.getDay() === 0 || rdDate.getDay() === 6) &&
-           rd.isActive && 
-           (rd.groupId === '' || rd.groupId === settings.selectedGroupId);
-  });
+    // Function to get color for a subject with improved color palette
+    const getSubjectColor = (subjectName: string): string => {
+        // More vibrant, design-friendly color palette
+        const colors = Colors.dark.subjectColors;
 
-  const totalDays = normalDayCount + weekendRecoveryDays.length;
-  
-  const dayDates = Array.from({ length: totalDays }, (_, i) => {
-    // First 5 days are the normal weekdays
-    if (i < normalDayCount) {
-      const date = new Date(weekStart);
-      date.setDate(weekStart.getDate() + i);
-      
-      // Check if this is a recovery day
-      const recoveryDay = recoveryDays.find(rd => {
-        const rdDate = rd.date.split('-').map(Number);
-        return date.getFullYear() === rdDate[0] && 
-              date.getMonth() + 1 === rdDate[1] && 
-              date.getDate() === rdDate[2] &&
-              rd.isActive &&
-              (rd.groupId === '' || rd.groupId === settings.selectedGroupId);
-      });
-      
-      return {
-        date,
-        dayName: t('weekdays').short[date.getDay()],
-        dayNumber: date.getDate(),
-        isToday: date.toDateString() === new Date().toDateString(),
-        recoveryDay: recoveryDay,
-        isWeekend: false,
-        dayKey: DAYS_MAP[date.getDay() as keyof typeof DAYS_MAP]
-      };
-    } else {
-      // Weekend recovery days
-      const weekendIndex = i - normalDayCount;
-      const recoveryDay = weekendRecoveryDays[weekendIndex];
-      const date = new Date(recoveryDay.date);
-      
-      return {
-        date,
-        dayName: t('weekdays').short[date.getDay()],
-        dayNumber: date.getDate(),
-        isToday: date.toDateString() === new Date().toDateString(),
-        recoveryDay: recoveryDay,
-        isWeekend: true,
-        dayKey: `weekend_${recoveryDay.date}`
-      };
-    }
-  });
+        let hash = 0;
+        for (let i = 0; i < subjectName.length; i++) {
+            hash = subjectName.charCodeAt(i) + ((hash << 5) - hash);
+        }
 
-  // Calculate time range
-  const { min: firstHour, max: lastHour } = scheduleData
-    ? getTimeRange(weekSchedule)
-    : { min: 8, max: 17 };
-
-  // Generate time slots
-  const timeSlots = generateTimeSlots(firstHour, lastHour);
-
-  // Calculate timetable dimensions
-  const windowWidth = Dimensions.get('window').width;
-  const hourHeight = 65; // Slightly more compact
-  const timeColumnWidth = 30; // Even narrower time column
-  const dayColumnWidth = (windowWidth - timeColumnWidth - 8) / Math.min(totalDays, 6); // Limit to 6 columns max for readability
-  const timetableHeight = (lastHour - firstHour + 1) * hourHeight;
-
-  // Get current hour for highlighting
-  const nowHour = new Date().getHours();
-
-  // Create animated styles
-  const containerStyle = useAnimatedStyle(() => {
-    return {
-      opacity: fadeAnim.value,
-      transform: [
-        { translateX: slideAnim.value }
-      ]
+        const index = Math.abs(hash) % colors.length;
+        return colors[index];
     };
-  });
 
-  // Function to navigate between weeks with smooth transitions
-  const navigateWeek = (direction: number) => {
-    // Immediately clear current week's data and start transition
-    fadeAnim.value = withTiming(0, { duration: 150 });
-    slideAnim.value = withTiming(direction * 50, { duration: 150 });
-    
-    // Set slide direction for animation
-    setSlideDirection(direction > 0 ? 'right' : 'left');
-    
-    // Update week offset
-    setWeekOffset(prev => prev + direction);
-    
-    // Force an update of the week schedule with the new date
-    if (scheduleData) {
-      const newWeekStart = new Date(weekStart);
-      newWeekStart.setDate(weekStart.getDate() + (direction * 7));
-      
-      const updateScheduleForNewWeek = async () => {
-        try {
-          const targetWeekOffset = weekOffset + direction;
-          await scheduleService.syncPeriodTimesForWeek(new Date(), targetWeekOffset);
-          // Fetch fresh data for the new week
-          const data = await scheduleService.getClassSchedule(settings.selectedGroupId);
-          
-          // Process recovery days for the new week
-          const recoveryDays = Array.isArray(data.recoveryDays) ? data.recoveryDays : [];
-          const weekendRecoveryDays = recoveryDays.filter(rd => {
-            const rdDate = new Date(rd.date);
-            const startOfWeek = new Date(newWeekStart);
-            const endOfWeek = new Date(newWeekStart);
-            endOfWeek.setDate(newWeekStart.getDate() + 6);
-            
-            return rdDate >= startOfWeek && 
-                   rdDate <= endOfWeek && 
-                   (rdDate.getDay() === 0 || rdDate.getDay() === 6) &&
-                   rd.isActive && 
-                   (rd.groupId === '' || rd.groupId === settings.selectedGroupId);
-          });
+    // Format week display text
+    const weekDisplayText = () => {
+        const weekStartFormatted = formatDate(weekStart, {
+            day: 'numeric',
+            month: 'short',
+        });
+        const weekEndDate = new Date(weekStart);
+        weekEndDate.setDate(weekStart.getDate() + 4);
+        const weekEndFormatted = formatDate(weekEndDate, {
+            day: 'numeric',
+            month: 'short',
+        });
+        return `${weekStartFormatted} - ${weekEndFormatted}`;
+    };
 
-          // Build the schedule object for the new week with fresh data
-          const newWeekSchedule: Record<string, ScheduleItem[]> = {
-            monday: await scheduleService.getScheduleForDay(data, 'monday', getDateForDay(newWeekStart, 0)),
-            tuesday: await scheduleService.getScheduleForDay(data, 'tuesday', getDateForDay(newWeekStart, 1)),
-            wednesday: await scheduleService.getScheduleForDay(data, 'wednesday', getDateForDay(newWeekStart, 2)),
-            thursday: await scheduleService.getScheduleForDay(data, 'thursday', getDateForDay(newWeekStart, 3)),
-            friday: await scheduleService.getScheduleForDay(data, 'friday', getDateForDay(newWeekStart, 4))
-          };
-          
-          // Add recovery days if any
-          if (weekendRecoveryDays.length > 0) {
-            for (const rd of weekendRecoveryDays) {
-              const dayKey = `weekend_${rd.date}`;
-              newWeekSchedule[dayKey] = await scheduleService.getScheduleForDay(
-                data, 
-                undefined,
-                new Date(rd.date)
-              );
-            }
-          }
-          
-          // Update the data
-          setScheduleData(data);
-          setWeekSchedule(newWeekSchedule);
-          
-          // Animate in the new content
-          slideAnim.value = withTiming(0, { duration: 150 });
-          fadeAnim.value = withTiming(1, { duration: 150 });
-        } catch (error) {
-          setError(t('schedule').error || 'Failed to load schedule');
-          // Reset animations on error
-          slideAnim.value = withTiming(0, { duration: 150 });
-          fadeAnim.value = withTiming(1, { duration: 150 });
-        }
-      };
-      
-      updateScheduleForNewWeek();
-    }
-  };
-
-  // Fix goToCurrentWeek to use the same smooth transitions
-  const goToCurrentWeek = () => {
-    if (weekOffset === 0) return; // Don't do anything if already on current week
-    
-    // Immediately clear current week's data and start transition
-    fadeAnim.value = withTiming(0, { duration: 150 });
-    slideAnim.value = withTiming(weekOffset > 0 ? -50 : 50, { duration: 150 });
-    
-    // Set slide direction for animation
-    setSlideDirection(weekOffset > 0 ? 'left' : 'right');
-    
-    setWeekOffset(0);
-    
-    // Force an update of the week schedule
-    if (scheduleData) {
-      const updateCurrentWeek = async () => {
-        try {
-          await scheduleService.syncPeriodTimesForWeek(new Date(), 0);
-          // Fetch fresh data for the current week
-          const data = await scheduleService.getClassSchedule(settings.selectedGroupId);
-          
-          const now = new Date();
-          const currentWeekStart = getWeekStart(now);
-          
-          // Process recovery days for current week
-          const recoveryDays = Array.isArray(data.recoveryDays) ? data.recoveryDays : [];
-          const weekendRecoveryDays = recoveryDays.filter(rd => {
-            const rdDate = new Date(rd.date);
-            const startOfWeek = new Date(currentWeekStart);
-            const endOfWeek = new Date(currentWeekStart);
-            endOfWeek.setDate(currentWeekStart.getDate() + 6);
-            
-            return rdDate >= startOfWeek && 
-                   rdDate <= endOfWeek && 
-                   (rdDate.getDay() === 0 || rdDate.getDay() === 6) &&
-                   rd.isActive && 
-                   (rd.groupId === '' || rd.groupId === settings.selectedGroupId);
-          });
-
-          // Build the schedule object for current week with fresh data
-          const newWeekSchedule: Record<string, ScheduleItem[]> = {
-            monday: await scheduleService.getScheduleForDay(data, 'monday', getDateForDay(currentWeekStart, 0)),
-            tuesday: await scheduleService.getScheduleForDay(data, 'tuesday', getDateForDay(currentWeekStart, 1)),
-            wednesday: await scheduleService.getScheduleForDay(data, 'wednesday', getDateForDay(currentWeekStart, 2)),
-            thursday: await scheduleService.getScheduleForDay(data, 'thursday', getDateForDay(currentWeekStart, 3)),
-            friday: await scheduleService.getScheduleForDay(data, 'friday', getDateForDay(currentWeekStart, 4))
-          };
-          
-          // Add recovery days if any
-          if (weekendRecoveryDays.length > 0) {
-            for (const rd of weekendRecoveryDays) {
-              const dayKey = `weekend_${rd.date}`;
-              newWeekSchedule[dayKey] = await scheduleService.getScheduleForDay(
-                data, 
-                undefined,
-                new Date(rd.date)
-              );
-            }
-          }
-          
-          // Update the data
-          setScheduleData(data);
-          setWeekSchedule(newWeekSchedule);
-          
-          // Animate in the new content
-          slideAnim.value = withTiming(0, { duration: 150 });
-          fadeAnim.value = withTiming(1, { duration: 150 });
-        } catch (error) {
-          setError(t('schedule').error || 'Failed to load schedule');
-          // Reset animations on error
-          slideAnim.value = withTiming(0, { duration: 150 });
-          fadeAnim.value = withTiming(1, { duration: 150 });
-        }
-      };
-      
-      updateCurrentWeek();
-    }
-  };
-
-  // Function to get color for a subject with improved color palette
-  const getSubjectColor = (subjectName: string): string => {
-    // More vibrant, design-friendly color palette
-    const colors = Colors.dark.subjectColors;
-    
-    let hash = 0;
-    for (let i = 0; i < subjectName.length; i++) {
-      hash = subjectName.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    
-    const index = Math.abs(hash) % colors.length;
-    return colors[index];
-  };
-
-  // Format week display text
-  const weekDisplayText = () => {
-    const weekStartFormatted = formatDate(weekStart, { day: 'numeric', month: 'short' });
-    const weekEndDate = new Date(weekStart);
-    weekEndDate.setDate(weekStart.getDate() + 4);
-    const weekEndFormatted = formatDate(weekEndDate, { day: 'numeric', month: 'short' });
-    return `${weekStartFormatted} - ${weekEndFormatted}`;
-  };
-
-  // Show loading state
-  if (isLoading && !scheduleData) {
-    return (
-      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.dark.primary} />
-          <Text style={styles.loadingText}>{t('schedule').loading}</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  // Show error state
-  if (error && !scheduleData) {
-    return (
-      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-        <View style={styles.header}>
-          <Text style={styles.pageTitle}>{t('tabs').schedule}</Text>
-          <View style={styles.weekInfo}>
-            <Text style={styles.weekText}>
-              {isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
-            </Text>
-          </View>
-        </View>
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <View style={styles.headerContainer}>
-        <View style={styles.header}>
-          <Text style={styles.pageTitle}>{t('tabs').schedule}</Text>
-          <TouchableOpacity 
-            style={styles.weekInfo}
-            onPress={() => setIsMenuOpen(true)}
-          >
-            <Text style={styles.weekText}>
-              {isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Week navigation controls */}
-        <View style={styles.navigationControls}>
-          <TouchableOpacity onPress={() => navigateWeek(-1)} style={styles.navButton}>
-            <Text style={styles.navButtonText}>◀ {t('schedule').prevWeek}</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity onPress={goToCurrentWeek} style={[styles.navButton, weekOffset === 0 && { opacity: 0.5 }]}>
-            <Animated.View
-              entering={FadeIn.duration(150)}
-              exiting={FadeOut.duration(150)}
+    // Show loading state
+    if (isLoading && !scheduleData) {
+        return (
+            <SafeAreaView
+                style={styles.container}
+                edges={['top', 'left', 'right']}
             >
-              <Text style={styles.navButtonText}>
-                {weekDisplayText()}
-              </Text>
-            </Animated.View>
-          </TouchableOpacity>
-          
-          <TouchableOpacity onPress={() => navigateWeek(1)} style={styles.navButton}>
-            <Text style={styles.navButtonText}>{t('schedule').nextWeek} ▶</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Days header with animation */}
-        <Animated.View 
-          style={styles.daysHeader}
-          entering={FadeIn.duration(200)}
-        >
-          {/* Empty space for time column alignment */}
-          <View style={{ width: timeColumnWidth }} />
-          
-          {dayDates.map((day, index) => {
-            const dayKey = day.dayKey;
-            const dayItems = weekSchedule[dayKey as keyof typeof weekSchedule] || [];
-            const dayReasonItem = dayItems.find(item => typeof item?.recoveryReason === 'string' && item.recoveryReason.trim().length > 0);
-            const dayReason = dayReasonItem?.recoveryReason?.trim() || day.recoveryDay?.reason || '';
-            const visibleDayItems = dayItems.filter(item => item && item.period !== 'recovery-info');
-            const dayThesisEvents = filterThesisEventsForDate(thesisEvents, day.date, settings.group);
-            const dayExamEvents = filterExamEventsForDate(examEvents, day.date, settings.group);
-            
-            // Calculate total assignments for the day
-            const totalAssignments = visibleDayItems.reduce((total, item) => total + (item.assignmentCount || 0), 0);
-            
-            return (
-              <Animated.View 
-                key={day.dayKey}
-                style={[
-                  styles.dayColumn,
-                  { width: dayColumnWidth }, 
-                  day.isToday && styles.todayColumn,
-                  dayExamEvents.length > 0 && styles.dayColumnExam,
-                  dayThesisEvents.length > 0 && styles.dayColumnThesis,
-                  day.isWeekend && styles.weekendColumn
-                ]}
-                entering={FadeIn.duration(200).delay(index * 50)}
-              >
-                {totalAssignments > 0 && (
-                  <View style={styles.dayAssignmentBadge}>
-                    <Text style={styles.dayAssignmentBadgeText}>
-                      {totalAssignments}
-                    </Text>
-                  </View>
-                )}
-                <Text style={styles.dayName}>{day.dayName}</Text>
-                <Text style={styles.dateText}>{day.dayNumber}</Text>
-                {(dayExamEvents.length > 0 || dayThesisEvents.length > 0 || (isSpecialScheduleLoading && index === 0)) && (
-                  <View style={styles.daySpecialBadges}>
-                    {dayExamEvents.length > 0 && (
-                      <View style={[styles.daySpecialBadge, styles.daySpecialBadgeExam]}>
-                        <Text style={styles.daySpecialBadgeText}>E {dayExamEvents.length}</Text>
-                      </View>
-                    )}
-                    {dayThesisEvents.length > 0 && (
-                      <View style={[styles.daySpecialBadge, styles.daySpecialBadgeThesis]}>
-                        <Text style={styles.daySpecialBadgeText}>T {dayThesisEvents.length}</Text>
-                      </View>
-                    )}
-                    {isSpecialScheduleLoading && index === 0 && (
-                      <View style={[styles.daySpecialBadge, styles.daySpecialBadgeLoading]}>
-                        <Text style={styles.daySpecialBadgeText}>...</Text>
-                      </View>
-                    )}
-                  </View>
-                )}
-                {Boolean(dayReason) && (
-                  <View style={styles.recoveryDayInfoHeader}>
-                    <RecoveryDayInfo
-                      label="Special"
-                      title={day.recoveryDay ? 'Recovery Day Schedule' : 'Special Schedule'}
-                      reason={dayReason}
-                      align={index <= 1 ? 'left' : index >= dayDates.length - 2 ? 'right' : 'center'}
-                      details={[
-                        `${day.dayName} ${day.dayNumber}`,
-                        dayReasonItem?.replacedDayName ? `Replaces ${dayReasonItem.replacedDayName}` : 'Temporary schedule override'
-                      ]}
+                <View style={styles.loadingContainer}>
+                    <ActivityIndicator
+                        size="large"
+                        color={Colors.dark.primary}
                     />
-                  </View>
-                )}
-              </Animated.View>
-            );
-          })}
-        </Animated.View>
-      </View>
+                    <Text style={styles.loadingText}>
+                        {t('schedule').loading}
+                    </Text>
+                </View>
+            </SafeAreaView>
+        );
+    }
 
-      <View style={styles.content}>
-        <ScrollView
-          ref={verticalScrollRef}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ minHeight: timetableHeight + 20 }}
-        >
-          <Animated.View 
-            style={[styles.timetableContainer, containerStyle]}
-            entering={FadeIn.duration(200)}
-          >
-            {/* Time slots column */}
-            <View style={[styles.timeColumn, { width: timeColumnWidth }]}>
-              {timeSlots.map((hour, index) => {
-                const formattedHour = formatHour(hour);
-                const isCurrentHour = hour === nowHour && weekOffset === 0;
-                
-                return (
-                  <View 
-                    key={index} 
-                    style={[
-                      styles.timeSlot, 
-                      { height: hourHeight },
-                      isCurrentHour && styles.currentHourHighlight
-                    ]}
-                  >
-                    {typeof formattedHour === 'string' ? (
-                      <Text style={styles.timeHour}>{formattedHour}</Text>
-                    ) : (
-                      <>
-                        <Text style={styles.timeHour}>{formattedHour.hour}</Text>
-                        <Text style={styles.timePeriod}>{formattedHour.period}</Text>
-                      </>
-                    )}
-                  </View>
-                );
-              })}
-            </View>
+    // Show error state
+    if (error && !scheduleData) {
+        return (
+            <SafeAreaView
+                style={styles.container}
+                edges={['top', 'left', 'right']}
+            >
+                <View style={styles.header}>
+                    <Text style={styles.pageTitle}>{t('tabs').schedule}</Text>
+                    <View style={styles.weekInfo}>
+                        <Text style={styles.weekText}>
+                            {isEvenWeek ?
+                                t('schedule').evenWeek
+                            :   t('schedule').oddWeek}
+                        </Text>
+                    </View>
+                </View>
+                <View style={styles.errorContainer}>
+                    <Text style={styles.errorText}>{error}</Text>
+                </View>
+            </SafeAreaView>
+        );
+    }
 
-            {/* Grid container - contains all days and grid lines */}
-            <View style={[styles.gridContainer, { width: windowWidth - timeColumnWidth - 8 }]}>
+    return (
+        <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+            <View style={styles.headerContainer}>
+                <View style={styles.header}>
+                    <Text style={styles.pageTitle}>{t('tabs').schedule}</Text>
+                    <TouchableOpacity
+                        style={styles.weekInfo}
+                        onPress={() => setIsMenuOpen(true)}
+                    >
+                        <Text style={styles.weekText}>
+                            {isEvenWeek ?
+                                t('schedule').evenWeek
+                            :   t('schedule').oddWeek}
+                        </Text>
+                    </TouchableOpacity>
+                </View>
 
-              {/* Horizontal grid lines */}
-              {timeSlots.map((hour, index) => (
-                <View 
-                  key={`grid-${index}`} 
-                  style={[
-                    styles.gridLine,
-                    { 
-                      top: index * hourHeight,
-                      width: '100%'
-                    },
-                    hour === nowHour && weekOffset === 0 && { backgroundColor: Colors.dark.overlayPrimary12 }
-                  ]}
-                />
-              ))}
+                {/* Week navigation controls */}
+                <View style={styles.navigationControls}>
+                    <TouchableOpacity
+                        onPress={() => navigateWeek(-1)}
+                        style={styles.navButton}
+                    >
+                        <Text style={styles.navButtonText}>
+                            ◀ {t('schedule').prevWeek}
+                        </Text>
+                    </TouchableOpacity>
 
-              {/* Day columns */}
-              {dayDates.map((day, dayIndex) => {
-                const dayKey = day.dayKey;
-                const dayItems = weekSchedule[dayKey as keyof typeof weekSchedule] || [];
-                const isToday = day.isToday;
-                const isWeekend = day.isWeekend;
-                const isRecoveryDay = day.recoveryDay != null;
-                const dayThesisEvents = filterThesisEventsForDate(thesisEvents, day.date, settings.group);
-                const dayExamEvents = filterExamEventsForDate(examEvents, day.date, settings.group);
+                    <TouchableOpacity
+                        onPress={goToCurrentWeek}
+                        style={[
+                            styles.navButton,
+                            weekOffset === 0 && { opacity: 0.5 },
+                        ]}
+                    >
+                        <Animated.View
+                            entering={FadeIn.duration(150)}
+                            exiting={FadeOut.duration(150)}
+                        >
+                            <Text style={styles.navButtonText}>
+                                {weekDisplayText()}
+                            </Text>
+                        </Animated.View>
+                    </TouchableOpacity>
 
-                // Filter items based on current week (odd/even) with null check
-                const filteredItems = Array.isArray(dayItems) ? dayItems.filter(item => 
-                  item &&
-                  item.period !== 'recovery-info' &&
-                  (item.isEvenWeek === undefined || item.isEvenWeek === isEvenWeek)
-                ) : [];
+                    <TouchableOpacity
+                        onPress={() => navigateWeek(1)}
+                        style={styles.navButton}
+                    >
+                        <Text style={styles.navButtonText}>
+                            {t('schedule').nextWeek} ▶
+                        </Text>
+                    </TouchableOpacity>
+                </View>
 
-                return (
-                  <Animated.View 
-                    key={`day_${day.dayKey}`}
-                    style={[
-                      styles.dayContent, 
-                      { 
-                        width: dayColumnWidth,
-                        height: timetableHeight,
-                        left: dayIndex * dayColumnWidth,
-                      },
-                      isToday && { backgroundColor: Colors.dark.overlayPrimary03 },
-                      dayExamEvents.length > 0 && dayThesisEvents.length === 0 && styles.dayContentExam,
-                      dayThesisEvents.length > 0 && styles.dayContentThesis,
-                      (isRecoveryDay || isWeekend) && { backgroundColor: Colors.dark.overlayRecovery05 }
-                    ]}
-                    entering={FadeIn.duration(150).delay(dayIndex * 30)}
-                  >
-                    {/* Render schedule items */}
-                    {filteredItems.map((item, itemIndex) => {
-                      // Add null check for item
-                      if (!item || !item.startTime || !item.endTime) return null;
-                      
-                      const { top, height } = calculateItemPosition(
-                        item.startTime,
-                        item.endTime,
-                        hourHeight,
-                        firstHour
-                      );
-                      
-                      // Use custom color for custom periods, otherwise generate color from class name
-                      const color = item.isCustom && item.color ? item.color : getSubjectColor(item.className);
-                      const isActive = isToday && isCurrentTimeSlot(item.startTime, item.endTime);
+                {/* Days header with animation */}
+                <Animated.View
+                    style={styles.daysHeader}
+                    entering={FadeIn.duration(200)}
+                >
+                    {/* Empty space for time column alignment */}
+                    <View style={{ width: timeColumnWidth }} />
 
-                      return (
-                        <TimetableItem 
-                          key={`${item.period || itemIndex}-${item.startTime}-${item.endTime}-${item.className}`}
-                          item={item}
-                          top={top}
-                          height={height}
-                          color={color}
-                          isActive={isActive}
-                        />
-                      );
+                    {dayDates.map((day, index) => {
+                        const dayKey = day.dayKey;
+                        const dayItems =
+                            weekSchedule[dayKey as keyof typeof weekSchedule] ||
+                            [];
+                        const dayReasonItem = dayItems.find(
+                            (item) =>
+                                typeof item?.recoveryReason === 'string' &&
+                                item.recoveryReason.trim().length > 0,
+                        );
+                        const dayReason =
+                            dayReasonItem?.recoveryReason?.trim() ||
+                            day.recoveryDay?.reason ||
+                            '';
+                        const visibleDayItems = dayItems.filter(
+                            (item) => item && item.period !== 'recovery-info',
+                        );
+                        const dayThesisEvents = filterThesisEventsForDate(
+                            thesisEvents,
+                            day.date,
+                            settings.group,
+                        );
+                        const dayExamEvents = filterExamEventsForDate(
+                            examEvents,
+                            day.date,
+                            settings.group,
+                        );
+
+                        // Calculate total assignments for the day
+                        const totalAssignments = visibleDayItems.reduce(
+                            (total, item) =>
+                                total + (item.assignmentCount || 0),
+                            0,
+                        );
+
+                        return (
+                            <Animated.View
+                                key={day.dayKey}
+                                style={[
+                                    styles.dayColumn,
+                                    { width: dayColumnWidth },
+                                    day.isToday && styles.todayColumn,
+                                    dayExamEvents.length > 0 &&
+                                        styles.dayColumnExam,
+                                    dayThesisEvents.length > 0 &&
+                                        styles.dayColumnThesis,
+                                    day.isWeekend && styles.weekendColumn,
+                                ]}
+                                entering={FadeIn.duration(200).delay(
+                                    index * 50,
+                                )}
+                            >
+                                {totalAssignments > 0 && (
+                                    <View style={styles.dayAssignmentBadge}>
+                                        <Text
+                                            style={
+                                                styles.dayAssignmentBadgeText
+                                            }
+                                        >
+                                            {totalAssignments}
+                                        </Text>
+                                    </View>
+                                )}
+                                <Text style={styles.dayName}>
+                                    {day.dayName}
+                                </Text>
+                                <Text style={styles.dateText}>
+                                    {day.dayNumber}
+                                </Text>
+                                {(dayExamEvents.length > 0 ||
+                                    dayThesisEvents.length > 0 ||
+                                    (isSpecialScheduleLoading &&
+                                        index === 0)) && (
+                                    <View style={styles.daySpecialBadges}>
+                                        {dayExamEvents.length > 0 && (
+                                            <View
+                                                style={[
+                                                    styles.daySpecialBadge,
+                                                    styles.daySpecialBadgeExam,
+                                                ]}
+                                            >
+                                                <Text
+                                                    style={
+                                                        styles.daySpecialBadgeText
+                                                    }
+                                                >
+                                                    E {dayExamEvents.length}
+                                                </Text>
+                                            </View>
+                                        )}
+                                        {dayThesisEvents.length > 0 && (
+                                            <View
+                                                style={[
+                                                    styles.daySpecialBadge,
+                                                    styles.daySpecialBadgeThesis,
+                                                ]}
+                                            >
+                                                <Text
+                                                    style={
+                                                        styles.daySpecialBadgeText
+                                                    }
+                                                >
+                                                    T {dayThesisEvents.length}
+                                                </Text>
+                                            </View>
+                                        )}
+                                        {isSpecialScheduleLoading &&
+                                            index === 0 && (
+                                                <View
+                                                    style={[
+                                                        styles.daySpecialBadge,
+                                                        styles.daySpecialBadgeLoading,
+                                                    ]}
+                                                >
+                                                    <Text
+                                                        style={
+                                                            styles.daySpecialBadgeText
+                                                        }
+                                                    >
+                                                        ...
+                                                    </Text>
+                                                </View>
+                                            )}
+                                    </View>
+                                )}
+                                {Boolean(dayReason) && (
+                                    <View style={styles.recoveryDayInfoHeader}>
+                                        <RecoveryDayInfo
+                                            label="Special"
+                                            title={
+                                                day.recoveryDay ?
+                                                    'Recovery Day Schedule'
+                                                :   'Special Schedule'
+                                            }
+                                            reason={dayReason}
+                                            align={
+                                                index <= 1 ? 'left'
+                                                : index >= dayDates.length - 2 ?
+                                                    'right'
+                                                :   'center'
+                                            }
+                                            details={[
+                                                `${day.dayName} ${day.dayNumber}`,
+                                                dayReasonItem?.replacedDayName ?
+                                                    `Replaces ${dayReasonItem.replacedDayName}`
+                                                :   'Temporary schedule override',
+                                            ]}
+                                        />
+                                    </View>
+                                )}
+                            </Animated.View>
+                        );
                     })}
-
-                    {/* Only show empty message if there are no filtered items */}
-                    {filteredItems.length === 0 && (
-                      <Text style={[
-                        styles.emptySchedule,
-                        isRecoveryDay && { marginTop: 30 }
-                      ]}>
-                        {t('schedule').noClassesDay}
-                      </Text>
-                    )}
-
-                    {/* Show current time indicator if it's today */}
-                    {isToday && weekOffset === 0 && (
-                      <CurrentTimeIndicator 
-                        hourHeight={hourHeight}
-                        firstHour={firstHour}
-                        timestamp={currentTime.getTime()}
-                        schedule={weekSchedule}
-                      />
-                    )}
-                  </Animated.View>
-                );
-              })}
+                </Animated.View>
             </View>
-          </Animated.View>
-        </ScrollView>
-      </View>
 
-      <ViewModeMenu
-        isOpen={isMenuOpen}
-        onClose={() => setIsMenuOpen(false)}
-        isEvenWeek={isEvenWeek}
-        weekText={isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
-        currentView="week"
-      />
-    </SafeAreaView>
-  );
+            <View style={styles.content}>
+                <ScrollView
+                    ref={verticalScrollRef}
+                    showsVerticalScrollIndicator={false}
+                    contentContainerStyle={{ minHeight: timetableHeight + 20 }}
+                >
+                    <Animated.View
+                        style={[styles.timetableContainer, containerStyle]}
+                        entering={FadeIn.duration(200)}
+                    >
+                        {/* Time slots column */}
+                        <View
+                            style={[
+                                styles.timeColumn,
+                                { width: timeColumnWidth },
+                            ]}
+                        >
+                            {timeSlots.map((hour, index) => {
+                                const formattedHour = formatHour(hour);
+                                const isCurrentHour =
+                                    hour === nowHour && weekOffset === 0;
+
+                                return (
+                                    <View
+                                        key={index}
+                                        style={[
+                                            styles.timeSlot,
+                                            { height: hourHeight },
+                                            isCurrentHour &&
+                                                styles.currentHourHighlight,
+                                        ]}
+                                    >
+                                        {typeof formattedHour === 'string' ?
+                                            <Text style={styles.timeHour}>
+                                                {formattedHour}
+                                            </Text>
+                                        :   <>
+                                                <Text style={styles.timeHour}>
+                                                    {formattedHour.hour}
+                                                </Text>
+                                                <Text style={styles.timePeriod}>
+                                                    {formattedHour.period}
+                                                </Text>
+                                            </>
+                                        }
+                                    </View>
+                                );
+                            })}
+                        </View>
+
+                        {/* Grid container - contains all days and grid lines */}
+                        <View
+                            style={[
+                                styles.gridContainer,
+                                { width: windowWidth - timeColumnWidth - 8 },
+                            ]}
+                        >
+                            {/* Horizontal grid lines */}
+                            {timeSlots.map((hour, index) => (
+                                <View
+                                    key={`grid-${index}`}
+                                    style={[
+                                        styles.gridLine,
+                                        {
+                                            top: index * hourHeight,
+                                            width: '100%',
+                                        },
+                                        hour === nowHour &&
+                                            weekOffset === 0 && {
+                                                backgroundColor:
+                                                    Colors.dark
+                                                        .overlayPrimary12,
+                                            },
+                                    ]}
+                                />
+                            ))}
+
+                            {/* Day columns */}
+                            {dayDates.map((day, dayIndex) => {
+                                const dayKey = day.dayKey;
+                                const dayItems =
+                                    weekSchedule[
+                                        dayKey as keyof typeof weekSchedule
+                                    ] || [];
+                                const isToday = day.isToday;
+                                const isWeekend = day.isWeekend;
+                                const isRecoveryDay = day.recoveryDay != null;
+                                const dayThesisEvents =
+                                    filterThesisEventsForDate(
+                                        thesisEvents,
+                                        day.date,
+                                        settings.group,
+                                    );
+                                const dayExamEvents = filterExamEventsForDate(
+                                    examEvents,
+                                    day.date,
+                                    settings.group,
+                                );
+
+                                // Filter items based on current week (odd/even) with null check
+                                const filteredItems =
+                                    Array.isArray(dayItems) ?
+                                        dayItems.filter(
+                                            (item) =>
+                                                item &&
+                                                item.period !==
+                                                    'recovery-info' &&
+                                                (item.isEvenWeek ===
+                                                    undefined ||
+                                                    item.isEvenWeek ===
+                                                        isEvenWeek),
+                                        )
+                                    :   [];
+
+                                return (
+                                    <Animated.View
+                                        key={`day_${day.dayKey}`}
+                                        style={[
+                                            styles.dayContent,
+                                            {
+                                                width: dayColumnWidth,
+                                                height: timetableHeight,
+                                                left: dayIndex * dayColumnWidth,
+                                            },
+                                            isToday && {
+                                                backgroundColor:
+                                                    Colors.dark
+                                                        .overlayPrimary03,
+                                            },
+                                            dayExamEvents.length > 0 &&
+                                                dayThesisEvents.length === 0 &&
+                                                styles.dayContentExam,
+                                            dayThesisEvents.length > 0 &&
+                                                styles.dayContentThesis,
+                                            (isRecoveryDay || isWeekend) && {
+                                                backgroundColor:
+                                                    Colors.dark
+                                                        .overlayRecovery05,
+                                            },
+                                        ]}
+                                        entering={FadeIn.duration(150).delay(
+                                            dayIndex * 30,
+                                        )}
+                                    >
+                                        {/* Render schedule items */}
+                                        {filteredItems.map(
+                                            (item, itemIndex) => {
+                                                // Add null check for item
+                                                if (
+                                                    !item ||
+                                                    !item.startTime ||
+                                                    !item.endTime
+                                                )
+                                                    return null;
+
+                                                const { top, height } =
+                                                    calculateItemPosition(
+                                                        item.startTime,
+                                                        item.endTime,
+                                                        hourHeight,
+                                                        firstHour,
+                                                    );
+
+                                                // Use custom color for custom periods, otherwise generate color from class name
+                                                const color =
+                                                    (
+                                                        item.isCustom &&
+                                                        item.color
+                                                    ) ?
+                                                        item.color
+                                                    :   getSubjectColor(
+                                                            item.className,
+                                                        );
+                                                const isActive =
+                                                    isToday &&
+                                                    isCurrentTimeSlot(
+                                                        item.startTime,
+                                                        item.endTime,
+                                                    );
+
+                                                return (
+                                                    <TimetableItem
+                                                        key={`${item.period || itemIndex}-${item.startTime}-${item.endTime}-${item.className}`}
+                                                        item={item}
+                                                        top={top}
+                                                        height={height}
+                                                        color={color}
+                                                        isActive={isActive}
+                                                    />
+                                                );
+                                            },
+                                        )}
+
+                                        {/* Only show empty message if there are no filtered items */}
+                                        {filteredItems.length === 0 && (
+                                            <Text
+                                                style={[
+                                                    styles.emptySchedule,
+                                                    isRecoveryDay && {
+                                                        marginTop: 30,
+                                                    },
+                                                ]}
+                                            >
+                                                {t('schedule').noClassesDay}
+                                            </Text>
+                                        )}
+
+                                        {/* Show current time indicator if it's today */}
+                                        {isToday && weekOffset === 0 && (
+                                            <CurrentTimeIndicator
+                                                hourHeight={hourHeight}
+                                                firstHour={firstHour}
+                                                timestamp={currentTime.getTime()}
+                                                schedule={weekSchedule}
+                                            />
+                                        )}
+                                    </Animated.View>
+                                );
+                            })}
+                        </View>
+                    </Animated.View>
+                </ScrollView>
+            </View>
+
+            <ViewModeMenu
+                isOpen={isMenuOpen}
+                onClose={() => setIsMenuOpen(false)}
+                isEvenWeek={isEvenWeek}
+                weekText={
+                    isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek
+                }
+                currentView="week"
+            />
+        </SafeAreaView>
+    );
 }
 
 const styles = StyleSheet.create<Styles>({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.dark.backgroundSecondary,
-  },
-  content: {
-    flex: 1,
-  },
-  headerContainer: {
-    backgroundColor: Colors.dark.backgroundTertiary,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-    paddingBottom: 12,
-    shadowColor: Colors.dark.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-    zIndex: 10,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-  },
-  pageTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: Colors.dark.white,
-    letterSpacing: 0.5,
-  },
-  weekInfo: {
-    backgroundColor: Colors.dark.primaryStrong,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 16,
-  },
-  weekText: {
-    color: Colors.dark.white,
-    fontSize: 14,
-    fontWeight: '600',
-    letterSpacing: 0.3,
-  },
-  navigationControls: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  navButton: {
-    padding: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  navButtonText: {
-    color: Colors.dark.primaryStrong,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  daysHeader: {
-    flexDirection: 'row',
-    paddingHorizontal: 8,
-    paddingBottom: 8,
-  },
-  dayColumn: {
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderRadius: 12,
-    position: 'relative',
-  },
-  todayColumn: {
-    backgroundColor: Colors.dark.primaryStrong10,
-  },
-  recoveryIndicator: {
-    position: 'absolute',
-    bottom: 0,
-    width: 6,
-    height: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  recoveryDot: {
-    fontSize: 8,
-    color: Colors.dark.recoveryColor,
-  },
-  recoveryDayInfo: {
-    position: 'absolute',
-    top: 0,
-    left: 2,
-    right: 2,
-    zIndex: 10,
-  },
-  recoveryDayInfoHeader: {
-    marginTop: 4,
-    alignItems: 'center',
-    zIndex: 30,
-  },
-  recoveryDayInfoButton: {
-    position: 'relative',
-    top: 0,
-    right: 0,
-    minWidth: 56,
-    height: 20,
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    overflow: 'hidden',
-    zIndex: 10,
-    elevation: 3,
-    shadowColor: Colors.dark.black,
-    shadowOffset: { width: 1, height: 1 },
-    shadowOpacity: 0.3,
-    shadowRadius: 2,
-  },
-  recoveryDayInfoButtonGradient: {
-    flex: 1,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  recoveryDayInfoIcon: {
-    color: Colors.dark.white,
-    fontSize: 10,
-    fontWeight: '700',
-    textAlign: 'center',
-    letterSpacing: 0.3,
-  },
-  recoveryDayTooltipContainer: {
-    position: 'absolute',
-    top: 24,
-    right: 'auto',
-    left: '50%',
-    marginLeft: -90,
-    width: 180,
-    zIndex: 100,
-    elevation: 5,
-    shadowColor: Colors.dark.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-  },
-  recoveryDayTooltip: {
-    backgroundColor: Colors.dark.surface, // Dark background
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.dark.borderMuted,
-  },
-  recoveryDayTooltipHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  recoveryDayTooltipTitle: {
-    color: Colors.dark.recoveryColor,
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  closeTooltipButton: {
-    padding: 4,
-  },
-  closeTooltipText: {
-    color: Colors.dark.white,
-    fontSize: 14,
-    fontWeight: 'bold',
-  } as TextStyle,
-  recoveryDayTooltipReason: {
-    color: Colors.dark.white,
-    fontSize: 12,
-    lineHeight: 18,
-    opacity: 0.8,
-  },
-  dayName: {
-    color: Colors.dark.neutral500,
-    fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-  },
-  dateContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 2,
-  },
-  dateText: {
-    color: Colors.dark.white,
-    fontSize: 16,
-    fontWeight: '700',
-    marginTop: 2,
-  },
-  dayAssignmentBadge: {
-    backgroundColor: Colors.dark.red,
-    borderRadius: 8,
-    paddingHorizontal: 3,
-    paddingVertical: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    minWidth: 14,
-    height: 14,
-    position: 'absolute',
-    top: 2,
-    right: 2,
-  },
-  dayAssignmentBadgeText: {
-    color: Colors.dark.white,
-    fontSize: 8,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  daySpecialBadges: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
-  },
-  daySpecialBadge: {
-    borderRadius: 8,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-    minWidth: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  daySpecialBadgeExam: {
-    backgroundColor: Colors.dark.overlayOrange30,
-  },
-  daySpecialBadgeThesis: {
-    backgroundColor: Colors.dark.overlayPrimary35,
-  },
-  daySpecialBadgeLoading: {
-    backgroundColor: Colors.dark.overlayGray35,
-  },
-  daySpecialBadgeText: {
-    color: Colors.dark.white,
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-  },
-  dayColumnExam: {
-    backgroundColor: Colors.dark.overlayOrange08,
-    borderWidth: 1,
-    borderColor: Colors.dark.overlayOrange20,
-  },
-  dayColumnThesis: {
-    backgroundColor: Colors.dark.overlayAccentBlue14,
-    borderWidth: 1,
-    borderColor: Colors.dark.overlayAccentBlue28,
-  },
-  timetableContainer: {
-    flexDirection: 'row',
-    paddingTop: 8,
-    paddingHorizontal: 8,
-  },
-  timeColumn: {
-    alignItems: 'center',
-  },
-  timeSlot: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: Colors.dark.overlayWhite05,
-  },
-  timeHour: {
-    color: Colors.dark.neutral500,
-    fontSize: 14,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  timePeriod: {
-    color: Colors.dark.neutral500,
-    fontSize: 9,
-    fontWeight: '500',
-    textAlign: 'center',
-    marginTop: -3,
-  },
-  gridContainer: {
-    position: 'relative',
-    height: '100%',
-  },
-  gridLine: {
-    position: 'absolute',
-    height: 1,
-    backgroundColor: Colors.dark.overlayWhite03,
-  },
-  dayContent: {
-    position: 'absolute',
-    top: 0,
-    marginHorizontal: 2,
-    borderRadius: 8,
-  },
-  dayContentExam: {
-    backgroundColor: Colors.dark.overlayOrange06,
-  },
-  dayContentThesis: {
-    backgroundColor: Colors.dark.overlayAccentBlue08,
-  },
-  timetableItem: {
-    position: 'absolute',
-    left: 2,
-    right: 2,
-    borderRadius: 10,
-    overflow: 'hidden',
-  },
-  itemGradient: {
-    flex: 1,
-    padding: 6,
-    justifyContent: 'space-between',
-  },
-  itemHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 2,
-  },
-  className: {
-    color: Colors.dark.white,
-    fontSize: 11,
-    fontWeight: '600',
-    textShadowColor: Colors.dark.overlayBlack50,
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-    flex: 1,
-    marginRight: 4,
-  },
-  itemFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 2,
-  },
-  roomNumber: {
-    color: Colors.dark.white,
-    fontSize: 9,
-    fontWeight: '500',
-    opacity: 0.9,
-    textShadowColor: Colors.dark.overlayBlack50,
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-    flex: 1,
-    marginRight: 6,
-  },
-  currentTimeIndicator: {
-		position: 'absolute',
-		left: 0,
-		right: 0,
-		flexDirection: 'row',
-		alignItems: 'center',
-		zIndex: 50,
-	},
-	currentTimeIndicatorLine: {
-		flex: 1,
-		height: 2,
-		backgroundColor: Colors.dark.red,
-		opacity: 0.7,
-	},
-	currentTimeIndicatorDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.dark.red,
-    marginRight: 2,
-    shadowColor: Colors.dark.red,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 4,
-	},
-	emptySchedule: {
-    color: Colors.dark.neutral500,
-    fontSize: 10,
-    textAlign: 'center',
-    marginTop: 30,
-    opacity: 0.7,
-	},
-	loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-	},
-	loadingText: {
-    color: Colors.dark.neutral500,
-    fontSize: 16,
-    marginTop: 12,
-	},
-	errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-	},
-	errorText: {
-    color: Colors.dark.red,
-    fontSize: 16,
-    textAlign: 'center',
-	},
-	weekendColumn: {
-    backgroundColor: Colors.dark.overlayRecovery10,
-    borderWidth: 1,
-    borderColor: Colors.dark.overlayRecovery20,
-	},
-	currentHourHighlight: {
-		backgroundColor: Colors.dark.overlayPrimary08, // Light blue background for current hour
-	},
-  assignmentBadge: {
-    backgroundColor: Colors.dark.red,
-    borderRadius: 10,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    minWidth: 16,
-    height: 16,
-  },
-  assignmentBadgeText: {
-    color: Colors.dark.white,
-    fontSize: 9,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
+    container: {
+        flex: 1,
+        backgroundColor: Colors.dark.backgroundSecondary,
+    },
+    content: {
+        flex: 1,
+    },
+    headerContainer: {
+        backgroundColor: Colors.dark.backgroundTertiary,
+        borderBottomLeftRadius: 24,
+        borderBottomRightRadius: 24,
+        paddingBottom: 12,
+        shadowColor: Colors.dark.black,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+        elevation: 8,
+        zIndex: 10,
+    },
+    header: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 20,
+    },
+    pageTitle: {
+        fontSize: 24,
+        fontWeight: '700',
+        color: Colors.dark.white,
+        letterSpacing: 0.5,
+    },
+    weekInfo: {
+        backgroundColor: Colors.dark.primaryStrong,
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 16,
+    },
+    weekText: {
+        color: Colors.dark.white,
+        fontSize: 14,
+        fontWeight: '600',
+        letterSpacing: 0.3,
+    },
+    navigationControls: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+    },
+    navButton: {
+        padding: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    navButtonText: {
+        color: Colors.dark.primaryStrong,
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    daysHeader: {
+        flexDirection: 'row',
+        paddingHorizontal: 8,
+        paddingBottom: 8,
+    },
+    dayColumn: {
+        alignItems: 'center',
+        paddingVertical: 8,
+        borderRadius: 12,
+        position: 'relative',
+    },
+    todayColumn: {
+        backgroundColor: Colors.dark.primaryStrong10,
+    },
+    recoveryIndicator: {
+        position: 'absolute',
+        bottom: 0,
+        width: 6,
+        height: 6,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    recoveryDot: {
+        fontSize: 8,
+        color: Colors.dark.recoveryColor,
+    },
+    recoveryDayInfo: {
+        position: 'absolute',
+        top: 0,
+        left: 2,
+        right: 2,
+        zIndex: 10,
+    },
+    recoveryDayInfoHeader: {
+        marginTop: 4,
+        alignItems: 'center',
+        zIndex: 30,
+    },
+    recoveryDayInfoButton: {
+        position: 'relative',
+        top: 0,
+        right: 0,
+        minWidth: 56,
+        height: 20,
+        borderRadius: 10,
+        paddingHorizontal: 8,
+        overflow: 'hidden',
+        zIndex: 10,
+        elevation: 3,
+        shadowColor: Colors.dark.black,
+        shadowOffset: { width: 1, height: 1 },
+        shadowOpacity: 0.3,
+        shadowRadius: 2,
+    },
+    recoveryDayInfoButtonGradient: {
+        flex: 1,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    recoveryDayInfoIcon: {
+        color: Colors.dark.white,
+        fontSize: 10,
+        fontWeight: '700',
+        textAlign: 'center',
+        letterSpacing: 0.3,
+    },
+    recoveryDayTooltipContainer: {
+        position: 'absolute',
+        top: 24,
+        right: 'auto',
+        left: '50%',
+        marginLeft: -90,
+        width: 180,
+        zIndex: 100,
+        elevation: 5,
+        shadowColor: Colors.dark.black,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+    },
+    recoveryDayTooltip: {
+        backgroundColor: Colors.dark.surface, // Dark background
+        padding: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: Colors.dark.borderMuted,
+    },
+    recoveryDayTooltipHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 6,
+    },
+    recoveryDayTooltipTitle: {
+        color: Colors.dark.recoveryColor,
+        fontSize: 14,
+        fontWeight: 'bold',
+    },
+    closeTooltipButton: {
+        padding: 4,
+    },
+    closeTooltipText: {
+        color: Colors.dark.white,
+        fontSize: 14,
+        fontWeight: 'bold',
+    } as TextStyle,
+    recoveryDayTooltipReason: {
+        color: Colors.dark.white,
+        fontSize: 12,
+        lineHeight: 18,
+        opacity: 0.8,
+    },
+    dayName: {
+        color: Colors.dark.neutral500,
+        fontSize: 13,
+        fontWeight: '600',
+        letterSpacing: 0.5,
+    },
+    dateContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 2,
+    },
+    dateText: {
+        color: Colors.dark.white,
+        fontSize: 16,
+        fontWeight: '700',
+        marginTop: 2,
+    },
+    dayAssignmentBadge: {
+        backgroundColor: Colors.dark.red,
+        borderRadius: 8,
+        paddingHorizontal: 3,
+        paddingVertical: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        minWidth: 14,
+        height: 14,
+        position: 'absolute',
+        top: 2,
+        right: 2,
+    },
+    dayAssignmentBadgeText: {
+        color: Colors.dark.white,
+        fontSize: 8,
+        fontWeight: 'bold',
+        textAlign: 'center',
+    },
+    daySpecialBadges: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        marginTop: 4,
+    },
+    daySpecialBadge: {
+        borderRadius: 8,
+        paddingHorizontal: 5,
+        paddingVertical: 2,
+        minWidth: 18,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    daySpecialBadgeExam: {
+        backgroundColor: Colors.dark.overlayOrange30,
+    },
+    daySpecialBadgeThesis: {
+        backgroundColor: Colors.dark.overlayPrimary35,
+    },
+    daySpecialBadgeLoading: {
+        backgroundColor: Colors.dark.overlayGray35,
+    },
+    daySpecialBadgeText: {
+        color: Colors.dark.white,
+        fontSize: 9,
+        fontWeight: '700',
+        letterSpacing: 0.2,
+    },
+    dayColumnExam: {
+        backgroundColor: Colors.dark.overlayOrange08,
+        borderWidth: 1,
+        borderColor: Colors.dark.overlayOrange20,
+    },
+    dayColumnThesis: {
+        backgroundColor: Colors.dark.overlayAccentBlue14,
+        borderWidth: 1,
+        borderColor: Colors.dark.overlayAccentBlue28,
+    },
+    timetableContainer: {
+        flexDirection: 'row',
+        paddingTop: 8,
+        paddingHorizontal: 8,
+    },
+    timeColumn: {
+        alignItems: 'center',
+    },
+    timeSlot: {
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderTopWidth: 1,
+        borderTopColor: Colors.dark.overlayWhite05,
+    },
+    timeHour: {
+        color: Colors.dark.neutral500,
+        fontSize: 14,
+        fontWeight: '700',
+        textAlign: 'center',
+    },
+    timePeriod: {
+        color: Colors.dark.neutral500,
+        fontSize: 9,
+        fontWeight: '500',
+        textAlign: 'center',
+        marginTop: -3,
+    },
+    gridContainer: {
+        position: 'relative',
+        height: '100%',
+    },
+    gridLine: {
+        position: 'absolute',
+        height: 1,
+        backgroundColor: Colors.dark.overlayWhite03,
+    },
+    dayContent: {
+        position: 'absolute',
+        top: 0,
+        marginHorizontal: 2,
+        borderRadius: 8,
+    },
+    dayContentExam: {
+        backgroundColor: Colors.dark.overlayOrange06,
+    },
+    dayContentThesis: {
+        backgroundColor: Colors.dark.overlayAccentBlue08,
+    },
+    timetableItem: {
+        position: 'absolute',
+        left: 2,
+        right: 2,
+        borderRadius: 10,
+        overflow: 'hidden',
+    },
+    itemGradient: {
+        flex: 1,
+        padding: 6,
+        justifyContent: 'space-between',
+    },
+    itemHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 2,
+    },
+    className: {
+        color: Colors.dark.white,
+        fontSize: 11,
+        fontWeight: '600',
+        textShadowColor: Colors.dark.overlayBlack50,
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 2,
+        flex: 1,
+        marginRight: 4,
+    },
+    itemFooter: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: 2,
+    },
+    roomNumber: {
+        color: Colors.dark.white,
+        fontSize: 9,
+        fontWeight: '500',
+        opacity: 0.9,
+        textShadowColor: Colors.dark.overlayBlack50,
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 2,
+        flex: 1,
+        marginRight: 6,
+    },
+    currentTimeIndicator: {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        flexDirection: 'row',
+        alignItems: 'center',
+        zIndex: 50,
+    },
+    currentTimeIndicatorLine: {
+        flex: 1,
+        height: 2,
+        backgroundColor: Colors.dark.red,
+        opacity: 0.7,
+    },
+    currentTimeIndicatorDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: Colors.dark.red,
+        marginRight: 2,
+        shadowColor: Colors.dark.red,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.5,
+        shadowRadius: 4,
+    },
+    emptySchedule: {
+        color: Colors.dark.neutral500,
+        fontSize: 10,
+        textAlign: 'center',
+        marginTop: 30,
+        opacity: 0.7,
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    loadingText: {
+        color: Colors.dark.neutral500,
+        fontSize: 16,
+        marginTop: 12,
+    },
+    errorContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    errorText: {
+        color: Colors.dark.red,
+        fontSize: 16,
+        textAlign: 'center',
+    },
+    weekendColumn: {
+        backgroundColor: Colors.dark.overlayRecovery10,
+        borderWidth: 1,
+        borderColor: Colors.dark.overlayRecovery20,
+    },
+    currentHourHighlight: {
+        backgroundColor: Colors.dark.overlayPrimary08, // Light blue background for current hour
+    },
+    assignmentBadge: {
+        backgroundColor: Colors.dark.red,
+        borderRadius: 10,
+        paddingHorizontal: 4,
+        paddingVertical: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        minWidth: 16,
+        height: 16,
+    },
+    assignmentBadgeText: {
+        color: Colors.dark.white,
+        fontSize: 9,
+        fontWeight: 'bold',
+        textAlign: 'center',
+    },
 });

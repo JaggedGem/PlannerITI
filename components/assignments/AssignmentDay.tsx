@@ -5,47 +5,47 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import CourseAssignment, { CourseAssignmentType } from './CourseAssignment';
 
 type AssignmentDayProps = {
-  title: string;
-  courses: CourseAssignmentType[];
-  onToggleItem: (courseId: string, itemId: string) => void;
-  onEditCourse: (courseId: string) => void;
+    title: string;
+    courses: CourseAssignmentType[];
+    onToggleItem: (courseId: string, itemId: string) => void;
+    onEditCourse: (courseId: string) => void;
 };
 
 export default function AssignmentDay({
-  title,
-  courses,
-  onToggleItem,
-  onEditCourse,
+    title,
+    courses,
+    onToggleItem,
+    onEditCourse,
 }: AssignmentDayProps) {
-  const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme];
+    const colorScheme = useColorScheme();
+    const colors = Colors[colorScheme];
 
-  return (
-    <View style={styles.container}>
-      <Text style={[styles.dayTitle, { color: colors.text }]}>
-        {title}
-      </Text>
-      
-      {courses.map(course => (
-        <CourseAssignment
-          key={course.id}
-          course={course}
-          onToggleItem={onToggleItem}
-          onEditCourse={onEditCourse}
-        />
-      ))}
-    </View>
-  );
+    return (
+        <View style={styles.container}>
+            <Text style={[styles.dayTitle, { color: colors.text }]}>
+                {title}
+            </Text>
+
+            {courses.map((course) => (
+                <CourseAssignment
+                    key={course.id}
+                    course={course}
+                    onToggleItem={onToggleItem}
+                    onEditCourse={onEditCourse}
+                />
+            ))}
+        </View>
+    );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    marginBottom: 24,
-  },
-  dayTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginHorizontal: 16,
-    marginBottom: 12,
-  },
-}); 
+    container: {
+        marginBottom: 24,
+    },
+    dayTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        marginHorizontal: 16,
+        marginBottom: 12,
+    },
+});

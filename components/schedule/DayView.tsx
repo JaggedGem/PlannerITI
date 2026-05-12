@@ -1,29 +1,54 @@
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Dimensions, ViewStyle, TextStyle, ActivityIndicator, InteractionManager } from 'react-native';
-import { SafeAreaView, Edge } from 'react-native-safe-area-context';
+import {
+    StyleSheet,
+    View,
+    Text,
+    ScrollView,
+    TouchableOpacity,
+    Dimensions,
+    ViewStyle,
+    TextStyle,
+    ActivityIndicator,
+    InteractionManager,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import {
-  scheduleService,
-  DAYS_MAP,
-  ApiResponse,
-  ThesisScheduleEvent,
-  ExamScheduleEvent,
-  SpecialScheduleResponse,
-  SubGroupType,
+    scheduleService,
+    DAYS_MAP,
+    ApiResponse,
+    ThesisScheduleEvent,
+    ExamScheduleEvent,
+    SpecialScheduleResponse,
+    SubGroupType,
 } from '@/services/scheduleService';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useTimeUpdate } from '@/hooks/useTimeUpdate';
-import Animated, { useAnimatedStyle, withTiming, withSpring, FadeIn, FadeOut, useSharedValue, withSequence, withDelay } from 'react-native-reanimated';
+import Animated, {
+    useAnimatedStyle,
+    withTiming,
+    FadeIn,
+    FadeOut,
+    useSharedValue,
+    withSequence,
+    withDelay,
+} from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import ViewModeMenu from './ViewModeMenu';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { getAssignmentsForPeriod, Assignment, AssignmentType, getAssignmentsForTimeRange, getAssignmentsForClass } from '@/utils/assignmentStorage';
+import {
+    getAssignmentsForPeriod,
+    Assignment,
+    AssignmentType,
+    getAssignmentsForTimeRange,
+    getAssignmentsForClass,
+} from '@/utils/assignmentStorage';
 import { router } from 'expo-router';
 import {
-  buildSpecialEventKey,
-  filterExamEventsForDate,
-  filterThesisEventsForDate,
-  thesisMatchesScheduleSlot,
+    buildSpecialEventKey,
+    filterExamEventsForDate,
+    filterThesisEventsForDate,
+    thesisMatchesScheduleSlot,
 } from '@/utils/specialScheduleUtils';
 import { Colors } from '@/constants/Colors';
 
@@ -32,2601 +57,3432 @@ const TUTORIAL_SHOWN_KEY = 'schedule_tutorial_shown';
 const DAY_DISPLAY_SNAPSHOT_PREFIX = '@day_display_snapshot_';
 
 interface DayDisplaySnapshot {
-  generatedAt: number;
-  groupId: string;
-  subgroup: SubGroupType;
-  dateMap: Record<string, ScheduleItem[]>;
+    generatedAt: number;
+    groupId: string;
+    subgroup: SubGroupType;
+    dateMap: Record<string, ScheduleItem[]>;
 }
 
 // Function to get assignment type icon name
-const getAssignmentTypeIcon = (type: AssignmentType): React.ComponentProps<typeof Ionicons>['name'] => {
-  switch (type) {
-    case AssignmentType.HOMEWORK:
-      return 'book-outline';
-    case AssignmentType.TEST:
-      return 'document-text-outline';
-    case AssignmentType.EXAM:
-      return 'school-outline';
-    case AssignmentType.PROJECT:
-      return 'construct-outline';
-    case AssignmentType.QUIZ:
-      return 'clipboard-outline';
-    case AssignmentType.LAB:
-      return 'flask-outline';
-    case AssignmentType.ESSAY:
-      return 'create-outline';
-    case AssignmentType.PRESENTATION:
-      return 'easel-outline';
-    default:
-      return 'ellipsis-horizontal-outline';
-  }
+const getAssignmentTypeIcon = (
+    type: AssignmentType,
+): React.ComponentProps<typeof Ionicons>['name'] => {
+    switch (type) {
+        case AssignmentType.HOMEWORK:
+            return 'book-outline';
+        case AssignmentType.TEST:
+            return 'document-text-outline';
+        case AssignmentType.EXAM:
+            return 'school-outline';
+        case AssignmentType.PROJECT:
+            return 'construct-outline';
+        case AssignmentType.QUIZ:
+            return 'clipboard-outline';
+        case AssignmentType.LAB:
+            return 'flask-outline';
+        case AssignmentType.ESSAY:
+            return 'create-outline';
+        case AssignmentType.PRESENTATION:
+            return 'easel-outline';
+        default:
+            return 'ellipsis-horizontal-outline';
+    }
 };
 
 // Function to get assignment type color
 const getAssignmentTypeColor = (type: AssignmentType): string => {
-  switch (type) {
-    case AssignmentType.HOMEWORK:
-      return Colors.dark.assignmentTypes.homework;
-    case AssignmentType.TEST:
-      return Colors.dark.assignmentTypes.test;
-    case AssignmentType.EXAM:
-      return Colors.dark.assignmentTypes.exam;
-    case AssignmentType.PROJECT:
-      return Colors.dark.assignmentTypes.project;
-    case AssignmentType.QUIZ:
-      return Colors.dark.assignmentTypes.quiz;
-    case AssignmentType.LAB:
-      return Colors.dark.assignmentTypes.lab;
-    case AssignmentType.ESSAY:
-      return Colors.dark.assignmentTypes.essay;
-    case AssignmentType.PRESENTATION:
-      return Colors.dark.assignmentTypes.presentation;
-    default:
-      return Colors.dark.assignmentTypes.other;
-  }
-};
-
-
-
-const getMinutesBetween = (currentTime: Date, targetTime: string) => {
-  const [hours, minutes] = targetTime.split(':').map(Number);
-  const target = new Date(
-    currentTime.getFullYear(),
-    currentTime.getMonth(),
-    currentTime.getDate(),
-    hours,
-    minutes
-  );
-  return Math.round((target.getTime() - currentTime.getTime()) / 1000 / 60);
+    switch (type) {
+        case AssignmentType.HOMEWORK:
+            return Colors.dark.assignmentTypes.homework;
+        case AssignmentType.TEST:
+            return Colors.dark.assignmentTypes.test;
+        case AssignmentType.EXAM:
+            return Colors.dark.assignmentTypes.exam;
+        case AssignmentType.PROJECT:
+            return Colors.dark.assignmentTypes.project;
+        case AssignmentType.QUIZ:
+            return Colors.dark.assignmentTypes.quiz;
+        case AssignmentType.LAB:
+            return Colors.dark.assignmentTypes.lab;
+        case AssignmentType.ESSAY:
+            return Colors.dark.assignmentTypes.essay;
+        case AssignmentType.PRESENTATION:
+            return Colors.dark.assignmentTypes.presentation;
+        default:
+            return Colors.dark.assignmentTypes.other;
+    }
 };
 
 interface TimeIndicatorProps {
-  startTime: string;
-  endTime: string;
-  containerHeight: number;
-  hasNextItem?: boolean;
-  timestamp: number;
+    startTime: string;
+    endTime: string;
+    containerHeight: number;
+    hasNextItem?: boolean;
+    timestamp: number;
 }
 
 type ScheduleItem = {
-  isBreak?: boolean;
-  startTime: string;
-  endTime: string;
-  className: string;
-  teacherName: string;
-  roomNumber: string;
-  _height?: number;
-  hasNextItem?: boolean;
-  period?: string;
-  assignmentCount: number;
-  subjectId?: string;
-  group?: string;
-  isEvenWeek?: boolean;
-  isCustom?: boolean;
-  color?: string;
-  isRecoveryDay?: boolean;
-  recoveryReason?: string;
-  replacedDayName?: string;
+    isBreak?: boolean;
+    startTime: string;
+    endTime: string;
+    className: string;
+    teacherName: string;
+    roomNumber: string;
+    _height?: number;
+    hasNextItem?: boolean;
+    period?: string;
+    assignmentCount: number;
+    subjectId?: string;
+    group?: string;
+    isEvenWeek?: boolean;
+    isCustom?: boolean;
+    color?: string;
+    isRecoveryDay?: boolean;
+    recoveryReason?: string;
+    replacedDayName?: string;
 };
 
 interface ScheduleInfoBadgeProps {
-  label: string;
-  title: string;
-  reason: string;
-  details?: string[];
+    label: string;
+    title: string;
+    reason: string;
+    details?: string[];
 }
 
-const ScheduleInfoBadge = ({ label, title, reason, details = [] }: ScheduleInfoBadgeProps) => {
-  const [showInfo, setShowInfo] = useState(false);
+const ScheduleInfoBadge = ({
+    label,
+    title,
+    reason,
+    details = [],
+}: ScheduleInfoBadgeProps) => {
+    const [showInfo, setShowInfo] = useState(false);
 
-  const popupAnimation = useAnimatedStyle(() => {
-    return {
-      opacity: withTiming(showInfo ? 1 : 0, { duration: 120 }),
-      transform: [
-        {
-          translateY: withTiming(showInfo ? 0 : -6, { duration: 120 })
-        }
-      ],
-    };
-  }, [showInfo]);
+    const popupAnimation = useAnimatedStyle(() => {
+        return {
+            opacity: withTiming(showInfo ? 1 : 0, { duration: 120 }),
+            transform: [
+                {
+                    translateY: withTiming(showInfo ? 0 : -6, {
+                        duration: 120,
+                    }),
+                },
+            ],
+        };
+    }, [showInfo]);
 
-  const buttonAnimation = useAnimatedStyle(() => {
-    return {
-      transform: [
-        {
-          scale: withTiming(showInfo ? 0.98 : 1, { duration: 100 })
-        }
-      ]
-    };
-  }, [showInfo]);
+    const buttonAnimation = useAnimatedStyle(() => {
+        return {
+            transform: [
+                {
+                    scale: withTiming(showInfo ? 0.98 : 1, { duration: 100 }),
+                },
+            ],
+        };
+    }, [showInfo]);
 
-  return (
-    <View style={styles.recoveryDayInfoContainer}>
-      <Animated.View style={buttonAnimation}>
-        <TouchableOpacity
-          style={styles.recoveryDayInfoButton}
-          onPress={() => setShowInfo(!showInfo)}
-          activeOpacity={0.7}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <LinearGradient
-            colors={Colors.dark.recoveryInfoGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.recoveryDayInfoButtonGradient}
-          >
-            <Text style={styles.recoveryDayInfoBadgeText}>{label}</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-      </Animated.View>
+    return (
+        <View style={styles.recoveryDayInfoContainer}>
+            <Animated.View style={buttonAnimation}>
+                <TouchableOpacity
+                    style={styles.recoveryDayInfoButton}
+                    onPress={() => setShowInfo(!showInfo)}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                    <LinearGradient
+                        colors={Colors.dark.recoveryInfoGradient}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.recoveryDayInfoButtonGradient}
+                    >
+                        <Text style={styles.recoveryDayInfoBadgeText}>
+                            {label}
+                        </Text>
+                    </LinearGradient>
+                </TouchableOpacity>
+            </Animated.View>
 
-      <Animated.View
-        style={[styles.recoveryDayTooltipContainer, popupAnimation]}
-        pointerEvents={showInfo ? 'auto' : 'none'}
-      >
-        <View style={styles.recoveryDayTooltip}>
-          <View style={styles.recoveryDayTooltipHeader}>
-            <Text style={styles.recoveryDayTooltipTitle}>{title}</Text>
-            <TouchableOpacity
-              style={styles.closeTooltipButton}
-              onPress={() => setShowInfo(false)}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            <Animated.View
+                style={[styles.recoveryDayTooltipContainer, popupAnimation]}
+                pointerEvents={showInfo ? 'auto' : 'none'}
             >
-              <Text style={styles.closeTooltipText}>✕</Text>
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.recoveryDayTooltipReason}>
-            {reason || 'No reason provided'}
-          </Text>
-          {details.map((detail, idx) => (
-            <Text key={idx} style={styles.recoveryDayTooltipDetail}>
-              {detail}
-            </Text>
-          ))}
+                <View style={styles.recoveryDayTooltip}>
+                    <View style={styles.recoveryDayTooltipHeader}>
+                        <Text style={styles.recoveryDayTooltipTitle}>
+                            {title}
+                        </Text>
+                        <TouchableOpacity
+                            style={styles.closeTooltipButton}
+                            onPress={() => setShowInfo(false)}
+                            hitSlop={{
+                                top: 10,
+                                bottom: 10,
+                                left: 10,
+                                right: 10,
+                            }}
+                        >
+                            <Text style={styles.closeTooltipText}>✕</Text>
+                        </TouchableOpacity>
+                    </View>
+                    <Text style={styles.recoveryDayTooltipReason}>
+                        {reason || 'No reason provided'}
+                    </Text>
+                    {details.map((detail, idx) => (
+                        <Text key={idx} style={styles.recoveryDayTooltipDetail}>
+                            {detail}
+                        </Text>
+                    ))}
+                </View>
+            </Animated.View>
         </View>
-      </Animated.View>
-    </View>
-  );
+    );
 };
 
 // Add this interface near the top of the file with other interfaces
 interface WeekDateInfo {
-  date: Date;
-  day: string;
-  dateNum: number;
-  isToday: boolean;
-  isRecoveryDay: boolean;
-  totalAssignments: number;
+    date: Date;
+    day: string;
+    dateNum: number;
+    isToday: boolean;
+    isRecoveryDay: boolean;
+    totalAssignments: number;
 }
 
 export default function DayView() {
-  const [scheduleData, setScheduleData] = useState<ApiResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [settings, setSettings] = useState(scheduleService.getSettings());
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [todaySchedule, setTodaySchedule] = useState<ScheduleItem[]>([]);
-  const [thesisSchedule, setThesisSchedule] = useState<SpecialScheduleResponse | null>(null);
-  const [examSchedule, setExamSchedule] = useState<SpecialScheduleResponse | null>(null);
-  const [initialLoadAttempted, setInitialLoadAttempted] = useState(false);
-  const currentDate = useRef(new Date()).current;
-  const isEvenWeek = scheduleService.isEvenWeek(selectedDate);
-  const { t, formatDate, formatTime } = useTranslation();
-  const recoveryDay = useMemo(() => scheduleService.isRecoveryDay(selectedDate), [selectedDate]);
-  const scheduleOverride = useMemo(() => {
-    if (!Array.isArray(todaySchedule)) return null;
-    const itemWithReason = todaySchedule.find(item => typeof item?.recoveryReason === 'string' && item.recoveryReason.trim().length > 0);
-    const reason = itemWithReason?.recoveryReason?.trim() || recoveryDay?.reason || '';
-    if (!reason) return null;
-
-    return {
-      reason,
-      replacedDayName: itemWithReason?.replacedDayName,
-      isRecoveryDay: Boolean(itemWithReason?.isRecoveryDay || recoveryDay),
-    };
-  }, [todaySchedule, recoveryDay]);
-  const visibleTodaySchedule = useMemo(() => {
-    if (!Array.isArray(todaySchedule)) return [];
-    return todaySchedule.filter(item =>
-      item &&
-      item.period !== 'recovery-info' &&
-      (item.isEvenWeek === undefined || item.isEvenWeek === isEvenWeek)
+    const [scheduleData, setScheduleData] = useState<ApiResponse | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [selectedDate, setSelectedDate] = useState(new Date());
+    const [settings, setSettings] = useState(scheduleService.getSettings());
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [todaySchedule, setTodaySchedule] = useState<ScheduleItem[]>([]);
+    const [thesisSchedule, setThesisSchedule] =
+        useState<SpecialScheduleResponse | null>(null);
+    const [examSchedule, setExamSchedule] =
+        useState<SpecialScheduleResponse | null>(null);
+    const [initialLoadAttempted, setInitialLoadAttempted] = useState(false);
+    const currentDate = useRef(new Date()).current;
+    const isEvenWeek = scheduleService.isEvenWeek(selectedDate);
+    const { t, formatDate, formatTime } = useTranslation();
+    const recoveryDay = useMemo(
+        () => scheduleService.isRecoveryDay(selectedDate),
+        [selectedDate],
     );
-  }, [todaySchedule, isEvenWeek]);
-  const thesisEvents = useMemo(
-    () => (thesisSchedule?.events || []).filter((event): event is ThesisScheduleEvent => event.type === 'thesis'),
-    [thesisSchedule]
-  );
-  const examEvents = useMemo(
-    () => (examSchedule?.events || []).filter((event): event is ExamScheduleEvent => event.type === 'exam'),
-    [examSchedule]
-  );
-  const selectedDateThesisEvents = useMemo(
-    () => filterThesisEventsForDate(thesisEvents, selectedDate, settings.group),
-    [thesisEvents, selectedDate, settings.group]
-  );
-  const selectedDateExamEvents = useMemo(
-    () => filterExamEventsForDate(examEvents, selectedDate, settings.group),
-    [examEvents, selectedDate, settings.group]
-  );
-  const getThesisEventsForItem = useCallback(
-    (item: ScheduleItem) =>
-      selectedDateThesisEvents.filter((thesisEvent) =>
-        thesisMatchesScheduleSlot(thesisEvent, item, settings.group)
-      ),
-    [selectedDateThesisEvents, settings.group]
-  );
-  const matchedThesisEventKeys = useMemo(() => {
-    const keys = new Set<string>();
-    visibleTodaySchedule.forEach((scheduleItem) => {
-      getThesisEventsForItem(scheduleItem).forEach((event) => {
-        keys.add(buildSpecialEventKey(event));
-      });
-    });
-    return keys;
-  }, [visibleTodaySchedule, getThesisEventsForItem]);
-  const standaloneThesisEvents = useMemo(
-    () =>
-      selectedDateThesisEvents.filter(
-        (event) => !matchedThesisEventKeys.has(buildSpecialEventKey(event))
-      ),
-    [selectedDateThesisEvents, matchedThesisEventKeys]
-  );
-  const hasStandaloneAssessments = selectedDateExamEvents.length > 0 || standaloneThesisEvents.length > 0;
-  const currentTime = useTimeUpdate();
-  
-  // Initialize refs at the top level
-  const settingsRef = useRef(scheduleService.getSettings());
-  const refreshVersionRef = useRef(scheduleService.getScheduleRefreshVersion());
-  const displayedScheduleMapRef = useRef<Record<string, ScheduleItem[]>>({});
-  const selectedDateRef = useRef<Date>(selectedDate);
-  const initialLoadAttemptedRef = useRef(false);
-  const scrollViewRef = useRef<ScrollView>(null);
-  const [showFirstTimeIndicator, setShowFirstTimeIndicator] = useState(false);
-  const firstTimeAnimValue = useSharedValue(0);
-  const hasShownFirstTimeIndicator = useRef(false);
-  const [tutorialShown, setTutorialShown] = useState(true); // Assume shown by default, will be updated
-  const [expandedPeriods, setExpandedPeriods] = useState<{[key: string]: boolean}>({});
-  const [periodAssignments, setPeriodAssignments] = useState<{[key: string]: Assignment[]}>({});
-  const [loadingAssignments, setLoadingAssignments] = useState<{[key: string]: boolean}>({});
-  const [periodAssignmentCounts, setPeriodAssignmentCounts] = useState<{[key: string]: number}>({});
+    const scheduleOverride = useMemo(() => {
+        if (!Array.isArray(todaySchedule)) return null;
+        const itemWithReason = todaySchedule.find(
+            (item) =>
+                typeof item?.recoveryReason === 'string' &&
+                item.recoveryReason.trim().length > 0,
+        );
+        const reason =
+            itemWithReason?.recoveryReason?.trim() || recoveryDay?.reason || '';
+        if (!reason) return null;
 
-  useEffect(() => {
-    selectedDateRef.current = selectedDate;
-  }, [selectedDate]);
-
-  // Check if tutorial has been shown before
-  useEffect(() => {
-    const checkTutorialShown = async () => {
-      try {
-        const value = await AsyncStorage.getItem(TUTORIAL_SHOWN_KEY);
-        if (value === null) {
-          // Tutorial has not been shown before
-          setTutorialShown(false);
-        }
-      } catch (e) {
-        // Error reading value, assume it hasn't been shown
-        setTutorialShown(false);
-      }
-    };
-    
-    checkTutorialShown();
-  }, []);
-
-  // Generate current week dates (Monday to Friday, plus Saturday if it's a recovery day)
-  const weekDates = useMemo(() => {
-    const today = new Date();
-    const currentDay = today.getDay(); // 0 is Sunday, 1 is Monday, etc.
-
-    // Calculate the Monday date
-    const monday = new Date(today);
-    let daysFromMonday;
-
-    // Special handling for weekends
-    if (currentDay === 0 || currentDay === 6) { // If weekend (Saturday or Sunday)
-      // Check if current Saturday is a recovery day
-      const currentSaturday = new Date(today);
-      if (currentDay === 0) { // If Sunday
-        currentSaturday.setDate(today.getDate() - 1); // Yesterday was Saturday
-      }
-      
-      const saturdayIsRecovery = scheduleService.isRecoveryDay(currentSaturday) !== null;
-      
-      if (saturdayIsRecovery && currentDay === 6) {
-        // If it's Saturday and it's a recovery day, stay on current week
-        daysFromMonday = 1 - currentDay; // -5 to get to Monday of current week
-      } else if (saturdayIsRecovery && currentDay === 0) {
-        // If it's Sunday and yesterday (Saturday) was a recovery day, stay on current week
-        daysFromMonday = 1 - 7; // -6 to get to Monday of current week
-      } else {
-        // Otherwise, go to next week as before
-        daysFromMonday = currentDay === 0 ? 1 : 2; // Sunday: +1, Saturday: +2
-      }
-    } else {
-      // For weekdays, calculate normally
-      daysFromMonday = 1 - currentDay; // Formula to get to Monday (e.g., if Wednesday (3), -2)
-    }
-
-    monday.setDate(today.getDate() + daysFromMonday);
-
-    // First generate Monday-Friday
-    const dates = Array.from({ length: 5 }, (_, i) => {
-      const date = new Date(monday);
-      date.setDate(monday.getDate() + i);
-      
-      return {
-        date,
-        day: t('weekdays').short[date.getDay()],
-        dateNum: date.getDate(),
-        isToday: date.toDateString() === currentDate.toDateString(),
-        isRecoveryDay: scheduleService.isRecoveryDay(date) !== null,
-        totalAssignments: 0
-      };
-    });
-
-    // Check if Saturday is a recovery day, and if so, add it to the array
-    const saturday = new Date(monday);
-    saturday.setDate(monday.getDate() + 5); // Saturday is 5 days from Monday
-
-    const saturdayIsRecovery = scheduleService.isRecoveryDay(saturday) !== null;
-
-    if (saturdayIsRecovery) {
-      dates.push({
-        date: saturday,
-        day: t('weekdays').short[saturday.getDay()],
-        dateNum: saturday.getDate(),
-        isToday: saturday.toDateString() === currentDate.toDateString(),
-        isRecoveryDay: true,
-        totalAssignments: 0
-      });
-    }
-
-    return dates;
-  }, [currentDate, t]);
-
-  // Update the useEffect for assignment counts
-  useEffect(() => {
-    const updateAssignmentCounts = async () => {
-      if (!scheduleData) return;
-
-      const updatedDates = await Promise.all(weekDates.map(async (dateInfo) => {
-        let totalAssignments = 0;
-        if (dateInfo.isRecoveryDay) {
-          const dateString = dateInfo.date.toISOString().split('T')[0];
-          const dayKey = `weekend_${dateString}`;
-          const daySchedule = await scheduleService.getScheduleForDay(scheduleData, dayKey, dateInfo.date);
-          if (Array.isArray(daySchedule)) { // Check if daySchedule is an array
-            // Instead of using periodIds from schedule, get actual assignments for the day
-            const dayAssignments = await getAssignmentsForTimeRange(dateInfo.date);
-            totalAssignments = dayAssignments.length;
-          }
-        } else {
-          const dayKey = DAYS_MAP[dateInfo.date.getDay() as keyof typeof DAYS_MAP];
-          const daySchedule = await scheduleService.getScheduleForDay(scheduleData, dayKey, dateInfo.date);
-          if (Array.isArray(daySchedule)) { // Check if daySchedule is an array
-            // Get all assignments for this day
-            const dayAssignments = await getAssignmentsForTimeRange(dateInfo.date);
-            totalAssignments = dayAssignments.length;
-          }
-        }
-        return { ...dateInfo, totalAssignments };
-      }));
-
-      // Force a re-render with updated assignment counts
-      setWeekDates(updatedDates);
-    };
-
-    updateAssignmentCounts();
-  }, [scheduleData, weekDates]);
-
-  // Update the state declaration with proper typing
-  const [weekDatesWithAssignments, setWeekDates] = useState<WeekDateInfo[]>(weekDates);
-
-  // Add these functions after the main hook declarations, before updateSchedule
-  const scrollToDate = useCallback((date: Date) => {
-    if (!scrollViewRef.current) return;
-
-    const dateIndex = weekDates.findIndex(
-      d => d.date.toDateString() === date.toDateString()
-    );
-
-    if (dateIndex !== -1) {
-      scrollViewRef.current.scrollTo({
-        x: dateIndex * ((Dimensions.get('window').width - 40) / 5),
-        animated: true
-      });
-    }
-  }, [weekDates]);
-
-  const handleDatePress = useCallback((date: Date) => {
-    // Immediately set the selected date for better responsiveness
-    setSelectedDate(date);
-    
-    // Only scroll if within the range of available weekDates
-    const dateTime = date.getTime();
-    const minDate = weekDates[0].date.getTime();
-    const maxDate = weekDates[weekDates.length - 1].date.getTime();
-
-    if (dateTime >= minDate && dateTime <= maxDate) {
-      // Use requestAnimationFrame for smoother UI updates
-      requestAnimationFrame(() => {
-        scrollToDate(date);
-      });
-    }
-  }, [scrollToDate, weekDates]);
-
-  const toDateKey = useCallback((date: Date): string => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  }, []);
-
-  const getDisplaySnapshotKey = useCallback((groupId: string, subgroup: SubGroupType): string => {
-    return `${DAY_DISPLAY_SNAPSHOT_PREFIX}${groupId || 'nogroup'}_${subgroup}`;
-  }, []);
-
-  const normalizeDayScheduleForDisplay = useCallback(
-    (items: ScheduleItem[], targetDate: Date): ScheduleItem[] => {
-      const targetEvenWeek = scheduleService.isEvenWeek(targetDate);
-      const safeItems = Array.isArray(items) ? items : [];
-      const reasonItem = safeItems.find(
-        item => item && (item.period === 'recovery-info' || (item.recoveryReason && item.recoveryReason.trim().length > 0))
-      );
-      const visibleItems = safeItems.filter(item =>
-        item &&
-        item.period !== 'recovery-info' &&
-        (item.isEvenWeek === undefined || item.isEvenWeek === targetEvenWeek)
-      );
-      return reasonItem ? [reasonItem, ...visibleItems] : visibleItems;
-    },
-    []
-  );
-
-  const loadDisplaySnapshot = useCallback(
-    async (groupId: string, subgroup: SubGroupType): Promise<Record<string, ScheduleItem[]> | null> => {
-      try {
-        const key = getDisplaySnapshotKey(groupId, subgroup);
-        const raw = await AsyncStorage.getItem(key);
-        if (!raw) return null;
-        const parsed = JSON.parse(raw) as DayDisplaySnapshot;
-        if (!parsed || typeof parsed !== 'object' || !parsed.dateMap || typeof parsed.dateMap !== 'object') {
-          return null;
-        }
-        return parsed.dateMap;
-      } catch {
-        return null;
-      }
-    },
-    [getDisplaySnapshotKey]
-  );
-
-  const saveDisplaySnapshot = useCallback(
-    async (groupId: string, subgroup: SubGroupType, dateMap: Record<string, ScheduleItem[]>) => {
-      try {
-        const key = getDisplaySnapshotKey(groupId, subgroup);
-        const payload: DayDisplaySnapshot = {
-          generatedAt: Date.now(),
-          groupId,
-          subgroup,
-          dateMap,
+        return {
+            reason,
+            replacedDayName: itemWithReason?.replacedDayName,
+            isRecoveryDay: Boolean(
+                itemWithReason?.isRecoveryDay || recoveryDay,
+            ),
         };
-        await AsyncStorage.setItem(key, JSON.stringify(payload));
-      } catch {
-        // ignore cache write errors
-      }
-    },
-    [getDisplaySnapshotKey]
-  );
-
-  const buildDisplayMapForDates = useCallback(
-    async (data: ApiResponse, dates: Date[]): Promise<Record<string, ScheduleItem[]>> => {
-      const result: Record<string, ScheduleItem[]> = {};
-
-      for (const date of dates) {
-        const dateKey = toDateKey(date);
-        const weekday = DAYS_MAP[date.getDay() as keyof typeof DAYS_MAP];
-        const dayKey = weekday || `weekend_${dateKey}`;
-        const daySchedule = await scheduleService.getScheduleForDay(data, dayKey, date) as ScheduleItem[];
-        result[dateKey] = normalizeDayScheduleForDisplay(daySchedule, date);
-      }
-
-      return result;
-    },
-    [normalizeDayScheduleForDisplay, toDateKey]
-  );
-
-  const rebuildDisplayCache = useCallback(
-    async (data: ApiResponse, targetDates?: Date[]) => {
-      const dates = targetDates && targetDates.length > 0
-        ? targetDates
-        : weekDates.map(dayInfo => dayInfo.date);
-      const map = await buildDisplayMapForDates(data, dates);
-      displayedScheduleMapRef.current = map;
-
-      const currentSettings = scheduleService.getSettings();
-      await saveDisplaySnapshot(currentSettings.selectedGroupId, currentSettings.group, map);
-
-      const selectedKey = toDateKey(selectedDate);
-      setTodaySchedule(map[selectedKey] || []);
-    },
-    [buildDisplayMapForDates, saveDisplaySnapshot, selectedDate, toDateKey, weekDates]
-  );
-
-  const loadCachedSpecialSchedules = useCallback(
-    async (groupName?: string) => {
-      const resolvedGroupName = String(groupName || scheduleService.getSettings().selectedGroupName || '').trim();
-
-      if (!resolvedGroupName) {
-        setThesisSchedule(null);
-        setExamSchedule(null);
-        return;
-      }
-      try {
-        const { thesis, exam } = await scheduleService.getCachedExamAndThesisSchedule(resolvedGroupName);
-        setThesisSchedule(thesis);
-        setExamSchedule(exam);
-      } catch (specialError) {
-        setThesisSchedule(
-          scheduleService.buildUnavailableSpecialSchedule(
-            'thesis',
-            resolvedGroupName,
-            'cache_read_failed',
-            'Unable to load cached thesis schedule'
-          )
+    }, [todaySchedule, recoveryDay]);
+    const visibleTodaySchedule = useMemo(() => {
+        if (!Array.isArray(todaySchedule)) return [];
+        return todaySchedule.filter(
+            (item) =>
+                item &&
+                item.period !== 'recovery-info' &&
+                (item.isEvenWeek === undefined ||
+                    item.isEvenWeek === isEvenWeek),
         );
-        setExamSchedule(
-          scheduleService.buildUnavailableSpecialSchedule(
-            'exam',
-            resolvedGroupName,
-            'cache_read_failed',
-            'Unable to load cached exam schedule'
-          )
-        );
-      }
-    },
-    []
-  );
-
-  // Schedule data fetching function using useCallback
-  const fetchSchedule = useCallback(async (groupId?: string) => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      
-      // Check for internet connection before attempting to fetch
-      const hasInternet = await scheduleService.hasInternetConnection();
-      
-      const data = await scheduleService.getClassSchedule(groupId);
-      
-      // If we got here successfully, update state
-      setScheduleData(data);
-      initialLoadAttemptedRef.current = true;
-      setInitialLoadAttempted(true);
-
-      if (data) {
-        await rebuildDisplayCache(data);
-      }
-
-      await loadCachedSpecialSchedules(scheduleService.getSettings().selectedGroupName);
-    } catch (error) {
-      setError(t('schedule').error || 'Unable to load schedule. Please try again later.');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [t, loadCachedSpecialSchedules, rebuildDisplayCache]);
-
-  // Settings subscription effect. Rebuild displayed periods only on explicit schedule refresh or group change.
-  useEffect(() => {
-    const currentFetchSchedule = fetchSchedule;
-
-    const updateHandler = async () => {
-      const newSettings = scheduleService.getSettings();
-      const prevSettings = settingsRef.current;
-      const latestRefreshVersion = scheduleService.getScheduleRefreshVersion();
-
-      settingsRef.current = newSettings;
-      setSettings(newSettings);
-
-      if (latestRefreshVersion !== refreshVersionRef.current) {
-        refreshVersionRef.current = latestRefreshVersion;
-        await currentFetchSchedule(newSettings.selectedGroupId);
-        await loadCachedSpecialSchedules(newSettings.selectedGroupName);
-        return;
-      }
-
-      if (newSettings.selectedGroupId !== prevSettings.selectedGroupId) {
-        await currentFetchSchedule(newSettings.selectedGroupId);
-        await loadCachedSpecialSchedules(newSettings.selectedGroupName);
-        return;
-      }
-
-      if (newSettings.group !== prevSettings.group) {
-        const cachedMap = await loadDisplaySnapshot(newSettings.selectedGroupId, newSettings.group);
-        if (cachedMap) {
-          displayedScheduleMapRef.current = cachedMap;
-          const selectedKey = toDateKey(selectedDate);
-          setTodaySchedule(cachedMap[selectedKey] || []);
-        } else if (scheduleData) {
-          await rebuildDisplayCache(scheduleData);
-        }
-        await loadCachedSpecialSchedules(newSettings.selectedGroupName);
-        return;
-      }
-
-      if (newSettings.selectedGroupName !== prevSettings.selectedGroupName) {
-        await loadCachedSpecialSchedules(newSettings.selectedGroupName);
-      }
-    };
-
-    const unsubscribe = scheduleService.subscribe(updateHandler);
-    return () => unsubscribe();
-  }, [
-    fetchSchedule,
-    loadCachedSpecialSchedules,
-    loadDisplaySnapshot,
-    rebuildDisplayCache,
-    scheduleData,
-    selectedDate,
-    toDateKey,
-  ]);
-
-  // Schedule data fetching effect
-  useEffect(() => {
-    const settings = scheduleService.getSettings();
-    const run = () => {
-      const loadData = async () => {
-        try {
-          await fetchSchedule();
-        } catch (err) {
-          console.error('Failed to load schedule:', err);
-          setError('Unable to load schedule. Please try again later.');
-          setIsLoading(false);
-        }
-      };
-      loadData();
-    };
-    // If Day view not currently active, defer heavy fetch until interactions settle
-    if (settings.scheduleView !== 'day') {
-      const handle = InteractionManager.runAfterInteractions(run);
-      return () => handle.cancel && handle.cancel();
-    } else {
-      run();
-    }
-  }, [fetchSchedule]);
-
-  useEffect(() => {
-    void loadCachedSpecialSchedules(settings.selectedGroupName);
-  }, [settings.selectedGroupName, loadCachedSpecialSchedules]);
-
-  useEffect(() => {
-    const restoreDisplaySnapshot = async () => {
-      const cachedMap = await loadDisplaySnapshot(settings.selectedGroupId, settings.group);
-      if (!cachedMap) return;
-      displayedScheduleMapRef.current = cachedMap;
-      const selectedKey = toDateKey(selectedDateRef.current);
-      setTodaySchedule(cachedMap[selectedKey] || []);
-    };
-
-    void restoreDisplaySnapshot();
-  }, [settings.selectedGroupId, settings.group, loadDisplaySnapshot, toDateKey]);
-
-  // Initial scroll to today, only once on mount
-  useEffect(() => {
-    if (scrollViewRef.current) {
-      // Wait for layout to complete
-      setTimeout(() => {
-        scrollViewRef.current?.scrollTo({
-          x: (3 * (Dimensions.get('window').width - 40) / 5),
-          animated: false
+    }, [todaySchedule, isEvenWeek]);
+    const thesisEvents = useMemo(
+        () =>
+            (thesisSchedule?.events || []).filter(
+                (event): event is ThesisScheduleEvent =>
+                    event.type === 'thesis',
+            ),
+        [thesisSchedule],
+    );
+    const examEvents = useMemo(
+        () =>
+            (examSchedule?.events || []).filter(
+                (event): event is ExamScheduleEvent => event.type === 'exam',
+            ),
+        [examSchedule],
+    );
+    const selectedDateThesisEvents = useMemo(
+        () =>
+            filterThesisEventsForDate(
+                thesisEvents,
+                selectedDate,
+                settings.group,
+            ),
+        [thesisEvents, selectedDate, settings.group],
+    );
+    const selectedDateExamEvents = useMemo(
+        () => filterExamEventsForDate(examEvents, selectedDate, settings.group),
+        [examEvents, selectedDate, settings.group],
+    );
+    const getThesisEventsForItem = useCallback(
+        (item: ScheduleItem) =>
+            selectedDateThesisEvents.filter((thesisEvent) =>
+                thesisMatchesScheduleSlot(thesisEvent, item, settings.group),
+            ),
+        [selectedDateThesisEvents, settings.group],
+    );
+    const matchedThesisEventKeys = useMemo(() => {
+        const keys = new Set<string>();
+        visibleTodaySchedule.forEach((scheduleItem) => {
+            getThesisEventsForItem(scheduleItem).forEach((event) => {
+                keys.add(buildSpecialEventKey(event));
+            });
         });
-      }, 100);
-    }
-  }, []); // Empty dependency array ensures this only runs once
-
-  // Handle empty schedule differently for weekends
-  const isWeekend = selectedDate.getDay() === 0 || selectedDate.getDay() === 6;
-
-  const currentTimestamp = currentTime.getTime();
-
-  const TimeIndicator = useCallback((props: TimeIndicatorProps) => {
-    const animatedStyle = useAnimatedStyle(() => {
-      'worklet';
-      const date = new Date(props.timestamp);
-      const currentHours = date.getHours();
-      const currentMinutes = date.getMinutes();
-      const currentSeconds = date.getSeconds();
-      const currentTimeInMinutes = currentHours * 60 + currentMinutes + (currentSeconds / 60);
-
-      const [startHours, startMinutes] = props.startTime.split(':').map(Number);
-      const [endHours, endMinutes] = props.endTime.split(':').map(Number);
-
-      const startTimeInMinutes = startHours * 60 + startMinutes;
-      const endTimeInMinutes = endHours * 60 + endMinutes;
-      const timeSlotDuration = endTimeInMinutes - startTimeInMinutes;
-
-      if (currentTimeInMinutes < startTimeInMinutes) return { top: withTiming('0%') };
-      if (currentTimeInMinutes > endTimeInMinutes) return { top: withTiming('100%') };
-
-      const progress = (currentTimeInMinutes - startTimeInMinutes) / timeSlotDuration;
-      return {
-        top: withTiming(`${progress * 100}%`, { duration: 1000 }),
-      };
-    }, [props.timestamp]);
-
-    const animatedTimeStyle = useAnimatedStyle(() => {
-      'worklet';
-      const date = new Date(props.timestamp);
-      const currentHours = date.getHours();
-      const currentMinutes = date.getMinutes();
-      const currentSeconds = date.getSeconds();
-      const currentTimeInMinutes = currentHours * 60 + currentMinutes + (currentSeconds / 60);
-
-      const [startHours, startMinutes] = props.startTime.split(':').map(Number);
-      const [endHours, endMinutes] = props.endTime.split(':').map(Number);
-
-      const startTimeInMinutes = startHours * 60 + startMinutes;
-      const endTimeInMinutes = endHours * 60 + endMinutes;
-      const timeSlotDuration = endTimeInMinutes - startTimeInMinutes;
-      const progress = (currentTimeInMinutes - startTimeInMinutes) / timeSlotDuration;
-
-      // Improved positioning calculation to avoid overlap
-      // Calculate if the time indicator is in the top half or bottom half
-      const isInTopHalf = progress < 0.5;
-      
-      return {
-        transform: [{
-          translateY: withTiming(isInTopHalf ? 24 : -24, { duration: 300 })
-        }]
-      };
-    }, [props.timestamp, props.containerHeight]);
-
-    return (
-      <View style={styles.timeIndicatorContainer}>
-        <Animated.View style={[styles.timeIndicator, animatedStyle]}>
-          <View style={styles.timeIndicatorLine} />
-          <View style={styles.timeIndicatorArrowContainer}>
-            <View style={styles.timeIndicatorArrow} />
-          </View>
-          <Animated.Text style={[styles.timeLeftText, animatedTimeStyle]}>
-            {(() => {
-              const now = new Date();
-              // Use the current period's end time for the line indicator
-              const [endHours, endMinutes] = props.endTime.split(':').map(Number);
-
-              const endTime = new Date(
-                now.getFullYear(),
-                now.getMonth(),
-                now.getDate(),
-                endHours,
-                endMinutes
-              );
-
-              // Calculate minutes until the current period ends
-              const diffInMinutes = Math.ceil(
-                (endTime.getTime() - now.getTime()) / (1000 * 60)
-              );
-
-              return diffInMinutes > 0 ? `${diffInMinutes}m` : '';
-            })()}
-          </Animated.Text>
-        </Animated.View>
-      </View>
+        return keys;
+    }, [visibleTodaySchedule, getThesisEventsForItem]);
+    const standaloneThesisEvents = useMemo(
+        () =>
+            selectedDateThesisEvents.filter(
+                (event) =>
+                    !matchedThesisEventKeys.has(buildSpecialEventKey(event)),
+            ),
+        [selectedDateThesisEvents, matchedThesisEventKeys],
     );
-  }, []);
+    const hasStandaloneAssessments =
+        selectedDateExamEvents.length > 0 || standaloneThesisEvents.length > 0;
+    const currentTime = useTimeUpdate();
 
-  const isCurrentTimeSlot = (startTime: string, endTime: string): boolean => {
-    const [startHours, startMinutes] = startTime.split(':').map(Number);
-    const [endHours, endMinutes] = endTime.split(':').map(Number);
-    const currentHours = currentTime.getHours();
-    const currentMinutes = currentTime.getMinutes();
+    // Initialize refs at the top level
+    const settingsRef = useRef(scheduleService.getSettings());
+    const refreshVersionRef = useRef(
+        scheduleService.getScheduleRefreshVersion(),
+    );
+    const displayedScheduleMapRef = useRef<Record<string, ScheduleItem[]>>({});
+    const selectedDateRef = useRef<Date>(selectedDate);
+    const initialLoadAttemptedRef = useRef(false);
+    const scrollViewRef = useRef<ScrollView>(null);
+    const [showFirstTimeIndicator, setShowFirstTimeIndicator] = useState(false);
+    const firstTimeAnimValue = useSharedValue(0);
+    const hasShownFirstTimeIndicator = useRef(false);
+    const [tutorialShown, setTutorialShown] = useState(true); // Assume shown by default, will be updated
+    const [expandedPeriods, setExpandedPeriods] = useState<{
+        [key: string]: boolean;
+    }>({});
+    const [periodAssignments, setPeriodAssignments] = useState<{
+        [key: string]: Assignment[];
+    }>({});
+    const [loadingAssignments, setLoadingAssignments] = useState<{
+        [key: string]: boolean;
+    }>({});
+    const [periodAssignmentCounts, setPeriodAssignmentCounts] = useState<{
+        [key: string]: number;
+    }>({});
 
-    const currentTimeInMinutes = currentHours * 60 + currentMinutes;
-    const startTimeInMinutes = startHours * 60 + startMinutes;
-    const endTimeInMinutes = endHours * 60 + endMinutes;
+    useEffect(() => {
+        selectedDateRef.current = selectedDate;
+    }, [selectedDate]);
 
-    return currentTimeInMinutes >= startTimeInMinutes &&
-      currentTimeInMinutes <= endTimeInMinutes;
-  };
+    // Check if tutorial has been shown before
+    useEffect(() => {
+        const checkTutorialShown = async () => {
+            try {
+                const value = await AsyncStorage.getItem(TUTORIAL_SHOWN_KEY);
+                if (value === null) {
+                    // Tutorial has not been shown before
+                    setTutorialShown(false);
+                }
+            } catch {
+                // Error reading value, assume it hasn't been shown
+                setTutorialShown(false);
+            }
+        };
 
-  const isCurrentTimeInSchedule = (item: ScheduleItem): boolean => {
-    // First check if selected date is today
-    const today = new Date();
-    const isSelectedDateToday = selectedDate.toDateString() === today.toDateString();
+        checkTutorialShown();
+    }, []);
 
-    // If not today, don't show the time indicator
-    if (!isSelectedDateToday) return false;
+    // Generate current week dates (Monday to Friday, plus Saturday if it's a recovery day)
+    const weekDates = useMemo(() => {
+        const today = new Date();
+        const currentDay = today.getDay(); // 0 is Sunday, 1 is Monday, etc.
 
-    const [startHours, startMinutes] = item.startTime.split(':').map(Number);
-    const [endHours, endMinutes] = item.endTime.split(':').map(Number);
-    const currentHours = currentTime.getHours();
-    const currentMinutes = currentTime.getMinutes();
+        // Calculate the Monday date
+        const monday = new Date(today);
+        let daysFromMonday;
 
-    const currentTimeInMinutes = currentHours * 60 + currentMinutes;
-    const startTimeInMinutes = startHours * 60 + startMinutes;
-    const endTimeInMinutes = endHours * 60 + endMinutes;
+        // Special handling for weekends
+        if (currentDay === 0 || currentDay === 6) {
+            // If weekend (Saturday or Sunday)
+            // Check if current Saturday is a recovery day
+            const currentSaturday = new Date(today);
+            if (currentDay === 0) {
+                // If Sunday
+                currentSaturday.setDate(today.getDate() - 1); // Yesterday was Saturday
+            }
 
-    return currentTimeInMinutes >= startTimeInMinutes && currentTimeInMinutes < endTimeInMinutes;
-  };
+            const saturdayIsRecovery =
+                scheduleService.isRecoveryDay(currentSaturday) !== null;
 
-  // Update displayed periods from precomputed map when date changes.
-  useEffect(() => {
-    const selectedKey = toDateKey(selectedDate);
-    const mapped = displayedScheduleMapRef.current[selectedKey];
-    if (mapped) {
-      setTodaySchedule(mapped);
-      return;
-    }
-
-    // Lazy-fill one missing day from current schedule data without full recompute.
-    if (!scheduleData) {
-      setTodaySchedule([]);
-      return;
-    }
-
-    const fillMissingDate = async () => {
-      const oneDayMap = await buildDisplayMapForDates(scheduleData, [selectedDate]);
-      displayedScheduleMapRef.current = {
-        ...displayedScheduleMapRef.current,
-        ...oneDayMap,
-      };
-      const currentSettings = scheduleService.getSettings();
-      await saveDisplaySnapshot(
-        currentSettings.selectedGroupId,
-        currentSettings.group,
-        displayedScheduleMapRef.current
-      );
-      setTodaySchedule(oneDayMap[selectedKey] || []);
-    };
-
-    void fillMissingDate();
-  }, [buildDisplayMapForDates, saveDisplaySnapshot, scheduleData, selectedDate, toDateKey]);
-
-  // Initial selected date setup - if weekend, select next Monday
-  useEffect(() => {
-    const today = new Date();
-    const currentDay = today.getDay();
-
-    if (currentDay === 0 || currentDay === 6) { // If weekend
-      const nextMonday = new Date(today);
-      const daysUntilMonday = currentDay === 0 ? 1 : 2;
-      nextMonday.setDate(today.getDate() + daysUntilMonday);
-      setSelectedDate(nextMonday);
-    }
-  }, []);
-
-  useEffect(() => {
-    // Skip animation if data isn't loaded yet or if tutorial has been shown before
-    if (isLoading || !scheduleData || tutorialShown) return;
-    
-    // Only show the first-time indicator once and save the state
-    if (!hasShownFirstTimeIndicator.current) {
-      hasShownFirstTimeIndicator.current = true;
-      
-      // Show the first-time indicators after a short delay
-      setTimeout(() => {
-        setShowFirstTimeIndicator(true);
-        
-        // Animate in and then fade out after 2 seconds
-        firstTimeAnimValue.value = withSequence(
-          withTiming(1, { duration: 300 }),
-          withDelay(2000, withTiming(0, { duration: 500 }))
-        );
-        
-        // Hide the component after animation completes
-        setTimeout(() => {
-          setShowFirstTimeIndicator(false);
-          
-          // Save that tutorial has been shown
-          AsyncStorage.setItem(TUTORIAL_SHOWN_KEY, 'true').catch(err => {
-            console.error('Error saving tutorial state:', err);
-          });
-        }, 2800);
-      }, 800);
-    }
-  }, [isLoading, scheduleData, tutorialShown]);
-
-  const firstTimeAnimStyle = useAnimatedStyle(() => {
-    return {
-      opacity: firstTimeAnimValue.value,
-      transform: [
-        { scale: 0.9 + firstTimeAnimValue.value * 0.1 }
-      ]
-    };
-  }, []);
-
-  // Function to toggle period expansion
-  const togglePeriodExpansion = async (periodId: string, startTime?: string, endTime?: string, subjectId?: string, className?: string) => {
-    // If not already expanded, fetch the assignments
-    if (!expandedPeriods[periodId]) {
-      // Set loading state for this period
-      setLoadingAssignments(prev => ({
-        ...prev,
-        [periodId]: true
-      }));
-      
-      try {
-        // Use the dedicated class/subject filtering function
-        if (className && (subjectId || startTime)) {
-          const assignments = await getAssignmentsForClass(
-            selectedDate,
-            subjectId || '',
-            className,
-            startTime,
-            endTime
-          );
-          setPeriodAssignments(prev => ({
-            ...prev,
-            [periodId]: assignments
-          }));
-        } 
-        // Fall back to time range filtering if we don't have class name
-        else if (startTime && endTime) {
-          const assignments = await getAssignmentsForTimeRange(selectedDate, startTime, endTime, subjectId);
-          setPeriodAssignments(prev => ({
-            ...prev,
-            [periodId]: assignments
-          }));
-        } 
-        // Fall back to the standard period-based filtering if we don't have any filtering info
-        else {
-          const assignments = await getAssignmentsForPeriod(periodId, selectedDate);
-          setPeriodAssignments(prev => ({
-            ...prev,
-            [periodId]: assignments
-          }));
+            if (saturdayIsRecovery && currentDay === 6) {
+                // If it's Saturday and it's a recovery day, stay on current week
+                daysFromMonday = 1 - currentDay; // -5 to get to Monday of current week
+            } else if (saturdayIsRecovery && currentDay === 0) {
+                // If it's Sunday and yesterday (Saturday) was a recovery day, stay on current week
+                daysFromMonday = 1 - 7; // -6 to get to Monday of current week
+            } else {
+                // Otherwise, go to next week as before
+                daysFromMonday = currentDay === 0 ? 1 : 2; // Sunday: +1, Saturday: +2
+            }
+        } else {
+            // For weekdays, calculate normally
+            daysFromMonday = 1 - currentDay; // Formula to get to Monday (e.g., if Wednesday (3), -2)
         }
-      } catch (error) {
-        console.error('Error loading assignments:', error);
-        // In case of error, set empty array
-        setPeriodAssignments(prev => ({
-          ...prev,
-          [periodId]: []
-        }));
-      } finally {
-        // Clear loading state
-        setLoadingAssignments(prev => ({
-          ...prev,
-          [periodId]: false
-        }));
-      }
-    }
-    
-    setExpandedPeriods(prev => ({
-      ...prev,
-      [periodId]: !prev[periodId]
-    }));
-  };
 
-  // Add a useEffect to update period assignment counts
-  useEffect(() => {
-    // Skip if no schedule data
-    if (!scheduleData || !todaySchedule || todaySchedule.length === 0) return;
+        monday.setDate(today.getDate() + daysFromMonday);
 
-    const updatePeriodAssignmentCounts = async () => {
-      const newCounts: {[key: string]: number} = {};
-      
-      // Process each period in today's schedule
-      for (const period of todaySchedule) {
-        if (!period.period) continue;
-        
-        try {
-          // Use the dedicated class/subject filtering function
-          const assignments = await getAssignmentsForClass(
-            selectedDate,
-            period.subjectId || '',
-            period.className,
-            period.startTime,
-            period.endTime
-          );
-          
-          // Store the count for this period
-          newCounts[period.period] = assignments.length;
-        } catch (error) {
-          console.error('Error counting assignments for period:', error);
-          newCounts[period.period] = 0;
+        // First generate Monday-Friday
+        const dates = Array.from({ length: 5 }, (_, i) => {
+            const date = new Date(monday);
+            date.setDate(monday.getDate() + i);
+
+            return {
+                date,
+                day: t('weekdays').short[date.getDay()],
+                dateNum: date.getDate(),
+                isToday: date.toDateString() === currentDate.toDateString(),
+                isRecoveryDay: scheduleService.isRecoveryDay(date) !== null,
+                totalAssignments: 0,
+            };
+        });
+
+        // Check if Saturday is a recovery day, and if so, add it to the array
+        const saturday = new Date(monday);
+        saturday.setDate(monday.getDate() + 5); // Saturday is 5 days from Monday
+
+        const saturdayIsRecovery =
+            scheduleService.isRecoveryDay(saturday) !== null;
+
+        if (saturdayIsRecovery) {
+            dates.push({
+                date: saturday,
+                day: t('weekdays').short[saturday.getDay()],
+                dateNum: saturday.getDate(),
+                isToday: saturday.toDateString() === currentDate.toDateString(),
+                isRecoveryDay: true,
+                totalAssignments: 0,
+            });
         }
-      }
-      
-      // Update the state with all counts at once to minimize renders
-      setPeriodAssignmentCounts(newCounts);
-    };
-    
-    updatePeriodAssignmentCounts();
-  }, [scheduleData, todaySchedule, selectedDate]);
 
-  const formatDisplayTime = useCallback(
-    (time?: string | null): string => {
-      if (!time) return '';
-      return formatTime(time);
-    },
-    [formatTime]
-  );
+        return dates;
+    }, [currentDate, t]);
 
-  const formatDisplayTimeRange = useCallback(
-    (start?: string | null, end?: string | null): string => {
-      if (start && end) return `${formatDisplayTime(start)} - ${formatDisplayTime(end)}`;
-      if (start) return formatDisplayTime(start);
-      if (end) return formatDisplayTime(end);
-      return '';
-    },
-    [formatDisplayTime]
-  );
+    // Update the useEffect for assignment counts
+    useEffect(() => {
+        const updateAssignmentCounts = async () => {
+            if (!scheduleData) return;
 
-  const normalizeComparable = useCallback((value?: string | null): string => {
-    if (!value) return '';
-    return value.toLowerCase().replace(/\s+/g, ' ').trim();
-  }, []);
+            const updatedDates = await Promise.all(
+                weekDates.map(async (dateInfo) => {
+                    let totalAssignments = 0;
+                    if (dateInfo.isRecoveryDay) {
+                        const dateString = dateInfo.date
+                            .toISOString()
+                            .split('T')[0];
+                        const dayKey = `weekend_${dateString}`;
+                        const daySchedule =
+                            await scheduleService.getScheduleForDay(
+                                scheduleData,
+                                dayKey,
+                                dateInfo.date,
+                            );
+                        if (Array.isArray(daySchedule)) {
+                            // Check if daySchedule is an array
+                            // Instead of using periodIds from schedule, get actual assignments for the day
+                            const dayAssignments =
+                                await getAssignmentsForTimeRange(dateInfo.date);
+                            totalAssignments = dayAssignments.length;
+                        }
+                    } else {
+                        const dayKey =
+                            DAYS_MAP[
+                                dateInfo.date.getDay() as keyof typeof DAYS_MAP
+                            ];
+                        const daySchedule =
+                            await scheduleService.getScheduleForDay(
+                                scheduleData,
+                                dayKey,
+                                dateInfo.date,
+                            );
+                        if (Array.isArray(daySchedule)) {
+                            // Check if daySchedule is an array
+                            // Get all assignments for this day
+                            const dayAssignments =
+                                await getAssignmentsForTimeRange(dateInfo.date);
+                            totalAssignments = dayAssignments.length;
+                        }
+                    }
+                    return { ...dateInfo, totalAssignments };
+                }),
+            );
 
-  const getInlineThesisMeta = useCallback(
-    (thesisEvent: ThesisScheduleEvent, item: ScheduleItem): { isFullyRedundant: boolean; text: string } => {
-      const eventSubject = normalizeComparable(thesisEvent.subject);
-      const itemSubject = normalizeComparable(item.className);
-      const eventRoom = normalizeComparable(thesisEvent.room);
-      const itemRoom = normalizeComparable(item.roomNumber);
+            // Force a re-render with updated assignment counts
+            setWeekDates(updatedDates);
+        };
 
-      const sameSubject = Boolean(eventSubject && itemSubject && eventSubject === itemSubject);
-      const sameRoom = Boolean(eventRoom && itemRoom && eventRoom === itemRoom);
-      const sameTime = Boolean(
-        thesisEvent.startTime &&
-        thesisEvent.endTime &&
-        thesisEvent.startTime === item.startTime &&
-        thesisEvent.endTime === item.endTime
-      );
+        updateAssignmentCounts();
+    }, [scheduleData, weekDates]);
 
-      const parts = [
-        sameSubject ? '' : thesisEvent.subject,
-        sameTime ? '' : formatDisplayTimeRange(thesisEvent.startTime, thesisEvent.endTime),
-        sameRoom || !thesisEvent.room ? '' : `${t('schedule').room} ${thesisEvent.room}`,
-      ].filter(Boolean);
+    // Update the state declaration with proper typing
+    const [weekDatesWithAssignments, setWeekDates] =
+        useState<WeekDateInfo[]>(weekDates);
 
-      return {
-        isFullyRedundant: sameTime && sameRoom && (sameSubject || !eventSubject),
-        text: parts.join(' • '),
-      };
-    },
-    [formatDisplayTimeRange, normalizeComparable, t]
-  );
+    // Add these functions after the main hook declarations, before updateSchedule
+    const scrollToDate = useCallback(
+        (date: Date) => {
+            if (!scrollViewRef.current) return;
 
-  if (isLoading && !scheduleData) {
-    return (
-      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-        <View style={styles.headerContainer}>
-          <View style={styles.header}>
-            <View style={styles.headerTop}>
-              <Text style={styles.headerTitle}>
-                {formatDate(selectedDate, {
-                  month: 'long',
-                  day: 'numeric',
-                  year: 'numeric'
-                })}
-              </Text>
-              <TouchableOpacity
-                style={styles.weekInfo}
-                onPress={() => setIsMenuOpen(true)}
-              >
-                <Text style={styles.weekText}>
-                  {isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
-                </Text>
-              </TouchableOpacity>
-            </View>
+            const dateIndex = weekDates.findIndex(
+                (d) => d.date.toDateString() === date.toDateString(),
+            );
 
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={Colors.dark.primary} />
-              <Text style={styles.loadingText}>{t('schedule').loading}</Text>
-            </View>
-            <ViewModeMenu
-              isOpen={isMenuOpen}
-              onClose={() => setIsMenuOpen(false)}
-              isEvenWeek={isEvenWeek}
-              weekText={isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
-              currentView="day"
-            />
-          </View>
-        </View>
-      </SafeAreaView>
+            if (dateIndex !== -1) {
+                scrollViewRef.current.scrollTo({
+                    x: dateIndex * ((Dimensions.get('window').width - 40) / 5),
+                    animated: true,
+                });
+            }
+        },
+        [weekDates],
     );
-  }
 
-  if (error && !scheduleData) {
-    return (
-      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-        <View style={styles.headerContainer}>
-          <View style={styles.header}>
-            <View style={styles.headerTop}>
-              <Text style={styles.headerTitle}>
-                {formatDate(selectedDate, {
-                  month: 'long',
-                  day: 'numeric',
-                  year: 'numeric'
-                })}
-              </Text>
-              <TouchableOpacity
-                style={styles.weekInfo}
-                onPress={() => setIsMenuOpen(true)}
-              >
-                <Text style={styles.weekText}>
-                  {isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
-                </Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.errorContainer}>
-              <Text style={styles.errorText}>{error}</Text>
-              {/* Add retry button for initial load errors */}
-              {!initialLoadAttempted || error.includes('internet') ? (
-                <TouchableOpacity 
-                  style={{
-                    marginTop: 16,
-                    paddingVertical: 10,
-                    paddingHorizontal: 20,
-                    backgroundColor: Colors.dark.primaryStrong,
-                    borderRadius: 8
-                  }}
-                  onPress={() => fetchSchedule()}
-                >
-                  <Text style={{ color: Colors.dark.white, fontWeight: '600' }}>
-                    Retry
-                  </Text>
-                </TouchableOpacity>
-              ) : null}
-            </View>
-            <ViewModeMenu
-              isOpen={isMenuOpen}
-              onClose={() => setIsMenuOpen(false)}
-              isEvenWeek={isEvenWeek}
-              weekText={isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
-              currentView="day"
-            />
-          </View>
-        </View>
-      </SafeAreaView>
+    const handleDatePress = useCallback(
+        (date: Date) => {
+            // Immediately set the selected date for better responsiveness
+            setSelectedDate(date);
+
+            // Only scroll if within the range of available weekDates
+            const dateTime = date.getTime();
+            const minDate = weekDates[0].date.getTime();
+            const maxDate = weekDates[weekDates.length - 1].date.getTime();
+
+            if (dateTime >= minDate && dateTime <= maxDate) {
+                // Use requestAnimationFrame for smoother UI updates
+                requestAnimationFrame(() => {
+                    scrollToDate(date);
+                });
+            }
+        },
+        [scrollToDate, weekDates],
     );
-  }
 
-  return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <View style={styles.headerContainer}>
-        <View style={styles.header}>
-          <View style={styles.headerTop}>
-            <Text style={styles.headerTitle}>
-              {formatDate(selectedDate, {
-                month: 'long',
-                day: 'numeric',
-                year: 'numeric'
-              })}
-            </Text>
-            <TouchableOpacity
-              style={styles.weekInfo}
-              onPress={() => setIsMenuOpen(true)}
-            >
-              <Text style={styles.weekText}>
-                {isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
-              </Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.dateList}>
-            {/* Left gradient fade */}
-            <LinearGradient
-              colors={[Colors.dark.backgroundTertiary, Colors.dark.overlayDarkTransparent]}
-              start={{x: 0, y: 0}}
-              end={{x: 1, y: 0}}
-              style={styles.leftGradient}
-              pointerEvents="none"
-            />
+    const toDateKey = useCallback((date: Date): string => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }, []);
 
-            <ScrollView
-              ref={scrollViewRef}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.dateListScrollContent}
-            >
-              {weekDatesWithAssignments.map((date, index) => (
-                <TouchableOpacity
-                  key={index}
-                  onPress={() => handleDatePress(date.date)}
-                  style={[
-                    styles.dateItem,
-                    date.date.getDate() === selectedDate.getDate() && !date.isRecoveryDay && styles.selectedDay,
-                    date.date.getDate() === selectedDate.getDate() && date.isRecoveryDay && styles.selectedRecoveryDay,
-                    date.isToday && date.date.getDate() !== selectedDate.getDate() && styles.todayDateItem,
-                    date.isRecoveryDay && date.date.getDate() !== selectedDate.getDate() && styles.recoveryDayItem
-                  ]}
-                >
-                  {date.totalAssignments > 0 && (
-                    <View style={[
-                      index === weekDatesWithAssignments.length - 1 ? styles.lastDateAssignmentBadge : styles.dateAssignmentBadge,
-                      date.date.getDate() === selectedDate.getDate() && styles.selectedDateAssignmentBadge
-                    ]}>
-                      <Text style={[
-                        styles.dateAssignmentBadgeText,
-                        date.date.getDate() === selectedDate.getDate() && styles.selectedDateAssignmentBadgeText
-                      ]}>
-                        {date.totalAssignments}
-                      </Text>
-                    </View>
-                  )}
-                  <Text style={[
-                    styles.dateDay,
-                    date.date.getDate() === selectedDate.getDate() && !date.isRecoveryDay && styles.selectedDayText,
-                    date.date.getDate() === selectedDate.getDate() && date.isRecoveryDay && styles.selectedRecoveryDayText,
-                    date.isToday && date.date.getDate() !== selectedDate.getDate() && styles.todayText,
-                    date.isRecoveryDay && date.date.getDate() !== selectedDate.getDate() && styles.recoveryDayText
-                  ]}>
-                    {date.day}
-                  </Text>
-                  <Text style={[
-                    styles.dateNumber,
-                    date.date.getDate() === selectedDate.getDate() && !date.isRecoveryDay && styles.selectedDayText,
-                    date.date.getDate() === selectedDate.getDate() && date.isRecoveryDay && styles.selectedRecoveryDayText,
-                    date.isToday && date.date.getDate() !== selectedDate.getDate() && styles.todayText,
-                    date.isRecoveryDay && date.date.getDate() !== selectedDate.getDate() && styles.recoveryDayText
-                  ]}>
-                    {date.dateNum}
-                  </Text>
-                  {date.isToday && date.date.getDate() !== selectedDate.getDate() && <View style={styles.todayDot} />}
-                  {date.isRecoveryDay && <View style={styles.recoveryDot} />}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+    const getDisplaySnapshotKey = useCallback(
+        (groupId: string, subgroup: SubGroupType): string => {
+            return `${DAY_DISPLAY_SNAPSHOT_PREFIX}${groupId || 'nogroup'}_${subgroup}`;
+        },
+        [],
+    );
 
-            {/* Right gradient fade */}
-            <LinearGradient
-              colors={[Colors.dark.overlayDarkTransparent, Colors.dark.backgroundTertiary]}
-              start={{x: 0, y: 0}}
-              end={{x: 1, y: 0}}
-              style={styles.rightGradient}
-              pointerEvents="none"
-            />
-            
-            {/* First-time indicator */}
-            {showFirstTimeIndicator && (
-              <Animated.View style={[styles.firstTimeIndicatorContainer, firstTimeAnimStyle]}>
-                <View style={styles.firstTimeIndicator}>
-                  <Text style={styles.firstTimeIndicatorArrow}>‹</Text>
-                  <Text style={styles.firstTimeIndicatorText}>Swipe to see more</Text>
-                  <Text style={styles.firstTimeIndicatorArrow}>›</Text>
-                </View>
-              </Animated.View>
-            )}
-          </View>
-        </View>
-      </View>
+    const normalizeDayScheduleForDisplay = useCallback(
+        (items: ScheduleItem[], targetDate: Date): ScheduleItem[] => {
+            const targetEvenWeek = scheduleService.isEvenWeek(targetDate);
+            const safeItems = Array.isArray(items) ? items : [];
+            const reasonItem = safeItems.find(
+                (item) =>
+                    item &&
+                    (item.period === 'recovery-info' ||
+                        (item.recoveryReason &&
+                            item.recoveryReason.trim().length > 0)),
+            );
+            const visibleItems = safeItems.filter(
+                (item) =>
+                    item &&
+                    item.period !== 'recovery-info' &&
+                    (item.isEvenWeek === undefined ||
+                        item.isEvenWeek === targetEvenWeek),
+            );
+            return reasonItem ? [reasonItem, ...visibleItems] : visibleItems;
+        },
+        [],
+    );
 
-      <View style={styles.contentContainer}>
-        <ScrollView style={styles.scheduleContainer}>
-          {hasStandaloneAssessments && (
-            <View style={styles.assessmentSection}>
-              <Text style={styles.assessmentSectionTitle}>{t('schedule').assessments}</Text>
+    const loadDisplaySnapshot = useCallback(
+        async (
+            groupId: string,
+            subgroup: SubGroupType,
+        ): Promise<Record<string, ScheduleItem[]> | null> => {
+            try {
+                const key = getDisplaySnapshotKey(groupId, subgroup);
+                const raw = await AsyncStorage.getItem(key);
+                if (!raw) return null;
+                const parsed = JSON.parse(raw) as DayDisplaySnapshot;
+                if (
+                    !parsed ||
+                    typeof parsed !== 'object' ||
+                    !parsed.dateMap ||
+                    typeof parsed.dateMap !== 'object'
+                ) {
+                    return null;
+                }
+                return parsed.dateMap;
+            } catch {
+                return null;
+            }
+        },
+        [getDisplaySnapshotKey],
+    );
 
-              {selectedDateExamEvents.map((examEvent) => (
-                <View key={buildSpecialEventKey(examEvent)} style={[styles.assessmentCard, styles.assessmentCardExam]}>
-                  <View style={styles.assessmentCardHeader}>
-                    <View style={[styles.assessmentTypeBadge, styles.assessmentTypeBadgeExam]}>
-                      <Ionicons name="school-outline" size={12} color={Colors.dark.assessmentExamIcon} />
-                      <Text style={styles.assessmentTypeText}>{t('grades').subjects.exam}</Text>
-                    </View>
-                    {examEvent.subgroup ? (
-                      <Text style={styles.assessmentSubgroupText}>SG {examEvent.subgroup}</Text>
-                    ) : null}
-                  </View>
+    const saveDisplaySnapshot = useCallback(
+        async (
+            groupId: string,
+            subgroup: SubGroupType,
+            dateMap: Record<string, ScheduleItem[]>,
+        ) => {
+            try {
+                const key = getDisplaySnapshotKey(groupId, subgroup);
+                const payload: DayDisplaySnapshot = {
+                    generatedAt: Date.now(),
+                    groupId,
+                    subgroup,
+                    dateMap,
+                };
+                await AsyncStorage.setItem(key, JSON.stringify(payload));
+            } catch {
+                // ignore cache write errors
+            }
+        },
+        [getDisplaySnapshotKey],
+    );
 
-                  <Text style={styles.assessmentSubjectText}>{examEvent.subject}</Text>
-                  <Text style={styles.assessmentMetaText} numberOfLines={2}>
-                    {[
-                      formatDisplayTime(examEvent.time),
-                      examEvent.room ? `${t('schedule').room} ${examEvent.room}` : '',
-                      examEvent.teacher || '',
-                    ]
-                      .filter(Boolean)
-                      .join(' • ')}
-                  </Text>
-                </View>
-              ))}
+    const buildDisplayMapForDates = useCallback(
+        async (
+            data: ApiResponse,
+            dates: Date[],
+        ): Promise<Record<string, ScheduleItem[]>> => {
+            const result: Record<string, ScheduleItem[]> = {};
 
-              {standaloneThesisEvents.map((thesisEvent) => (
-                <View key={buildSpecialEventKey(thesisEvent)} style={[styles.assessmentCard, styles.assessmentCardThesis]}>
-                  <View style={styles.assessmentCardHeader}>
-                    <View style={[styles.assessmentTypeBadge, styles.assessmentTypeBadgeThesis]}>
-                      <Ionicons name="document-text-outline" size={12} color={Colors.dark.assessmentThesisIcon} />
-                      <Text style={styles.assessmentTypeText}>{t('grades').subjects.thesis}</Text>
-                    </View>
-                    {thesisEvent.subgroup ? (
-                      <Text style={styles.assessmentSubgroupText}>SG {thesisEvent.subgroup}</Text>
-                    ) : null}
-                  </View>
-
-                  <Text style={styles.assessmentSubjectText}>{thesisEvent.subject}</Text>
-                  <Text style={styles.assessmentMetaText} numberOfLines={2}>
-                    {[
-                      formatDisplayTimeRange(thesisEvent.startTime, thesisEvent.endTime),
-                      thesisEvent.room ? `${t('schedule').room} ${thesisEvent.room}` : '',
-                      thesisEvent.teacher || '',
-                    ]
-                      .filter(Boolean)
-                      .join(' • ')}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {isWeekend && !recoveryDay ? (
-            <View style={styles.noSchedule}>
-              <Text style={styles.noScheduleText}>{t('schedule').noClassesWeekend}</Text>
-            </View>
-          ) : visibleTodaySchedule.length === 0 ? (
-            <View style={styles.noSchedule}>
-              <Text style={styles.noScheduleText}>{t('schedule').noClassesDay}</Text>
-            </View>
-          ) : (
-              visibleTodaySchedule.map((item, index) => {
-                // Add null check for item
-                if (!item) return null;
-
-                const showTimeIndicator = isCurrentTimeInSchedule(item);
-                const hasAssignments = item.period ? periodAssignmentCounts[item.period] > 0 : false;
-                const isPeriodExpanded = item.period ? expandedPeriods[item.period] : false;
-                const periodAssignmentsList = item.period ? periodAssignments[item.period] || [] : [];
-                const thesisMatches = getThesisEventsForItem(item);
-                const periodColor = getSubjectColor(item.className);
-
-                return (
-                  <View
-                    key={`${item.period || 'period'}-${item.startTime}-${item.endTime}-${item.className}`}
-                    style={[styles.scheduleItem]}
-                    onLayout={(event) => {
-                      item._height = event.nativeEvent.layout.height;
-                    }}
-                  >
-                    <TouchableOpacity
-                      activeOpacity={0.7}
-                      disabled={!hasAssignments}
-                      onPress={() => item.period && hasAssignments ? 
-                        togglePeriodExpansion(
-                          item.period, 
-                          item.startTime, 
-                          item.endTime,
-                          item.subjectId,
-                          item.className
-                        ) : null}
-                      >
-                        <View style={[styles.classCard, {
-                        borderLeftColor: periodColor,
-                        backgroundColor: Colors.dark.surfaceSecondary,
-                        shadowOpacity: 0.1,
-                        minHeight: 100,
-                      }]}
-                      >
-                        <View style={[styles.timeContainer, {
-                          borderRightColor: Colors.dark.overlayGray20
-                        }]}
-                        >
-                          <Text style={[styles.time, { marginBottom: 'auto' }]}>
-                            {formatTime(item.startTime)}
-                          </Text>
-
-                          {/* Time separator - show chevron if has assignments, otherwise show dot */}
-                          <View style={styles.timeDotContainer}>
-                            {hasAssignments ? (
-                              <Animated.View style={[
-                                styles.timeChevronContainer,
-                                { transform: [{ rotate: isPeriodExpanded ? '180deg' : '0deg' }] }
-                              ]}>
-                                <Ionicons 
-                                  name="chevron-down" 
-                                  size={14} 
-                                  color={getSubjectColor(item.className)} 
-                                />
-                              </Animated.View>
-                            ) : (
-                              <View style={[styles.timeDot, { backgroundColor: getSubjectColor(item.className) }]} />
-                            )}
-                          </View>
-
-                          <Text style={[styles.time, { marginTop: 'auto' }]}>
-                            {formatTime(item.endTime)}
-                          </Text>
-                        </View>
-
-                        <View style={styles.classContent}>
-                          <View style={styles.classHeaderRow}>
-                            <Text style={styles.className} numberOfLines={1}>
-                              {item.className}
-                            </Text>
-                            
-                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                              {/* Assignment count badge */}
-                              {periodAssignmentCounts[item.period || ''] > 0 && (
-                                <View style={styles.assignmentBadge}>
-                                  <Text style={styles.assignmentBadgeText}>
-                                    {periodAssignmentCounts[item.period || '']}
-                                  </Text>
-                                </View>
-                              )}
-                              
-                              {/* Status text */}
-                              <Text style={[styles.statusText, showTimeIndicator && styles.activeStatusText]}>
-                                {showTimeIndicator ? 'Now' :
-                                  (() => {
-                                    const currentTimeMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
-                                    const [startHours, startMinutes] = item.startTime.split(':').map(Number);
-                                    const startTimeMinutes = startHours * 60 + startMinutes;
-
-                                    if (currentTimeMinutes < startTimeMinutes) {
-                                      const previousItem = index > 0 ? visibleTodaySchedule[index - 1] : null;
-                                      if (previousItem && isCurrentTimeInSchedule(previousItem)) {
-                                        // Calculate minutes until start and round up (so 59 seconds = 1 minute)
-                                        const now = new Date();
-                                        const target = new Date(
-                                          now.getFullYear(),
-                                          now.getMonth(),
-                                          now.getDate(),
-                                          startHours,
-                                          startMinutes
-                                        );
-                                        const diffInMs = target.getTime() - now.getTime();
-                                        const minutesUntilStart = Math.ceil(diffInMs / (1000 * 60));
-                                        // Only show if less than 60 minutes
-                                        return minutesUntilStart <= 60 ? `In ${minutesUntilStart}m` : '';
-                                      } else if (!previousItem && currentTimeMinutes < startTimeMinutes) {
-                                        // If this is the first class and it hasn't started yet
-                                        const now = new Date();
-                                        const target = new Date(
-                                          now.getFullYear(),
-                                          now.getMonth(),
-                                          now.getDate(),
-                                          startHours,
-                                          startMinutes
-                                        );
-                                        const diffInMs = target.getTime() - now.getTime();
-                                        const minutesUntilStart = Math.ceil(diffInMs / (1000 * 60));
-                                        // Only show if less than 60 minutes
-                                        return minutesUntilStart <= 60 ? `${t('schedule').in} ${minutesUntilStart}m` : '';
-                                      }
-                                    }
-                                    return '';
-                                  })()
-                                }
-                              </Text>
-                            </View>
-                          </View>
-                          <View style={styles.detailsContainer}>
-                            <View style={styles.teacherContainer}>
-                              <Text style={styles.teacherName}>{item.teacherName}</Text>
-                              {item.group && (item.group === 'Subgroup 1' || item.group === 'Subgroup 2') && (
-                                <Text style={styles.groupName}>
-                                  {item.group === 'Subgroup 1' ? t('subgroup').group1 : t('subgroup').group2}
-                                </Text>
-                              )}
-                            </View>
-                            <View style={styles.roomContainer}>
-                              <Text style={styles.roomNumber}>{t('schedule').room} {item.roomNumber}</Text>
-                            </View>
-                          </View>
-
-                          {thesisMatches.length > 0 && (
-                            <View style={styles.thesisInlineContainer}>
-                              {thesisMatches.map((thesisEvent) => {
-                                const inlineMeta = getInlineThesisMeta(thesisEvent, item);
-                                return (
-                                  <View
-                                    key={`${buildSpecialEventKey(thesisEvent)}-${item.period || thesisEvent.period || 'n'}`}
-                                    style={[
-                                      styles.thesisInlineCard,
-                                      {
-                                        backgroundColor: withAlpha(periodColor, 0.18),
-                                        borderColor: withAlpha(periodColor, 0.45),
-                                      },
-                                      inlineMeta.isFullyRedundant && styles.thesisInlineCardCompact,
-                                    ]}
-                                  >
-                                    <View style={styles.thesisInlineHeader}>
-                                      <Ionicons name="document-text-outline" size={12} color={withAlpha(periodColor, 0.95)} />
-                                      <Text style={styles.thesisInlineTitle}>{t('grades').subjects.thesis}</Text>
-                                      {thesisEvent.subgroup ? (
-                                        <Text style={styles.thesisInlineSubgroup}>SG {thesisEvent.subgroup}</Text>
-                                      ) : null}
-                                    </View>
-                                    {!inlineMeta.isFullyRedundant && Boolean(inlineMeta.text) && (
-                                      <Text style={styles.thesisInlineMeta} numberOfLines={2}>
-                                        {inlineMeta.text}
-                                      </Text>
-                                    )}
-                                  </View>
-                                );
-                              })}
-                            </View>
-                          )}
-                          
-                          {/* Assignments expandable section */}
-                          {hasAssignments && isPeriodExpanded && (
-                            <Animated.View 
-                              style={styles.assignmentsContainer}
-                              entering={FadeIn.duration(200)}
-                              exiting={FadeOut.duration(150)}
-                            >
-                              <View style={styles.assignmentsSeparator} />
-                              <Text style={styles.assignmentsSectionTitle}>
-                                {'Assignments'}
-                              </Text>
-                              
-                              {loadingAssignments[item.period || ''] ? (
-                                <View style={styles.loadingAssignments}>
-                                  <ActivityIndicator size="small" color={Colors.dark.primary} />
-                                  <Text style={styles.loadingAssignmentsText}>
-                                    {'Loading assignments...'}
-                                  </Text>
-                                </View>
-                              ) : periodAssignmentsList.length > 0 ? (
-                                periodAssignmentsList.map((assignment, idx) => (
-                                  <TouchableOpacity 
-                                    key={assignment.id} 
-                                    style={styles.assignmentItem}
-                                    activeOpacity={0.7}
-                                    onPress={() => {
-                                      // Save selected date and assignment ID to AsyncStorage
-                                      // for the assignments page to know which day to expand
-                                      const assignmentDate = new Date(assignment.dueDate);
-                                      
-                                      // Store the info needed to auto-expand the day
-                                      const navigationData = {
-                                        assignmentId: assignment.id,
-                                        date: assignmentDate.toISOString(),
-                                        autoExpand: true
-                                      };
-                                      
-                                      // Store in AsyncStorage for the assignments tab to read
-                                      AsyncStorage.setItem('assignment_navigation_data', 
-                                        JSON.stringify(navigationData))
-                                        .then(() => {
-                                          // Navigate to assignments tab
-                                          router.navigate('/(tabs)/assignments');
-                                        })
-                                        .catch(error => {
-                                          console.error('Error saving navigation data:', error);
-                                          // Navigate anyway even if saving fails
-                                          router.navigate('/(tabs)/assignments');
-                                        });
-                                    }}
-                                  >
-                                    <View style={[
-                                      styles.assignmentTypeIndicator, 
-                                      { backgroundColor: getAssignmentTypeColor(assignment.assignmentType) }
-                                    ]}>
-                                      <Ionicons 
-                                        name={getAssignmentTypeIcon(assignment.assignmentType)} 
-                                        size={12} 
-                                        color={Colors.dark.white} 
-                                      />
-                                    </View>
-                                    <View style={styles.assignmentDetails}>
-                                      <Text style={styles.assignmentTitle}>{assignment.title}</Text>
-                                      {assignment.description ? (
-                                        <Text style={styles.assignmentDescription} numberOfLines={2}>
-                                          {assignment.description}
-                                        </Text>
-                                      ) : null}
-                                    </View>
-                                  </TouchableOpacity>
-                                ))
-                              ) : (
-                                <View style={styles.noAssignments}>
-                                  <Text style={styles.noAssignmentsText}>
-                                    {'No assignments for this period'}
-                                  </Text>
-                                </View>
-                              )}
-                            </Animated.View>
-                          )}
-                        </View>
-                        {showTimeIndicator && (
-                          <TimeIndicator
-                            startTime={item.startTime}
-                            endTime={item.endTime} // Use item's end time for the period indicator
-                            containerHeight={item._height || 100}
-                            hasNextItem={item.hasNextItem}
-                            timestamp={currentTimestamp}
-                          />
-                        )}
-                      </View>
-                    </TouchableOpacity>
-                  </View>
+            for (const date of dates) {
+                const dateKey = toDateKey(date);
+                const weekday =
+                    DAYS_MAP[date.getDay() as keyof typeof DAYS_MAP];
+                const dayKey = weekday || `weekend_${dateKey}`;
+                const daySchedule = (await scheduleService.getScheduleForDay(
+                    data,
+                    dayKey,
+                    date,
+                )) as ScheduleItem[];
+                result[dateKey] = normalizeDayScheduleForDisplay(
+                    daySchedule,
+                    date,
                 );
-              })
-            )}
-        </ScrollView>
+            }
 
-        {/* Position special schedule badge at the top right corner */}
-        {scheduleOverride && (
-          <View style={styles.fixedRecoveryInfoContainer}>
-            <ScheduleInfoBadge
-              label="Special"
-              title={scheduleOverride.isRecoveryDay ? 'Recovery Day Schedule' : 'Special Schedule'}
-              reason={scheduleOverride.reason}
-              details={[
-                formatDate(selectedDate, { weekday: 'long', month: 'short', day: 'numeric' }),
-                scheduleOverride.replacedDayName ? `Replaces ${scheduleOverride.replacedDayName}` : 'Temporary schedule override'
-              ]}
+            return result;
+        },
+        [normalizeDayScheduleForDisplay, toDateKey],
+    );
+
+    const rebuildDisplayCache = useCallback(
+        async (data: ApiResponse, targetDates?: Date[]) => {
+            const dates =
+                targetDates && targetDates.length > 0 ?
+                    targetDates
+                :   weekDates.map((dayInfo) => dayInfo.date);
+            const map = await buildDisplayMapForDates(data, dates);
+            displayedScheduleMapRef.current = map;
+
+            const currentSettings = scheduleService.getSettings();
+            await saveDisplaySnapshot(
+                currentSettings.selectedGroupId,
+                currentSettings.group,
+                map,
+            );
+
+            const selectedKey = toDateKey(selectedDate);
+            setTodaySchedule(map[selectedKey] || []);
+        },
+        [
+            buildDisplayMapForDates,
+            saveDisplaySnapshot,
+            selectedDate,
+            toDateKey,
+            weekDates,
+        ],
+    );
+
+    const loadCachedSpecialSchedules = useCallback(
+        async (groupName?: string) => {
+            const resolvedGroupName = String(
+                groupName ||
+                    scheduleService.getSettings().selectedGroupName ||
+                    '',
+            ).trim();
+
+            if (!resolvedGroupName) {
+                setThesisSchedule(null);
+                setExamSchedule(null);
+                return;
+            }
+            try {
+                const { thesis, exam } =
+                    await scheduleService.getCachedExamAndThesisSchedule(
+                        resolvedGroupName,
+                    );
+                setThesisSchedule(thesis);
+                setExamSchedule(exam);
+            } catch {
+                setThesisSchedule(
+                    scheduleService.buildUnavailableSpecialSchedule(
+                        'thesis',
+                        resolvedGroupName,
+                        'cache_read_failed',
+                        'Unable to load cached thesis schedule',
+                    ),
+                );
+                setExamSchedule(
+                    scheduleService.buildUnavailableSpecialSchedule(
+                        'exam',
+                        resolvedGroupName,
+                        'cache_read_failed',
+                        'Unable to load cached exam schedule',
+                    ),
+                );
+            }
+        },
+        [],
+    );
+
+    // Schedule data fetching function using useCallback
+    const fetchSchedule = useCallback(
+        async (groupId?: string) => {
+            try {
+                setIsLoading(true);
+                setError(null);
+
+                const data = await scheduleService.getClassSchedule(groupId);
+
+                // If we got here successfully, update state
+                setScheduleData(data);
+                initialLoadAttemptedRef.current = true;
+                setInitialLoadAttempted(true);
+
+                if (data) {
+                    await rebuildDisplayCache(data);
+                }
+
+                await loadCachedSpecialSchedules(
+                    scheduleService.getSettings().selectedGroupName,
+                );
+            } catch {
+                setError(
+                    t('schedule').error ||
+                        'Unable to load schedule. Please try again later.',
+                );
+            } finally {
+                setIsLoading(false);
+            }
+        },
+        [t, loadCachedSpecialSchedules, rebuildDisplayCache],
+    );
+
+    // Settings subscription effect. Rebuild displayed periods only on explicit schedule refresh or group change.
+    useEffect(() => {
+        const currentFetchSchedule = fetchSchedule;
+
+        const updateHandler = async () => {
+            const newSettings = scheduleService.getSettings();
+            const prevSettings = settingsRef.current;
+            const latestRefreshVersion =
+                scheduleService.getScheduleRefreshVersion();
+
+            settingsRef.current = newSettings;
+            setSettings(newSettings);
+
+            if (latestRefreshVersion !== refreshVersionRef.current) {
+                refreshVersionRef.current = latestRefreshVersion;
+                await currentFetchSchedule(newSettings.selectedGroupId);
+                await loadCachedSpecialSchedules(newSettings.selectedGroupName);
+                return;
+            }
+
+            if (newSettings.selectedGroupId !== prevSettings.selectedGroupId) {
+                await currentFetchSchedule(newSettings.selectedGroupId);
+                await loadCachedSpecialSchedules(newSettings.selectedGroupName);
+                return;
+            }
+
+            if (newSettings.group !== prevSettings.group) {
+                const cachedMap = await loadDisplaySnapshot(
+                    newSettings.selectedGroupId,
+                    newSettings.group,
+                );
+                if (cachedMap) {
+                    displayedScheduleMapRef.current = cachedMap;
+                    const selectedKey = toDateKey(selectedDate);
+                    setTodaySchedule(cachedMap[selectedKey] || []);
+                } else if (scheduleData) {
+                    await rebuildDisplayCache(scheduleData);
+                }
+                await loadCachedSpecialSchedules(newSettings.selectedGroupName);
+                return;
+            }
+
+            if (
+                newSettings.selectedGroupName !== prevSettings.selectedGroupName
+            ) {
+                await loadCachedSpecialSchedules(newSettings.selectedGroupName);
+            }
+        };
+
+        const unsubscribe = scheduleService.subscribe(updateHandler);
+        return () => unsubscribe();
+    }, [
+        fetchSchedule,
+        loadCachedSpecialSchedules,
+        loadDisplaySnapshot,
+        rebuildDisplayCache,
+        scheduleData,
+        selectedDate,
+        toDateKey,
+    ]);
+
+    // Schedule data fetching effect
+    useEffect(() => {
+        const settings = scheduleService.getSettings();
+        const run = () => {
+            const loadData = async () => {
+                try {
+                    await fetchSchedule();
+                } catch (err) {
+                    console.error('Failed to load schedule:', err);
+                    setError(
+                        'Unable to load schedule. Please try again later.',
+                    );
+                    setIsLoading(false);
+                }
+            };
+            loadData();
+        };
+        // If Day view not currently active, defer heavy fetch until interactions settle
+        if (settings.scheduleView !== 'day') {
+            const handle = InteractionManager.runAfterInteractions(run);
+            return () => handle.cancel && handle.cancel();
+        } else {
+            run();
+        }
+    }, [fetchSchedule]);
+
+    useEffect(() => {
+        void loadCachedSpecialSchedules(settings.selectedGroupName);
+    }, [settings.selectedGroupName, loadCachedSpecialSchedules]);
+
+    useEffect(() => {
+        const restoreDisplaySnapshot = async () => {
+            const cachedMap = await loadDisplaySnapshot(
+                settings.selectedGroupId,
+                settings.group,
+            );
+            if (!cachedMap) return;
+            displayedScheduleMapRef.current = cachedMap;
+            const selectedKey = toDateKey(selectedDateRef.current);
+            setTodaySchedule(cachedMap[selectedKey] || []);
+        };
+
+        void restoreDisplaySnapshot();
+    }, [
+        settings.selectedGroupId,
+        settings.group,
+        loadDisplaySnapshot,
+        toDateKey,
+    ]);
+
+    // Initial scroll to today, only once on mount
+    useEffect(() => {
+        if (scrollViewRef.current) {
+            // Wait for layout to complete
+            setTimeout(() => {
+                scrollViewRef.current?.scrollTo({
+                    x: (3 * (Dimensions.get('window').width - 40)) / 5,
+                    animated: false,
+                });
+            }, 100);
+        }
+    }, []); // Empty dependency array ensures this only runs once
+
+    // Handle empty schedule differently for weekends
+    const isWeekend =
+        selectedDate.getDay() === 0 || selectedDate.getDay() === 6;
+
+    const currentTimestamp = currentTime.getTime();
+
+    const TimeIndicator = (props: TimeIndicatorProps) => {
+        const animatedStyle = useAnimatedStyle(() => {
+            'worklet';
+            const date = new Date(props.timestamp);
+            const currentHours = date.getHours();
+            const currentMinutes = date.getMinutes();
+            const currentSeconds = date.getSeconds();
+            const currentTimeInMinutes =
+                currentHours * 60 + currentMinutes + currentSeconds / 60;
+
+            const [startHours, startMinutes] = props.startTime
+                .split(':')
+                .map(Number);
+            const [endHours, endMinutes] = props.endTime.split(':').map(Number);
+
+            const startTimeInMinutes = startHours * 60 + startMinutes;
+            const endTimeInMinutes = endHours * 60 + endMinutes;
+            const timeSlotDuration = endTimeInMinutes - startTimeInMinutes;
+
+            if (currentTimeInMinutes < startTimeInMinutes)
+                return { top: withTiming('0%') };
+            if (currentTimeInMinutes > endTimeInMinutes)
+                return { top: withTiming('100%') };
+
+            const progress =
+                (currentTimeInMinutes - startTimeInMinutes) / timeSlotDuration;
+            return {
+                top: withTiming(`${progress * 100}%`, { duration: 1000 }),
+            };
+        }, [props.timestamp]);
+
+        const animatedTimeStyle = useAnimatedStyle(() => {
+            'worklet';
+            const date = new Date(props.timestamp);
+            const currentHours = date.getHours();
+            const currentMinutes = date.getMinutes();
+            const currentSeconds = date.getSeconds();
+            const currentTimeInMinutes =
+                currentHours * 60 + currentMinutes + currentSeconds / 60;
+
+            const [startHours, startMinutes] = props.startTime
+                .split(':')
+                .map(Number);
+            const [endHours, endMinutes] = props.endTime.split(':').map(Number);
+
+            const startTimeInMinutes = startHours * 60 + startMinutes;
+            const endTimeInMinutes = endHours * 60 + endMinutes;
+            const timeSlotDuration = endTimeInMinutes - startTimeInMinutes;
+            const progress =
+                (currentTimeInMinutes - startTimeInMinutes) / timeSlotDuration;
+
+            // Improved positioning calculation to avoid overlap
+            // Calculate if the time indicator is in the top half or bottom half
+            const isInTopHalf = progress < 0.5;
+
+            return {
+                transform: [
+                    {
+                        translateY: withTiming(isInTopHalf ? 24 : -24, {
+                            duration: 300,
+                        }),
+                    },
+                ],
+            };
+        }, [props.timestamp, props.containerHeight]);
+
+        return (
+            <View style={styles.timeIndicatorContainer}>
+                <Animated.View style={[styles.timeIndicator, animatedStyle]}>
+                    <View style={styles.timeIndicatorLine} />
+                    <View style={styles.timeIndicatorArrowContainer}>
+                        <View style={styles.timeIndicatorArrow} />
+                    </View>
+                    <Animated.Text
+                        style={[styles.timeLeftText, animatedTimeStyle]}
+                    >
+                        {(() => {
+                            const now = new Date();
+                            // Use the current period's end time for the line indicator
+                            const [endHours, endMinutes] = props.endTime
+                                .split(':')
+                                .map(Number);
+
+                            const endTime = new Date(
+                                now.getFullYear(),
+                                now.getMonth(),
+                                now.getDate(),
+                                endHours,
+                                endMinutes,
+                            );
+
+                            // Calculate minutes until the current period ends
+                            const diffInMinutes = Math.ceil(
+                                (endTime.getTime() - now.getTime()) /
+                                    (1000 * 60),
+                            );
+
+                            return diffInMinutes > 0 ? `${diffInMinutes}m` : '';
+                        })()}
+                    </Animated.Text>
+                </Animated.View>
+            </View>
+        );
+    };
+    // todo: do something with this, maybe show in period details or something? currently unused
+    // const isCurrentTimeSlot = (startTime: string, endTime: string): boolean => {
+    //   const [startHours, startMinutes] = startTime.split(':').map(Number);
+    //   const [endHours, endMinutes] = endTime.split(':').map(Number);
+    //   const currentHours = currentTime.getHours();
+    //   const currentMinutes = currentTime.getMinutes();
+
+    //   const currentTimeInMinutes = currentHours * 60 + currentMinutes;
+    //   const startTimeInMinutes = startHours * 60 + startMinutes;
+    //   const endTimeInMinutes = endHours * 60 + endMinutes;
+
+    //   return currentTimeInMinutes >= startTimeInMinutes &&
+    //     currentTimeInMinutes <= endTimeInMinutes;
+    // };
+
+    const isCurrentTimeInSchedule = (item: ScheduleItem): boolean => {
+        // First check if selected date is today
+        const today = new Date();
+        const isSelectedDateToday =
+            selectedDate.toDateString() === today.toDateString();
+
+        // If not today, don't show the time indicator
+        if (!isSelectedDateToday) return false;
+
+        const [startHours, startMinutes] = item.startTime
+            .split(':')
+            .map(Number);
+        const [endHours, endMinutes] = item.endTime.split(':').map(Number);
+        const currentHours = currentTime.getHours();
+        const currentMinutes = currentTime.getMinutes();
+
+        const currentTimeInMinutes = currentHours * 60 + currentMinutes;
+        const startTimeInMinutes = startHours * 60 + startMinutes;
+        const endTimeInMinutes = endHours * 60 + endMinutes;
+
+        return (
+            currentTimeInMinutes >= startTimeInMinutes &&
+            currentTimeInMinutes < endTimeInMinutes
+        );
+    };
+
+    // Update displayed periods from precomputed map when date changes.
+    useEffect(() => {
+        const selectedKey = toDateKey(selectedDate);
+        const mapped = displayedScheduleMapRef.current[selectedKey];
+        if (mapped) {
+            setTodaySchedule(mapped);
+            return;
+        }
+
+        // Lazy-fill one missing day from current schedule data without full recompute.
+        if (!scheduleData) {
+            setTodaySchedule([]);
+            return;
+        }
+
+        const fillMissingDate = async () => {
+            const oneDayMap = await buildDisplayMapForDates(scheduleData, [
+                selectedDate,
+            ]);
+            displayedScheduleMapRef.current = {
+                ...displayedScheduleMapRef.current,
+                ...oneDayMap,
+            };
+            const currentSettings = scheduleService.getSettings();
+            await saveDisplaySnapshot(
+                currentSettings.selectedGroupId,
+                currentSettings.group,
+                displayedScheduleMapRef.current,
+            );
+            setTodaySchedule(oneDayMap[selectedKey] || []);
+        };
+
+        void fillMissingDate();
+    }, [
+        buildDisplayMapForDates,
+        saveDisplaySnapshot,
+        scheduleData,
+        selectedDate,
+        toDateKey,
+    ]);
+
+    // Initial selected date setup - if weekend, select next Monday
+    useEffect(() => {
+        const today = new Date();
+        const currentDay = today.getDay();
+
+        if (currentDay === 0 || currentDay === 6) {
+            // If weekend
+            const nextMonday = new Date(today);
+            const daysUntilMonday = currentDay === 0 ? 1 : 2;
+            nextMonday.setDate(today.getDate() + daysUntilMonday);
+            setSelectedDate(nextMonday);
+        }
+    }, []);
+
+    useEffect(() => {
+        // Skip animation if data isn't loaded yet or if tutorial has been shown before
+        if (isLoading || !scheduleData || tutorialShown) return;
+
+        // Only show the first-time indicator once and save the state
+        if (!hasShownFirstTimeIndicator.current) {
+            hasShownFirstTimeIndicator.current = true;
+
+            // Show the first-time indicators after a short delay
+            setTimeout(() => {
+                setShowFirstTimeIndicator(true);
+
+                // Animate in and then fade out after 2 seconds
+                firstTimeAnimValue.value = withSequence(
+                    withTiming(1, { duration: 300 }),
+                    withDelay(2000, withTiming(0, { duration: 500 })),
+                );
+
+                // Hide the component after animation completes
+                setTimeout(() => {
+                    setShowFirstTimeIndicator(false);
+
+                    // Save that tutorial has been shown
+                    AsyncStorage.setItem(TUTORIAL_SHOWN_KEY, 'true').catch(
+                        (err) => {
+                            console.error('Error saving tutorial state:', err);
+                        },
+                    );
+                }, 2800);
+            }, 800);
+        }
+    }, [isLoading, scheduleData, tutorialShown, firstTimeAnimValue]);
+
+    const firstTimeAnimStyle = useAnimatedStyle(() => {
+        return {
+            opacity: firstTimeAnimValue.value,
+            transform: [{ scale: 0.9 + firstTimeAnimValue.value * 0.1 }],
+        };
+    }, []);
+
+    // Function to toggle period expansion
+    const togglePeriodExpansion = async (
+        periodId: string,
+        startTime?: string,
+        endTime?: string,
+        subjectId?: string,
+        className?: string,
+    ) => {
+        // If not already expanded, fetch the assignments
+        if (!expandedPeriods[periodId]) {
+            // Set loading state for this period
+            setLoadingAssignments((prev) => ({
+                ...prev,
+                [periodId]: true,
+            }));
+
+            try {
+                // Use the dedicated class/subject filtering function
+                if (className && (subjectId || startTime)) {
+                    const assignments = await getAssignmentsForClass(
+                        selectedDate,
+                        subjectId || '',
+                        className,
+                        startTime,
+                        endTime,
+                    );
+                    setPeriodAssignments((prev) => ({
+                        ...prev,
+                        [periodId]: assignments,
+                    }));
+                }
+                // Fall back to time range filtering if we don't have class name
+                else if (startTime && endTime) {
+                    const assignments = await getAssignmentsForTimeRange(
+                        selectedDate,
+                        startTime,
+                        endTime,
+                        subjectId,
+                    );
+                    setPeriodAssignments((prev) => ({
+                        ...prev,
+                        [periodId]: assignments,
+                    }));
+                }
+                // Fall back to the standard period-based filtering if we don't have any filtering info
+                else {
+                    const assignments = await getAssignmentsForPeriod(
+                        periodId,
+                        selectedDate,
+                    );
+                    setPeriodAssignments((prev) => ({
+                        ...prev,
+                        [periodId]: assignments,
+                    }));
+                }
+            } catch (error) {
+                console.error('Error loading assignments:', error);
+                // In case of error, set empty array
+                setPeriodAssignments((prev) => ({
+                    ...prev,
+                    [periodId]: [],
+                }));
+            } finally {
+                // Clear loading state
+                setLoadingAssignments((prev) => ({
+                    ...prev,
+                    [periodId]: false,
+                }));
+            }
+        }
+
+        setExpandedPeriods((prev) => ({
+            ...prev,
+            [periodId]: !prev[periodId],
+        }));
+    };
+
+    // Add a useEffect to update period assignment counts
+    useEffect(() => {
+        // Skip if no schedule data
+        if (!scheduleData || !todaySchedule || todaySchedule.length === 0)
+            return;
+
+        const updatePeriodAssignmentCounts = async () => {
+            const newCounts: { [key: string]: number } = {};
+
+            // Process each period in today's schedule
+            for (const period of todaySchedule) {
+                if (!period.period) continue;
+
+                try {
+                    // Use the dedicated class/subject filtering function
+                    const assignments = await getAssignmentsForClass(
+                        selectedDate,
+                        period.subjectId || '',
+                        period.className,
+                        period.startTime,
+                        period.endTime,
+                    );
+
+                    // Store the count for this period
+                    newCounts[period.period] = assignments.length;
+                } catch (error) {
+                    console.error(
+                        'Error counting assignments for period:',
+                        error,
+                    );
+                    newCounts[period.period] = 0;
+                }
+            }
+
+            // Update the state with all counts at once to minimize renders
+            setPeriodAssignmentCounts(newCounts);
+        };
+
+        updatePeriodAssignmentCounts();
+    }, [scheduleData, todaySchedule, selectedDate]);
+
+    const formatDisplayTime = useCallback(
+        (time?: string | null): string => {
+            if (!time) return '';
+            return formatTime(time);
+        },
+        [formatTime],
+    );
+
+    const formatDisplayTimeRange = useCallback(
+        (start?: string | null, end?: string | null): string => {
+            if (start && end)
+                return `${formatDisplayTime(start)} - ${formatDisplayTime(end)}`;
+            if (start) return formatDisplayTime(start);
+            if (end) return formatDisplayTime(end);
+            return '';
+        },
+        [formatDisplayTime],
+    );
+
+    const normalizeComparable = useCallback((value?: string | null): string => {
+        if (!value) return '';
+        return value.toLowerCase().replace(/\s+/g, ' ').trim();
+    }, []);
+
+    const getInlineThesisMeta = useCallback(
+        (
+            thesisEvent: ThesisScheduleEvent,
+            item: ScheduleItem,
+        ): { isFullyRedundant: boolean; text: string } => {
+            const eventSubject = normalizeComparable(thesisEvent.subject);
+            const itemSubject = normalizeComparable(item.className);
+            const eventRoom = normalizeComparable(thesisEvent.room);
+            const itemRoom = normalizeComparable(item.roomNumber);
+
+            const sameSubject = Boolean(
+                eventSubject && itemSubject && eventSubject === itemSubject,
+            );
+            const sameRoom = Boolean(
+                eventRoom && itemRoom && eventRoom === itemRoom,
+            );
+            const sameTime = Boolean(
+                thesisEvent.startTime &&
+                thesisEvent.endTime &&
+                thesisEvent.startTime === item.startTime &&
+                thesisEvent.endTime === item.endTime,
+            );
+
+            const parts = [
+                sameSubject ? '' : thesisEvent.subject,
+                sameTime ? '' : (
+                    formatDisplayTimeRange(
+                        thesisEvent.startTime,
+                        thesisEvent.endTime,
+                    )
+                ),
+                sameRoom || !thesisEvent.room ?
+                    ''
+                :   `${t('schedule').room} ${thesisEvent.room}`,
+            ].filter(Boolean);
+
+            return {
+                isFullyRedundant:
+                    sameTime && sameRoom && (sameSubject || !eventSubject),
+                text: parts.join(' • '),
+            };
+        },
+        [formatDisplayTimeRange, normalizeComparable, t],
+    );
+
+    if (isLoading && !scheduleData) {
+        return (
+            <SafeAreaView
+                style={styles.container}
+                edges={['top', 'left', 'right']}
+            >
+                <View style={styles.headerContainer}>
+                    <View style={styles.header}>
+                        <View style={styles.headerTop}>
+                            <Text style={styles.headerTitle}>
+                                {formatDate(selectedDate, {
+                                    month: 'long',
+                                    day: 'numeric',
+                                    year: 'numeric',
+                                })}
+                            </Text>
+                            <TouchableOpacity
+                                style={styles.weekInfo}
+                                onPress={() => setIsMenuOpen(true)}
+                            >
+                                <Text style={styles.weekText}>
+                                    {isEvenWeek ?
+                                        t('schedule').evenWeek
+                                    :   t('schedule').oddWeek}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.loadingContainer}>
+                            <ActivityIndicator
+                                size="large"
+                                color={Colors.dark.primary}
+                            />
+                            <Text style={styles.loadingText}>
+                                {t('schedule').loading}
+                            </Text>
+                        </View>
+                        <ViewModeMenu
+                            isOpen={isMenuOpen}
+                            onClose={() => setIsMenuOpen(false)}
+                            isEvenWeek={isEvenWeek}
+                            weekText={
+                                isEvenWeek ?
+                                    t('schedule').evenWeek
+                                :   t('schedule').oddWeek
+                            }
+                            currentView="day"
+                        />
+                    </View>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
+    if (error && !scheduleData) {
+        return (
+            <SafeAreaView
+                style={styles.container}
+                edges={['top', 'left', 'right']}
+            >
+                <View style={styles.headerContainer}>
+                    <View style={styles.header}>
+                        <View style={styles.headerTop}>
+                            <Text style={styles.headerTitle}>
+                                {formatDate(selectedDate, {
+                                    month: 'long',
+                                    day: 'numeric',
+                                    year: 'numeric',
+                                })}
+                            </Text>
+                            <TouchableOpacity
+                                style={styles.weekInfo}
+                                onPress={() => setIsMenuOpen(true)}
+                            >
+                                <Text style={styles.weekText}>
+                                    {isEvenWeek ?
+                                        t('schedule').evenWeek
+                                    :   t('schedule').oddWeek}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                        <View style={styles.errorContainer}>
+                            <Text style={styles.errorText}>{error}</Text>
+                            {/* Add retry button for initial load errors */}
+                            {(
+                                !initialLoadAttempted ||
+                                error.includes('internet')
+                            ) ?
+                                <TouchableOpacity
+                                    style={{
+                                        marginTop: 16,
+                                        paddingVertical: 10,
+                                        paddingHorizontal: 20,
+                                        backgroundColor:
+                                            Colors.dark.primaryStrong,
+                                        borderRadius: 8,
+                                    }}
+                                    onPress={() => fetchSchedule()}
+                                >
+                                    <Text
+                                        style={{
+                                            color: Colors.dark.white,
+                                            fontWeight: '600',
+                                        }}
+                                    >
+                                        Retry
+                                    </Text>
+                                </TouchableOpacity>
+                            :   null}
+                        </View>
+                        <ViewModeMenu
+                            isOpen={isMenuOpen}
+                            onClose={() => setIsMenuOpen(false)}
+                            isEvenWeek={isEvenWeek}
+                            weekText={
+                                isEvenWeek ?
+                                    t('schedule').evenWeek
+                                :   t('schedule').oddWeek
+                            }
+                            currentView="day"
+                        />
+                    </View>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
+    return (
+        <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+            <View style={styles.headerContainer}>
+                <View style={styles.header}>
+                    <View style={styles.headerTop}>
+                        <Text style={styles.headerTitle}>
+                            {formatDate(selectedDate, {
+                                month: 'long',
+                                day: 'numeric',
+                                year: 'numeric',
+                            })}
+                        </Text>
+                        <TouchableOpacity
+                            style={styles.weekInfo}
+                            onPress={() => setIsMenuOpen(true)}
+                        >
+                            <Text style={styles.weekText}>
+                                {isEvenWeek ?
+                                    t('schedule').evenWeek
+                                :   t('schedule').oddWeek}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                    <View style={styles.dateList}>
+                        {/* Left gradient fade */}
+                        <LinearGradient
+                            colors={[
+                                Colors.dark.backgroundTertiary,
+                                Colors.dark.overlayDarkTransparent,
+                            ]}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                            style={styles.leftGradient}
+                            pointerEvents="none"
+                        />
+
+                        <ScrollView
+                            ref={scrollViewRef}
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={styles.dateListScrollContent}
+                        >
+                            {weekDatesWithAssignments.map((date, index) => (
+                                <TouchableOpacity
+                                    key={index}
+                                    onPress={() => handleDatePress(date.date)}
+                                    style={[
+                                        styles.dateItem,
+                                        date.date.getDate() ===
+                                            selectedDate.getDate() &&
+                                            !date.isRecoveryDay &&
+                                            styles.selectedDay,
+                                        date.date.getDate() ===
+                                            selectedDate.getDate() &&
+                                            date.isRecoveryDay &&
+                                            styles.selectedRecoveryDay,
+                                        date.isToday &&
+                                            date.date.getDate() !==
+                                                selectedDate.getDate() &&
+                                            styles.todayDateItem,
+                                        date.isRecoveryDay &&
+                                            date.date.getDate() !==
+                                                selectedDate.getDate() &&
+                                            styles.recoveryDayItem,
+                                    ]}
+                                >
+                                    {date.totalAssignments > 0 && (
+                                        <View
+                                            style={[
+                                                (
+                                                    index ===
+                                                    weekDatesWithAssignments.length -
+                                                        1
+                                                ) ?
+                                                    styles.lastDateAssignmentBadge
+                                                :   styles.dateAssignmentBadge,
+                                                date.date.getDate() ===
+                                                    selectedDate.getDate() &&
+                                                    styles.selectedDateAssignmentBadge,
+                                            ]}
+                                        >
+                                            <Text
+                                                style={[
+                                                    styles.dateAssignmentBadgeText,
+                                                    date.date.getDate() ===
+                                                        selectedDate.getDate() &&
+                                                        styles.selectedDateAssignmentBadgeText,
+                                                ]}
+                                            >
+                                                {date.totalAssignments}
+                                            </Text>
+                                        </View>
+                                    )}
+                                    <Text
+                                        style={[
+                                            styles.dateDay,
+                                            date.date.getDate() ===
+                                                selectedDate.getDate() &&
+                                                !date.isRecoveryDay &&
+                                                styles.selectedDayText,
+                                            date.date.getDate() ===
+                                                selectedDate.getDate() &&
+                                                date.isRecoveryDay &&
+                                                styles.selectedRecoveryDayText,
+                                            date.isToday &&
+                                                date.date.getDate() !==
+                                                    selectedDate.getDate() &&
+                                                styles.todayText,
+                                            date.isRecoveryDay &&
+                                                date.date.getDate() !==
+                                                    selectedDate.getDate() &&
+                                                styles.recoveryDayText,
+                                        ]}
+                                    >
+                                        {date.day}
+                                    </Text>
+                                    <Text
+                                        style={[
+                                            styles.dateNumber,
+                                            date.date.getDate() ===
+                                                selectedDate.getDate() &&
+                                                !date.isRecoveryDay &&
+                                                styles.selectedDayText,
+                                            date.date.getDate() ===
+                                                selectedDate.getDate() &&
+                                                date.isRecoveryDay &&
+                                                styles.selectedRecoveryDayText,
+                                            date.isToday &&
+                                                date.date.getDate() !==
+                                                    selectedDate.getDate() &&
+                                                styles.todayText,
+                                            date.isRecoveryDay &&
+                                                date.date.getDate() !==
+                                                    selectedDate.getDate() &&
+                                                styles.recoveryDayText,
+                                        ]}
+                                    >
+                                        {date.dateNum}
+                                    </Text>
+                                    {date.isToday &&
+                                        date.date.getDate() !==
+                                            selectedDate.getDate() && (
+                                            <View style={styles.todayDot} />
+                                        )}
+                                    {date.isRecoveryDay && (
+                                        <View style={styles.recoveryDot} />
+                                    )}
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+
+                        {/* Right gradient fade */}
+                        <LinearGradient
+                            colors={[
+                                Colors.dark.overlayDarkTransparent,
+                                Colors.dark.backgroundTertiary,
+                            ]}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                            style={styles.rightGradient}
+                            pointerEvents="none"
+                        />
+
+                        {/* First-time indicator */}
+                        {showFirstTimeIndicator && (
+                            <Animated.View
+                                style={[
+                                    styles.firstTimeIndicatorContainer,
+                                    firstTimeAnimStyle,
+                                ]}
+                            >
+                                <View style={styles.firstTimeIndicator}>
+                                    <Text
+                                        style={styles.firstTimeIndicatorArrow}
+                                    >
+                                        ‹
+                                    </Text>
+                                    <Text style={styles.firstTimeIndicatorText}>
+                                        Swipe to see more
+                                    </Text>
+                                    <Text
+                                        style={styles.firstTimeIndicatorArrow}
+                                    >
+                                        ›
+                                    </Text>
+                                </View>
+                            </Animated.View>
+                        )}
+                    </View>
+                </View>
+            </View>
+
+            <View style={styles.contentContainer}>
+                <ScrollView style={styles.scheduleContainer}>
+                    {hasStandaloneAssessments && (
+                        <View style={styles.assessmentSection}>
+                            <Text style={styles.assessmentSectionTitle}>
+                                {t('schedule').assessments}
+                            </Text>
+
+                            {selectedDateExamEvents.map((examEvent) => (
+                                <View
+                                    key={buildSpecialEventKey(examEvent)}
+                                    style={[
+                                        styles.assessmentCard,
+                                        styles.assessmentCardExam,
+                                    ]}
+                                >
+                                    <View style={styles.assessmentCardHeader}>
+                                        <View
+                                            style={[
+                                                styles.assessmentTypeBadge,
+                                                styles.assessmentTypeBadgeExam,
+                                            ]}
+                                        >
+                                            <Ionicons
+                                                name="school-outline"
+                                                size={12}
+                                                color={
+                                                    Colors.dark
+                                                        .assessmentExamIcon
+                                                }
+                                            />
+                                            <Text
+                                                style={
+                                                    styles.assessmentTypeText
+                                                }
+                                            >
+                                                {t('grades').subjects.exam}
+                                            </Text>
+                                        </View>
+                                        {examEvent.subgroup ?
+                                            <Text
+                                                style={
+                                                    styles.assessmentSubgroupText
+                                                }
+                                            >
+                                                SG {examEvent.subgroup}
+                                            </Text>
+                                        :   null}
+                                    </View>
+
+                                    <Text style={styles.assessmentSubjectText}>
+                                        {examEvent.subject}
+                                    </Text>
+                                    <Text
+                                        style={styles.assessmentMetaText}
+                                        numberOfLines={2}
+                                    >
+                                        {[
+                                            formatDisplayTime(examEvent.time),
+                                            examEvent.room ?
+                                                `${t('schedule').room} ${examEvent.room}`
+                                            :   '',
+                                            examEvent.teacher || '',
+                                        ]
+                                            .filter(Boolean)
+                                            .join(' • ')}
+                                    </Text>
+                                </View>
+                            ))}
+
+                            {standaloneThesisEvents.map((thesisEvent) => (
+                                <View
+                                    key={buildSpecialEventKey(thesisEvent)}
+                                    style={[
+                                        styles.assessmentCard,
+                                        styles.assessmentCardThesis,
+                                    ]}
+                                >
+                                    <View style={styles.assessmentCardHeader}>
+                                        <View
+                                            style={[
+                                                styles.assessmentTypeBadge,
+                                                styles.assessmentTypeBadgeThesis,
+                                            ]}
+                                        >
+                                            <Ionicons
+                                                name="document-text-outline"
+                                                size={12}
+                                                color={
+                                                    Colors.dark
+                                                        .assessmentThesisIcon
+                                                }
+                                            />
+                                            <Text
+                                                style={
+                                                    styles.assessmentTypeText
+                                                }
+                                            >
+                                                {t('grades').subjects.thesis}
+                                            </Text>
+                                        </View>
+                                        {thesisEvent.subgroup ?
+                                            <Text
+                                                style={
+                                                    styles.assessmentSubgroupText
+                                                }
+                                            >
+                                                SG {thesisEvent.subgroup}
+                                            </Text>
+                                        :   null}
+                                    </View>
+
+                                    <Text style={styles.assessmentSubjectText}>
+                                        {thesisEvent.subject}
+                                    </Text>
+                                    <Text
+                                        style={styles.assessmentMetaText}
+                                        numberOfLines={2}
+                                    >
+                                        {[
+                                            formatDisplayTimeRange(
+                                                thesisEvent.startTime,
+                                                thesisEvent.endTime,
+                                            ),
+                                            thesisEvent.room ?
+                                                `${t('schedule').room} ${thesisEvent.room}`
+                                            :   '',
+                                            thesisEvent.teacher || '',
+                                        ]
+                                            .filter(Boolean)
+                                            .join(' • ')}
+                                    </Text>
+                                </View>
+                            ))}
+                        </View>
+                    )}
+
+                    {isWeekend && !recoveryDay ?
+                        <View style={styles.noSchedule}>
+                            <Text style={styles.noScheduleText}>
+                                {t('schedule').noClassesWeekend}
+                            </Text>
+                        </View>
+                    : visibleTodaySchedule.length === 0 ?
+                        <View style={styles.noSchedule}>
+                            <Text style={styles.noScheduleText}>
+                                {t('schedule').noClassesDay}
+                            </Text>
+                        </View>
+                    :   visibleTodaySchedule.map((item, index) => {
+                            // Add null check for item
+                            if (!item) return null;
+
+                            const showTimeIndicator =
+                                isCurrentTimeInSchedule(item);
+                            const hasAssignments =
+                                item.period ?
+                                    periodAssignmentCounts[item.period] > 0
+                                :   false;
+                            const isPeriodExpanded =
+                                item.period ?
+                                    expandedPeriods[item.period]
+                                :   false;
+                            const periodAssignmentsList =
+                                item.period ?
+                                    periodAssignments[item.period] || []
+                                :   [];
+                            const thesisMatches = getThesisEventsForItem(item);
+                            const periodColor = getSubjectColor(item.className);
+
+                            return (
+                                <View
+                                    key={`${item.period || 'period'}-${item.startTime}-${item.endTime}-${item.className}`}
+                                    style={[styles.scheduleItem]}
+                                    onLayout={(event) => {
+                                        item._height =
+                                            event.nativeEvent.layout.height;
+                                    }}
+                                >
+                                    <TouchableOpacity
+                                        activeOpacity={0.7}
+                                        disabled={!hasAssignments}
+                                        onPress={() =>
+                                            item.period && hasAssignments ?
+                                                togglePeriodExpansion(
+                                                    item.period,
+                                                    item.startTime,
+                                                    item.endTime,
+                                                    item.subjectId,
+                                                    item.className,
+                                                )
+                                            :   null
+                                        }
+                                    >
+                                        <View
+                                            style={[
+                                                styles.classCard,
+                                                {
+                                                    borderLeftColor:
+                                                        periodColor,
+                                                    backgroundColor:
+                                                        Colors.dark
+                                                            .surfaceSecondary,
+                                                    shadowOpacity: 0.1,
+                                                    minHeight: 100,
+                                                },
+                                            ]}
+                                        >
+                                            <View
+                                                style={[
+                                                    styles.timeContainer,
+                                                    {
+                                                        borderRightColor:
+                                                            Colors.dark
+                                                                .overlayGray20,
+                                                    },
+                                                ]}
+                                            >
+                                                <Text
+                                                    style={[
+                                                        styles.time,
+                                                        {
+                                                            marginBottom:
+                                                                'auto',
+                                                        },
+                                                    ]}
+                                                >
+                                                    {formatTime(item.startTime)}
+                                                </Text>
+
+                                                {/* Time separator - show chevron if has assignments, otherwise show dot */}
+                                                <View
+                                                    style={
+                                                        styles.timeDotContainer
+                                                    }
+                                                >
+                                                    {hasAssignments ?
+                                                        <Animated.View
+                                                            style={[
+                                                                styles.timeChevronContainer,
+                                                                {
+                                                                    transform: [
+                                                                        {
+                                                                            rotate:
+                                                                                (
+                                                                                    isPeriodExpanded
+                                                                                ) ?
+                                                                                    '180deg'
+                                                                                :   '0deg',
+                                                                        },
+                                                                    ],
+                                                                },
+                                                            ]}
+                                                        >
+                                                            <Ionicons
+                                                                name="chevron-down"
+                                                                size={14}
+                                                                color={getSubjectColor(
+                                                                    item.className,
+                                                                )}
+                                                            />
+                                                        </Animated.View>
+                                                    :   <View
+                                                            style={[
+                                                                styles.timeDot,
+                                                                {
+                                                                    backgroundColor:
+                                                                        getSubjectColor(
+                                                                            item.className,
+                                                                        ),
+                                                                },
+                                                            ]}
+                                                        />
+                                                    }
+                                                </View>
+
+                                                <Text
+                                                    style={[
+                                                        styles.time,
+                                                        { marginTop: 'auto' },
+                                                    ]}
+                                                >
+                                                    {formatTime(item.endTime)}
+                                                </Text>
+                                            </View>
+
+                                            <View style={styles.classContent}>
+                                                <View
+                                                    style={
+                                                        styles.classHeaderRow
+                                                    }
+                                                >
+                                                    <Text
+                                                        style={styles.className}
+                                                        numberOfLines={1}
+                                                    >
+                                                        {item.className}
+                                                    </Text>
+
+                                                    <View
+                                                        style={{
+                                                            flexDirection:
+                                                                'row',
+                                                            alignItems:
+                                                                'center',
+                                                        }}
+                                                    >
+                                                        {/* Assignment count badge */}
+                                                        {periodAssignmentCounts[
+                                                            item.period || ''
+                                                        ] > 0 && (
+                                                            <View
+                                                                style={
+                                                                    styles.assignmentBadge
+                                                                }
+                                                            >
+                                                                <Text
+                                                                    style={
+                                                                        styles.assignmentBadgeText
+                                                                    }
+                                                                >
+                                                                    {
+                                                                        periodAssignmentCounts[
+                                                                            item.period ||
+                                                                                ''
+                                                                        ]
+                                                                    }
+                                                                </Text>
+                                                            </View>
+                                                        )}
+
+                                                        {/* Status text */}
+                                                        <Text
+                                                            style={[
+                                                                styles.statusText,
+                                                                showTimeIndicator &&
+                                                                    styles.activeStatusText,
+                                                            ]}
+                                                        >
+                                                            {showTimeIndicator ?
+                                                                'Now'
+                                                            :   (() => {
+                                                                    const currentTimeMinutes =
+                                                                        currentTime.getHours() *
+                                                                            60 +
+                                                                        currentTime.getMinutes();
+                                                                    const [
+                                                                        startHours,
+                                                                        startMinutes,
+                                                                    ] =
+                                                                        item.startTime
+                                                                            .split(
+                                                                                ':',
+                                                                            )
+                                                                            .map(
+                                                                                Number,
+                                                                            );
+                                                                    const startTimeMinutes =
+                                                                        startHours *
+                                                                            60 +
+                                                                        startMinutes;
+
+                                                                    if (
+                                                                        currentTimeMinutes <
+                                                                        startTimeMinutes
+                                                                    ) {
+                                                                        const previousItem =
+
+                                                                                (
+                                                                                    index >
+                                                                                    0
+                                                                                ) ?
+                                                                                    visibleTodaySchedule[
+                                                                                        index -
+                                                                                            1
+                                                                                    ]
+                                                                                :   null;
+                                                                        if (
+                                                                            previousItem &&
+                                                                            isCurrentTimeInSchedule(
+                                                                                previousItem,
+                                                                            )
+                                                                        ) {
+                                                                            // Calculate minutes until start and round up (so 59 seconds = 1 minute)
+                                                                            const now =
+                                                                                new Date();
+                                                                            const target =
+                                                                                new Date(
+                                                                                    now.getFullYear(),
+                                                                                    now.getMonth(),
+                                                                                    now.getDate(),
+                                                                                    startHours,
+                                                                                    startMinutes,
+                                                                                );
+                                                                            const diffInMs =
+                                                                                target.getTime() -
+                                                                                now.getTime();
+                                                                            const minutesUntilStart =
+                                                                                Math.ceil(
+                                                                                    diffInMs /
+                                                                                        (1000 *
+                                                                                            60),
+                                                                                );
+                                                                            // Only show if less than 60 minutes
+                                                                            return (
+                                                                                    minutesUntilStart <=
+                                                                                        60
+                                                                                ) ?
+                                                                                    `In ${minutesUntilStart}m`
+                                                                                :   '';
+                                                                        } else if (
+                                                                            !previousItem &&
+                                                                            currentTimeMinutes <
+                                                                                startTimeMinutes
+                                                                        ) {
+                                                                            // If this is the first class and it hasn't started yet
+                                                                            const now =
+                                                                                new Date();
+                                                                            const target =
+                                                                                new Date(
+                                                                                    now.getFullYear(),
+                                                                                    now.getMonth(),
+                                                                                    now.getDate(),
+                                                                                    startHours,
+                                                                                    startMinutes,
+                                                                                );
+                                                                            const diffInMs =
+                                                                                target.getTime() -
+                                                                                now.getTime();
+                                                                            const minutesUntilStart =
+                                                                                Math.ceil(
+                                                                                    diffInMs /
+                                                                                        (1000 *
+                                                                                            60),
+                                                                                );
+                                                                            // Only show if less than 60 minutes
+                                                                            return (
+                                                                                    minutesUntilStart <=
+                                                                                        60
+                                                                                ) ?
+                                                                                    `${t('schedule').in} ${minutesUntilStart}m`
+                                                                                :   '';
+                                                                        }
+                                                                    }
+                                                                    return '';
+                                                                })()
+                                                            }
+                                                        </Text>
+                                                    </View>
+                                                </View>
+                                                <View
+                                                    style={
+                                                        styles.detailsContainer
+                                                    }
+                                                >
+                                                    <View
+                                                        style={
+                                                            styles.teacherContainer
+                                                        }
+                                                    >
+                                                        <Text
+                                                            style={
+                                                                styles.teacherName
+                                                            }
+                                                        >
+                                                            {item.teacherName}
+                                                        </Text>
+                                                        {item.group &&
+                                                            (item.group ===
+                                                                'Subgroup 1' ||
+                                                                item.group ===
+                                                                    'Subgroup 2') && (
+                                                                <Text
+                                                                    style={
+                                                                        styles.groupName
+                                                                    }
+                                                                >
+                                                                    {(
+                                                                        item.group ===
+                                                                        'Subgroup 1'
+                                                                    ) ?
+                                                                        t(
+                                                                            'subgroup',
+                                                                        ).group1
+                                                                    :   t(
+                                                                            'subgroup',
+                                                                        ).group2
+                                                                    }
+                                                                </Text>
+                                                            )}
+                                                    </View>
+                                                    <View
+                                                        style={
+                                                            styles.roomContainer
+                                                        }
+                                                    >
+                                                        <Text
+                                                            style={
+                                                                styles.roomNumber
+                                                            }
+                                                        >
+                                                            {t('schedule').room}{' '}
+                                                            {item.roomNumber}
+                                                        </Text>
+                                                    </View>
+                                                </View>
+
+                                                {thesisMatches.length > 0 && (
+                                                    <View
+                                                        style={
+                                                            styles.thesisInlineContainer
+                                                        }
+                                                    >
+                                                        {thesisMatches.map(
+                                                            (thesisEvent) => {
+                                                                const inlineMeta =
+                                                                    getInlineThesisMeta(
+                                                                        thesisEvent,
+                                                                        item,
+                                                                    );
+                                                                return (
+                                                                    <View
+                                                                        key={`${buildSpecialEventKey(thesisEvent)}-${item.period || thesisEvent.period || 'n'}`}
+                                                                        style={[
+                                                                            styles.thesisInlineCard,
+                                                                            {
+                                                                                backgroundColor:
+                                                                                    withAlpha(
+                                                                                        periodColor,
+                                                                                        0.18,
+                                                                                    ),
+                                                                                borderColor:
+                                                                                    withAlpha(
+                                                                                        periodColor,
+                                                                                        0.45,
+                                                                                    ),
+                                                                            },
+                                                                            inlineMeta.isFullyRedundant &&
+                                                                                styles.thesisInlineCardCompact,
+                                                                        ]}
+                                                                    >
+                                                                        <View
+                                                                            style={
+                                                                                styles.thesisInlineHeader
+                                                                            }
+                                                                        >
+                                                                            <Ionicons
+                                                                                name="document-text-outline"
+                                                                                size={
+                                                                                    12
+                                                                                }
+                                                                                color={withAlpha(
+                                                                                    periodColor,
+                                                                                    0.95,
+                                                                                )}
+                                                                            />
+                                                                            <Text
+                                                                                style={
+                                                                                    styles.thesisInlineTitle
+                                                                                }
+                                                                            >
+                                                                                {
+                                                                                    t(
+                                                                                        'grades',
+                                                                                    )
+                                                                                        .subjects
+                                                                                        .thesis
+                                                                                }
+                                                                            </Text>
+                                                                            {(
+                                                                                thesisEvent.subgroup
+                                                                            ) ?
+                                                                                <Text
+                                                                                    style={
+                                                                                        styles.thesisInlineSubgroup
+                                                                                    }
+                                                                                >
+                                                                                    SG{' '}
+                                                                                    {
+                                                                                        thesisEvent.subgroup
+                                                                                    }
+                                                                                </Text>
+                                                                            :   null
+                                                                            }
+                                                                        </View>
+                                                                        {!inlineMeta.isFullyRedundant &&
+                                                                            Boolean(
+                                                                                inlineMeta.text,
+                                                                            ) && (
+                                                                                <Text
+                                                                                    style={
+                                                                                        styles.thesisInlineMeta
+                                                                                    }
+                                                                                    numberOfLines={
+                                                                                        2
+                                                                                    }
+                                                                                >
+                                                                                    {
+                                                                                        inlineMeta.text
+                                                                                    }
+                                                                                </Text>
+                                                                            )}
+                                                                    </View>
+                                                                );
+                                                            },
+                                                        )}
+                                                    </View>
+                                                )}
+
+                                                {/* Assignments expandable section */}
+                                                {hasAssignments &&
+                                                    isPeriodExpanded && (
+                                                        <Animated.View
+                                                            style={
+                                                                styles.assignmentsContainer
+                                                            }
+                                                            entering={FadeIn.duration(
+                                                                200,
+                                                            )}
+                                                            exiting={FadeOut.duration(
+                                                                150,
+                                                            )}
+                                                        >
+                                                            <View
+                                                                style={
+                                                                    styles.assignmentsSeparator
+                                                                }
+                                                            />
+                                                            <Text
+                                                                style={
+                                                                    styles.assignmentsSectionTitle
+                                                                }
+                                                            >
+                                                                {'Assignments'}
+                                                            </Text>
+
+                                                            {(
+                                                                loadingAssignments[
+                                                                    item.period ||
+                                                                        ''
+                                                                ]
+                                                            ) ?
+                                                                <View
+                                                                    style={
+                                                                        styles.loadingAssignments
+                                                                    }
+                                                                >
+                                                                    <ActivityIndicator
+                                                                        size="small"
+                                                                        color={
+                                                                            Colors
+                                                                                .dark
+                                                                                .primary
+                                                                        }
+                                                                    />
+                                                                    <Text
+                                                                        style={
+                                                                            styles.loadingAssignmentsText
+                                                                        }
+                                                                    >
+                                                                        {
+                                                                            'Loading assignments...'
+                                                                        }
+                                                                    </Text>
+                                                                </View>
+                                                            : (
+                                                                periodAssignmentsList.length >
+                                                                0
+                                                            ) ?
+                                                                periodAssignmentsList.map(
+                                                                    (
+                                                                        assignment,
+                                                                        idx,
+                                                                    ) => (
+                                                                        <TouchableOpacity
+                                                                            key={
+                                                                                assignment.id
+                                                                            }
+                                                                            style={
+                                                                                styles.assignmentItem
+                                                                            }
+                                                                            activeOpacity={
+                                                                                0.7
+                                                                            }
+                                                                            onPress={() => {
+                                                                                // Save selected date and assignment ID to AsyncStorage
+                                                                                // for the assignments page to know which day to expand
+                                                                                const assignmentDate =
+                                                                                    new Date(
+                                                                                        assignment.dueDate,
+                                                                                    );
+
+                                                                                // Store the info needed to auto-expand the day
+                                                                                const navigationData =
+                                                                                    {
+                                                                                        assignmentId:
+                                                                                            assignment.id,
+                                                                                        date: assignmentDate.toISOString(),
+                                                                                        autoExpand: true,
+                                                                                    };
+
+                                                                                // Store in AsyncStorage for the assignments tab to read
+                                                                                AsyncStorage.setItem(
+                                                                                    'assignment_navigation_data',
+                                                                                    JSON.stringify(
+                                                                                        navigationData,
+                                                                                    ),
+                                                                                )
+                                                                                    .then(
+                                                                                        () => {
+                                                                                            // Navigate to assignments tab
+                                                                                            router.navigate(
+                                                                                                '/(tabs)/assignments',
+                                                                                            );
+                                                                                        },
+                                                                                    )
+                                                                                    .catch(
+                                                                                        (
+                                                                                            error,
+                                                                                        ) => {
+                                                                                            console.error(
+                                                                                                'Error saving navigation data:',
+                                                                                                error,
+                                                                                            );
+                                                                                            // Navigate anyway even if saving fails
+                                                                                            router.navigate(
+                                                                                                '/(tabs)/assignments',
+                                                                                            );
+                                                                                        },
+                                                                                    );
+                                                                            }}
+                                                                        >
+                                                                            <View
+                                                                                style={[
+                                                                                    styles.assignmentTypeIndicator,
+                                                                                    {
+                                                                                        backgroundColor:
+                                                                                            getAssignmentTypeColor(
+                                                                                                assignment.assignmentType,
+                                                                                            ),
+                                                                                    },
+                                                                                ]}
+                                                                            >
+                                                                                <Ionicons
+                                                                                    name={getAssignmentTypeIcon(
+                                                                                        assignment.assignmentType,
+                                                                                    )}
+                                                                                    size={
+                                                                                        12
+                                                                                    }
+                                                                                    color={
+                                                                                        Colors
+                                                                                            .dark
+                                                                                            .white
+                                                                                    }
+                                                                                />
+                                                                            </View>
+                                                                            <View
+                                                                                style={
+                                                                                    styles.assignmentDetails
+                                                                                }
+                                                                            >
+                                                                                <Text
+                                                                                    style={
+                                                                                        styles.assignmentTitle
+                                                                                    }
+                                                                                >
+                                                                                    {
+                                                                                        assignment.title
+                                                                                    }
+                                                                                </Text>
+                                                                                {(
+                                                                                    assignment.description
+                                                                                ) ?
+                                                                                    <Text
+                                                                                        style={
+                                                                                            styles.assignmentDescription
+                                                                                        }
+                                                                                        numberOfLines={
+                                                                                            2
+                                                                                        }
+                                                                                    >
+                                                                                        {
+                                                                                            assignment.description
+                                                                                        }
+                                                                                    </Text>
+                                                                                :   null
+                                                                                }
+                                                                            </View>
+                                                                        </TouchableOpacity>
+                                                                    ),
+                                                                )
+                                                            :   <View
+                                                                    style={
+                                                                        styles.noAssignments
+                                                                    }
+                                                                >
+                                                                    <Text
+                                                                        style={
+                                                                            styles.noAssignmentsText
+                                                                        }
+                                                                    >
+                                                                        {
+                                                                            'No assignments for this period'
+                                                                        }
+                                                                    </Text>
+                                                                </View>
+                                                            }
+                                                        </Animated.View>
+                                                    )}
+                                            </View>
+                                            {showTimeIndicator && (
+                                                <TimeIndicator
+                                                    startTime={item.startTime}
+                                                    endTime={item.endTime} // Use item's end time for the period indicator
+                                                    containerHeight={
+                                                        item._height || 100
+                                                    }
+                                                    hasNextItem={
+                                                        item.hasNextItem
+                                                    }
+                                                    timestamp={currentTimestamp}
+                                                />
+                                            )}
+                                        </View>
+                                    </TouchableOpacity>
+                                </View>
+                            );
+                        })
+                    }
+                </ScrollView>
+
+                {/* Position special schedule badge at the top right corner */}
+                {scheduleOverride && (
+                    <View style={styles.fixedRecoveryInfoContainer}>
+                        <ScheduleInfoBadge
+                            label="Special"
+                            title={
+                                scheduleOverride.isRecoveryDay ?
+                                    'Recovery Day Schedule'
+                                :   'Special Schedule'
+                            }
+                            reason={scheduleOverride.reason}
+                            details={[
+                                formatDate(selectedDate, {
+                                    weekday: 'long',
+                                    month: 'short',
+                                    day: 'numeric',
+                                }),
+                                scheduleOverride.replacedDayName ?
+                                    `Replaces ${scheduleOverride.replacedDayName}`
+                                :   'Temporary schedule override',
+                            ]}
+                        />
+                    </View>
+                )}
+            </View>
+
+            <ViewModeMenu
+                isOpen={isMenuOpen}
+                onClose={() => setIsMenuOpen(false)}
+                isEvenWeek={isEvenWeek}
+                weekText={
+                    isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek
+                }
+                currentView="day"
             />
-          </View>
-        )}
-      </View>
-
-      <ViewModeMenu
-        isOpen={isMenuOpen}
-        onClose={() => setIsMenuOpen(false)}
-        isEvenWeek={isEvenWeek}
-        weekText={isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
-        currentView="day"
-      />
-    </SafeAreaView>
-  );
+        </SafeAreaView>
+    );
 }
 
 // Function to generate consistent colors for subjects
 function getSubjectColor(subjectName: string): string {
-  const colors = Colors.dark.dayViewSubjectColors;
+    const colors = Colors.dark.dayViewSubjectColors;
 
-  // Generate a number from the subject name
-  let hash = 0;
-  for (let i = 0; i < subjectName.length; i++) {
-    hash = subjectName.charCodeAt(i) + ((hash << 5) - hash);
-  }
+    // Generate a number from the subject name
+    let hash = 0;
+    for (let i = 0; i < subjectName.length; i++) {
+        hash = subjectName.charCodeAt(i) + ((hash << 5) - hash);
+    }
 
-  // Use the hash to pick a color
-  const index = Math.abs(hash) % colors.length;
-  return colors[index];
+    // Use the hash to pick a color
+    const index = Math.abs(hash) % colors.length;
+    return colors[index];
 }
 
 function withAlpha(hexColor: string, alpha: number): string {
-  const normalized = hexColor.replace('#', '');
-  if (normalized.length !== 6) return hexColor;
-  const numericAlpha = Math.max(0, Math.min(1, alpha));
-  const alphaHex = Math.round(numericAlpha * 255).toString(16).padStart(2, '0');
-  return `#${normalized}${alphaHex}`;
+    const normalized = hexColor.replace('#', '');
+    if (normalized.length !== 6) return hexColor;
+    const numericAlpha = Math.max(0, Math.min(1, alpha));
+    const alphaHex = Math.round(numericAlpha * 255)
+        .toString(16)
+        .padStart(2, '0');
+    return `#${normalized}${alphaHex}`;
 }
 
 type Styles = {
-  container: ViewStyle;
-  header: ViewStyle;
-  headerTop: ViewStyle;
-  headerTitle: TextStyle;
-  dateList: ViewStyle;
-  dateListScrollContent: ViewStyle;
-  dateListContent: ViewStyle;
-  dateItem: ViewStyle;
-  activeDateItem: ViewStyle;
-  todayDateItem: ViewStyle;
-  dateDay: TextStyle;
-  dateNumber: TextStyle;
-  activeDateText: TextStyle;
-  todayText: TextStyle;
-  todayDot: ViewStyle;
-  scheduleContainer: ViewStyle;
-  scheduleItem: ViewStyle;
-  classCard: ViewStyle;
-  timeContainer: ViewStyle;
-  time: TextStyle;
-  classContent: ViewStyle;
-  className: TextStyle;
-  roomContainer: ViewStyle;
-  roomNumber: TextStyle;
-  weekInfo: ViewStyle;
-  weekText: TextStyle;
-  detailsContainer: ViewStyle;
-  teacherContainer: ViewStyle;
-  teacherName: TextStyle;
-  noSchedule: ViewStyle;
-  noScheduleText: TextStyle;
-  timeIndicatorContainer: ViewStyle;
-  timeIndicator: ViewStyle;
-  timeIndicatorLine: ViewStyle;
-  timeIndicatorArrowContainer: ViewStyle;
-  timeIndicatorMove: ViewStyle;
-  timeIndicatorArrow: ViewStyle;
-  timeLeftText: TextStyle;
-  timeWrapper: ViewStyle;
-  timeDot: ViewStyle;
-  timeDotContainer: ViewStyle;
-  classHeaderRow: ViewStyle;
-  statusText: TextStyle;
-  activeStatusText: TextStyle;
-  loadingContainer: ViewStyle;
-  loadingText: TextStyle;
-  errorContainer: ViewStyle;
-  errorText: TextStyle;
-  weekInfo2: ViewStyle;
-  weekText2: TextStyle;
-  headerContainer: ViewStyle;
-  contentContainer: ViewStyle;
-  leftGradient: ViewStyle;
-  rightGradient: ViewStyle;
-  selectedDayText: TextStyle;
-  selectedDay: ViewStyle;
-  groupName: TextStyle;
-  recoveryBanner: ViewStyle;
-  recoveryTitle: TextStyle;
-  recoveryInfo: TextStyle;
-  recoveryReason: TextStyle;
-  recoveryDot: ViewStyle;
-  recoveryDayItem: ViewStyle;
-  recoveryDayText: TextStyle;
-  selectedRecoveryDay: ViewStyle;
-  selectedRecoveryDayText: TextStyle;
-  recoveryDayInfoButton: ViewStyle;
-  recoveryDayInfoButtonGradient: ViewStyle;
-  recoveryDayInfoIcon: TextStyle;
-  recoveryDayInfoBadgeText: TextStyle;
-  recoveryDayTooltipContainer: ViewStyle;
-  recoveryDayTooltip: ViewStyle;
-  recoveryDayTooltipHeader: ViewStyle;
-  recoveryDayTooltipTitle: TextStyle;
-  closeTooltipButton: ViewStyle;
-  closeTooltipText: TextStyle;
-  recoveryDayTooltipReason: TextStyle;
-  recoveryDayTooltipDetail: TextStyle;
-  recoveryDayInfoContainer: ViewStyle;
-  recoveryDayInfoWrapper: ViewStyle;
-  fixedRecoveryInfoContainer: ViewStyle;
-  firstTimeIndicatorContainer: ViewStyle;
-  firstTimeIndicator: ViewStyle;
-  firstTimeIndicatorText: TextStyle;
-  firstTimeIndicatorArrow: TextStyle;
-  assignmentBadge: ViewStyle;
-  assignmentBadgeText: TextStyle;
-  dateAssignmentBadge: ViewStyle;
-  selectedDateAssignmentBadge: ViewStyle;
-  dateAssignmentBadgeText: TextStyle;
-  selectedDateAssignmentBadgeText: TextStyle;
-  lastDateAssignmentBadge: ViewStyle;
-  timeChevronContainer: ViewStyle;
-  assignmentsContainer: ViewStyle;
-  assignmentsSeparator: ViewStyle;
-  assignmentsSectionTitle: TextStyle;
-  assignmentItem: ViewStyle;
-  assignmentTypeIndicator: ViewStyle;
-  assignmentDetails: ViewStyle;
-  assignmentTitle: TextStyle;
-  assignmentDescription: TextStyle;
-  loadingAssignments: ViewStyle;
-  loadingAssignmentsText: TextStyle;
-  noAssignments: ViewStyle;
-  noAssignmentsText: TextStyle;
-  assessmentSection: ViewStyle;
-  assessmentSectionTitle: TextStyle;
-  assessmentCard: ViewStyle;
-  assessmentCardExam: ViewStyle;
-  assessmentCardThesis: ViewStyle;
-  assessmentCardHeader: ViewStyle;
-  assessmentTypeBadge: ViewStyle;
-  assessmentTypeBadgeExam: ViewStyle;
-  assessmentTypeBadgeThesis: ViewStyle;
-  assessmentTypeText: TextStyle;
-  assessmentSubgroupText: TextStyle;
-  assessmentSubjectText: TextStyle;
-  assessmentMetaText: TextStyle;
-  specialLoadingRow: ViewStyle;
-  specialLoadingText: TextStyle;
-  thesisInlineContainer: ViewStyle;
-  thesisInlineCard: ViewStyle;
-  thesisInlineCardCompact: ViewStyle;
-  thesisInlineHeader: ViewStyle;
-  thesisInlineTitle: TextStyle;
-  thesisInlineSubgroup: TextStyle;
-  thesisInlineMeta: TextStyle;
+    container: ViewStyle;
+    header: ViewStyle;
+    headerTop: ViewStyle;
+    headerTitle: TextStyle;
+    dateList: ViewStyle;
+    dateListScrollContent: ViewStyle;
+    dateListContent: ViewStyle;
+    dateItem: ViewStyle;
+    activeDateItem: ViewStyle;
+    todayDateItem: ViewStyle;
+    dateDay: TextStyle;
+    dateNumber: TextStyle;
+    activeDateText: TextStyle;
+    todayText: TextStyle;
+    todayDot: ViewStyle;
+    scheduleContainer: ViewStyle;
+    scheduleItem: ViewStyle;
+    classCard: ViewStyle;
+    timeContainer: ViewStyle;
+    time: TextStyle;
+    classContent: ViewStyle;
+    className: TextStyle;
+    roomContainer: ViewStyle;
+    roomNumber: TextStyle;
+    weekInfo: ViewStyle;
+    weekText: TextStyle;
+    detailsContainer: ViewStyle;
+    teacherContainer: ViewStyle;
+    teacherName: TextStyle;
+    noSchedule: ViewStyle;
+    noScheduleText: TextStyle;
+    timeIndicatorContainer: ViewStyle;
+    timeIndicator: ViewStyle;
+    timeIndicatorLine: ViewStyle;
+    timeIndicatorArrowContainer: ViewStyle;
+    timeIndicatorMove: ViewStyle;
+    timeIndicatorArrow: ViewStyle;
+    timeLeftText: TextStyle;
+    timeWrapper: ViewStyle;
+    timeDot: ViewStyle;
+    timeDotContainer: ViewStyle;
+    classHeaderRow: ViewStyle;
+    statusText: TextStyle;
+    activeStatusText: TextStyle;
+    loadingContainer: ViewStyle;
+    loadingText: TextStyle;
+    errorContainer: ViewStyle;
+    errorText: TextStyle;
+    weekInfo2: ViewStyle;
+    weekText2: TextStyle;
+    headerContainer: ViewStyle;
+    contentContainer: ViewStyle;
+    leftGradient: ViewStyle;
+    rightGradient: ViewStyle;
+    selectedDayText: TextStyle;
+    selectedDay: ViewStyle;
+    groupName: TextStyle;
+    recoveryBanner: ViewStyle;
+    recoveryTitle: TextStyle;
+    recoveryInfo: TextStyle;
+    recoveryReason: TextStyle;
+    recoveryDot: ViewStyle;
+    recoveryDayItem: ViewStyle;
+    recoveryDayText: TextStyle;
+    selectedRecoveryDay: ViewStyle;
+    selectedRecoveryDayText: TextStyle;
+    recoveryDayInfoButton: ViewStyle;
+    recoveryDayInfoButtonGradient: ViewStyle;
+    recoveryDayInfoIcon: TextStyle;
+    recoveryDayInfoBadgeText: TextStyle;
+    recoveryDayTooltipContainer: ViewStyle;
+    recoveryDayTooltip: ViewStyle;
+    recoveryDayTooltipHeader: ViewStyle;
+    recoveryDayTooltipTitle: TextStyle;
+    closeTooltipButton: ViewStyle;
+    closeTooltipText: TextStyle;
+    recoveryDayTooltipReason: TextStyle;
+    recoveryDayTooltipDetail: TextStyle;
+    recoveryDayInfoContainer: ViewStyle;
+    recoveryDayInfoWrapper: ViewStyle;
+    fixedRecoveryInfoContainer: ViewStyle;
+    firstTimeIndicatorContainer: ViewStyle;
+    firstTimeIndicator: ViewStyle;
+    firstTimeIndicatorText: TextStyle;
+    firstTimeIndicatorArrow: TextStyle;
+    assignmentBadge: ViewStyle;
+    assignmentBadgeText: TextStyle;
+    dateAssignmentBadge: ViewStyle;
+    selectedDateAssignmentBadge: ViewStyle;
+    dateAssignmentBadgeText: TextStyle;
+    selectedDateAssignmentBadgeText: TextStyle;
+    lastDateAssignmentBadge: ViewStyle;
+    timeChevronContainer: ViewStyle;
+    assignmentsContainer: ViewStyle;
+    assignmentsSeparator: ViewStyle;
+    assignmentsSectionTitle: TextStyle;
+    assignmentItem: ViewStyle;
+    assignmentTypeIndicator: ViewStyle;
+    assignmentDetails: ViewStyle;
+    assignmentTitle: TextStyle;
+    assignmentDescription: TextStyle;
+    loadingAssignments: ViewStyle;
+    loadingAssignmentsText: TextStyle;
+    noAssignments: ViewStyle;
+    noAssignmentsText: TextStyle;
+    assessmentSection: ViewStyle;
+    assessmentSectionTitle: TextStyle;
+    assessmentCard: ViewStyle;
+    assessmentCardExam: ViewStyle;
+    assessmentCardThesis: ViewStyle;
+    assessmentCardHeader: ViewStyle;
+    assessmentTypeBadge: ViewStyle;
+    assessmentTypeBadgeExam: ViewStyle;
+    assessmentTypeBadgeThesis: ViewStyle;
+    assessmentTypeText: TextStyle;
+    assessmentSubgroupText: TextStyle;
+    assessmentSubjectText: TextStyle;
+    assessmentMetaText: TextStyle;
+    specialLoadingRow: ViewStyle;
+    specialLoadingText: TextStyle;
+    thesisInlineContainer: ViewStyle;
+    thesisInlineCard: ViewStyle;
+    thesisInlineCardCompact: ViewStyle;
+    thesisInlineHeader: ViewStyle;
+    thesisInlineTitle: TextStyle;
+    thesisInlineSubgroup: TextStyle;
+    thesisInlineMeta: TextStyle;
 };
 
 const styles = StyleSheet.create<Styles>({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.dark.backgroundSecondary, // Darker background for more contrast
-  },
-  header: {
-    padding: 20,
-    backgroundColor: Colors.dark.backgroundTertiary, // Subtle distinction from background
-    borderBottomRightRadius: 32,
-    borderBottomLeftRadius: 32,
-    shadowColor: Colors.dark.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-    zIndex: 10,
-  },
-  headerTop: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24,
-    gap: 12,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: Colors.dark.white,
-    textAlign: 'center',
-    letterSpacing: 0.5,
-  },
-  weekInfo: {
-    backgroundColor: Colors.dark.primaryStrong,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 16,
-  },
-  weekText: {
-    color: Colors.dark.white,
-    fontSize: 14,
-    fontWeight: '600',
-    letterSpacing: 0.3,
-  },
-  weekInfo2: {
-    backgroundColor: Colors.dark.primaryStrong, // More vibrant blue for consistency
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  weekText2: {
-    color: Colors.dark.white,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  dateList: {
-    flexDirection: 'row',
-    width: '100%',
-    paddingHorizontal: 0,
-    marginBottom: 0,
-    position: 'relative', // Added for absolute positioning of indicators
-  },
-  dateListContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
-  },
-  dateListScrollContent: {
-    paddingVertical: 5,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 8,
-    gap: 12,
-  },
-  dateItem: {
-    width: 70,
-    height: 90,
-    borderRadius: 20,
-    backgroundColor: Colors.dark.surfaceSecondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-  },
-  activeDateItem: {
-    backgroundColor: Colors.dark.primaryStrong,
-    transform: [{ scale: 1.05 }],
-  },
-  todayDateItem: {
-    borderColor: Colors.dark.primaryStrong,
-    borderWidth: 2,
-    backgroundColor: Colors.dark.surfaceSecondary,
-  },
-  dateDay: {
-    color: Colors.dark.neutral500,
-    fontSize: 14,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-    marginBottom: 6,
-  },
-  dateNumber: {
-    color: Colors.dark.white,
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 6, // Increased to make room for today dot
-  },
-  activeDateText: {
-    color: Colors.dark.white,
-  },
-  todayText: {
-    color: Colors.dark.primaryStrong,
-  },
-  todayDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.dark.primaryStrong,
-    marginTop: 4,
-  },
-  scheduleContainer: {
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    backgroundColor: Colors.dark.backgroundSecondary,
-  },
-  scheduleItem: {
-    marginBottom: 16,
-    zIndex: 1,
-  },
-  classCard: {
-    backgroundColor: Colors.dark.surfaceSecondary,
-    borderRadius: 20,
-    borderLeftWidth: 4,
-    shadowColor: Colors.dark.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 3,
-    flexDirection: 'row',
-    overflow: 'hidden',
-    minHeight: 100,
-  },
-  timeContainer: {
-    width: 90,
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 16,
-    borderRightWidth: 2,
-  },
-  time: {
-    color: Colors.dark.neutral500,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  classContent: {
-    flex: 1,
-    padding: 16,
-  },
-  className: {
-    color: Colors.dark.white,
-    fontSize: 16,
-    fontWeight: '600',
-    letterSpacing: 0.3,
-  },
-  roomContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  roomNumber: {
-    color: Colors.dark.neutral500,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  detailsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  teacherContainer: {
-    flex: 1,
-    marginRight: 8,
-  },
-  teacherName: {
-    color: Colors.dark.neutral500,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  noSchedule: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 40,
-  },
-  noScheduleText: {
-    color: Colors.dark.neutral500,
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  timeIndicatorContainer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    pointerEvents: 'none',
-  },
-  timeIndicator: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    zIndex: 2,
-  },
-  timeIndicatorLine: {
-    position: 'absolute',
-    left: 90,
-    right: 0,
-    height: 2,
-    backgroundColor: Colors.dark.red,
-    opacity: 0.7,
-  },
-  timeIndicatorArrowContainer: {
-    position: 'absolute',
-    left: 83,
-    width: 12,
-    height: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: Colors.dark.red,
-    borderRadius: 6,
-    shadowColor: Colors.dark.red,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: .5,
-    shadowRadius: 6,
-    elevation: 8,
-  },
-  timeIndicatorMove: {
-    position: 'absolute',
-    left: 0,
-    borderColor: Colors.dark.red,
-    width: 2,
-    height: 2,
-    borderRadius: 5,
-  },
-  timeIndicatorArrow: {
-    width: 0,
-    height: 0,
-    backgroundColor: Colors.dark.transparent,
-    borderStyle: 'solid',
-    borderLeftWidth: 4,
-    borderRightWidth: 4,
-    borderBottomWidth: 4,
-    borderLeftColor: Colors.dark.transparent,
-    borderRightColor: Colors.dark.transparent,
-    borderBottomColor: Colors.dark.red,
-    transform: [{ rotate: '180deg' }],
-  },
-  timeLeftText: {
-    position: 'absolute',
-    left: 60,
-    backgroundColor: Colors.dark.red,
-    color: Colors.dark.white,
-    fontSize: 12,
-    fontWeight: 'bold',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    overflow: 'hidden',
-    shadowColor: Colors.dark.red,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 2,
-    elevation: 3,
-    zIndex: 100,
-  },
-  timeWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  timeDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    shadowColor: Colors.dark.white,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  timeDotContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 8, // Add padding to make it more tappable
-  },
-  classHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  statusText: {
-    fontSize: 12,
-    color: Colors.dark.neutral500,
-    fontWeight: '600',
-  },
-  activeStatusText: {
-    color: Colors.dark.primary,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    color: Colors.dark.neutral500,
-    fontSize: 16,
-    marginTop: 12,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  errorText: {
-    color: Colors.dark.red,
-    fontSize: 16,
-    textAlign: 'center',
-  },
-  headerContainer: {
-    zIndex: 10,
-  },
-  contentContainer: {
-    flex: 1,
-    zIndex: 1,
-  },
-  leftGradient: {
-    position: 'absolute',
-    left: 0,
-    width: 40,
-    top: 0,
-    bottom: 0,
-    zIndex: 10,
-    pointerEvents: 'none',
-  },
-  rightGradient: {
-    position: 'absolute',
-    right: 0,
-    width: 40,
-    top: 0,
-    bottom: 0,
-    zIndex: 10,
-    pointerEvents: 'none',
-  },
-  selectedDayText: {
-    color: Colors.dark.white,
-  },
-  selectedDay: {
-    backgroundColor: Colors.dark.primaryStrong,
-    transform: [{ scale: 1.05 }],
-    shadowColor: Colors.dark.primaryStrong,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  groupName: {
-    color: Colors.dark.neutral500,
-    fontSize: 12,
-    marginTop: 4,
-  },
-  recoveryBanner: {
-    backgroundColor: Colors.dark.recoveryInfoSurface,
-    borderRadius: 10,
-    padding: 16,
-    marginVertical: 8,
-  },
-  recoveryTitle: {
-    color: Colors.dark.white,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  recoveryInfo: {
-    color: Colors.dark.white,
-    fontSize: 12,
-    marginTop: 4,
-  },
-  recoveryReason: {
-    color: Colors.dark.recoveryReason,
-    fontSize: 12,
-    fontStyle: 'italic',
-    marginTop: 4,
-  },
-  recoveryDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.dark.recoveryColor,
-    marginTop: 4,
-  },
-  recoveryDayItem: {
-    borderColor: Colors.dark.recoveryColor,
-    borderWidth: 2,
-    backgroundColor: Colors.dark.transparent,
-  },
-  recoveryDayText: {
-    color: Colors.dark.recoveryColor,
-  },
-  selectedRecoveryDay: {
-    backgroundColor: Colors.dark.recoveryColor,
-    transform: [{ scale: 1.05 }],
-    shadowColor: Colors.dark.recoveryColor,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-    borderWidth: 0, // Remove border when selected
-  },
-  selectedRecoveryDayText: {
-    color: Colors.dark.white,
-  },
-  recoveryDayInfoButtonGradient: {
-    flex: 1,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  recoveryDayInfoIcon: {
-    color: Colors.dark.white,
-    fontSize: 14,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  recoveryDayInfoBadgeText: {
-    color: Colors.dark.white,
-    fontSize: 11,
-    fontWeight: '700',
-    textAlign: 'center',
-    letterSpacing: 0.3,
-  },
-  recoveryDayTooltipContainer: {
-    position: 'absolute',
-    top: 28,
-    right: 0,
-    width: 200,
-    zIndex: 100,
-  },
-  recoveryDayTooltip: {
-    backgroundColor: Colors.dark.surface,
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.dark.borderMuted,
-  },
-  recoveryDayTooltipHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  recoveryDayTooltipTitle: {
-    color: Colors.dark.recoveryColor,
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  closeTooltipButton: {
-    padding: 4,
-  },
-  closeTooltipText: {
-    color: Colors.dark.white,
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  recoveryDayTooltipReason: {
-    color: Colors.dark.white,
-    fontSize: 12,
-    lineHeight: 18,
-    opacity: 0.8,
-  },
-  recoveryDayTooltipDetail: {
-    color: Colors.dark.assessmentSubduedText,
-    fontSize: 11,
-    lineHeight: 16,
-    marginTop: 4,
-  },
-  recoveryDayInfoContainer: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    zIndex: 100,
-  },
-  recoveryDayInfoWrapper: {
-    position: 'relative',
-    height: 28, // Provide space for the button
-    marginBottom: 4,
-    width: '100%',
-  },
-  recoveryDayInfoButton: {
-    minWidth: 64,
-    height: 24,
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    overflow: 'hidden',
-    zIndex: 100,
-    elevation: 5,
-    shadowColor: Colors.dark.black,
-    shadowOffset: { width: 1, height: 1 },
-    shadowOpacity: 0.4,
-    shadowRadius: 3,
-  },
-  fixedRecoveryInfoContainer: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    zIndex: 101,
-  },
-  firstTimeIndicatorContainer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: -8,
-    zIndex: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-  },
-  firstTimeIndicator: {
-    flexDirection: 'row',
-    backgroundColor: Colors.dark.overlayNeutral90,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: Colors.dark.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  firstTimeIndicatorText: {
-    color: Colors.dark.white,
-    fontSize: 14,
-    fontWeight: '600',
-    marginHorizontal: 8,
-  },
-  firstTimeIndicatorArrow: {
-    color: Colors.dark.primary,
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  assignmentBadge: {
-    backgroundColor: Colors.dark.red,
-    borderRadius: 12,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    marginLeft: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  assignmentBadgeText: {
-    color: Colors.dark.white,
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  dateAssignmentBadge: {
-    position: 'absolute',
-    bottom: 6,
-    right: 6,
-    backgroundColor: Colors.dark.red,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-    zIndex: 1,
-  },
-  selectedDateAssignmentBadge: {
-    backgroundColor: Colors.dark.red,
-  },
-  dateAssignmentBadgeText: {
-    color: Colors.dark.white,
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  selectedDateAssignmentBadgeText: {
-    color: Colors.dark.white,
-  },
-  lastDateAssignmentBadge: {
-    position: 'absolute',
-    bottom: 6,
-    left: 6,
-    backgroundColor: Colors.dark.red,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-    zIndex: 1,
-  },
-  timeChevronContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: 20,
-    height: 20,
-  },
-  assignmentsContainer: {
-    marginTop: 8, 
-    paddingTop: 8,
-  },
-  assignmentsSeparator: {
-    height: 1,
-    backgroundColor: Colors.dark.overlayGray20,
-    marginBottom: 8,
-  },
-  assignmentsSectionTitle: {
-    color: Colors.dark.neutral500,
-    fontSize: 13,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  assignmentItem: {
-    flexDirection: 'row',
-    marginBottom: 8,
-    alignItems: 'flex-start',
-    backgroundColor: Colors.dark.overlayNeutral30,
-    borderRadius: 8,
-    padding: 8,
-  },
-  assignmentTypeIndicator: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 8,
-  },
-  assignmentDetails: {
-    flex: 1,
-  },
-  assignmentTitle: {
-    color: Colors.dark.white,
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  assignmentDescription: {
-    color: Colors.dark.neutral500,
-    fontSize: 12,
-  },
-  loadingAssignments: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-  },
-  loadingAssignmentsText: {
-    color: Colors.dark.neutral500,
-    fontSize: 14,
-    marginLeft: 8,
-  },
-  noAssignments: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-  },
-  noAssignmentsText: {
-    color: Colors.dark.neutral500,
-    fontSize: 14,
-    fontStyle: 'italic',
-  },
-  assessmentSection: {
-    marginBottom: 16,
-    gap: 10,
-  },
-  assessmentSectionTitle: {
-    color: Colors.dark.assessmentSectionTitle,
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-    textTransform: 'uppercase',
-    marginBottom: 2,
-  },
-  assessmentCard: {
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderWidth: 1,
-    gap: 6,
-  },
-  assessmentCardExam: {
-    backgroundColor: Colors.dark.overlayOrange08,
-    borderColor: Colors.dark.overlayOrange26,
-  },
-  assessmentCardThesis: {
-    backgroundColor: Colors.dark.overlayPrimary10,
-    borderColor: Colors.dark.overlayPrimary30,
-  },
-  assessmentCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  assessmentTypeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  assessmentTypeBadgeExam: {
-    backgroundColor: Colors.dark.overlayOrange20,
-  },
-  assessmentTypeBadgeThesis: {
-    backgroundColor: Colors.dark.overlayAccentBlue25,
-  },
-  assessmentTypeText: {
-    color: Colors.dark.white,
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-    textTransform: 'uppercase',
-  },
-  assessmentSubgroupText: {
-    color: Colors.dark.assessmentSubduedText,
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  assessmentSubjectText: {
-    color: Colors.dark.white,
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  assessmentMetaText: {
-    color: Colors.dark.assessmentSubduedText,
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  specialLoadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginBottom: 16,
-  },
-  specialLoadingText: {
-    color: Colors.dark.neutral500,
-    fontSize: 13,
-  },
-  thesisInlineContainer: {
-    marginTop: 10,
-    gap: 8,
-  },
-  thesisInlineCard: {
-    backgroundColor: Colors.dark.overlayPrimary12,
-    borderWidth: 1,
-    borderColor: Colors.dark.overlayPrimary25,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    gap: 6,
-  },
-  thesisInlineCardCompact: {
-    paddingVertical: 6,
-  },
-  thesisInlineHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  thesisInlineTitle: {
-    color: Colors.dark.thesisInlineTitle,
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
-  },
-  thesisInlineSubgroup: {
-    color: Colors.dark.thesisInlineSubgroup,
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  thesisInlineMeta: {
-    color: Colors.dark.thesisInlineMeta,
-    fontSize: 12,
-    lineHeight: 17,
-  },
+    container: {
+        flex: 1,
+        backgroundColor: Colors.dark.backgroundSecondary, // Darker background for more contrast
+    },
+    header: {
+        padding: 20,
+        backgroundColor: Colors.dark.backgroundTertiary, // Subtle distinction from background
+        borderBottomRightRadius: 32,
+        borderBottomLeftRadius: 32,
+        shadowColor: Colors.dark.black,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+        elevation: 8,
+        zIndex: 10,
+    },
+    headerTop: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 24,
+        gap: 12,
+    },
+    headerTitle: {
+        fontSize: 24,
+        fontWeight: '700',
+        color: Colors.dark.white,
+        textAlign: 'center',
+        letterSpacing: 0.5,
+    },
+    weekInfo: {
+        backgroundColor: Colors.dark.primaryStrong,
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 16,
+    },
+    weekText: {
+        color: Colors.dark.white,
+        fontSize: 14,
+        fontWeight: '600',
+        letterSpacing: 0.3,
+    },
+    weekInfo2: {
+        backgroundColor: Colors.dark.primaryStrong, // More vibrant blue for consistency
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 12,
+    },
+    weekText2: {
+        color: Colors.dark.white,
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    dateList: {
+        flexDirection: 'row',
+        width: '100%',
+        paddingHorizontal: 0,
+        marginBottom: 0,
+        position: 'relative', // Added for absolute positioning of indicators
+    },
+    dateListContent: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        width: '100%',
+    },
+    dateListScrollContent: {
+        paddingVertical: 5,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        paddingHorizontal: 8,
+        gap: 12,
+    },
+    dateItem: {
+        width: 70,
+        height: 90,
+        borderRadius: 20,
+        backgroundColor: Colors.dark.surfaceSecondary,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+    },
+    activeDateItem: {
+        backgroundColor: Colors.dark.primaryStrong,
+        transform: [{ scale: 1.05 }],
+    },
+    todayDateItem: {
+        borderColor: Colors.dark.primaryStrong,
+        borderWidth: 2,
+        backgroundColor: Colors.dark.surfaceSecondary,
+    },
+    dateDay: {
+        color: Colors.dark.neutral500,
+        fontSize: 14,
+        fontWeight: '600',
+        letterSpacing: 0.5,
+        marginBottom: 6,
+    },
+    dateNumber: {
+        color: Colors.dark.white,
+        fontSize: 20,
+        fontWeight: '700',
+        marginBottom: 6, // Increased to make room for today dot
+    },
+    activeDateText: {
+        color: Colors.dark.white,
+    },
+    todayText: {
+        color: Colors.dark.primaryStrong,
+    },
+    todayDot: {
+        width: 4,
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: Colors.dark.primaryStrong,
+        marginTop: 4,
+    },
+    scheduleContainer: {
+        flex: 1,
+        paddingHorizontal: 20,
+        paddingTop: 16,
+        backgroundColor: Colors.dark.backgroundSecondary,
+    },
+    scheduleItem: {
+        marginBottom: 16,
+        zIndex: 1,
+    },
+    classCard: {
+        backgroundColor: Colors.dark.surfaceSecondary,
+        borderRadius: 20,
+        borderLeftWidth: 4,
+        shadowColor: Colors.dark.black,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 3.84,
+        elevation: 3,
+        flexDirection: 'row',
+        overflow: 'hidden',
+        minHeight: 100,
+    },
+    timeContainer: {
+        width: 90,
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 16,
+        borderRightWidth: 2,
+    },
+    time: {
+        color: Colors.dark.neutral500,
+        fontSize: 14,
+        fontWeight: '500',
+    },
+    classContent: {
+        flex: 1,
+        padding: 16,
+    },
+    className: {
+        color: Colors.dark.white,
+        fontSize: 16,
+        fontWeight: '600',
+        letterSpacing: 0.3,
+    },
+    roomContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 8,
+    },
+    roomNumber: {
+        color: Colors.dark.neutral500,
+        fontSize: 14,
+        fontWeight: '500',
+    },
+    detailsContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: 8,
+    },
+    teacherContainer: {
+        flex: 1,
+        marginRight: 8,
+    },
+    teacherName: {
+        color: Colors.dark.neutral500,
+        fontSize: 14,
+        fontWeight: '500',
+    },
+    noSchedule: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingTop: 40,
+    },
+    noScheduleText: {
+        color: Colors.dark.neutral500,
+        fontSize: 16,
+        fontWeight: '500',
+    },
+    timeIndicatorContainer: {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        top: 0,
+        bottom: 0,
+        pointerEvents: 'none',
+    },
+    timeIndicator: {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        height: 2,
+        flexDirection: 'row',
+        alignItems: 'center',
+        zIndex: 2,
+    },
+    timeIndicatorLine: {
+        position: 'absolute',
+        left: 90,
+        right: 0,
+        height: 2,
+        backgroundColor: Colors.dark.red,
+        opacity: 0.7,
+    },
+    timeIndicatorArrowContainer: {
+        position: 'absolute',
+        left: 83,
+        width: 12,
+        height: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: Colors.dark.red,
+        borderRadius: 6,
+        shadowColor: Colors.dark.red,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.5,
+        shadowRadius: 6,
+        elevation: 8,
+    },
+    timeIndicatorMove: {
+        position: 'absolute',
+        left: 0,
+        borderColor: Colors.dark.red,
+        width: 2,
+        height: 2,
+        borderRadius: 5,
+    },
+    timeIndicatorArrow: {
+        width: 0,
+        height: 0,
+        backgroundColor: Colors.dark.transparent,
+        borderStyle: 'solid',
+        borderLeftWidth: 4,
+        borderRightWidth: 4,
+        borderBottomWidth: 4,
+        borderLeftColor: Colors.dark.transparent,
+        borderRightColor: Colors.dark.transparent,
+        borderBottomColor: Colors.dark.red,
+        transform: [{ rotate: '180deg' }],
+    },
+    timeLeftText: {
+        position: 'absolute',
+        left: 60,
+        backgroundColor: Colors.dark.red,
+        color: Colors.dark.white,
+        fontSize: 12,
+        fontWeight: 'bold',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 4,
+        overflow: 'hidden',
+        shadowColor: Colors.dark.red,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.3,
+        shadowRadius: 2,
+        elevation: 3,
+        zIndex: 100,
+    },
+    timeWrapper: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    timeDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        shadowColor: Colors.dark.white,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.5,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    timeDotContainer: {
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 8, // Add padding to make it more tappable
+    },
+    classHeaderRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    statusText: {
+        fontSize: 12,
+        color: Colors.dark.neutral500,
+        fontWeight: '600',
+    },
+    activeStatusText: {
+        color: Colors.dark.primary,
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    loadingText: {
+        color: Colors.dark.neutral500,
+        fontSize: 16,
+        marginTop: 12,
+    },
+    errorContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    errorText: {
+        color: Colors.dark.red,
+        fontSize: 16,
+        textAlign: 'center',
+    },
+    headerContainer: {
+        zIndex: 10,
+    },
+    contentContainer: {
+        flex: 1,
+        zIndex: 1,
+    },
+    leftGradient: {
+        position: 'absolute',
+        left: 0,
+        width: 40,
+        top: 0,
+        bottom: 0,
+        zIndex: 10,
+        pointerEvents: 'none',
+    },
+    rightGradient: {
+        position: 'absolute',
+        right: 0,
+        width: 40,
+        top: 0,
+        bottom: 0,
+        zIndex: 10,
+        pointerEvents: 'none',
+    },
+    selectedDayText: {
+        color: Colors.dark.white,
+    },
+    selectedDay: {
+        backgroundColor: Colors.dark.primaryStrong,
+        transform: [{ scale: 1.05 }],
+        shadowColor: Colors.dark.primaryStrong,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 8,
+    },
+    groupName: {
+        color: Colors.dark.neutral500,
+        fontSize: 12,
+        marginTop: 4,
+    },
+    recoveryBanner: {
+        backgroundColor: Colors.dark.recoveryInfoSurface,
+        borderRadius: 10,
+        padding: 16,
+        marginVertical: 8,
+    },
+    recoveryTitle: {
+        color: Colors.dark.white,
+        fontSize: 14,
+        fontWeight: '700',
+    },
+    recoveryInfo: {
+        color: Colors.dark.white,
+        fontSize: 12,
+        marginTop: 4,
+    },
+    recoveryReason: {
+        color: Colors.dark.recoveryReason,
+        fontSize: 12,
+        fontStyle: 'italic',
+        marginTop: 4,
+    },
+    recoveryDot: {
+        width: 4,
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: Colors.dark.recoveryColor,
+        marginTop: 4,
+    },
+    recoveryDayItem: {
+        borderColor: Colors.dark.recoveryColor,
+        borderWidth: 2,
+        backgroundColor: Colors.dark.transparent,
+    },
+    recoveryDayText: {
+        color: Colors.dark.recoveryColor,
+    },
+    selectedRecoveryDay: {
+        backgroundColor: Colors.dark.recoveryColor,
+        transform: [{ scale: 1.05 }],
+        shadowColor: Colors.dark.recoveryColor,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 8,
+        borderWidth: 0, // Remove border when selected
+    },
+    selectedRecoveryDayText: {
+        color: Colors.dark.white,
+    },
+    recoveryDayInfoButtonGradient: {
+        flex: 1,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    recoveryDayInfoIcon: {
+        color: Colors.dark.white,
+        fontSize: 14,
+        fontWeight: 'bold',
+        textAlign: 'center',
+    },
+    recoveryDayInfoBadgeText: {
+        color: Colors.dark.white,
+        fontSize: 11,
+        fontWeight: '700',
+        textAlign: 'center',
+        letterSpacing: 0.3,
+    },
+    recoveryDayTooltipContainer: {
+        position: 'absolute',
+        top: 28,
+        right: 0,
+        width: 200,
+        zIndex: 100,
+    },
+    recoveryDayTooltip: {
+        backgroundColor: Colors.dark.surface,
+        padding: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: Colors.dark.borderMuted,
+    },
+    recoveryDayTooltipHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 6,
+    },
+    recoveryDayTooltipTitle: {
+        color: Colors.dark.recoveryColor,
+        fontSize: 14,
+        fontWeight: 'bold',
+    },
+    closeTooltipButton: {
+        padding: 4,
+    },
+    closeTooltipText: {
+        color: Colors.dark.white,
+        fontSize: 14,
+        fontWeight: 'bold',
+    },
+    recoveryDayTooltipReason: {
+        color: Colors.dark.white,
+        fontSize: 12,
+        lineHeight: 18,
+        opacity: 0.8,
+    },
+    recoveryDayTooltipDetail: {
+        color: Colors.dark.assessmentSubduedText,
+        fontSize: 11,
+        lineHeight: 16,
+        marginTop: 4,
+    },
+    recoveryDayInfoContainer: {
+        position: 'absolute',
+        top: 0,
+        right: 0,
+        zIndex: 100,
+    },
+    recoveryDayInfoWrapper: {
+        position: 'relative',
+        height: 28, // Provide space for the button
+        marginBottom: 4,
+        width: '100%',
+    },
+    recoveryDayInfoButton: {
+        minWidth: 64,
+        height: 24,
+        borderRadius: 12,
+        paddingHorizontal: 10,
+        overflow: 'hidden',
+        zIndex: 100,
+        elevation: 5,
+        shadowColor: Colors.dark.black,
+        shadowOffset: { width: 1, height: 1 },
+        shadowOpacity: 0.4,
+        shadowRadius: 3,
+    },
+    fixedRecoveryInfoContainer: {
+        position: 'absolute',
+        top: 12,
+        right: 12,
+        zIndex: 101,
+    },
+    firstTimeIndicatorContainer: {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        top: -8,
+        zIndex: 30,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 8,
+    },
+    firstTimeIndicator: {
+        flexDirection: 'row',
+        backgroundColor: Colors.dark.overlayNeutral90,
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+        borderRadius: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: Colors.dark.black,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+        elevation: 5,
+    },
+    firstTimeIndicatorText: {
+        color: Colors.dark.white,
+        fontSize: 14,
+        fontWeight: '600',
+        marginHorizontal: 8,
+    },
+    firstTimeIndicatorArrow: {
+        color: Colors.dark.primary,
+        fontSize: 24,
+        fontWeight: 'bold',
+    },
+    assignmentBadge: {
+        backgroundColor: Colors.dark.red,
+        borderRadius: 12,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        marginLeft: 8,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    assignmentBadgeText: {
+        color: Colors.dark.white,
+        fontSize: 12,
+        fontWeight: 'bold',
+    },
+    dateAssignmentBadge: {
+        position: 'absolute',
+        bottom: 6,
+        right: 6,
+        backgroundColor: Colors.dark.red,
+        minWidth: 18,
+        height: 18,
+        borderRadius: 9,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 4,
+        zIndex: 1,
+    },
+    selectedDateAssignmentBadge: {
+        backgroundColor: Colors.dark.red,
+    },
+    dateAssignmentBadgeText: {
+        color: Colors.dark.white,
+        fontSize: 12,
+        fontWeight: 'bold',
+    },
+    selectedDateAssignmentBadgeText: {
+        color: Colors.dark.white,
+    },
+    lastDateAssignmentBadge: {
+        position: 'absolute',
+        bottom: 6,
+        left: 6,
+        backgroundColor: Colors.dark.red,
+        minWidth: 18,
+        height: 18,
+        borderRadius: 9,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 4,
+        zIndex: 1,
+    },
+    timeChevronContainer: {
+        justifyContent: 'center',
+        alignItems: 'center',
+        width: 20,
+        height: 20,
+    },
+    assignmentsContainer: {
+        marginTop: 8,
+        paddingTop: 8,
+    },
+    assignmentsSeparator: {
+        height: 1,
+        backgroundColor: Colors.dark.overlayGray20,
+        marginBottom: 8,
+    },
+    assignmentsSectionTitle: {
+        color: Colors.dark.neutral500,
+        fontSize: 13,
+        fontWeight: '600',
+        marginBottom: 8,
+    },
+    assignmentItem: {
+        flexDirection: 'row',
+        marginBottom: 8,
+        alignItems: 'flex-start',
+        backgroundColor: Colors.dark.overlayNeutral30,
+        borderRadius: 8,
+        padding: 8,
+    },
+    assignmentTypeIndicator: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 8,
+    },
+    assignmentDetails: {
+        flex: 1,
+    },
+    assignmentTitle: {
+        color: Colors.dark.white,
+        fontSize: 14,
+        fontWeight: '600',
+        marginBottom: 2,
+    },
+    assignmentDescription: {
+        color: Colors.dark.neutral500,
+        fontSize: 12,
+    },
+    loadingAssignments: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+    },
+    loadingAssignmentsText: {
+        color: Colors.dark.neutral500,
+        fontSize: 14,
+        marginLeft: 8,
+    },
+    noAssignments: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+    },
+    noAssignmentsText: {
+        color: Colors.dark.neutral500,
+        fontSize: 14,
+        fontStyle: 'italic',
+    },
+    assessmentSection: {
+        marginBottom: 16,
+        gap: 10,
+    },
+    assessmentSectionTitle: {
+        color: Colors.dark.assessmentSectionTitle,
+        fontSize: 14,
+        fontWeight: '700',
+        letterSpacing: 0.3,
+        textTransform: 'uppercase',
+        marginBottom: 2,
+    },
+    assessmentCard: {
+        borderRadius: 14,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderWidth: 1,
+        gap: 6,
+    },
+    assessmentCardExam: {
+        backgroundColor: Colors.dark.overlayOrange08,
+        borderColor: Colors.dark.overlayOrange26,
+    },
+    assessmentCardThesis: {
+        backgroundColor: Colors.dark.overlayPrimary10,
+        borderColor: Colors.dark.overlayPrimary30,
+    },
+    assessmentCardHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    assessmentTypeBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        borderRadius: 10,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+    },
+    assessmentTypeBadgeExam: {
+        backgroundColor: Colors.dark.overlayOrange20,
+    },
+    assessmentTypeBadgeThesis: {
+        backgroundColor: Colors.dark.overlayAccentBlue25,
+    },
+    assessmentTypeText: {
+        color: Colors.dark.white,
+        fontSize: 11,
+        fontWeight: '700',
+        letterSpacing: 0.3,
+        textTransform: 'uppercase',
+    },
+    assessmentSubgroupText: {
+        color: Colors.dark.assessmentSubduedText,
+        fontSize: 11,
+        fontWeight: '600',
+    },
+    assessmentSubjectText: {
+        color: Colors.dark.white,
+        fontSize: 15,
+        fontWeight: '600',
+    },
+    assessmentMetaText: {
+        color: Colors.dark.assessmentSubduedText,
+        fontSize: 12,
+        lineHeight: 18,
+    },
+    specialLoadingRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        marginBottom: 16,
+    },
+    specialLoadingText: {
+        color: Colors.dark.neutral500,
+        fontSize: 13,
+    },
+    thesisInlineContainer: {
+        marginTop: 10,
+        gap: 8,
+    },
+    thesisInlineCard: {
+        backgroundColor: Colors.dark.overlayPrimary12,
+        borderWidth: 1,
+        borderColor: Colors.dark.overlayPrimary25,
+        borderRadius: 10,
+        paddingHorizontal: 10,
+        paddingVertical: 8,
+        gap: 6,
+    },
+    thesisInlineCardCompact: {
+        paddingVertical: 6,
+    },
+    thesisInlineHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    thesisInlineTitle: {
+        color: Colors.dark.thesisInlineTitle,
+        fontSize: 11,
+        fontWeight: '700',
+        textTransform: 'uppercase',
+        letterSpacing: 0.3,
+    },
+    thesisInlineSubgroup: {
+        color: Colors.dark.thesisInlineSubgroup,
+        fontSize: 10,
+        fontWeight: '600',
+    },
+    thesisInlineMeta: {
+        color: Colors.dark.thesisInlineMeta,
+        fontSize: 12,
+        lineHeight: 17,
+    },
 });

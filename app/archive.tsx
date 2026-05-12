@@ -5,22 +5,22 @@ import { Stack } from 'expo-router';
 import { useTranslation } from '@/hooks/useTranslation';
 
 export default function ArchiveScreen() {
-  const { 
-    archivedAssignments, 
-    toggleAssignmentCompletion, 
-    deleteAssignment
-  } = useAssignments();
-  
-  const { t } = useTranslation();
+    const {
+        archivedAssignments,
+        toggleAssignmentCompletion,
+        deleteAssignment,
+    } = useAssignments();
 
-  return (
-    <>
-      <Stack.Screen options={{ title: t('assignments').archive.title }} />
-      <ArchiveView
-        assignments={archivedAssignments}
-        onToggleAssignment={toggleAssignmentCompletion}
-        onDeleteAssignment={deleteAssignment}
-      />
-    </>
-  );
-} 
+    const { t } = useTranslation();
+
+    return (
+        <>
+            <Stack.Screen options={{ title: t('assignments').archive.title }} />
+            <ArchiveView
+                assignments={archivedAssignments}
+                onToggleAssignment={toggleAssignmentCompletion}
+                onDeleteAssignment={deleteAssignment}
+            />
+        </>
+    );
+}
