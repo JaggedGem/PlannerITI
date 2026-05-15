@@ -2897,7 +2897,12 @@ export default function Settings() {
                         {t('settings').language}
                     </Text>
                     <TouchableOpacity
-                        onPress={() => setShowLanguageModal(false)}
+                        style={styles.modalCloseButton}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        onPress={(event) => {
+                            event.stopPropagation();
+                            setShowLanguageModal(false);
+                        }}
                     >
                         <MaterialIcons
                             name="close"
@@ -2990,7 +2995,10 @@ export default function Settings() {
                         {t('settings').group.select}
                     </Text>
                     <TouchableOpacity
-                        onPress={() => {
+                        style={styles.modalCloseButton}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        onPress={(event) => {
+                            event.stopPropagation();
                             setShowGroupModal(false);
                             setSearchQuery('');
                         }}
@@ -3095,7 +3103,10 @@ export default function Settings() {
                         :   t('settings').customPeriods.add}
                     </Text>
                     <TouchableOpacity
-                        onPress={() => {
+                        style={styles.modalCloseButton}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        onPress={(event) => {
+                            event.stopPropagation();
                             setShowPeriodModal(false);
                             resetPeriodForm();
                         }}
@@ -3583,6 +3594,10 @@ const styles = StyleSheet.create({
         fontSize: 20,
         fontWeight: 'bold',
         color: Colors.dark.white,
+    },
+    modalCloseButton: {
+        padding: 6,
+        margin: -6,
     },
     searchContainer: {
         flexDirection: 'row',
