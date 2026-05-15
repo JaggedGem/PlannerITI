@@ -4,6 +4,7 @@
   "version": "1.4.0",
   "scripts": {
     "start": "expo start --clear",
+    "start:dev-client": "expo start --dev-client",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo start --android",
     "ios": "expo start --ios",
@@ -11,6 +12,10 @@
     "lint": "expo lint",
     "build": "eas build --profile production --platform android",
     "build:ios": "eas build --profile production --platform ios",
+    "build:dev": "eas build --profile development --platform android",
+    "build:dev:ios": "eas build --profile development --platform ios",
+    "build:dev:local": "eas build --profile development --platform android --local",
+    "build:dev:local:ios": "eas build --profile development --platform ios --local",
     "update": "eas update --channel production --platform android",
     "update:ios": "eas update --channel production --platform ios",
     "build:apks": "node scripts/build-apks.js"
@@ -31,6 +36,7 @@
     "expo-application": "~55.0.14",
     "expo-blur": "~55.0.14",
     "expo-constants": "~55.0.16",
+    "expo-dev-client": "~55.0.15",
     "expo-device": "~55.0.16",
     "expo-font": "~55.0.7",
     "expo-haptics": "~55.0.14",
