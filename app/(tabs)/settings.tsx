@@ -1303,9 +1303,106 @@ export default function Settings() {
     //     }
     // };
 
+    // Memoized Gravatar profile component - defined at component level to prevent unnecessary re-creation
+    const MemoizedGravatarProfile = useMemo(
+        () => {
+            const GravatarProfile = memo(
+                ({
+                    userEmail,
+                    isVerified,
+                    displayName,
+                    onActionSheetPress,
+                }: {
+                    userEmail: string;
+                    isVerified: boolean;
+                    displayName?: string;
+                    onActionSheetPress: () => void;
+                }) => {
+                    const [gravatarProfile, setGravatarProfile] = useState<{
+                        display_name?: string;
+                        avatar_url?: string;
+                    } | null>(null);
+
+                    useEffect(() => {
+                        const loadGravatarProfile = async () => {
+                            const profile = await getGravatarProfile(userEmail);
+                            setGravatarProfile(profile);
+                        };
+                        void loadGravatarProfile();
+                    }, [userEmail]);
+
+                    return (
+                        <>
+                            <TouchableOpacity
+                                style={styles.accountAvatar}
+                                onPress={() =>
+                                    Linking.openURL('https://gravatar.com')
+                                }
+                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                            >
+                                {gravatarProfile?.avatar_url ?
+                                    <Image
+                                        source={{
+                                            uri: gravatarProfile.avatar_url,
+                                        }}
+                                        style={styles.avatarImage}
+                                        defaultSource={require('../../assets/images/default-avatar.jpg')}
+                                    />
+                                :   <Text style={styles.avatarText}>
+                                        {userEmail.charAt(0).toUpperCase()}
+                                    </Text>
+                                }
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.accountDetails}
+                                onPress={onActionSheetPress}
+                                activeOpacity={0.7}
+                            >
+                                <View style={styles.accountDetailsContent}>
+                                    <Text
+                                        style={styles.accountEmail}
+                                        numberOfLines={1}
+                                    >
+                                        {gravatarProfile?.display_name ||
+                                            displayName ||
+                                            userEmail}
+                                    </Text>
+                                    {!isVerified && (
+                                        <View style={styles.verificationBadge}>
+                                            <MaterialIcons
+                                                name="warning"
+                                                size={14}
+                                                color={Colors.dark.orange}
+                                            />
+                                            <Text style={styles.verificationText}>
+                                                {t('settings').account
+                                                    .notVerified}
+                                            </Text>
+                                        </View>
+                                    )}
+                                </View>
+                                <MaterialIcons
+                                    name="chevron-right"
+                                    size={24}
+                                    color={Colors.dark.mutedText}
+                                />
+                            </TouchableOpacity>
+                        </>
+                    );
+                },
+                (prevProps, nextProps) =>
+                    prevProps.userEmail === nextProps.userEmail &&
+                    prevProps.isVerified === nextProps.isVerified &&
+                    prevProps.displayName === nextProps.displayName,
+            );
+            GravatarProfile.displayName = 'MemoizedGravatarProfile';
+            return GravatarProfile;
+        },
+        [t],
+    );
+
     // Function to render the account section based on authentication state
-    const renderAccountSection = () => {
-        // Use MemoizedGravatarProfile component instead of creating state inside render function
+    const renderAccountSection = useCallback(() => {
         if (!isAuthenticated) {
             return (
                 <View style={styles.section}>
@@ -1346,79 +1443,16 @@ export default function Settings() {
                     </Text>
                 </View>
                 <View style={styles.accountInfo}>
-                    <MemoizedGravatarProfile />
+                    <MemoizedGravatarProfile
+                        userEmail={user?.email || ''}
+                        isVerified={user?.is_verified || false}
+                        displayName={user?.email}
+                        onActionSheetPress={() => setShowAccountActionSheet(true)}
+                    />
                 </View>
             </View>
         );
-    };
-
-    // Separate component for Gravatar profile to handle its own state
-    const MemoizedGravatarProfile = memo(() => {
-        const [gravatarProfile, setGravatarProfile] = useState<{
-            display_name?: string;
-            avatar_url?: string;
-        } | null>(null);
-
-        useEffect(() => {
-            const loadGravatarProfile = async () => {
-                if (user?.email) {
-                    const profile = await getGravatarProfile(user.email);
-                    setGravatarProfile(profile);
-                }
-            };
-            void loadGravatarProfile();
-        }, []);
-
-        return (
-            <>
-                <TouchableOpacity
-                    style={styles.accountAvatar}
-                    onPress={() => Linking.openURL('https://gravatar.com')}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                    {gravatarProfile?.avatar_url ?
-                        <Image
-                            source={{ uri: gravatarProfile.avatar_url }}
-                            style={styles.avatarImage}
-                            defaultSource={require('../../assets/images/default-avatar.jpg')}
-                        />
-                    :   <Text style={styles.avatarText}>
-                            {user?.email.charAt(0).toUpperCase()}
-                        </Text>
-                    }
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={styles.accountDetails}
-                    onPress={() => setShowAccountActionSheet(true)}
-                    activeOpacity={0.7}
-                >
-                    <View style={styles.accountDetailsContent}>
-                        <Text style={styles.accountEmail} numberOfLines={1}>
-                            {gravatarProfile?.display_name || user?.email}
-                        </Text>
-                        {!user?.is_verified && (
-                            <View style={styles.verificationBadge}>
-                                <MaterialIcons
-                                    name="warning"
-                                    size={14}
-                                    color={Colors.dark.orange}
-                                />
-                                <Text style={styles.verificationText}>
-                                    {t('settings').account.notVerified}
-                                </Text>
-                            </View>
-                        )}
-                    </View>
-                    <MaterialIcons
-                        name="chevron-right"
-                        size={24}
-                        color={Colors.dark.mutedText}
-                    />
-                </TouchableOpacity>
-            </>
-        );
-    });
-    MemoizedGravatarProfile.displayName = 'MemoizedGravatarProfile';
+    }, [isAuthenticated, MemoizedGravatarProfile, router, t, user?.email, user?.is_verified]);
 
     // Function to render the developer section
     const renderDeveloperSection = () => {
