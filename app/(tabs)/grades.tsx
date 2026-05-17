@@ -249,17 +249,150 @@ const normalizeAssessmentText = (value: string): string => {
         .replace(/\bl romana\b/g, 'limba romana')
         .replace(/\bl franceza\b/g, 'limba franceza')
         .replace(/\bl germana\b/g, 'limba germana')
-        .replace(/\binf\.\b/g, 'informatica')
-        .replace(/\bmat\.\b/g, 'matematica')
-        .replace(/\bfiz\.\b/g, 'fizica')
-        .replace(/\bchim\.\b/g, 'chimie')
-        .replace(/\bist\.\b/g, 'istorie')
-        .replace(/\bgeo\.\b/g, 'geografie');
+        .replace(/\binf\.?\b/g, 'informatica')
+        .replace(/\bmat\.?\b/g, 'matematica')
+        .replace(/\bfiz\.?\b/g, 'fizica')
+        .replace(/\bchim\.?\b/g, 'chimie')
+        .replace(/\bist\.?\b/g, 'istorie')
+        .replace(/\bgeo\.?\b/g, 'geografie')
+        .replace(/\bsec\.?\b/g, 'securitate')
+        .replace(/\btehn\.?\b/g, 'tehnologii')
+        .replace(/\bcomunic\.?\b/g, 'comunicare')
+        .replace(/\bimpliment\.?\b/g, 'implementare');
 
     return expanded
         .replace(/[^a-z0-9\s]/g, ' ')
         .replace(/\s+/g, ' ')
         .trim();
+};
+
+const ASSESSMENT_STOPWORDS = new Set([
+    'de',
+    'si',
+    'la',
+    'pe',
+    'cu',
+    'in',
+    'din',
+    'the',
+    'and',
+    'of',
+]);
+
+const tokenizeAssessmentText = (value: string): string[] =>
+    normalizeAssessmentText(value).split(' ').filter(Boolean);
+
+const buildAssessmentAcronym = (tokens: string[]): string => {
+    const letters = tokens
+        .filter(
+            (token) => !ASSESSMENT_STOPWORDS.has(token) && token.length > 1,
+        )
+        .map((token) => token[0])
+        .join('');
+
+    return letters.length >= 2 ? letters : '';
+};
+
+const computeLevenshteinDistance = (left: string, right: string): number => {
+    if (left === right) return 0;
+    if (!left.length) return right.length;
+    if (!right.length) return left.length;
+
+    const previousRow = Array.from(
+        { length: right.length + 1 },
+        (_, index) => index,
+    );
+    const currentRow = new Array<number>(right.length + 1);
+
+    for (let rowIndex = 1; rowIndex <= left.length; rowIndex++) {
+        currentRow[0] = rowIndex;
+
+        for (
+            let columnIndex = 1;
+            columnIndex <= right.length;
+            columnIndex++
+        ) {
+            const cost =
+                left[rowIndex - 1] === right[columnIndex - 1] ? 0 : 1;
+            currentRow[columnIndex] = Math.min(
+                previousRow[columnIndex] + 1,
+                currentRow[columnIndex - 1] + 1,
+                previousRow[columnIndex - 1] + cost,
+            );
+        }
+
+        for (
+            let columnIndex = 0;
+            columnIndex <= right.length;
+            columnIndex++
+        ) {
+            previousRow[columnIndex] = currentRow[columnIndex];
+        }
+    }
+
+    return previousRow[right.length];
+};
+
+const scoreAssessmentTokenMatch = (
+    leftToken: string,
+    rightToken: string,
+): number => {
+    if (leftToken === rightToken) return 1;
+    if (leftToken.length < 3 || rightToken.length < 3) return 0;
+
+    if (
+        leftToken.startsWith(rightToken) ||
+        rightToken.startsWith(leftToken)
+    ) {
+        const shorterLength = Math.min(leftToken.length, rightToken.length);
+        const longerLength = Math.max(leftToken.length, rightToken.length);
+        return shorterLength / longerLength >= 0.6 ? 0.9 : 0.75;
+    }
+
+    if (
+        Math.abs(leftToken.length - rightToken.length) <= 2 &&
+        Math.max(leftToken.length, rightToken.length) >= 6 &&
+        computeLevenshteinDistance(leftToken, rightToken) <= 1
+    ) {
+        return 0.82;
+    }
+
+    if (leftToken.slice(0, 4) === rightToken.slice(0, 4)) {
+        return 0.7;
+    }
+
+    return 0;
+};
+
+const scoreFuzzyTokenOverlap = (
+    leftTokens: string[],
+    rightTokens: string[],
+): number => {
+    if (leftTokens.length === 0 || rightTokens.length === 0) return 0;
+
+    const consumedRightIndexes = new Set<number>();
+    let totalScore = 0;
+
+    leftTokens.forEach((leftToken) => {
+        let bestScore = 0;
+        let bestIndex = -1;
+
+        rightTokens.forEach((rightToken, rightIndex) => {
+            if (consumedRightIndexes.has(rightIndex)) return;
+            const score = scoreAssessmentTokenMatch(leftToken, rightToken);
+            if (score > bestScore) {
+                bestScore = score;
+                bestIndex = rightIndex;
+            }
+        });
+
+        if (bestIndex >= 0) {
+            consumedRightIndexes.add(bestIndex);
+            totalScore += bestScore;
+        }
+    });
+
+    return totalScore / Math.max(leftTokens.length, rightTokens.length);
 };
 
 const scoreAssessmentTextMatch = (left: string, right: string): number => {
@@ -268,8 +401,8 @@ const scoreAssessmentTextMatch = (left: string, right: string): number => {
     if (!a || !b) return 0;
     if (a === b) return 1;
 
-    const leftTokens = a.split(' ');
-    const rightTokens = b.split(' ');
+    const leftTokens = tokenizeAssessmentText(left);
+    const rightTokens = tokenizeAssessmentText(right);
     const tokenIntersection = leftTokens.filter((token) =>
         rightTokens.includes(token),
     ).length;
@@ -277,9 +410,33 @@ const scoreAssessmentTextMatch = (left: string, right: string): number => {
         new Set<string>([...leftTokens, ...rightTokens]).size || 1;
 
     let score = tokenIntersection / tokenUnion;
-    if (a.includes(b) || b.includes(a)) score += 0.2;
-    if (leftTokens[0] && rightTokens[0] && leftTokens[0] === rightTokens[0])
-        score += 0.1;
+    score = Math.max(
+        score,
+        scoreFuzzyTokenOverlap(leftTokens, rightTokens),
+        scoreFuzzyTokenOverlap(rightTokens, leftTokens),
+    );
+
+    const leftAcronym = buildAssessmentAcronym(leftTokens);
+    const rightAcronym = buildAssessmentAcronym(rightTokens);
+    if (
+        (leftAcronym && rightTokens.includes(leftAcronym)) ||
+        (rightAcronym && leftTokens.includes(rightAcronym)) ||
+        (leftAcronym && rightAcronym && leftAcronym === rightAcronym)
+    ) {
+        score = Math.max(score, 0.9);
+    }
+
+    if (a.includes(b) || b.includes(a)) {
+        score = Math.max(score, 0.7);
+    }
+
+    if (
+        leftTokens[0] &&
+        rightTokens[0] &&
+        scoreAssessmentTokenMatch(leftTokens[0], rightTokens[0]) >= 0.9
+    ) {
+        score = Math.min(1, score + 0.05);
+    }
 
     return Math.max(0, Math.min(1, score));
 };
@@ -315,44 +472,90 @@ const formatOfficialEventSummary = (
     return [dateLabel, timingLabel, room, subgroup].filter(Boolean).join(' • ');
 };
 
-const findMatchingOfficialEvent = (
-    exam: Exam,
+const buildExamToOfficialEventMap = (
+    exams: Exam[],
     officialEvents: OfficialAssessmentEvent[],
-): OfficialAssessmentEvent | null => {
-    if (officialEvents.length === 0) return null;
+    currentSemester: number,
+): Map<Exam, OfficialAssessmentEvent> => {
+    const matches = new Map<Exam, OfficialAssessmentEvent>();
+    if (exams.length === 0 || officialEvents.length === 0) return matches;
 
-    const normalizedType = normalizeExamType(exam.type);
-    const candidates =
-        normalizedType === 'other' ? officialEvents : (
-            officialEvents.filter((event) => event.type === normalizedType)
-        );
-    if (candidates.length === 0) return null;
+    const candidates: {
+        exam: Exam;
+        event: OfficialAssessmentEvent;
+        totalScore: number;
+        subjectScore: number;
+        eventDateMs: number;
+    }[] = [];
 
-    let bestMatch: OfficialAssessmentEvent | null = null;
-    let bestScore = 0;
+    exams.forEach((exam) => {
+        // Official special schedules are session-scoped; avoid cross-semester binding.
+        if (exam.semester !== currentSemester) return;
 
-    candidates.forEach((event) => {
-        const subjectScore = scoreAssessmentTextMatch(exam.name, event.subject);
-        const eventDateMs = parseEventDate(event.date).getTime();
-        const isFutureEvent =
-            Number.isFinite(eventDateMs) &&
-            eventDateMs >= Date.now() - 12 * 60 * 60 * 1000;
-        const dateBonus =
-            exam.isUpcoming ?
-                isFutureEvent ? 0.15
-                :   -0.15
-            :   0;
-        const typeBonus = normalizedType === 'other' ? 0 : 0.2;
-        const totalScore = subjectScore + dateBonus + typeBonus;
+        const normalizedType = normalizeExamType(exam.type);
+        const typedEvents =
+            normalizedType === 'other' ? officialEvents : (
+                officialEvents.filter((event) => event.type === normalizedType)
+            );
+        if (typedEvents.length === 0) return;
 
-        if (totalScore > bestScore) {
-            bestScore = totalScore;
-            bestMatch = event;
-        }
+        typedEvents.forEach((event) => {
+            const subjectScore = scoreAssessmentTextMatch(
+                exam.name,
+                event.subject,
+            );
+            const minimumSubjectScore = normalizedType === 'other' ? 0.58 : 0.3;
+            if (subjectScore < minimumSubjectScore) return;
+
+            const eventDateMs = parseEventDate(event.date).getTime();
+            const isFutureEvent =
+                Number.isFinite(eventDateMs) &&
+                eventDateMs >= Date.now() - 12 * 60 * 60 * 1000;
+            const dateBonus =
+                exam.isUpcoming ?
+                    isFutureEvent ? 0.12
+                    :   -0.12
+                :   0;
+
+            candidates.push({
+                exam,
+                event,
+                totalScore: subjectScore + dateBonus,
+                subjectScore,
+                eventDateMs: Number.isFinite(eventDateMs) ?
+                    eventDateMs
+                :   Number.MAX_SAFE_INTEGER,
+            });
+        });
     });
 
-    const matchThreshold = normalizedType === 'other' ? 0.55 : 0.34;
-    return bestScore >= matchThreshold ? bestMatch : null;
+    candidates.sort((left, right) => {
+        if (right.totalScore !== left.totalScore) {
+            return right.totalScore - left.totalScore;
+        }
+        if (right.subjectScore !== left.subjectScore) {
+            return right.subjectScore - left.subjectScore;
+        }
+        return left.eventDateMs - right.eventDateMs;
+    });
+
+    const matchedExams = new Set<Exam>();
+    const matchedEvents = new Set<OfficialAssessmentEvent>();
+
+    candidates.forEach((candidate) => {
+        if (
+            matchedExams.has(candidate.exam) ||
+            matchedEvents.has(candidate.event)
+        ) {
+            return;
+        }
+
+        matchedExams.add(candidate.exam);
+        matchedEvents.add(candidate.event);
+        matches.set(candidate.exam, candidate.event);
+    });
+
+    return matches;
 };
 
 const recalculateSubjectAverages = (subject: GradeSubject) => {
@@ -961,6 +1164,16 @@ const ExamsView = ({
         selectedSubgroup,
     ]);
 
+    const officialMatchesByExam = useMemo(
+        () =>
+            buildExamToOfficialEventMap(
+                filteredExams,
+                officialEvents,
+                studentCurrentSemester,
+            ),
+        [filteredExams, officialEvents, studentCurrentSemester],
+    );
+
     // Toggle dropdown
     const toggleDropdown = () => {
         setIsOpen((prev) => !prev);
@@ -1054,10 +1267,8 @@ const ExamsView = ({
                     <View key={type} style={styles.examTypeSection}>
                         {examList.map((exam, index) => {
                             const normalizedType = normalizeExamType(exam.type);
-                            const officialMatch = findMatchingOfficialEvent(
-                                exam,
-                                officialEvents,
-                            );
+                            const officialMatch =
+                                officialMatchesByExam.get(exam) || null;
                             const officialSummary =
                                 officialMatch ?
                                     formatOfficialEventSummary(
