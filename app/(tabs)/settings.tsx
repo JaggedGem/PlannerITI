@@ -36,9 +36,7 @@ import * as Haptics from "expo-haptics";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useAuthContext } from "@/components/auth/AuthContext";
 import authService, { getGravatarProfile } from "@/services/authService";
-import {
-    getAssignments,
-} from "../../utils/assignmentStorage";
+import { getAssignments } from "../../utils/assignmentStorage";
 import {
     getNotificationSettings,
     saveNotificationSettings,
