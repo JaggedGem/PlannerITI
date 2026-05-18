@@ -636,8 +636,6 @@ const ModernDropdown = memo(
         onSelect: (index: number) => void;
         styles: any;
     }) => {
-        const { t } = useTranslation();
-
         const handleSelect = (index: number) => {
             // Trigger haptic feedback
             Haptics.selectionAsync();
@@ -646,20 +644,12 @@ const ModernDropdown = memo(
         };
 
         return (
-            <BottomModalPortal isVisible={isVisible} onClose={onClose}>
-                <View style={styles.dropdownHeader}>
-                    <Text style={styles.dropdownTitle}>
-                        {t('assignments').title}
-                    </Text>
-                    <Pressable onPress={onClose} style={styles.closeButton}>
-                        <Ionicons
-                            name="close"
-                            size={24}
-                            color={Colors.dark.mutedText}
-                        />
-                    </Pressable>
-                </View>
-
+            <BottomModalPortal
+                isVisible={isVisible}
+                onClose={onClose}
+                snapPoints={['32%', '54%']}
+                contentContainerStyle={styles.dropdownSheetContent}
+            >
                 {segments.map((segment, index) => (
                     <Pressable
                         key={segment}
@@ -1646,6 +1636,11 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.25,
         shadowRadius: 3.84,
         elevation: 5,
+    },
+    dropdownSheetContent: {
+        paddingTop: 0,
+        paddingHorizontal: 0,
+        paddingBottom: Platform.OS === 'ios' ? 18 : 12,
     },
     dropdownHeader: {
         flexDirection: 'row',

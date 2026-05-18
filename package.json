@@ -26,6 +26,7 @@
   "dependencies": {
     "@expo/dom-webview": "~56.0.5",
     "@expo/metro-runtime": "~56.0.8",
+    "@expo/ui": "~56.0.8",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-vector-icons/feather": "^13.1.1",
     "@react-native-vector-icons/fontawesome": "^13.1.1",

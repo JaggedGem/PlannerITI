@@ -33,9 +33,9 @@ import {
 } from '../utils/assignmentStorage';
 import { scheduleService, Subject } from '../services/scheduleService';
 import { useTranslation } from '@/hooks/useTranslation';
-import { ModernDropdownPortal } from '@/components/ModernDropdownPortal';
+import { BottomModalPortal } from '@/components/BottomModalPortal';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
-import { SegmentItem } from '@/components/modernDropdown';
+import { ModernDropdown, SegmentItem } from '@/components/modernDropdown';
 import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
 import { Colors } from '@/constants/Colors';
 import { StatusBar } from 'expo-status-bar';
@@ -1626,66 +1626,75 @@ export default function EditAssignmentScreen() {
                 <View style={{ height: 24 + bottomTabOverflow }} />
             </KeyboardAwareScrollView>
 
-            {/* Assignment Type Selection Modal - Using Portal */}
-            <ModernDropdownPortal
-                title={t('assignments').type}
+            {/* Assignment Type Selection Modal */}
+            <BottomModalPortal
                 isVisible={isTypeModalVisible}
                 onClose={() => setIsTypeModalVisible(false)}
-                items={Object.values(AssignmentType).map((type) => {
-                    // Get appropriate icon for this type
-                    const getTypeSpecificIcon = () => {
-                        switch (type) {
-                            case AssignmentType.HOMEWORK:
-                                return 'book-outline';
-                            case AssignmentType.TEST:
-                                return 'document-text-outline';
-                            case AssignmentType.EXAM:
-                                return 'school-outline';
-                            case AssignmentType.PROJECT:
-                                return 'construct-outline';
-                            case AssignmentType.QUIZ:
-                                return 'clipboard-outline';
-                            case AssignmentType.LAB:
-                                return 'flask-outline';
-                            case AssignmentType.ESSAY:
-                                return 'create-outline';
-                            case AssignmentType.PRESENTATION:
-                                return 'easel-outline';
-                            default:
-                                return 'ellipsis-horizontal-outline';
-                        }
-                    };
+                snapPoints={['74%', '92%']}
+                backgroundColor={Colors.dark.card}
+                contentContainerStyle={styles.dropdownSheetContent}
+            >
+                <ModernDropdown
+                    title={t('assignments').type}
+                    isVisible={isTypeModalVisible}
+                    onClose={() => setIsTypeModalVisible(false)}
+                    items={Object.values(AssignmentType).map((type) => {
+                        // Get appropriate icon for this type
+                        const getTypeSpecificIcon = () => {
+                            switch (type) {
+                                case AssignmentType.HOMEWORK:
+                                    return 'book-outline';
+                                case AssignmentType.TEST:
+                                    return 'document-text-outline';
+                                case AssignmentType.EXAM:
+                                    return 'school-outline';
+                                case AssignmentType.PROJECT:
+                                    return 'construct-outline';
+                                case AssignmentType.QUIZ:
+                                    return 'clipboard-outline';
+                                case AssignmentType.LAB:
+                                    return 'flask-outline';
+                                case AssignmentType.ESSAY:
+                                    return 'create-outline';
+                                case AssignmentType.PRESENTATION:
+                                    return 'easel-outline';
+                                default:
+                                    return 'ellipsis-horizontal-outline';
+                            }
+                        };
 
-                    return {
-                        id: type,
-                        label: t('assignments').types[
-                            type.toLowerCase() as
-                                | 'homework'
-                                | 'test'
-                                | 'exam'
-                                | 'project'
-                                | 'quiz'
-                                | 'lab'
-                                | 'essay'
-                                | 'presentation'
-                                | 'other'
-                        ],
-                        icon: (
-                            <Ionicons
-                                name={getTypeSpecificIcon() as any}
-                                size={24}
-                                color={Colors.dark.white}
-                            />
-                        ),
-                        isSelected: type === assignmentType,
-                    };
-                })}
-                selectedItemId={assignmentType}
-                onSelectItem={(item: SegmentItem) =>
-                    handleTypeSelection(item.id as AssignmentType)
-                }
-                maxOptions={7}
-            />
+                        return {
+                            id: type,
+                            label: t('assignments').types[
+                                type.toLowerCase() as
+                                    | 'homework'
+                                    | 'test'
+                                    | 'exam'
+                                    | 'project'
+                                    | 'quiz'
+                                    | 'lab'
+                                    | 'essay'
+                                    | 'presentation'
+                                    | 'other'
+                            ],
+                            icon: (
+                                <Ionicons
+                                    name={getTypeSpecificIcon() as any}
+                                    size={24}
+                                    color={Colors.dark.white}
+                                />
+                            ),
+                            isSelected: type === assignmentType,
+                        };
+                    })}
+                    selectedItemId={assignmentType}
+                    onSelectItem={(item: SegmentItem) =>
+                        handleTypeSelection(item.id as AssignmentType)
+                    }
+                    maxOptions={7}
+                    disableScroll={true}
+                />
+            </BottomModalPortal>
         </SafeAreaView>
     );
 }
@@ -1695,6 +1704,9 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: Colors.dark.backgroundTertiary,
+    },
+    dropdownSheetContent: {
+        padding: 0,
     },
     loadingContainer: {
         flex: 1,

@@ -3,7 +3,6 @@ import {
     View,
     Text,
     TouchableOpacity,
-    Modal,
     TextInput,
     Platform,
     KeyboardAvoidingView,
@@ -36,6 +35,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from '@/hooks/useTranslation';
+import { BottomSheetScrollView } from '@expo/ui/community/bottom-sheet';
 
 import {
     fetchStudentInfo,
@@ -61,6 +61,7 @@ import {
     formatThesisTimeLabel,
 } from '@/utils/specialScheduleUtils';
 import { Colors } from '@/constants/Colors';
+import { BottomModalPortal } from '@/components/BottomModalPortal';
 import { runWhenIdle } from '@/utils/runWhenIdle';
 
 // Types for local grades
@@ -1693,14 +1694,6 @@ const GradeCalculatorModal = ({
     const [isAnnualCalculation, setIsAnnualCalculation] = useState(false);
     const scrollViewRef = useRef<ScrollView>(null);
 
-    const resetCalculatorState = useCallback(() => {
-        setSelectedSubject(subjects.length > 0 ? subjects[0] : null);
-        setTargetAverage('');
-        setCalculatedGrades([]);
-        setHasCalculated(false);
-        setIsAnnualCalculation(false);
-    }, [subjects]);
-
     // Convert string grades to numbers
     const getNumericGrades = (subject: GradeSubject): number[] => {
         return subject.grades
@@ -1820,314 +1813,263 @@ const GradeCalculatorModal = ({
     }, [selectedSubject, isSubjectInMultipleSemesters]);
 
     return (
-        <Modal
-            visible={isVisible}
-            animationType="fade"
-            transparent={true}
-            onRequestClose={onClose}
-            onShow={resetCalculatorState}
+        <BottomModalPortal
+            isVisible={isVisible}
+            onClose={onClose}
+            snapPoints={['66%', '92%']}
+            backgroundColor={Colors.dark.surfaceSecondary}
+            contentContainerStyle={styles.calculatorSheetContent}
         >
-            <View style={styles.modalOverlay}>
-                <View
-                    style={[styles.calculatorModalContent, { height: '70%' }]}
-                >
-                    <View style={styles.modalHeader}>
-                        <Text style={styles.modalTitle}>
-                            {t('grades').calculator.title}
-                        </Text>
-                        <TouchableOpacity onPress={onClose}>
-                            <MaterialIcons
-                                name="close"
-                                size={24}
-                                color={Colors.dark.white}
-                            />
-                        </TouchableOpacity>
-                    </View>
-
-                    <ScrollView
-                        ref={scrollViewRef}
-                        style={{ flex: 1 }}
-                        contentContainerStyle={{ paddingBottom: 20 }}
-                        showsVerticalScrollIndicator={false}
-                        keyboardShouldPersistTaps="handled"
-                        keyboardDismissMode="on-drag"
-                    >
-                        {/* Subject Selection */}
-                        <View style={styles.formGroup}>
-                            <Text style={styles.label}>
-                                {t('grades').calculator.selectSubject}
-                            </Text>
-                            <View style={styles.pickerContainer}>
-                                <ScrollView
-                                    horizontal
-                                    showsHorizontalScrollIndicator={false}
+            <BottomSheetScrollView
+                ref={scrollViewRef}
+                style={{ flex: 1 }}
+                contentContainerStyle={{ paddingBottom: 20 }}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
+            >
+                {/* Subject Selection */}
+                <View style={styles.formGroup}>
+                    <Text style={styles.label}>
+                        {t('grades').calculator.selectSubject}
+                    </Text>
+                    <View style={styles.pickerContainer}>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                            {subjects.map((subject, index) => (
+                                <React.Fragment
+                                    key={`subject-option-${index}`}
                                 >
-                                    {subjects.map((subject, index) => (
-                                        <React.Fragment
-                                            key={`subject-option-${index}`}
-                                        >
-                                            {index > 0 && (
-                                                <View
-                                                    style={
-                                                        styles.subjectSeparator
-                                                    }
-                                                />
-                                            )}
-                                            <TouchableOpacity
-                                                style={[
-                                                    styles.subjectOption,
-                                                    selectedSubject?.name ===
-                                                        subject.name &&
-                                                        styles.subjectOptionSelected,
-                                                ]}
-                                                onPress={() => {
-                                                    setSelectedSubject(subject);
-                                                    setHasCalculated(false);
-                                                    setIsAnnualCalculation(
-                                                        false,
-                                                    );
-                                                    Haptics.selectionAsync();
-                                                }}
-                                            >
-                                                <Text
-                                                    style={[
-                                                        styles.subjectOptionText,
-                                                        selectedSubject?.name ===
-                                                            subject.name &&
-                                                            styles.subjectOptionTextSelected,
-                                                    ]}
-                                                    numberOfLines={1}
-                                                >
-                                                    {subject.name}
-                                                </Text>
-                                            </TouchableOpacity>
-                                        </React.Fragment>
-                                    ))}
-                                </ScrollView>
-                            </View>
-                        </View>
-
-                        {/* Annual vs Current Semester Toggle - only show if subject exists in multiple semesters */}
-                        {selectedSubject && showAnnualOption && (
-                            <View style={styles.formGroup}>
-                                <View style={styles.calculationTypeContainer}>
-                                    <Text style={styles.label}>
-                                        {t('grades').calculator
-                                            .calculationType ||
-                                            'Calculation Type:'}
-                                    </Text>
-                                    <View style={styles.calculationToggle}>
-                                        <TouchableOpacity
-                                            style={[
-                                                styles.toggleOption,
-                                                !isAnnualCalculation &&
-                                                    styles.toggleOptionActive,
-                                            ]}
-                                            onPress={() => {
-                                                setIsAnnualCalculation(false);
-                                                setHasCalculated(false);
-                                                Haptics.selectionAsync();
-                                            }}
-                                        >
-                                            <Text
-                                                style={[
-                                                    styles.toggleOptionText,
-                                                    !isAnnualCalculation &&
-                                                        styles.toggleOptionTextActive,
-                                                ]}
-                                            >
-                                                {t('grades').calculator
-                                                    .semesterOnly ||
-                                                    'Current Semester'}
-                                            </Text>
-                                        </TouchableOpacity>
-
-                                        <View style={styles.toggleSeparator} />
-
-                                        <TouchableOpacity
-                                            style={[
-                                                styles.toggleOption,
-                                                isAnnualCalculation &&
-                                                    styles.toggleOptionActive,
-                                            ]}
-                                            onPress={() => {
-                                                setIsAnnualCalculation(true);
-                                                setHasCalculated(false);
-                                                Haptics.selectionAsync();
-                                            }}
-                                        >
-                                            <Text
-                                                style={[
-                                                    styles.toggleOptionText,
-                                                    isAnnualCalculation &&
-                                                        styles.toggleOptionTextActive,
-                                                ]}
-                                            >
-                                                {t('grades').calculator
-                                                    .annualAverage ||
-                                                    'Annual Average'}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    </View>
-                                </View>
-                            </View>
-                        )}
-
-                        {/* Current Grades Display */}
-                        {selectedSubject && (
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>
-                                    {isAnnualCalculation ?
-                                        t('grades').calculator.allGrades ||
-                                        'All Grades'
-                                    :   t('grades').calculator.currentGrades}
-                                </Text>
-                                <View style={styles.currentGradesContainer}>
-                                    {getAllCurrentGrades().length > 0 ?
-                                        <View style={styles.gradesGrid}>
-                                            {getAllCurrentGrades().map(
-                                                (grade, index) => (
-                                                    <View
-                                                        key={`current-grade-${index}`}
-                                                        style={{
-                                                            backgroundColor:
-                                                                getGradeColor(
-                                                                    grade,
-                                                                ),
-                                                            borderRadius: 8,
-                                                            paddingHorizontal: 12,
-                                                            paddingVertical: 6,
-                                                            minWidth: 40,
-                                                            alignItems:
-                                                                'center',
-                                                            marginBottom: 8,
-                                                        }}
-                                                    >
-                                                        <Text
-                                                            style={
-                                                                styles.gradeText
-                                                            }
-                                                        >
-                                                            {grade}
-                                                        </Text>
-                                                    </View>
-                                                ),
-                                            )}
-                                        </View>
-                                    :   <Text
-                                            style={{
-                                                color: Colors.dark.neutral500,
-                                                fontSize: 14,
-                                                textAlign: 'center',
-                                                padding: 10,
-                                            }}
-                                        >
-                                            {t('grades').calculator.noGrades}
-                                        </Text>
-                                    }
-
-                                    <View
-                                        style={styles.currentAverageContainer}
+                                    {index > 0 && (
+                                        <View
+                                            style={styles.subjectSeparator}
+                                        />
+                                    )}
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.subjectOption,
+                                            selectedSubject?.name ===
+                                                subject.name &&
+                                                styles.subjectOptionSelected,
+                                        ]}
+                                        onPress={() => {
+                                            setSelectedSubject(subject);
+                                            setHasCalculated(false);
+                                            setIsAnnualCalculation(false);
+                                            Haptics.selectionAsync();
+                                        }}
                                     >
                                         <Text
-                                            style={styles.currentAverageLabel}
+                                            style={[
+                                                styles.subjectOptionText,
+                                                selectedSubject?.name ===
+                                                    subject.name &&
+                                                    styles.subjectOptionTextSelected,
+                                            ]}
+                                            numberOfLines={1}
                                         >
-                                            {
-                                                t('grades').calculator
-                                                    .currentAverage
-                                            }
-                                            :
+                                            {subject.name}
                                         </Text>
-                                        <Text
-                                            style={styles.currentAverageValue}
-                                        >
-                                            {getCurrentAverage()}
-                                        </Text>
-                                    </View>
-                                </View>
-                            </View>
-                        )}
-
-                        {/* Target Average Input */}
-                        <View style={[styles.formGroup, { marginBottom: 20 }]}>
-                            <Text style={styles.label}>
-                                {t('grades').calculator.targetAverage}
-                            </Text>
-                            <TextInput
-                                style={styles.input}
-                                value={targetAverage}
-                                onChangeText={setTargetAverage}
-                                placeholder="8.50"
-                                placeholderTextColor={Colors.dark.neutral500}
-                                keyboardType="numeric"
-                                maxLength={4}
-                            />
-                        </View>
-
-                        {/* Calculate Button */}
-                        <TouchableOpacity
-                            style={[
-                                styles.calculateButton,
-                                (!selectedSubject || !targetAverage) &&
-                                    styles.calculateButtonDisabled,
-                            ]}
-                            onPress={handleCalculate}
-                            disabled={!selectedSubject || !targetAverage}
-                        >
-                            <Text style={styles.calculateButtonText}>
-                                {t('grades').calculator.calculate}
-                            </Text>
-                        </TouchableOpacity>
-
-                        {/* Results */}
-                        {hasCalculated && (
-                            <Animated.View
-                                entering={FadeInUp.springify()}
-                                style={styles.resultsContainer}
-                            >
-                                <Text style={styles.resultsTitle}>
-                                    {calculatedGrades.length > 0 ?
-                                        t('grades').calculator.resultsTitle
-                                    :   t('grades').calculator.noSolution}
-                                </Text>
-
-                                {calculatedGrades.length > 0 ?
-                                    <View style={styles.gradesGrid}>
-                                        {calculatedGrades.map(
-                                            (grade, index) => (
-                                                <View
-                                                    key={`result-grade-${index}`}
-                                                    style={{
-                                                        backgroundColor:
-                                                            Colors.dark
-                                                                .overlaySuccess50,
-                                                        borderRadius: 8,
-                                                        paddingHorizontal: 12,
-                                                        paddingVertical: 6,
-                                                        minWidth: 40,
-                                                        alignItems: 'center',
-                                                        marginBottom: 8,
-                                                    }}
-                                                >
-                                                    <Text
-                                                        style={styles.gradeText}
-                                                    >
-                                                        {grade}
-                                                    </Text>
-                                                </View>
-                                            ),
-                                        )}
-                                    </View>
-                                :   <Text style={styles.noSolutionText}>
-                                        {t('grades').calculator.alreadyAchieved}
-                                    </Text>
-                                }
-                            </Animated.View>
-                        )}
-                    </ScrollView>
+                                    </TouchableOpacity>
+                                </React.Fragment>
+                            ))}
+                        </ScrollView>
+                    </View>
                 </View>
-            </View>
-        </Modal>
+
+                {/* Annual vs Current Semester Toggle - only show if subject exists in multiple semesters */}
+                {selectedSubject && showAnnualOption && (
+                    <View style={styles.formGroup}>
+                        <View style={styles.calculationTypeContainer}>
+                            <Text style={styles.label}>
+                                {t('grades').calculator.calculationType ||
+                                    'Calculation Type:'}
+                            </Text>
+                            <View style={styles.calculationToggle}>
+                                <TouchableOpacity
+                                    style={[
+                                        styles.toggleOption,
+                                        !isAnnualCalculation &&
+                                            styles.toggleOptionActive,
+                                    ]}
+                                    onPress={() => {
+                                        setIsAnnualCalculation(false);
+                                        setHasCalculated(false);
+                                        Haptics.selectionAsync();
+                                    }}
+                                >
+                                    <Text
+                                        style={[
+                                            styles.toggleOptionText,
+                                            !isAnnualCalculation &&
+                                                styles.toggleOptionTextActive,
+                                        ]}
+                                    >
+                                        {t('grades').calculator.semesterOnly ||
+                                            'Current Semester'}
+                                    </Text>
+                                </TouchableOpacity>
+
+                                <View style={styles.toggleSeparator} />
+
+                                <TouchableOpacity
+                                    style={[
+                                        styles.toggleOption,
+                                        isAnnualCalculation &&
+                                            styles.toggleOptionActive,
+                                    ]}
+                                    onPress={() => {
+                                        setIsAnnualCalculation(true);
+                                        setHasCalculated(false);
+                                        Haptics.selectionAsync();
+                                    }}
+                                >
+                                    <Text
+                                        style={[
+                                            styles.toggleOptionText,
+                                            isAnnualCalculation &&
+                                                styles.toggleOptionTextActive,
+                                        ]}
+                                    >
+                                        {t('grades').calculator.annualAverage ||
+                                            'Annual Average'}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </View>
+                )}
+
+                {/* Current Grades Display */}
+                {selectedSubject && (
+                    <View style={styles.formGroup}>
+                        <Text style={styles.label}>
+                            {isAnnualCalculation ?
+                                t('grades').calculator.allGrades ||
+                                'All Grades'
+                            :   t('grades').calculator.currentGrades}
+                        </Text>
+                        <View style={styles.currentGradesContainer}>
+                            {getAllCurrentGrades().length > 0 ?
+                                <View style={styles.gradesGrid}>
+                                    {getAllCurrentGrades().map(
+                                        (grade, index) => (
+                                            <View
+                                                key={`current-grade-${index}`}
+                                                style={{
+                                                    backgroundColor:
+                                                        getGradeColor(grade),
+                                                    borderRadius: 8,
+                                                    paddingHorizontal: 12,
+                                                    paddingVertical: 6,
+                                                    minWidth: 40,
+                                                    alignItems: 'center',
+                                                    marginBottom: 8,
+                                                }}
+                                            >
+                                                <Text style={styles.gradeText}>
+                                                    {grade}
+                                                </Text>
+                                            </View>
+                                        ),
+                                    )}
+                                </View>
+                            :   <Text
+                                    style={{
+                                        color: Colors.dark.neutral500,
+                                        fontSize: 14,
+                                        textAlign: 'center',
+                                        padding: 10,
+                                    }}
+                                >
+                                    {t('grades').calculator.noGrades}
+                                </Text>
+                            }
+
+                            <View style={styles.currentAverageContainer}>
+                                <Text style={styles.currentAverageLabel}>
+                                    {t('grades').calculator.currentAverage}:
+                                </Text>
+                                <Text style={styles.currentAverageValue}>
+                                    {getCurrentAverage()}
+                                </Text>
+                            </View>
+                        </View>
+                    </View>
+                )}
+
+                {/* Target Average Input */}
+                <View style={[styles.formGroup, { marginBottom: 20 }]}>
+                    <Text style={styles.label}>
+                        {t('grades').calculator.targetAverage}
+                    </Text>
+                    <TextInput
+                        style={styles.input}
+                        value={targetAverage}
+                        onChangeText={setTargetAverage}
+                        placeholder="8.50"
+                        placeholderTextColor={Colors.dark.neutral500}
+                        keyboardType="numeric"
+                        maxLength={4}
+                    />
+                </View>
+
+                {/* Calculate Button */}
+                <TouchableOpacity
+                    style={[
+                        styles.calculateButton,
+                        (!selectedSubject || !targetAverage) &&
+                            styles.calculateButtonDisabled,
+                    ]}
+                    onPress={handleCalculate}
+                    disabled={!selectedSubject || !targetAverage}
+                >
+                    <Text style={styles.calculateButtonText}>
+                        {t('grades').calculator.calculate}
+                    </Text>
+                </TouchableOpacity>
+
+                {/* Results */}
+                {hasCalculated && (
+                    <Animated.View
+                        entering={FadeInUp.springify()}
+                        style={styles.resultsContainer}
+                    >
+                        <Text style={styles.resultsTitle}>
+                            {calculatedGrades.length > 0 ?
+                                t('grades').calculator.resultsTitle
+                            :   t('grades').calculator.noSolution}
+                        </Text>
+
+                        {calculatedGrades.length > 0 ?
+                            <View style={styles.gradesGrid}>
+                                {calculatedGrades.map((grade, index) => (
+                                    <View
+                                        key={`result-grade-${index}`}
+                                        style={{
+                                            backgroundColor:
+                                                Colors.dark.overlaySuccess50,
+                                            borderRadius: 8,
+                                            paddingHorizontal: 12,
+                                            paddingVertical: 6,
+                                            minWidth: 40,
+                                            alignItems: 'center',
+                                            marginBottom: 8,
+                                        }}
+                                    >
+                                        <Text style={styles.gradeText}>
+                                            {grade}
+                                        </Text>
+                                    </View>
+                                ))}
+                            </View>
+                        :   <Text style={styles.noSolutionText}>
+                                {t('grades').calculator.alreadyAchieved}
+                            </Text>
+                        }
+                    </Animated.View>
+                )}
+            </BottomSheetScrollView>
+        </BottomModalPortal>
     );
 };
 
@@ -2242,6 +2184,7 @@ const GradesScreen = ({
 
     // Grade calculator modal state
     const [calculatorVisible, setCalculatorVisible] = useState(false);
+    const [calculatorSession, setCalculatorSession] = useState(0);
     const [isExportingPdf, setIsExportingPdf] = useState(false);
 
     // Track expanded semester dropdowns and subjects
@@ -3043,6 +2986,7 @@ const GradesScreen = ({
                             <TouchableOpacity
                                 style={styles.calculatorButton}
                                 onPress={() => {
+                                    setCalculatorSession((prev) => prev + 1);
                                     setCalculatorVisible(true);
                                     Haptics.selectionAsync();
                                 }}
@@ -3364,6 +3308,7 @@ const GradesScreen = ({
             {/* Grade Calculator Modal */}
             {currentSemesterData && (
                 <GradeCalculatorModal
+                    key={`grade-calculator-${calculatorSession}`}
                     isVisible={calculatorVisible}
                     onClose={() => setCalculatorVisible(false)}
                     subjects={currentSemesterData.subjects}
@@ -4108,31 +4053,10 @@ const styles = StyleSheet.create({
         marginTop: 40,
         fontSize: 16,
     },
-    modalOverlay: {
+    calculatorSheetContent: {
         flex: 1,
-        backgroundColor: Colors.dark.overlayBlack70,
-        justifyContent: 'flex-end',
-        width: '100%',
-    },
-    calculatorModalContent: {
-        backgroundColor: Colors.dark.surfaceSecondary,
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-        padding: 20,
-        height: '70%',
-        width: '100%',
-        paddingBottom: Platform.OS === 'ios' ? 40 : 20, // Extra padding for iOS devices
-    },
-    modalHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 20,
-    },
-    modalTitle: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: Colors.dark.white,
+        paddingTop: 0,
+        paddingBottom: Platform.OS === 'ios' ? 20 : 12,
     },
     form: {
         gap: 16,

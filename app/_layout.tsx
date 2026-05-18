@@ -211,7 +211,7 @@ function RootLayoutNav() {
 
     return (
         <ThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
-            <StatusBar style={isDark ? 'light' : 'dark'} />
+            <StatusBar style="light" />
             <NavigationBar style={isDark ? 'light' : 'dark'} hidden={false} />
             <AuthProvider>
                 <Stack

@@ -1,7 +1,6 @@
 import { Ionicons } from '@react-native-vector-icons/ionicons';
 import React, { memo, useEffect, useState } from 'react';
 import {
-    Pressable,
     View,
     Text,
     Platform,
@@ -12,6 +11,7 @@ import {
     ActivityIndicator,
     TouchableOpacity,
 } from 'react-native';
+import { BottomSheetScrollView } from '@expo/ui/community/bottom-sheet';
 import * as Haptics from 'expo-haptics';
 import Animated, {
     FadeIn,
@@ -110,9 +110,7 @@ const AnimatedTouchableOpacity =
 
 const ModernDropdown = memo((props: ModernDropdownProps) => {
     const {
-        title,
         isVisible,
-        onClose,
         items,
         selectedItemId,
         onSelectItem,
@@ -131,7 +129,6 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
         maxHeight,
         disableScroll = false,
         animationType = 'fade',
-        headerRightComponent,
         footerComponent,
     } = props;
 
@@ -253,13 +250,68 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
         }
     }, [isVisible]);
 
-    // Calculate dynamic max height based on screen size and content
+    const estimateVisibleRows = (): number => {
+        if (tabs && tabs.length > 0) {
+            const currentTab = filteredTabs.find((tab) => tab.id === activeTabId);
+            if (currentTab?.items) {
+                return currentTab.items.length;
+            }
+            if (currentTab?.categories) {
+                return currentTab.categories.reduce(
+                    (total, category) => total + category.data.length,
+                    0,
+                );
+            }
+            return 0;
+        }
+
+        if (categories && categories.length > 0) {
+            return filteredCategories.reduce(
+                (total, category) => total + category.data.length,
+                0,
+            );
+        }
+
+        return filteredItems.length;
+    };
+
+    // Calculate dynamic max height based on screen size and visible content
     const calculateMaxHeight = (): number => {
-        // If a fixed height is provided, use it
         if (maxHeight) return maxHeight;
 
-        // Otherwise, use 60% of screen height as the fixed default height
-        return screenHeight * 0.6;
+        const maxSheetHeight = screenHeight * 0.88;
+        const minSheetHeight = 240;
+        const rowCount = estimateVisibleRows();
+        const currentTab =
+            tabs?.length ?
+                filteredTabs.find((tab) => tab.id === activeTabId)
+            :   undefined;
+        const hasCustomTabContent = Boolean(currentTab?.renderCustomContent);
+        const baseRowsToShow = Math.min(Math.max(rowCount, 1), 7);
+        const rowsToShow =
+            hasCustomTabContent && rowCount === 0 ?
+                Math.max(baseRowsToShow, 3)
+            :   baseRowsToShow;
+
+        let chromeHeight = 24;
+        if (showSearch && searchBarPosition === 'top' && !searchPerTab) {
+            chromeHeight += 56;
+        }
+        if (tabs && tabs.length > 0) {
+            chromeHeight += 56;
+            if (showSearch && searchBarPosition === 'within-tabs') {
+                chromeHeight += 56;
+            }
+        }
+        if (hasCustomTabContent) {
+            chromeHeight += 140;
+        }
+
+        const estimatedContentHeight = chromeHeight + rowsToShow * 56;
+        return Math.max(
+            minSheetHeight,
+            Math.min(maxSheetHeight, estimatedContentHeight),
+        );
     };
 
     // Handle item selection
@@ -551,11 +603,7 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
                         style={styles.clearButton}
                         onPress={() => setSearchText('')}
                     >
-                        <Ionicons
-                            name="close-circle"
-                            size={16}
-                            color={Colors.dark.mutedText}
-                        />
+                        <Text style={styles.clearButtonText}>Clear</Text>
                     </TouchableOpacity>
                 )}
             </View>
@@ -633,133 +681,90 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
             (categories && categories.length > 0) ||
             (tabs && tabs.length > 0));
 
-    // Calculate fixed modal style
+    const dropdownMaxHeight = calculateMaxHeight();
+
+    // Calculate modal style
     const dropdownStyle = {
         ...styles.dropdownContainer,
-        height: calculateMaxHeight(), // Changed from maxHeight to a fixed height
+        ...(needsScrollView ?
+            { height: dropdownMaxHeight }
+        :   { maxHeight: dropdownMaxHeight }),
     };
 
-    // Use a view directly instead of Modal component
-    return isVisible ?
-            <View
-                style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    justifyContent: 'flex-end',
-                    zIndex: 9999,
-                    elevation: 9999,
-                }}
-            >
-                <Pressable style={styles.modalOverlay} onPress={onClose}>
-                    <Animated.View
-                        style={[dropdownStyle, { marginBottom: 0 }]}
-                        entering={
-                            animationType === 'slide' ?
-                                SlideInDown.springify()
-                            :   FadeIn.duration(200)
-                        }
-                    >
-                        {/* Header */}
-                        <View style={styles.dropdownHeader}>
-                            <Text style={styles.dropdownTitle}>{title}</Text>
-                            <View style={styles.headerRightContainer}>
-                                {headerRightComponent}
-                                <Pressable
-                                    onPress={onClose}
-                                    style={styles.closeButton}
-                                >
-                                    <Ionicons
-                                        name="close"
-                                        size={24}
-                                        color={Colors.dark.neutral500}
-                                    />
-                                </Pressable>
-                            </View>
+    if (!isVisible) {
+        return null;
+    }
+
+    return (
+        <Animated.View
+            style={[dropdownStyle, { marginBottom: 0 }]}
+            entering={
+                animationType === 'slide' ?
+                    SlideInDown.springify()
+                :   FadeIn.duration(200)
+            }
+        >
+            {/* Search bar at top position - only show if not using per-tab search */}
+            {showSearch &&
+                searchBarPosition === 'top' &&
+                !searchPerTab &&
+                renderSearchBar()}
+
+            {/* Tabs with search bar inside */}
+            {showSearch && searchBarPosition === 'within-tabs' && tabs && (
+                <View style={styles.tabsWithSearchContainer}>
+                    {renderSearchBar()}
+                    {renderTabs()}
+                </View>
+            )}
+
+            {/* Main content */}
+            {needsScrollView ?
+                <BottomSheetScrollView
+                    showsVerticalScrollIndicator={true}
+                    bounces={false}
+                    style={styles.scrollContainer}
+                    contentContainerStyle={styles.scrollContentContainer}
+                    keyboardShouldPersistTaps="handled"
+                >
+                    {/* Search bar above content */}
+                    {showSearch &&
+                        searchBarPosition === 'above-content' &&
+                        renderSearchBar()}
+
+                    {/* Main content */}
+                    {renderContent()}
+
+                    {/* Footer */}
+                    {footerComponent && (
+                        <View style={styles.footerContainer}>
+                            {footerComponent}
                         </View>
+                    )}
+                </BottomSheetScrollView>
+            :   <View style={styles.contentContainer}>
+                    {/* Search bar above content */}
+                    {showSearch &&
+                        searchBarPosition === 'above-content' &&
+                        renderSearchBar()}
 
-                        {/* Search bar at top position - only show if not using per-tab search */}
-                        {showSearch &&
-                            searchBarPosition === 'top' &&
-                            !searchPerTab &&
-                            renderSearchBar()}
+                    {/* Main content */}
+                    {renderContent()}
 
-                        {/* Tabs with search bar inside */}
-                        {showSearch &&
-                            searchBarPosition === 'within-tabs' &&
-                            tabs && (
-                                <View style={styles.tabsWithSearchContainer}>
-                                    {renderSearchBar()}
-                                    {renderTabs()}
-                                </View>
-                            )}
-
-                        {/* Main content */}
-                        {needsScrollView ?
-                            <ScrollView
-                                showsVerticalScrollIndicator={true}
-                                bounces={false}
-                                style={styles.scrollContainer}
-                                contentContainerStyle={
-                                    styles.scrollContentContainer
-                                }
-                                keyboardShouldPersistTaps="handled"
-                            >
-                                {/* Search bar above content */}
-                                {showSearch &&
-                                    searchBarPosition === 'above-content' &&
-                                    renderSearchBar()}
-
-                                {/* Main content */}
-                                {renderContent()}
-
-                                {/* Footer */}
-                                {footerComponent && (
-                                    <View style={styles.footerContainer}>
-                                        {footerComponent}
-                                    </View>
-                                )}
-                            </ScrollView>
-                        :   <View style={styles.contentContainer}>
-                                {/* Search bar above content */}
-                                {showSearch &&
-                                    searchBarPosition === 'above-content' &&
-                                    renderSearchBar()}
-
-                                {/* Main content */}
-                                {renderContent()}
-
-                                {/* Footer */}
-                                {footerComponent && (
-                                    <View style={styles.footerContainer}>
-                                        {footerComponent}
-                                    </View>
-                                )}
-                            </View>
-                        }
-                    </Animated.View>
-                </Pressable>
-            </View>
-        :   null;
+                    {/* Footer */}
+                    {footerComponent && (
+                        <View style={styles.footerContainer}>
+                            {footerComponent}
+                        </View>
+                    )}
+                </View>
+            }
+        </Animated.View>
+    );
 });
 ModernDropdown.displayName = 'ModernDropdown';
 
 const styles = StyleSheet.create({
-    // Modal container styles
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: Colors.dark.overlayBlack50,
-        justifyContent: 'flex-end',
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        zIndex: 9999,
-        elevation: 9999,
-    },
     dropdownContainer: {
         backgroundColor: Colors.dark.card,
         borderTopLeftRadius: 20,
@@ -778,34 +783,10 @@ const styles = StyleSheet.create({
         flexGrow: 0,
     },
     scrollContentContainer: {
-        paddingBottom: 16,
+        paddingBottom: Platform.OS === 'ios' ? 34 : 24,
     },
     contentContainer: {
         paddingBottom: 16,
-    },
-
-    // Header styles
-    dropdownHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingTop: 16,
-        paddingBottom: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: Colors.dark.borderMuted,
-    },
-    dropdownTitle: {
-        fontSize: 17,
-        fontWeight: '600',
-        color: Colors.dark.mutedText,
-    },
-    headerRightContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    closeButton: {
-        padding: 4,
     },
 
     // Search bar styles
@@ -835,6 +816,11 @@ const styles = StyleSheet.create({
     },
     clearButton: {
         padding: 4,
+    },
+    clearButtonText: {
+        color: Colors.dark.mutedText,
+        fontSize: 12,
+        fontWeight: '600',
     },
 
     // Tabs styles

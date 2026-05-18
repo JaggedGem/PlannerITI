@@ -3,13 +3,12 @@ import {
     View,
     Text,
     StyleSheet,
-    Modal,
     TouchableOpacity,
-    ScrollView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@react-native-vector-icons/material-icons';
+import { BottomSheetScrollView } from '@expo/ui/community/bottom-sheet';
 import { Colors } from '@/constants/Colors';
+import { BottomModalPortal } from './BottomModalPortal';
 
 type StorageViewerProps = {
     visible: boolean;
@@ -24,120 +23,86 @@ export const StorageViewer = ({
 }: StorageViewerProps) => {
     const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
-    // Function to toggle item expansion
     const toggleItemExpansion = useCallback((key: string) => {
         setExpandedItems((prev) => {
-            const newSet = new Set(prev);
-            if (newSet.has(key)) {
-                newSet.delete(key);
+            const next = new Set(prev);
+            if (next.has(key)) {
+                next.delete(key);
             } else {
-                newSet.add(key);
+                next.add(key);
             }
-            return newSet;
+            return next;
         });
     }, []);
 
     return (
-        <Modal
-            animationType="slide"
-            transparent={true}
-            visible={visible}
-            onRequestClose={onClose}
+        <BottomModalPortal
+            isVisible={visible}
+            onClose={onClose}
+            backgroundColor={Colors.dark.storageContainerBackground}
+            snapPoints={['90%', '96%']}
+            contentContainerStyle={styles.sheetContent}
         >
-            <SafeAreaView style={styles.container}>
-                <View style={styles.content}>
-                    <View style={styles.header}>
-                        <Text style={styles.title}>AsyncStorage Contents</Text>
+            <BottomSheetScrollView
+                style={styles.list}
+                contentContainerStyle={styles.listContent}
+                showsVerticalScrollIndicator={true}
+            >
+                {items.map(([key, value]) => (
+                    <View key={key} style={styles.item}>
                         <TouchableOpacity
-                            style={styles.closeButton}
-                            onPress={onClose}
+                            style={styles.itemHeader}
+                            onPress={() => toggleItemExpansion(key)}
                         >
+                            <Text style={styles.itemKey}>{key}</Text>
                             <MaterialIcons
-                                name="close"
-                                size={24}
+                                name={
+                                    expandedItems.has(key) ?
+                                        'expand-less'
+                                    :   'expand-more'
+                                }
+                                size={18}
                                 color={Colors.dark.white}
                             />
                         </TouchableOpacity>
-                    </View>
 
-                    <ScrollView style={styles.list}>
-                        {items.map(([key, value]) => (
-                            <View key={key} style={styles.item}>
-                                <TouchableOpacity
-                                    style={styles.itemHeader}
-                                    onPress={() => toggleItemExpansion(key)}
+                        {value ?
+                            <View style={styles.valueContainer}>
+                                <Text
+                                    style={styles.itemValue}
+                                    numberOfLines={
+                                        expandedItems.has(key) ? undefined : 3
+                                    }
                                 >
-                                    <Text style={styles.itemKey}>{key}</Text>
-                                    <MaterialIcons
-                                        name={
-                                            expandedItems.has(key) ?
-                                                'expand-less'
-                                            :   'expand-more'
-                                        }
-                                        size={18}
-                                        color={Colors.dark.white}
-                                    />
-                                </TouchableOpacity>
-
-                                {value ?
-                                    <View style={styles.valueContainer}>
-                                        <Text
-                                            style={styles.itemValue}
-                                            numberOfLines={
-                                                expandedItems.has(key) ?
-                                                    undefined
-                                                :   3
-                                            }
-                                        >
-                                            {value}
+                                    {value}
+                                </Text>
+                                {!expandedItems.has(key) &&
+                                    value.length > 150 && (
+                                        <Text style={styles.showMoreText}>
+                                            Tap to expand
                                         </Text>
-                                        {!expandedItems.has(key) &&
-                                            value.length > 150 && (
-                                                <Text
-                                                    style={styles.showMoreText}
-                                                >
-                                                    Tap to expand
-                                                </Text>
-                                            )}
-                                    </View>
-                                :   <Text style={styles.nullValue}>null</Text>}
+                                    )}
                             </View>
-                        ))}
-                    </ScrollView>
-                </View>
-            </SafeAreaView>
-        </Modal>
+                        :   <Text style={styles.nullValue}>null</Text>}
+                    </View>
+                ))}
+            </BottomSheetScrollView>
+        </BottomModalPortal>
     );
 };
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: Colors.dark.storageContainerBackground,
-    },
-    content: {
-        flex: 1,
-        padding: 16,
-    },
-    header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 16,
-        paddingBottom: 8,
-        borderBottomWidth: 1,
-        borderBottomColor: Colors.dark.overlayWhite10,
-    },
-    title: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: Colors.dark.white,
-    },
-    closeButton: {
-        padding: 4,
+    sheetContent: {
+        height: '100%',
+        paddingHorizontal: 12,
+        paddingTop: 0,
+        paddingBottom: 12,
     },
     list: {
         flex: 1,
+    },
+    listContent: {
+        paddingBottom: 24,
     },
     item: {
         backgroundColor: Colors.dark.surfaceRaisedAlt,

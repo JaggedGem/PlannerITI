@@ -11,7 +11,6 @@ import {
     Alert,
     ActivityIndicator,
     Animated as RNAnimated,
-    Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -36,9 +35,9 @@ import {
     CustomPeriod,
 } from '../services/scheduleService';
 import { useTranslation } from '@/hooks/useTranslation';
-import { ModernDropdownPortal } from '@/components/ModernDropdownPortal';
+import { BottomModalPortal } from '@/components/BottomModalPortal';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
-import { SegmentItem } from '@/components/modernDropdown';
+import { ModernDropdown, SegmentItem } from '@/components/modernDropdown';
 import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
 import { Colors } from '@/constants/Colors';
 import { StatusBar } from 'expo-status-bar';
@@ -2969,166 +2968,207 @@ export default function NewAssignmentScreen() {
                 </KeyboardAwareScrollView>
             </SafeAreaView>
 
-            {/* Subject Selection Modal - Using Portal */}
-            <ModernDropdownPortal
-                title={t('assignments').selectSubject}
+            {/* Subject Selection Modal */}
+            <BottomModalPortal
                 isVisible={isSubjectsModalVisible}
                 onClose={() => setIsSubjectsModalVisible(false)}
-                tabs={[
-                    {
-                        id: 'recent',
-                        label: t('assignments').recent,
-                        items: filteredSubjects.map((subject) => ({
-                            id: subject.id,
-                            label: subject.name,
-                            isSelected: subject.id === selectedSubjectId,
-                            isCustom: subject.isCustom,
-                            isCustomPeriod: subject.isCustomPeriod,
-                            color: subject.color,
-                        })),
-                        emptyMessage: t('assignments').noSubjects,
-                    },
-                    {
-                        id: 'all',
-                        label: t('assignments').all,
-                        items: subjects.map((subject) => ({
-                            id: subject.id,
-                            label: subject.name,
-                            isSelected: subject.id === selectedSubjectId,
-                            isCustom: subject.isCustom,
-                            isCustomPeriod: subject.isCustomPeriod,
-                            color: subject.color,
-                        })),
-                        emptyMessage: t('assignments').noSubjects,
-                    },
-                    {
-                        id: 'custom',
-                        label: t('assignments').custom,
-                        items: customPeriods
-                            .filter((period) => period.isEnabled)
-                            .map((period) => ({
-                                id: period._id,
-                                label: period.name || 'Custom Period',
-                                isCustomPeriod: true,
-                                color: period.color,
-                                isSelected: period._id === selectedSubjectId,
-                            })),
-                        emptyMessage: t('assignments').noCustomSubjects,
-                        renderCustomContent:
-                            customPeriods.length === 0 ?
-                                () => (
-                                    <View style={styles.emptyListContainer}>
-                                        <Text style={styles.emptyListText}>
-                                            {
-                                                t('settings').customPeriods
-                                                    .noPeriodsYet
-                                            }
-                                        </Text>
-                                        <TouchableOpacity
-                                            style={styles.settingsLinkButton}
-                                            onPress={() => {
-                                                setIsSubjectsModalVisible(
-                                                    false,
-                                                );
-                                                router.push('/(tabs)/settings');
-                                            }}
-                                        >
-                                            <Text
-                                                style={
-                                                    styles.settingsLinkButtonText
-                                                }
-                                            >
-                                                {'Go to Settings'}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    </View>
-                                )
-                            :   undefined,
-                    },
-                ]}
-                selectedTabId={subjectSelectionMode}
-                onTabChange={handleSubjectTabChange}
-                showSearch={true}
-                searchPerTab={false}
-                searchPlaceholder={t('assignments').enterSubjectName}
-                searchBarPosition="top"
-                onSearch={setSearchText}
-                onSelectItem={(item) =>
-                    handleSubjectSelect({
-                        id: item.id,
-                        name: item.label,
-                        isCustom: item.isCustom || false,
-                        isCustomPeriod: item.isCustomPeriod || false,
-                        color: item.color,
-                    } as ExtendedSubject)
-                }
-                isLoading={loadingSubjects}
-                loadingText={t('assignments').loadingSubjects}
-                emptyResultsMessage={t('assignments').noSubjects}
-                animationType="fade"
-                maxHeight={Dimensions.get('window').height * 0.7}
-            />
+                snapPoints={['84%', '92%']}
+                backgroundColor={Colors.dark.card}
+                contentContainerStyle={styles.dropdownSheetContent}
+            >
+                <ModernDropdown
+                    title={t('assignments').selectSubject}
+                    isVisible={isSubjectsModalVisible}
+                    onClose={() => setIsSubjectsModalVisible(false)}
+                    tabs={
+                        loadingSubjects ?
+                            []
+                        :   [
+                                {
+                                    id: 'recent',
+                                    label: t('assignments').recent,
+                                    items: filteredSubjects.map((subject) => ({
+                                        id: subject.id,
+                                        label: subject.name,
+                                        isSelected:
+                                            subject.id === selectedSubjectId,
+                                        isCustom: subject.isCustom,
+                                        isCustomPeriod: subject.isCustomPeriod,
+                                        color: subject.color,
+                                    })),
+                                    emptyMessage: t('assignments').noSubjects,
+                                },
+                                {
+                                    id: 'all',
+                                    label: t('assignments').all,
+                                    items: subjects.map((subject) => ({
+                                        id: subject.id,
+                                        label: subject.name,
+                                        isSelected:
+                                            subject.id === selectedSubjectId,
+                                        isCustom: subject.isCustom,
+                                        isCustomPeriod: subject.isCustomPeriod,
+                                        color: subject.color,
+                                    })),
+                                    emptyMessage: t('assignments').noSubjects,
+                                },
+                                {
+                                    id: 'custom',
+                                    label: t('assignments').custom,
+                                    items: customPeriods
+                                        .filter((period) => period.isEnabled)
+                                        .map((period) => ({
+                                            id: period._id,
+                                            label:
+                                                period.name ||
+                                                'Custom Period',
+                                            isCustomPeriod: true,
+                                            color: period.color,
+                                            isSelected:
+                                                period._id ===
+                                                selectedSubjectId,
+                                        })),
+                                    emptyMessage:
+                                        t('assignments').noCustomSubjects,
+                                    renderCustomContent:
+                                        customPeriods.length === 0 ?
+                                            () => (
+                                                <View
+                                                    style={
+                                                        styles.emptyListContainer
+                                                    }
+                                                >
+                                                    <Text
+                                                        style={
+                                                            styles.emptyListText
+                                                        }
+                                                    >
+                                                        {
+                                                            t('settings')
+                                                                .customPeriods
+                                                                .noPeriodsYet
+                                                        }
+                                                    </Text>
+                                                    <TouchableOpacity
+                                                        style={
+                                                            styles.settingsLinkButton
+                                                        }
+                                                        onPress={() => {
+                                                            setIsSubjectsModalVisible(
+                                                                false,
+                                                            );
+                                                            router.push(
+                                                                '/(tabs)/settings',
+                                                            );
+                                                        }}
+                                                    >
+                                                        <Text
+                                                            style={
+                                                                styles.settingsLinkButtonText
+                                                            }
+                                                        >
+                                                            {'Go to Settings'}
+                                                        </Text>
+                                                    </TouchableOpacity>
+                                                </View>
+                                            )
+                                        :   undefined,
+                                },
+                            ]
+                    }
+                    selectedTabId={subjectSelectionMode}
+                    onTabChange={handleSubjectTabChange}
+                    showSearch={true}
+                    searchPerTab={false}
+                    searchPlaceholder={t('assignments').enterSubjectName}
+                    searchBarPosition="top"
+                    onSearch={setSearchText}
+                    onSelectItem={(item) =>
+                        handleSubjectSelect({
+                            id: item.id,
+                            name: item.label,
+                            isCustom: item.isCustom || false,
+                            isCustomPeriod: item.isCustomPeriod || false,
+                            color: item.color,
+                        } as ExtendedSubject)
+                    }
+                    isLoading={loadingSubjects}
+                    loadingText={t('assignments').loadingSubjects}
+                    emptyResultsMessage={t('assignments').noSubjects}
+                    animationType="fade"
+                    maxHeight={520}
+                />
+            </BottomModalPortal>
 
-            {/* Assignment Type Selection Modal - Using Portal */}
-            <ModernDropdownPortal
-                title={t('assignments').type}
+            {/* Assignment Type Selection Modal */}
+            <BottomModalPortal
                 isVisible={isTypeModalVisible}
                 onClose={() => setIsTypeModalVisible(false)}
-                items={Object.values(AssignmentType).map((type) => {
-                    // Get appropriate icon for this type
-                    const getTypeSpecificIcon = () => {
-                        switch (type) {
-                            case AssignmentType.HOMEWORK:
-                                return 'book-outline';
-                            case AssignmentType.TEST:
-                                return 'document-text-outline';
-                            case AssignmentType.EXAM:
-                                return 'school-outline';
-                            case AssignmentType.PROJECT:
-                                return 'construct-outline';
-                            case AssignmentType.QUIZ:
-                                return 'clipboard-outline';
-                            case AssignmentType.LAB:
-                                return 'flask-outline';
-                            case AssignmentType.ESSAY:
-                                return 'create-outline';
-                            case AssignmentType.PRESENTATION:
-                                return 'easel-outline';
-                            default:
-                                return 'ellipsis-horizontal-outline';
-                        }
-                    };
+                snapPoints={['74%', '92%']}
+                backgroundColor={Colors.dark.card}
+                contentContainerStyle={styles.dropdownSheetContent}
+            >
+                <ModernDropdown
+                    title={t('assignments').type}
+                    isVisible={isTypeModalVisible}
+                    onClose={() => setIsTypeModalVisible(false)}
+                    items={Object.values(AssignmentType).map((type) => {
+                        // Get appropriate icon for this type
+                        const getTypeSpecificIcon = () => {
+                            switch (type) {
+                                case AssignmentType.HOMEWORK:
+                                    return 'book-outline';
+                                case AssignmentType.TEST:
+                                    return 'document-text-outline';
+                                case AssignmentType.EXAM:
+                                    return 'school-outline';
+                                case AssignmentType.PROJECT:
+                                    return 'construct-outline';
+                                case AssignmentType.QUIZ:
+                                    return 'clipboard-outline';
+                                case AssignmentType.LAB:
+                                    return 'flask-outline';
+                                case AssignmentType.ESSAY:
+                                    return 'create-outline';
+                                case AssignmentType.PRESENTATION:
+                                    return 'easel-outline';
+                                default:
+                                    return 'ellipsis-horizontal-outline';
+                            }
+                        };
 
-                    return {
-                        id: type,
-                        label: t('assignments').types[
-                            type.toLowerCase() as
-                                | 'homework'
-                                | 'test'
-                                | 'exam'
-                                | 'project'
-                                | 'quiz'
-                                | 'lab'
-                                | 'essay'
-                                | 'presentation'
-                                | 'other'
-                        ],
-                        icon: (
-                            <Ionicons
-                                name={getTypeSpecificIcon()}
-                                size={24}
-                                color={Colors.dark.white}
-                            />
-                        ),
-                        isSelected: type === assignmentType,
-                    };
-                })}
-                selectedItemId={assignmentType}
-                onSelectItem={(item: SegmentItem) =>
-                    handleTypeSelection(item.id as AssignmentType)
-                }
-                maxOptions={7}
-            />
+                        return {
+                            id: type,
+                            label: t('assignments').types[
+                                type.toLowerCase() as
+                                    | 'homework'
+                                    | 'test'
+                                    | 'exam'
+                                    | 'project'
+                                    | 'quiz'
+                                    | 'lab'
+                                    | 'essay'
+                                    | 'presentation'
+                                    | 'other'
+                            ],
+                            icon: (
+                                <Ionicons
+                                    name={getTypeSpecificIcon()}
+                                    size={24}
+                                    color={Colors.dark.white}
+                                />
+                            ),
+                            isSelected: type === assignmentType,
+                        };
+                    })}
+                    selectedItemId={assignmentType}
+                    onSelectItem={(item: SegmentItem) =>
+                        handleTypeSelection(item.id as AssignmentType)
+                    }
+                    maxOptions={7}
+                    disableScroll={true}
+                />
+            </BottomModalPortal>
         </>
     );
 }
@@ -3143,6 +3183,9 @@ const styles = StyleSheet.create({
         flex: 1,
         position: 'relative',
         zIndex: 1,
+    },
+    dropdownSheetContent: {
+        padding: 0,
     },
     header: {
         padding: 20,
