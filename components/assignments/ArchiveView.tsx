@@ -6,16 +6,16 @@ import {
     TouchableOpacity,
     ScrollView,
     ActivityIndicator,
-    StatusBar,
     Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Assignment } from '../../utils/assignmentStorage';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@react-native-vector-icons/ionicons';
 import { useTranslation } from '@/hooks/useTranslation';
 import { router } from 'expo-router';
 import { Colors } from '@/constants/Colors';
+import { StatusBar } from 'expo-status-bar';
 
 interface ArchiveViewProps {
     assignments: Assignment[];
@@ -113,7 +113,7 @@ export default function ArchiveView({
 
     return (
         <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="light-content" />
+            <StatusBar style="light" />
             <View style={styles.header}>
                 <TouchableOpacity
                     style={styles.closeButton}

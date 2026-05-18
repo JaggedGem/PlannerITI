@@ -8,12 +8,11 @@ import {
     ScrollView,
     Alert,
     ActivityIndicator,
-    StatusBar,
     Animated as RNAnimated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@react-native-vector-icons/ionicons';
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
@@ -39,6 +38,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import { SegmentItem } from '@/components/modernDropdown';
 import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
 import { Colors } from '@/constants/Colors';
+import { StatusBar } from 'expo-status-bar';
 
 // Import the components from new-assignment.tsx
 // For a real app, these would be separated into their own files
@@ -1306,7 +1306,7 @@ export default function EditAssignmentScreen() {
     if (isLoading) {
         return (
             <SafeAreaView style={styles.loadingContainer}>
-                <StatusBar barStyle="light-content" />
+                <StatusBar style="light" />
                 <ActivityIndicator
                     size="large"
                     color={Colors.dark.primaryStrong}
@@ -1320,7 +1320,7 @@ export default function EditAssignmentScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="light-content" />
+            <StatusBar style="light" />
 
             {/* Header */}
             <View style={styles.header}>

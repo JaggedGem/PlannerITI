@@ -32,7 +32,7 @@ import {
     CustomPeriod,
 } from '@/services/scheduleService';
 import { useTranslation } from '@/hooks/useTranslation';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@react-native-vector-icons/material-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -2276,7 +2276,7 @@ export default function Settings() {
         onDecrease: () => void;
         onIncrease: () => void;
         isMinValue: boolean;
-        icon: keyof typeof MaterialIcons.glyphMap;
+        icon: React.ComponentProps<typeof MaterialIcons>['name'];
         accentColor?: string;
     }) => (
         <View style={styles.reminderSettingItem}>

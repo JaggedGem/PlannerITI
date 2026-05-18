@@ -1,13 +1,14 @@
-import FontAwesome from '@expo/vector-icons/FontAwesome';
 import {
     DarkTheme,
     DefaultTheme,
     ThemeProvider,
-} from '@react-navigation/native';
+} from 'expo-router/react-navigation';
 import { useFonts } from 'expo-font';
 import { SplashScreen, Stack } from 'expo-router';
+import { NavigationBar } from 'expo-navigation-bar';
+import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { useColorScheme, StatusBar } from 'react-native';
+import { useColorScheme } from 'react-native';
 import { Colors } from '@/constants/Colors';
 import authService from '../services/authService';
 import LoginNotification from '@/components/LoginNotification';
@@ -43,7 +44,6 @@ SplashScreen.preventAutoHideAsync();
 export default function RootLayout() {
     const [loaded, error] = useFonts({
         SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-        ...FontAwesome.font,
     });
     const [startupReady, setStartupReady] = useState(false);
 
@@ -211,11 +211,8 @@ function RootLayoutNav() {
 
     return (
         <ThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
-            <StatusBar
-                barStyle={isDark ? 'light-content' : 'dark-content'}
-                backgroundColor={Colors.dark.transparent}
-                translucent
-            />
+            <StatusBar style={isDark ? 'light' : 'dark'} />
+            <NavigationBar style={isDark ? 'light' : 'dark'} hidden={false} />
             <AuthProvider>
                 <Stack
                     screenOptions={{

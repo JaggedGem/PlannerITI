@@ -52,6 +52,8 @@ module.exports = () => {
                 'expo-font',
                 'expo-secure-store',
                 'expo-sharing',
+                'expo-status-bar',
+                'expo-navigation-bar',
                 [
                     'expo-splash-screen',
                     {

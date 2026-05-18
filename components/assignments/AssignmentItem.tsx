@@ -18,7 +18,7 @@ import {
     updateAllSubtaskCompletion,
     getSubtasksForAssignment,
 } from '../../utils/assignmentStorage';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@react-native-vector-icons/ionicons';
 import Animated, {
     useSharedValue,
     useAnimatedStyle,

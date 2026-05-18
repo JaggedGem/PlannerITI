@@ -8,7 +8,7 @@ import {
     Modal,
 } from 'react-native';
 import { Link, router } from 'expo-router';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@react-native-vector-icons/material-icons';
 import { ThemedText } from '../ThemedText';
 import { ThemedView } from '../ThemedView';
 import { useTranslation } from '../../hooks/useTranslation';

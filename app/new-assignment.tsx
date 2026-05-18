@@ -10,13 +10,12 @@ import {
     Platform,
     Alert,
     ActivityIndicator,
-    StatusBar,
     Animated as RNAnimated,
     Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@react-native-vector-icons/ionicons';
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
@@ -42,6 +41,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import { SegmentItem } from '@/components/modernDropdown';
 import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
 import { Colors } from '@/constants/Colors';
+import { StatusBar } from 'expo-status-bar';
 
 // Extend Subject type to include custom period properties
 interface ExtendedSubject extends Subject {
@@ -2423,7 +2423,7 @@ export default function NewAssignmentScreen() {
     return (
         <>
             <SafeAreaView style={styles.container}>
-                <StatusBar barStyle="light-content" />
+                <StatusBar style="light" />
 
                 <KeyboardAwareScrollView
                     style={styles.scrollContainer}

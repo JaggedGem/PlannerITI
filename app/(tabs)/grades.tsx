@@ -21,7 +21,7 @@ import React, {
     useEffect,
     useRef,
 } from 'react';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@react-native-vector-icons/material-icons';
 import Animated, {
     FadeInUp,
     Layout,
@@ -4855,7 +4855,11 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     refreshOverlay: {
-        ...StyleSheet.absoluteFillObject,
+        position: 'absolute',
+        top: 0,
+        right: 0,
+        bottom: 0,
+        left: 0,
         backgroundColor: Colors.dark.overlayBlack50,
         justifyContent: 'center',
         alignItems: 'center',

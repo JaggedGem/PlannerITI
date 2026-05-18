@@ -13,7 +13,7 @@ import Animated, {
     Layout,
     Easing,
 } from 'react-native-reanimated';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@react-native-vector-icons/ionicons';
 import { Period } from '../../services/scheduleService';
 import { useTranslation } from '@/hooks/useTranslation';
 import { Colors } from '@/constants/Colors';

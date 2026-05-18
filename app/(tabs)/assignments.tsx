@@ -10,7 +10,6 @@ import React, {
 import {
     StyleSheet,
     ScrollView,
-    StatusBar,
     View,
     Text,
     ActivityIndicator,
@@ -25,7 +24,7 @@ import { router, useFocusEffect } from 'expo-router';
 import DaySection from '../../components/assignments/DaySection';
 import FloatingActionButton from '../../components/assignments/FloatingActionButton';
 import { BottomModalPortal } from '../../components/BottomModalPortal';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@react-native-vector-icons/ionicons';
 import {
     getAssignments,
     toggleAssignmentCompletion,
@@ -41,6 +40,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { AssignmentOptionsMenu } from '../../components/assignments/AssignmentOptionsMenu';
 import { AssignmentOptionsContext } from '../../components/assignments/AssignmentOptionsContext';
+import { StatusBar } from 'expo-status-bar';
 
 // Add circuit breaker constants
 const CRASH_DETECTION_KEY = 'assignment_tab_crash_detection';
@@ -528,7 +528,7 @@ const AssignmentsErrorFallback = ({ errorCount }: { errorCount: number }) => {
 
     return (
         <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="light-content" />
+            <StatusBar style="light" />
             <View style={styles.errorContainer}>
                 <Text style={styles.errorTitle}>
                     {t('assignments').errors.somethingWrong}
@@ -1329,7 +1329,7 @@ const Assignments = () => {
 
     return (
         <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-            <StatusBar barStyle="light-content" />
+            <StatusBar style="light" />
 
             <View style={styles.headerContainer}>
                 <View style={styles.header}>
