@@ -12,7 +12,6 @@ import {
     Text,
     TouchableOpacity,
     ActivityIndicator,
-    FlatList,
     Modal,
     TextInput,
     Platform,
@@ -28,7 +27,6 @@ import {
     scheduleService,
     SubGroupType,
     Language,
-    Group,
     CustomPeriod,
 } from "@/services/scheduleService";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -36,11 +34,9 @@ import { MaterialIcons } from "@react-native-vector-icons/material-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import { useRouter, useFocusEffect } from "expo-router";
-import { BottomSheetFlatList } from "@expo/ui/community/bottom-sheet";
 import { useAuthContext } from "@/components/auth/AuthContext";
 import authService, { getGravatarProfile } from "@/services/authService";
 import {
-    handleGroupChange as handleOrphanedAssignments,
     getAssignments,
 } from "../../utils/assignmentStorage";
 import {
@@ -84,69 +80,6 @@ const THEME_COLORS = Colors.dark.randomColors as unknown as string[];
 const getRandomColor = () => {
     return THEME_COLORS[Math.floor(Math.random() * THEME_COLORS.length)];
 };
-
-// Optimized item comparison function for memo
-const areGroupItemPropsEqual = (prevProps: any, nextProps: any) => {
-    return (
-        prevProps.item._id === nextProps.item._id &&
-        prevProps.item.name === nextProps.item.name &&
-        prevProps.item.diriginte?.name === nextProps.item.diriginte?.name &&
-        prevProps.isSelected === nextProps.isSelected
-    );
-};
-
-// Memoized group item component for better performance
-const GroupItem = memo(
-    ({
-        item,
-        isSelected,
-        onPress,
-    }: {
-        item: Group;
-        isSelected: boolean;
-        onPress: () => void;
-    }) => {
-        // Memoize styles to prevent unnecessary recalculations
-        const itemStyle = useMemo(
-            () => [
-                styles.groupItem,
-                isSelected && {
-                    ...styles.selectedOption,
-                    backgroundColor: Colors.dark.primaryStrong,
-                },
-            ],
-            [isSelected],
-        );
-
-        const textStyle = useMemo(
-            () => [
-                styles.groupItemText,
-                isSelected && styles.selectedOptionText,
-            ],
-            [isSelected],
-        );
-
-        const teacherStyle = useMemo(
-            () => [
-                styles.teacherText,
-                isSelected && styles.selectedTeacherText,
-            ],
-            [isSelected],
-        );
-
-        return (
-            <TouchableOpacity style={itemStyle} onPress={onPress}>
-                <Text style={textStyle}>{item.name}</Text>
-                {item.diriginte && (
-                    <Text style={teacherStyle}>{item.diriginte.name}</Text>
-                )}
-            </TouchableOpacity>
-        );
-    },
-    areGroupItemPropsEqual,
-);
-
-GroupItem.displayName = "GroupItem";
 
 // Custom TimePicker component
 const TimePicker = ({
@@ -594,17 +527,11 @@ const CustomToggle = ({
 export default function Settings() {
     const { t, formatCompactDate, formatTimeFromDate } = useTranslation();
     const router = useRouter();
-    const flatListRef = useRef<FlatList<Group>>(null);
     const { user, logout, reloadUser } = useAuthContext();
 
     // State hooks
     const [settings, setSettings] = useState(scheduleService.getSettings());
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [groupsList, setGroupsList] = useState<Group[]>([]);
-    const [filteredGroups, setFilteredGroups] = useState<Group[]>([]);
     const [showGroupModal, setShowGroupModal] = useState(false);
-    const [searchQuery, setSearchQuery] = useState("");
     const [showPeriodModal, setShowPeriodModal] = useState(false);
     const [editingPeriod, setEditingPeriod] = useState<CustomPeriod | null>(
         null,
@@ -904,93 +831,6 @@ export default function Settings() {
         scheduleService.updateSettings({ group });
     }, []);
 
-    const handleGroupSelection = useCallback(async (group: Group) => {
-        // Get the current settings to preserve the subgroup selection
-        const currentSettings = scheduleService.getSettings();
-
-        // Update the group settings - maintain the current subgroup or set default if not set
-        scheduleService.updateSettings({
-            selectedGroupId: group._id,
-            selectedGroupName: group.name,
-            group: currentSettings.group || SUBGROUPS[0],
-        });
-
-        // Update the last refresh timestamp to current time
-        setLastScheduleRefresh(new Date());
-
-        // Handle orphaned assignments asynchronously after settings update
-        setTimeout(async () => {
-            try {
-                // Pass the group ID (string) to handle orphaned assignments
-                await handleOrphanedAssignments(group._id);
-            } catch (error) {
-                console.error(
-                    "Error handling group change for assignments:",
-                    error,
-                );
-            }
-        }, 100);
-
-        setShowGroupModal(false);
-        setSearchQuery("");
-    }, []);
-
-    const handleSearchClear = useCallback(() => {
-        setSearchQuery("");
-    }, []);
-
-    const keyExtractor = useCallback((item: Group) => item._id, []);
-
-    const renderGroupItem = useCallback(
-        ({ item }: { item: Group }) => {
-            const isSelected = settings.selectedGroupId === item._id;
-            const onItemPress = () => handleGroupSelection(item);
-
-            return (
-                <GroupItem
-                    item={item}
-                    isSelected={isSelected}
-                    onPress={onItemPress}
-                />
-            );
-        },
-        [settings.selectedGroupId, handleGroupSelection],
-    );
-
-    const onScrollToIndexFailed = useCallback(
-        (info: {
-            index: number;
-            highestMeasuredFrameIndex: number;
-            averageItemLength: number;
-        }) => {
-            if (flatListRef.current) {
-                const approximateOffset = Math.max(
-                    0,
-                    info.index * info.averageItemLength -
-                        info.averageItemLength * 1.25,
-                );
-                flatListRef.current.scrollToOffset({
-                    offset: approximateOffset,
-                    animated: false,
-                });
-
-                setTimeout(() => {
-                    flatListRef.current?.scrollToIndex({
-                        index: info.index,
-                        animated: true,
-                        viewPosition: 0.5,
-                    });
-                }, 140);
-            }
-        },
-        [],
-    );
-
-    // Normalize text helper
-    const normalizeText = useCallback((text: string): string => {
-        return text.toLowerCase().replace(/[-\s]/g, "");
-    }, []);
-
     // Effect hooks
     useEffect(() => {
         const unsubscribe = scheduleService.subscribe(() => {
@@ -998,91 +838,8 @@ export default function Settings() {
             setSettings(updatedSettings);
         });
 
-        const fetchGroups = async () => {
-            try {
-                setIsLoading(true);
-                const groups = await scheduleService.getGroups();
-                setGroupsList(groups);
-                setFilteredGroups(groups);
-            } catch {
-                setError(t("settings").group.failed);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        fetchGroups();
-
         return () => unsubscribe();
-    }, [t]);
-
-    useEffect(() => {
-        if (searchQuery.trim() === "") {
-            setFilteredGroups(groupsList);
-        } else {
-            const normalizedQuery = normalizeText(searchQuery);
-            const filtered = groupsList.filter((group) => {
-                const normalizedName = normalizeText(group.name);
-                return normalizedName.includes(normalizedQuery);
-            });
-            setFilteredGroups(filtered);
-        }
-    }, [searchQuery, groupsList, normalizeText]);
-
-    const scrollToSelectedGroup = useCallback(
-        (animated: boolean) => {
-            if (!flatListRef.current || filteredGroups.length === 0) return;
-
-            const selectedIndex = filteredGroups.findIndex(
-                (group) => group._id === settings.selectedGroupId,
-            );
-
-            if (selectedIndex < 0) return;
-
-            try {
-                requestAnimationFrame(() => {
-                    flatListRef.current?.scrollToIndex({
-                        index: selectedIndex,
-                        animated,
-                        viewPosition: 0.5,
-                    });
-                });
-            } catch {
-                flatListRef.current.scrollToOffset({
-                    offset: Math.max(0, selectedIndex * 88),
-                    animated,
-                });
-            }
-        },
-        [filteredGroups, settings.selectedGroupId],
-    );
-
-    useEffect(() => {
-        if (!showGroupModal || isLoading || filteredGroups.length === 0) return;
-
-        const timer = setTimeout(() => {
-            scrollToSelectedGroup(true);
-        }, 180);
-
-        return () => clearTimeout(timer);
-    }, [
-        showGroupModal,
-        isLoading,
-        filteredGroups.length,
-        scrollToSelectedGroup,
-    ]);
-
-    // Memoize empty component for FlatList
-    const ListEmptyComponent = useCallback(
-        () => (
-            <View style={styles.errorContainer}>
-                <Text
-                    style={styles.loadingText}
-                >{`${t("settings").group.notFound} "${searchQuery}"`}</Text>
-            </View>
-        ),
-        [searchQuery, t],
-    );
+    }, []);
 
     const resetPeriodForm = useCallback(() => {
         setPeriodName("");
@@ -2536,7 +2293,9 @@ export default function Settings() {
                             {/* Group Selection Dropdown */}
                             <TouchableOpacity
                                 style={styles.scheduleDetailRow}
-                                onPress={() => setShowGroupModal(true)}
+                                onPress={() =>
+                                    setShowGroupModal(!showGroupModal)
+                                }
                                 activeOpacity={0.7}
                             >
                                 <MaterialIcons
@@ -2946,81 +2705,6 @@ export default function Settings() {
                     }}
                 />
             )}
-
-            {/* Groups Selection Modal */}
-            <BottomModalPortal
-                isVisible={showGroupModal}
-                onClose={() => {
-                    setShowGroupModal(false);
-                    setSearchQuery("");
-                }}
-                snapPoints={["60%"]}
-                contentContainerStyle={styles.groupSheetContent}
-            >
-                <View style={styles.groupModalContent}>
-                    <View style={styles.searchContainer}>
-                        <MaterialIcons
-                            name='search'
-                            size={20}
-                            color={Colors.dark.neutral500}
-                            style={styles.searchIcon}
-                        />
-                        <TextInput
-                            style={styles.searchInput}
-                            placeholder={t("settings").group.search}
-                            placeholderTextColor={Colors.dark.neutral500}
-                            value={searchQuery}
-                            onChangeText={setSearchQuery}
-                            autoCapitalize='none'
-                            autoCorrect={false}
-                        />
-                        {searchQuery.length > 0 && (
-                            <TouchableOpacity
-                                onPress={handleSearchClear}
-                                style={styles.searchClearButton}
-                            >
-                                <Text style={styles.searchClearText}>
-                                    Clear
-                                </Text>
-                            </TouchableOpacity>
-                        )}
-                    </View>
-
-                    {isLoading ?
-                        <View style={styles.loadingContainer}>
-                            <ActivityIndicator
-                                size='large'
-                                color={Colors.dark.primary}
-                            />
-                            <Text style={styles.loadingText}>
-                                {t("settings").group.searching}
-                            </Text>
-                        </View>
-                    : error ?
-                        <View style={styles.errorContainer}>
-                            <Text style={styles.errorText}>{error}</Text>
-                        </View>
-                    :   <BottomSheetFlatList
-                            ref={flatListRef}
-                            data={filteredGroups}
-                            renderItem={renderGroupItem}
-                            keyExtractor={keyExtractor}
-                            style={styles.groupsList}
-                            contentContainerStyle={styles.groupsListContent}
-                            onScrollToIndexFailed={onScrollToIndexFailed}
-                            keyboardShouldPersistTaps='handled'
-                            initialNumToRender={12}
-                            maxToRenderPerBatch={12}
-                            updateCellsBatchingPeriod={40}
-                            windowSize={7}
-                            ListEmptyComponent={ListEmptyComponent}
-                            showsVerticalScrollIndicator={true}
-                            nestedScrollEnabled={true}
-                            scrollEventThrottle={16}
-                        />
-                    }
-                </View>
-            </BottomModalPortal>
 
             {/* Custom Period Modal */}
             <BottomModalPortal
@@ -3479,85 +3163,6 @@ const styles = StyleSheet.create({
         paddingTop: 0,
         paddingHorizontal: 12,
         paddingBottom: Platform.OS === "ios" ? 24 : 20,
-    },
-    groupSheetContent: {
-        flex: 1,
-        paddingTop: 0,
-        paddingHorizontal: 12,
-        paddingBottom: Platform.OS === "ios" ? 20 : 16,
-    },
-    groupModalContent: {
-        flex: 1,
-        minHeight: 0,
-    },
-    searchContainer: {
-        flexDirection: "row",
-        backgroundColor: Colors.dark.surfaceSecondary,
-        borderRadius: 12,
-        marginBottom: 12,
-        paddingVertical: 10,
-        paddingHorizontal: 15,
-        alignItems: "center",
-    },
-    searchIcon: {
-        marginRight: 10,
-    },
-    searchInput: {
-        flex: 1,
-        color: Colors.dark.white,
-        fontSize: 16,
-        padding: 0,
-    },
-    searchClearButton: {
-        padding: 5,
-    },
-    searchClearText: {
-        color: Colors.dark.neutral500,
-        fontSize: 12,
-        fontWeight: "600",
-    },
-    groupsList: {
-        flex: 1,
-        width: "100%",
-    },
-    groupsListContent: {
-        paddingTop: 2,
-        paddingBottom: 24,
-    },
-    groupItem: {
-        backgroundColor: Colors.dark.surfaceSecondary,
-        padding: 16,
-        borderRadius: 12,
-        marginBottom: 10,
-    },
-    selectedGroupItem: {
-        backgroundColor: Colors.dark.primary,
-    },
-    groupItemText: {
-        color: Colors.dark.white,
-        fontSize: 16,
-        fontWeight: "600",
-    },
-    teacherText: {
-        color: Colors.dark.mutedText,
-        fontSize: 14,
-        marginTop: 4,
-    },
-    selectedTeacherText: {
-        color: Colors.dark.overlayWhite80,
-    },
-    loadingContainer: {
-        padding: 30,
-        alignItems: "center",
-    },
-    loadingText: {
-        color: Colors.dark.mutedText,
-        marginTop: 10,
-        fontSize: 16,
-    },
-    errorContainer: {
-        padding: 30,
-        alignItems: "center",
     },
     sectionHeader: {
         flexDirection: "row",
