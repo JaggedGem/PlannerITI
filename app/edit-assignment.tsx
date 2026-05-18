@@ -39,6 +39,7 @@ import { SegmentItem } from '@/components/modernDropdown';
 import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
 import { Colors } from '@/constants/Colors';
 import { StatusBar } from 'expo-status-bar';
+import { runWhenIdle } from '@/utils/runWhenIdle';
 
 // Import the components from new-assignment.tsx
 // For a real app, these would be separated into their own files
@@ -208,12 +209,20 @@ const DatePicker = ({
             monthTransition.value = selectedDate > calendarMonth ? 1 : -1;
 
             // Then update the month
-            setCalendarMonth(new Date(selectedDate));
+            const idleTask = runWhenIdle(
+                () => setCalendarMonth(new Date(selectedDate)),
+                16,
+            );
 
             // Reset transition value after animation
-            setTimeout(() => {
+            const timer = setTimeout(() => {
                 monthTransition.value = 0;
             }, 300);
+
+            return () => {
+                idleTask.cancel();
+                clearTimeout(timer);
+            };
         }
     }, [selectedDate, calendarMonth, monthTransition]);
 

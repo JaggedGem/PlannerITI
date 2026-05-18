@@ -17,6 +17,7 @@ import * as Haptics from 'expo-haptics';
 import { useTranslation } from '@/hooks/useTranslation';
 import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { runWhenIdle } from '@/utils/runWhenIdle';
 
 const LOGIN_DISMISSED_KEY = '@login_notification_dismissed';
 
@@ -63,7 +64,13 @@ export default function LoginNotification() {
     }, [opacityAnim, scaleAnim, slideAnim]);
 
     useEffect(() => {
-        void checkDismissedStatus();
+        const idleTask = runWhenIdle(() => {
+            void checkDismissedStatus();
+        }, 16);
+
+        return () => {
+            idleTask.cancel();
+        };
     }, [checkDismissedStatus]);
 
     const handleDismiss = async () => {

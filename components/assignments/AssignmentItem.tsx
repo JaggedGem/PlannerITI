@@ -37,6 +37,7 @@ import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAssignmentOptions } from './AssignmentOptionsContext';
 import { Colors } from '@/constants/Colors';
+import { runWhenIdle } from '@/utils/runWhenIdle';
 
 interface AssignmentItemProps {
     assignment: Assignment;
@@ -249,7 +250,13 @@ export default function AssignmentItem({
 
     // Load subtasks when assignment changes or when expanded
     useEffect(() => {
-        void loadSubtasks();
+        const idleTask = runWhenIdle(() => {
+            void loadSubtasks();
+        }, 16);
+
+        return () => {
+            idleTask.cancel();
+        };
     }, [loadSubtasks, expanded]);
 
     // Update check animation when completion status changes
@@ -324,15 +331,19 @@ export default function AssignmentItem({
 
     // Update remaining time text
     useEffect(() => {
-        // Initial update
-        setRemainingTime(updateRemainingTimeText(assignment.dueDate));
+        const idleTask = runWhenIdle(() => {
+            setRemainingTime(updateRemainingTimeText(assignment.dueDate));
+        }, 16);
 
         // Update remaining time every minute
         const interval = setInterval(() => {
             setRemainingTime(updateRemainingTimeText(assignment.dueDate));
         }, 60000); // 1 minute
 
-        return () => clearInterval(interval);
+        return () => {
+            idleTask.cancel();
+            clearInterval(interval);
+        };
     }, [assignment.dueDate, updateRemainingTimeText]);
 
     // Format the due date/time for display with localization

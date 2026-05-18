@@ -42,6 +42,7 @@ import { SegmentItem } from '@/components/modernDropdown';
 import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
 import { Colors } from '@/constants/Colors';
 import { StatusBar } from 'expo-status-bar';
+import { runWhenIdle } from '@/utils/runWhenIdle';
 
 // Extend Subject type to include custom period properties
 interface ExtendedSubject extends Subject {
@@ -266,12 +267,20 @@ const DatePicker = ({
             monthTransition.value = selectedDate > calendarMonth ? 1 : -1;
 
             // Then update the month
-            setCalendarMonth(new Date(selectedDate));
+            const idleTask = runWhenIdle(
+                () => setCalendarMonth(new Date(selectedDate)),
+                16,
+            );
 
             // Reset transition value after animation
-            setTimeout(() => {
+            const timer = setTimeout(() => {
                 monthTransition.value = 0;
             }, 300);
+
+            return () => {
+                idleTask.cancel();
+                clearTimeout(timer);
+            };
         }
     }, [selectedDate, calendarMonth, monthTransition]);
 
@@ -1445,14 +1454,22 @@ export default function NewAssignmentScreen() {
 
     // Filter subjects based on search text
     useEffect(() => {
-        if (searchText) {
-            const filtered = subjects.filter((subject) =>
-                subject.name.toLowerCase().includes(searchText.toLowerCase()),
-            );
-            setFilteredSubjects(filtered);
-        } else {
-            updateFilteredSubjects(subjects, subjectSelectionMode);
-        }
+        const idleTask = runWhenIdle(() => {
+            if (searchText) {
+                const filtered = subjects.filter((subject) =>
+                    subject.name
+                        .toLowerCase()
+                        .includes(searchText.toLowerCase()),
+                );
+                setFilteredSubjects(filtered);
+            } else {
+                updateFilteredSubjects(subjects, subjectSelectionMode);
+            }
+        }, 16);
+
+        return () => {
+            idleTask.cancel();
+        };
     }, [searchText, subjects, subjectSelectionMode]);
 
     const updateFilteredSubjects = (

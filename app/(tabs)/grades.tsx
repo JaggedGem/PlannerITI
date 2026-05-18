@@ -61,6 +61,7 @@ import {
     formatThesisTimeLabel,
 } from '@/utils/specialScheduleUtils';
 import { Colors } from '@/constants/Colors';
+import { runWhenIdle } from '@/utils/runWhenIdle';
 
 // Types for local grades
 type ViewMode = 'grades' | 'exams';
@@ -786,11 +787,17 @@ const IDNPScreen = ({
     const { t } = useTranslation();
 
     useEffect(() => {
-        if (errorMessage) {
+        if (!errorMessage) return;
+
+        const idleTask = runWhenIdle(() => {
             setError(errorMessage);
-            // Vibrate to notify user of error
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        }
+        });
+        // Vibrate to notify user of error
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+
+        return () => {
+            idleTask.cancel();
+        };
     }, [errorMessage]);
 
     const handleSubmit = () => {
@@ -1678,7 +1685,7 @@ const GradeCalculatorModal = ({
 }) => {
     const { t } = useTranslation();
     const [selectedSubject, setSelectedSubject] = useState<GradeSubject | null>(
-        null,
+        subjects.length > 0 ? subjects[0] : null,
     );
     const [targetAverage, setTargetAverage] = useState('');
     const [calculatedGrades, setCalculatedGrades] = useState<number[]>([]);
@@ -1686,16 +1693,13 @@ const GradeCalculatorModal = ({
     const [isAnnualCalculation, setIsAnnualCalculation] = useState(false);
     const scrollViewRef = useRef<ScrollView>(null);
 
-    // Reset state when modal is opened
-    useEffect(() => {
-        if (isVisible) {
-            setSelectedSubject(subjects.length > 0 ? subjects[0] : null);
-            setTargetAverage('');
-            setCalculatedGrades([]);
-            setHasCalculated(false);
-            setIsAnnualCalculation(false);
-        }
-    }, [isVisible, subjects]);
+    const resetCalculatorState = useCallback(() => {
+        setSelectedSubject(subjects.length > 0 ? subjects[0] : null);
+        setTargetAverage('');
+        setCalculatedGrades([]);
+        setHasCalculated(false);
+        setIsAnnualCalculation(false);
+    }, [subjects]);
 
     // Convert string grades to numbers
     const getNumericGrades = (subject: GradeSubject): number[] => {
@@ -1821,6 +1825,7 @@ const GradeCalculatorModal = ({
             animationType="fade"
             transparent={true}
             onRequestClose={onClose}
+            onShow={resetCalculatorState}
         >
             <View style={styles.modalOverlay}>
                 <View
@@ -2146,7 +2151,9 @@ const GradesScreen = ({
     ) => void;
 }) => {
     const { t, formatFullDate } = useTranslation();
-    const [isBackgroundRefreshing, setIsBackgroundRefreshing] = useState(false);
+    const [isBackgroundRefreshing, setIsBackgroundRefreshing] = useState(() =>
+        gradesDataService.isRefreshing(idnp),
+    );
     const [backgroundJustUpdated, setBackgroundJustUpdated] = useState(false);
 
     // Animated dot opacities
@@ -2198,7 +2205,10 @@ const GradesScreen = ({
     // If a silent refresh already started before this screen mounted, show dots immediately
     useEffect(() => {
         if (gradesDataService.isRefreshing(idnp)) {
-            setIsBackgroundRefreshing(true);
+            const idleTask = runWhenIdle(() => {
+                setIsBackgroundRefreshing(true);
+            });
+            return () => idleTask.cancel();
         }
     }, [idnp]);
 
@@ -2229,28 +2239,6 @@ const GradesScreen = ({
             exam: null,
             loading: false,
         });
-    const [activeSemesterIndex, setActiveSemesterIndex] = useState(
-        studentGrades?.currentGrades ?
-            studentGrades.currentGrades.findIndex(
-                (s) => s.semester === currentSemesterNumber,
-            )
-        :   0,
-    );
-
-    // Make sure activeSemesterIndex is valid
-    useEffect(() => {
-        if (studentGrades?.currentGrades) {
-            // Find the index of the current semester
-            const currentIndex = studentGrades.currentGrades.findIndex(
-                (s) => s.semester === currentSemesterNumber,
-            );
-
-            // If found, set it as active
-            if (currentIndex >= 0) {
-                setActiveSemesterIndex(currentIndex);
-            }
-        }
-    }, [studentGrades, currentSemesterNumber]);
 
     // Grade calculator modal state
     const [calculatorVisible, setCalculatorVisible] = useState(false);
@@ -2263,30 +2251,26 @@ const GradesScreen = ({
     const [expandedSubjects, setExpandedSubjects] = useState<
         Record<string, boolean>
     >({});
+    const [staleCheckTimestamp, setStaleCheckTimestamp] = useState(() =>
+        Date.now(),
+    );
 
     // Calculate if data is stale (older than STALE_DATA_DAYS)
     const isDataStale = useMemo(() => {
         if (!lastUpdated) return false;
 
-        const now = Date.now();
-        const daysDifference = (now - lastUpdated) / (1000 * 60 * 60 * 24);
+        const daysDifference =
+            (staleCheckTimestamp - lastUpdated) / (1000 * 60 * 60 * 24);
 
         return daysDifference >= STALE_DATA_DAYS;
-    }, [lastUpdated]);
+    }, [lastUpdated, staleCheckTimestamp]);
 
-    // Initialize with only the current semester expanded
     useEffect(() => {
-        if (studentGrades?.currentGrades?.length) {
-            // Create an object with only current semester expanded
-            const initialExpandedState: Record<number, boolean> = {};
-            studentGrades.currentGrades.forEach((semester) => {
-                // Only expand the current semester
-                initialExpandedState[semester.semester] =
-                    semester.semester === currentSemesterNumber;
-            });
-            setExpandedSemesters(initialExpandedState);
-        }
-    }, [studentGrades?.currentGrades, currentSemesterNumber]);
+        const interval = setInterval(() => {
+            setStaleCheckTimestamp(Date.now());
+        }, 60_000);
+        return () => clearInterval(interval);
+    }, []);
 
     // Listen to background refresh start/end events for anonymous indicator
     useEffect(() => {
@@ -2379,27 +2363,38 @@ const GradesScreen = ({
     }, [studentGrades?.studentInfo.group]);
 
     useEffect(() => {
-        void loadCachedOfficialSchedule();
-    }, [loadCachedOfficialSchedule]);
+        let isCancelled = false;
 
-    useEffect(() => {
-        void loadCachedOfficialSchedule();
-        // Also trigger a background network refresh when viewing exams
-        if (viewMode === 'exams') {
-            const groupName = String(
-                studentGrades?.studentInfo.group ||
-                    scheduleService.getSettings().selectedGroupName ||
-                    '',
-            ).trim();
-            if (groupName) {
-                scheduleService
-                    .getExamAndThesisSchedule(groupName)
-                    .then(({ thesis, exam }) => {
-                        setOfficialSchedule({ thesis, exam, loading: false });
-                    })
-                    .catch(() => {});
+        const idleTask = runWhenIdle(() => {
+            void loadCachedOfficialSchedule();
+
+            // Also trigger a background network refresh when viewing exams
+            if (viewMode === 'exams') {
+                const groupName = String(
+                    studentGrades?.studentInfo.group ||
+                        scheduleService.getSettings().selectedGroupName ||
+                        '',
+                ).trim();
+                if (groupName) {
+                    void scheduleService
+                        .getExamAndThesisSchedule(groupName)
+                        .then(({ thesis, exam }) => {
+                            if (isCancelled) return;
+                            setOfficialSchedule({
+                                thesis,
+                                exam,
+                                loading: false,
+                            });
+                        })
+                        .catch(() => {});
+                }
             }
-        }
+        });
+
+        return () => {
+            isCancelled = true;
+            idleTask.cancel();
+        };
     }, [
         viewMode,
         loadCachedOfficialSchedule,
@@ -2443,16 +2438,8 @@ const GradesScreen = ({
             return studentGrades.currentGrades[currentIndex];
         }
 
-        // Fall back to the active index if current semester not found
-        return studentGrades.currentGrades[
-            (
-                activeSemesterIndex >= 0 &&
-                activeSemesterIndex < studentGrades.currentGrades.length
-            ) ?
-                activeSemesterIndex
-            :   0
-        ];
-    }, [studentGrades, activeSemesterIndex, currentSemesterNumber]);
+        return studentGrades.currentGrades[0];
+    }, [studentGrades, currentSemesterNumber]);
 
     // Calculate average for all semesters
     const allSemestersAverages = useMemo(() => {
@@ -3017,6 +3004,13 @@ const GradesScreen = ({
         Haptics.selectionAsync();
     }, []);
 
+    const isSemesterExpanded = useCallback(
+        (semesterNumber: number) =>
+            expandedSemesters[semesterNumber] ??
+            semesterNumber === currentSemesterNumber,
+        [expandedSemesters, currentSemesterNumber],
+    );
+
     // If no data, show loading or error
     if (!studentGrades) {
         return (
@@ -3197,10 +3191,8 @@ const GradesScreen = ({
                                     )}
                                     <MaterialIcons
                                         name={
-                                            (
-                                                expandedSemesters[
-                                                    semester.semester
-                                                ]
+                                            isSemesterExpanded(
+                                                semester.semester,
                                             ) ?
                                                 'keyboard-arrow-up'
                                             :   'keyboard-arrow-down'
@@ -3213,7 +3205,7 @@ const GradesScreen = ({
                             </TouchableOpacity>
 
                             {/* Semester content (subjects) when expanded */}
-                            {expandedSemesters[semester.semester] && (
+                            {isSemesterExpanded(semester.semester) && (
                                 <Animated.View
                                     entering={FadeInUp.springify()}
                                     style={styles.semesterContent}

@@ -14,7 +14,6 @@ import {
     Text,
     ActivityIndicator,
     Platform,
-    InteractionManager,
     TouchableOpacity,
     Pressable,
 } from 'react-native';
@@ -41,6 +40,7 @@ import * as Haptics from 'expo-haptics';
 import { AssignmentOptionsMenu } from '../../components/assignments/AssignmentOptionsMenu';
 import { AssignmentOptionsContext } from '../../components/assignments/AssignmentOptionsContext';
 import { StatusBar } from 'expo-status-bar';
+import { runWhenIdle } from '@/utils/runWhenIdle';
 
 // Add circuit breaker constants
 const CRASH_DETECTION_KEY = 'assignment_tab_crash_detection';
@@ -150,10 +150,10 @@ const CoursesView = memo(
             timersRef.current = [];
 
             let frameId: number | null = null;
-            let interaction: any = null;
+            let idleTask: { cancel: () => void } | null = null;
 
             // Schedule first batch of work after all current UI work completes
-            interaction = InteractionManager.runAfterInteractions(() => {
+            idleTask = runWhenIdle(() => {
                 // Then use RAF to schedule the update for next frame
                 frameId = requestAnimationFrame(() => {
                     if (!isComponentMountedRef.current) return;
@@ -181,8 +181,8 @@ const CoursesView = memo(
             // Cleanup function
             return () => {
                 // Cancel the interaction
-                if (interaction) {
-                    interaction.cancel();
+                if (idleTask) {
+                    idleTask.cancel();
                 }
 
                 // Cancel animation frame if pending
@@ -939,11 +939,6 @@ const Assignments = () => {
             };
         }, [fetchAssignments]),
     );
-
-    // Load assignments when component mounts
-    useEffect(() => {
-        fetchAssignments();
-    }, [fetchAssignments]);
 
     // Handle segment change with selection from dropdown
     const handleSegmentChange = useCallback(

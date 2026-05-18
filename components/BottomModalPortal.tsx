@@ -10,6 +10,7 @@ import {
     Easing,
 } from 'react-native';
 import { Colors } from '@/constants/Colors';
+import { runWhenIdle } from '@/utils/runWhenIdle';
 
 interface BottomModalPortalProps {
     isVisible: boolean;
@@ -123,10 +124,12 @@ export function BottomModalPortal({
     useEffect(() => {
         if (isVisible) {
             closeRunIdRef.current += 1;
-            setIsRendered(true);
-            setIsLayoutStable(false);
-            resetAnimationValues();
-            return;
+            const idleTask = runWhenIdle(() => {
+                setIsRendered(true);
+                setIsLayoutStable(false);
+                resetAnimationValues();
+            }, 16);
+            return () => idleTask.cancel();
         }
 
         if (!isRendered) return;

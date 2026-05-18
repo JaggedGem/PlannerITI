@@ -41,6 +41,7 @@ import {
     filterThesisEventsForDate,
 } from '@/utils/specialScheduleUtils';
 import { Colors } from '@/constants/Colors';
+import { runWhenIdle } from '@/utils/runWhenIdle';
 
 // Get week start (Monday) from current date
 const getWeekStart = (date: Date): Date => {
@@ -805,7 +806,10 @@ export default function WeekView() {
     }, [fetchSchedule]);
 
     useEffect(() => {
-        void loadCachedSpecialSchedules(settings.selectedGroupName);
+        const idleTask = runWhenIdle(() => {
+            void loadCachedSpecialSchedules(settings.selectedGroupName);
+        }, 16);
+        return () => idleTask.cancel();
     }, [settings.selectedGroupName, loadCachedSpecialSchedules]);
 
     // Settings subscription effect for updates when settings change

@@ -8,7 +8,6 @@ import {
     ViewStyle,
     TextStyle,
     ActivityIndicator,
-    InteractionManager,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
@@ -51,6 +50,7 @@ import {
     thesisMatchesScheduleSlot,
 } from '@/utils/specialScheduleUtils';
 import { Colors } from '@/constants/Colors';
+import { runWhenIdle } from '@/utils/runWhenIdle';
 
 // Key for storing whether the tutorial has been shown
 const TUTORIAL_SHOWN_KEY = 'schedule_tutorial_shown';
@@ -248,11 +248,25 @@ interface WeekDateInfo {
     totalAssignments: number;
 }
 
+const getInitialSelectedDate = (): Date => {
+    const today = new Date();
+    const currentDay = today.getDay();
+
+    if (currentDay === 0 || currentDay === 6) {
+        const nextMonday = new Date(today);
+        const daysUntilMonday = currentDay === 0 ? 1 : 2;
+        nextMonday.setDate(today.getDate() + daysUntilMonday);
+        return nextMonday;
+    }
+
+    return today;
+};
+
 export default function DayView() {
     const [scheduleData, setScheduleData] = useState<ApiResponse | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [selectedDate, setSelectedDate] = useState(new Date());
+    const [selectedDate, setSelectedDate] = useState(getInitialSelectedDate);
     const [settings, setSettings] = useState(scheduleService.getSettings());
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [todaySchedule, setTodaySchedule] = useState<ScheduleItem[]>([]);
@@ -871,15 +885,18 @@ export default function DayView() {
         };
         // If Day view not currently active, defer heavy fetch until interactions settle
         if (settings.scheduleView !== 'day') {
-            const handle = InteractionManager.runAfterInteractions(run);
-            return () => handle.cancel && handle.cancel();
+            const idleTask = runWhenIdle(run);
+            return () => idleTask.cancel();
         } else {
             run();
         }
     }, [fetchSchedule]);
 
     useEffect(() => {
-        void loadCachedSpecialSchedules(settings.selectedGroupName);
+        const idleTask = runWhenIdle(() => {
+            void loadCachedSpecialSchedules(settings.selectedGroupName);
+        }, 16);
+        return () => idleTask.cancel();
     }, [settings.selectedGroupName, loadCachedSpecialSchedules]);
 
     useEffect(() => {
@@ -1106,20 +1123,6 @@ export default function DayView() {
         selectedDate,
         toDateKey,
     ]);
-
-    // Initial selected date setup - if weekend, select next Monday
-    useEffect(() => {
-        const today = new Date();
-        const currentDay = today.getDay();
-
-        if (currentDay === 0 || currentDay === 6) {
-            // If weekend
-            const nextMonday = new Date(today);
-            const daysUntilMonday = currentDay === 0 ? 1 : 2;
-            nextMonday.setDate(today.getDate() + daysUntilMonday);
-            setSelectedDate(nextMonday);
-        }
-    }, []);
 
     useEffect(() => {
         // Skip animation if data isn't loaded yet or if tutorial has been shown before
