@@ -11,6 +11,7 @@ import {
     View,
     Text,
     TouchableOpacity,
+    FlatList,
     ActivityIndicator,
     Modal,
     TextInput,
@@ -28,6 +29,7 @@ import {
     SubGroupType,
     Language,
     CustomPeriod,
+    Group,
 } from "@/services/scheduleService";
 import { useTranslation } from "@/hooks/useTranslation";
 import { MaterialIcons } from "@react-native-vector-icons/material-icons";
@@ -36,7 +38,10 @@ import * as Haptics from "expo-haptics";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useAuthContext } from "@/components/auth/AuthContext";
 import authService, { getGravatarProfile } from "@/services/authService";
-import { getAssignments } from "../../utils/assignmentStorage";
+import {
+    getAssignments,
+    handleGroupChange as handleOrphanedAssignments,
+} from "../../utils/assignmentStorage";
 import {
     getNotificationSettings,
     saveNotificationSettings,
@@ -60,6 +65,7 @@ const IDNP_UPDATE_EVENT = "IDNP_UPDATE";
 const IDNP_SYNC_KEY = "@planner_idnp_sync";
 const DEV_GRADE_TOGGLE_KEY = "@dev_grade_toggle_active";
 const DEV_GRADE_TOGGLE_EVENT = "dev_grade_toggle_event";
+const RECENT_GROUP_IDS_KEY = "@planner_recent_group_ids";
 
 // Check if app is running in development mode
 const IS_DEV = __DEV__;
@@ -71,6 +77,97 @@ const languages = {
 };
 
 const SUBGROUPS: SubGroupType[] = ["Subgroup 1", "Subgroup 2"];
+
+const normalizeSearchValue = (value: string) =>
+    value
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, "");
+
+const levenshteinDistance = (a: string, b: string): number => {
+    if (!a.length) return b.length;
+    if (!b.length) return a.length;
+
+    const matrix: number[][] = Array.from({ length: a.length + 1 }, () =>
+        Array.from({ length: b.length + 1 }, () => 0),
+    );
+
+    for (let i = 0; i <= a.length; i += 1) matrix[i][0] = i;
+    for (let j = 0; j <= b.length; j += 1) matrix[0][j] = j;
+
+    for (let i = 1; i <= a.length; i += 1) {
+        for (let j = 1; j <= b.length; j += 1) {
+            const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+            matrix[i][j] = Math.min(
+                matrix[i - 1][j] + 1,
+                matrix[i][j - 1] + 1,
+                matrix[i - 1][j - 1] + cost,
+            );
+        }
+    }
+
+    return matrix[a.length][b.length];
+};
+
+const subsequenceMatchRatio = (query: string, target: string): number => {
+    if (!query.length || !target.length) return 0;
+
+    let queryIndex = 0;
+    for (let i = 0; i < target.length && queryIndex < query.length; i += 1) {
+        if (target[i] === query[queryIndex]) {
+            queryIndex += 1;
+        }
+    }
+
+    return queryIndex / query.length;
+};
+
+const fuzzySimilarityScore = (query: string, target: string): number => {
+    if (!query.length || !target.length) return 0;
+
+    if (target.includes(query)) return 1;
+
+    const prefixLength = Array.from({ length: query.length }).findIndex(
+        (_, index) => query[index] !== target[index],
+    );
+    const resolvedPrefixLength =
+        prefixLength === -1 ?
+            Math.min(query.length, target.length)
+        :   prefixLength;
+
+    const prefixScore = resolvedPrefixLength / query.length;
+    const subsequenceScore = subsequenceMatchRatio(query, target);
+    const editDistance = levenshteinDistance(query, target);
+    const levenshteinScore =
+        1 - editDistance / Math.max(query.length, target.length);
+
+    const weightedScore =
+        prefixScore * 0.3 + subsequenceScore * 0.45 + levenshteinScore * 0.25;
+
+    return Math.max(0, Math.min(1, weightedScore));
+};
+
+const getGroupMatchScore = (query: string, group: Group): number => {
+    const normalizedQuery = normalizeSearchValue(query);
+    if (!normalizedQuery) return 1;
+
+    const normalizedGroupName = normalizeSearchValue(group.name || "");
+    const normalizedTeacherName = normalizeSearchValue(
+        group.diriginte?.name || "",
+    );
+
+    const groupNameScore = fuzzySimilarityScore(
+        normalizedQuery,
+        normalizedGroupName,
+    );
+    const teacherScore =
+        normalizedTeacherName ?
+            fuzzySimilarityScore(normalizedQuery, normalizedTeacherName) * 0.7
+        :   0;
+
+    return Math.max(groupNameScore, teacherScore);
+};
 
 // Array of theme-appropriate colors for random selection
 const THEME_COLORS = Colors.dark.randomColors as unknown as string[];
@@ -530,6 +627,11 @@ export default function Settings() {
     // State hooks
     const [settings, setSettings] = useState(scheduleService.getSettings());
     const [showGroupScreen, setShowGroupScreen] = useState(false);
+    const [groupSearchQuery, setGroupSearchQuery] = useState("");
+    const [availableGroups, setAvailableGroups] = useState<Group[]>([]);
+    const [recentGroupIds, setRecentGroupIds] = useState<string[]>([]);
+    const [isLoadingGroups, setIsLoadingGroups] = useState(false);
+    const [groupLoadError, setGroupLoadError] = useState<string | null>(null);
     const [showPeriodModal, setShowPeriodModal] = useState(false);
     const [editingPeriod, setEditingPeriod] = useState<CustomPeriod | null>(
         null,
@@ -825,8 +927,153 @@ export default function Settings() {
         scheduleService.updateSettings({ language });
     }, []);
 
-    const handleGroupChange = useCallback((group: SubGroupType) => {
+    const handleSubgroupChange = useCallback((group: SubGroupType) => {
         scheduleService.updateSettings({ group });
+    }, []);
+
+    useEffect(() => {
+        if (!showGroupScreen) return;
+
+        let isCancelled = false;
+
+        const loadGroupSelectionData = async () => {
+            setIsLoadingGroups(true);
+            setGroupLoadError(null);
+
+            try {
+                const [groupsFromApi, storedRecentGroups] = await Promise.all([
+                    scheduleService.getGroups(),
+                    AsyncStorage.getItem(RECENT_GROUP_IDS_KEY),
+                ]);
+
+                if (isCancelled) return;
+
+                setAvailableGroups(groupsFromApi);
+
+                if (storedRecentGroups) {
+                    const parsedRecentGroups = JSON.parse(storedRecentGroups);
+                    if (Array.isArray(parsedRecentGroups)) {
+                        setRecentGroupIds(
+                            parsedRecentGroups
+                                .filter(
+                                    (value): value is string =>
+                                        typeof value === "string",
+                                )
+                                .slice(0, 5),
+                        );
+                    }
+                }
+
+                if (groupsFromApi.length === 0) {
+                    setGroupLoadError(t("settings").group.failed);
+                }
+            } catch {
+                if (!isCancelled) {
+                    setGroupLoadError(t("settings").group.failed);
+                }
+            } finally {
+                if (!isCancelled) {
+                    setIsLoadingGroups(false);
+                }
+            }
+        };
+
+        void loadGroupSelectionData();
+
+        return () => {
+            isCancelled = true;
+        };
+    }, [showGroupScreen, t]);
+
+    const prioritizedGroupIds = useMemo(() => {
+        const mergedIds = [settings.selectedGroupId, ...recentGroupIds].filter(
+            (value): value is string =>
+                typeof value === "string" && value.trim().length > 0,
+        );
+        return Array.from(new Set(mergedIds)).slice(0, 5);
+    }, [settings.selectedGroupId, recentGroupIds]);
+
+    const orderedGroups = useMemo(() => {
+        const uniquePinnedIds = new Set(prioritizedGroupIds);
+        const groupsById = new Map(
+            availableGroups.map((group) => [group._id, group]),
+        );
+
+        const pinnedGroups = prioritizedGroupIds
+            .map((groupId) => groupsById.get(groupId))
+            .filter((group): group is Group => Boolean(group));
+
+        const remainingGroups = availableGroups
+            .filter((group) => !uniquePinnedIds.has(group._id))
+            .sort((a, b) => a.name.localeCompare(b.name));
+
+        return [...pinnedGroups, ...remainingGroups];
+    }, [availableGroups, prioritizedGroupIds]);
+
+    const displayedGroups = useMemo(() => {
+        const trimmedQuery = groupSearchQuery.trim();
+
+        if (!trimmedQuery) {
+            return orderedGroups;
+        }
+
+        const normalizedQuery = normalizeSearchValue(trimmedQuery);
+        const threshold = normalizedQuery.length <= 3 ? 0.4 : 0.45;
+
+        return orderedGroups
+            .map((group, index) => ({
+                group,
+                index,
+                score: getGroupMatchScore(trimmedQuery, group),
+            }))
+            .filter(({ score }) => score >= threshold)
+            .sort((a, b) => b.score - a.score || a.index - b.index)
+            .map(({ group }) => group);
+    }, [groupSearchQuery, orderedGroups]);
+
+    const closeGroupSelectionScreen = useCallback(() => {
+        setShowGroupScreen(false);
+        setGroupSearchQuery("");
+        setGroupLoadError(null);
+    }, []);
+
+    const selectGroup = useCallback((group: Group) => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        const currentSettings = scheduleService.getSettings();
+
+        scheduleService.updateSettings({
+            selectedGroupId: group._id,
+            selectedGroupName: group.name,
+            group: currentSettings.group || SUBGROUPS[0],
+        });
+
+        setLastScheduleRefresh(new Date());
+
+        setRecentGroupIds((previous) => {
+            const nextRecentGroups = [
+                group._id,
+                ...previous.filter((item) => item !== group._id),
+            ].slice(0, 5);
+            AsyncStorage.setItem(
+                RECENT_GROUP_IDS_KEY,
+                JSON.stringify(nextRecentGroups),
+            ).catch(() => {});
+            return nextRecentGroups;
+        });
+
+        setShowGroupScreen(false);
+        setGroupSearchQuery("");
+
+        setTimeout(async () => {
+            try {
+                await handleOrphanedAssignments(group._id);
+            } catch (error) {
+                console.error(
+                    "Error handling group change for assignments:",
+                    error,
+                );
+            }
+        }, 100);
     }, []);
 
     // Effect hooks
@@ -2291,9 +2538,7 @@ export default function Settings() {
                             {/* Group Selection Dropdown */}
                             <TouchableOpacity
                                 style={styles.scheduleDetailRow}
-                                onPress={() =>
-                                    setShowGroupScreen(!showGroupScreen)
-                                }
+                                onPress={() => setShowGroupScreen(true)}
                                 activeOpacity={0.7}
                             >
                                 <MaterialIcons
@@ -2499,7 +2744,7 @@ export default function Settings() {
                                     settings.group === group &&
                                         styles.selectedOption,
                                 ]}
-                                onPress={() => handleGroupChange(group)}
+                                onPress={() => handleSubgroupChange(group)}
                             >
                                 <Text
                                     style={[
@@ -2673,6 +2918,191 @@ export default function Settings() {
                     ))}
                 </View>
             </BottomModalPortal>
+
+            <Modal
+                visible={showGroupScreen}
+                animationType='slide'
+                presentationStyle='fullScreen'
+                onRequestClose={closeGroupSelectionScreen}
+            >
+                <SafeAreaView
+                    style={styles.groupScreenContainer}
+                    edges={["top", "left", "right"]}
+                >
+                    <View style={styles.groupScreenHeader}>
+                        <TouchableOpacity
+                            onPress={closeGroupSelectionScreen}
+                            style={styles.groupHeaderBackButton}
+                            hitSlop={8}
+                        >
+                            <MaterialIcons
+                                name='arrow-back'
+                                size={22}
+                                color={Colors.dark.white}
+                            />
+                        </TouchableOpacity>
+                        <View style={styles.groupHeaderTextBlock}>
+                            <Text style={styles.groupScreenTitle}>
+                                {t("settings").group.select}
+                            </Text>
+                            <Text style={styles.groupScreenSubtitle}>
+                                {`${displayedGroups.length} ${t("general").found.toLowerCase()}`}
+                            </Text>
+                        </View>
+                    </View>
+
+                    <View style={styles.groupSearchInputContainer}>
+                        <MaterialIcons
+                            name='search'
+                            size={20}
+                            color={Colors.dark.neutral500}
+                        />
+                        <TextInput
+                            value={groupSearchQuery}
+                            onChangeText={setGroupSearchQuery}
+                            placeholder={t("settings").group.search}
+                            placeholderTextColor={Colors.dark.neutral500}
+                            style={styles.groupSearchInput}
+                            autoCorrect={false}
+                            autoCapitalize='characters'
+                            returnKeyType='search'
+                        />
+                        {groupSearchQuery.length > 0 && (
+                            <TouchableOpacity
+                                onPress={() => setGroupSearchQuery("")}
+                                hitSlop={8}
+                            >
+                                <MaterialIcons
+                                    name='close'
+                                    size={20}
+                                    color={Colors.dark.neutral500}
+                                />
+                            </TouchableOpacity>
+                        )}
+                    </View>
+
+                    {isLoadingGroups ?
+                        <View style={styles.groupScreenFeedbackContainer}>
+                            <ActivityIndicator
+                                size='large'
+                                color={Colors.dark.primaryStrong}
+                            />
+                            <Text style={styles.groupScreenFeedbackText}>
+                                {t("settings").group.searching}
+                            </Text>
+                        </View>
+                    :   <FlatList
+                            data={displayedGroups}
+                            keyExtractor={(item) => item._id}
+                            keyboardShouldPersistTaps='handled'
+                            contentContainerStyle={styles.groupListContent}
+                            showsVerticalScrollIndicator={false}
+                            renderItem={({ item }) => {
+                                const isSelected =
+                                    item._id === settings.selectedGroupId;
+                                const isInRecentList = prioritizedGroupIds.includes(
+                                    item._id,
+                                );
+                                const teacherName = item.diriginte?.name || "—";
+
+                                return (
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.groupListItem,
+                                            isSelected &&
+                                                styles.groupListItemSelected,
+                                        ]}
+                                        onPress={() => selectGroup(item)}
+                                        activeOpacity={0.8}
+                                    >
+                                        <View style={styles.groupListItemMain}>
+                                            <View
+                                                style={
+                                                    styles.groupListItemTitleRow
+                                                }
+                                            >
+                                                <Text
+                                                    style={[
+                                                        styles.groupListItemTitle,
+                                                        isSelected &&
+                                                            styles.groupListItemTitleSelected,
+                                                    ]}
+                                                    numberOfLines={1}
+                                                >
+                                                    {item.name}
+                                                </Text>
+                                                {isInRecentList &&
+                                                    !isSelected && (
+                                                        <View
+                                                            style={
+                                                                styles.recentBadge
+                                                            }
+                                                        >
+                                                            <MaterialIcons
+                                                                name='history'
+                                                                size={14}
+                                                                color={
+                                                                    Colors.dark
+                                                                        .primaryStrong
+                                                                }
+                                                            />
+                                                        </View>
+                                                    )}
+                                            </View>
+                                            <View
+                                                style={
+                                                    styles.groupListTeacherRow
+                                                }
+                                            >
+                                                <MaterialIcons
+                                                    name='person-outline'
+                                                    size={16}
+                                                    color={
+                                                        Colors.dark.neutral500
+                                                    }
+                                                />
+                                                <Text
+                                                    style={
+                                                        styles.groupListTeacherText
+                                                    }
+                                                    numberOfLines={1}
+                                                >
+                                                    {teacherName}
+                                                </Text>
+                                            </View>
+                                        </View>
+
+                                        {isSelected && (
+                                            <MaterialIcons
+                                                name='check-circle'
+                                                size={20}
+                                                color={
+                                                    Colors.dark.primaryStrong
+                                                }
+                                            />
+                                        )}
+                                    </TouchableOpacity>
+                                );
+                            }}
+                            ListEmptyComponent={
+                                <View style={styles.groupScreenFeedbackContainer}>
+                                    <MaterialIcons
+                                        name='search-off'
+                                        size={30}
+                                        color={Colors.dark.neutral500}
+                                    />
+                                    <Text style={styles.groupScreenFeedbackText}>
+                                        {groupLoadError ||
+                                            (groupSearchQuery.trim().length > 0 ?
+                                                `${t("settings").group.notFound} "${groupSearchQuery.trim()}"`
+                                            :   t("settings").group.failed)}
+                                    </Text>
+                                </View>
+                            }
+                        />
+                    }
+                </SafeAreaView>
+            </Modal>
 
             {/* Time Pickers */}
             {showStartPicker && (
@@ -3100,6 +3530,124 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: Colors.dark.backgroundTertiary,
+    },
+    groupScreenContainer: {
+        flex: 1,
+        backgroundColor: Colors.dark.backgroundTertiary,
+        paddingHorizontal: 20,
+        paddingBottom: 12,
+    },
+    groupScreenHeader: {
+        flexDirection: "row",
+        alignItems: "center",
+        marginBottom: 16,
+        paddingTop: 8,
+    },
+    groupHeaderBackButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: Colors.dark.surfaceSecondary,
+        marginRight: 12,
+    },
+    groupHeaderTextBlock: {
+        flex: 1,
+    },
+    groupScreenTitle: {
+        color: Colors.dark.white,
+        fontSize: 22,
+        fontWeight: "700",
+    },
+    groupScreenSubtitle: {
+        color: Colors.dark.neutral500,
+        fontSize: 13,
+        marginTop: 2,
+    },
+    groupSearchInputContainer: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: Colors.dark.surfaceSecondary,
+        borderRadius: 14,
+        paddingHorizontal: 14,
+        paddingVertical: Platform.OS === "ios" ? 12 : 8,
+        borderWidth: 1,
+        borderColor: Colors.dark.border,
+        marginBottom: 16,
+    },
+    groupSearchInput: {
+        flex: 1,
+        color: Colors.dark.white,
+        fontSize: 16,
+        paddingVertical: 0,
+        marginLeft: 10,
+        marginRight: 8,
+    },
+    groupListContent: {
+        paddingBottom: 24,
+        gap: 10,
+    },
+    groupListItem: {
+        backgroundColor: Colors.dark.surfaceSecondary,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: Colors.dark.borderMuted,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        flexDirection: "row",
+        alignItems: "center",
+    },
+    groupListItemSelected: {
+        borderColor: Colors.dark.primaryStrong,
+        backgroundColor: Colors.dark.overlayPrimary08,
+    },
+    groupListItemMain: {
+        flex: 1,
+        marginRight: 12,
+    },
+    groupListItemTitleRow: {
+        flexDirection: "row",
+        alignItems: "center",
+    },
+    groupListItemTitle: {
+        color: Colors.dark.white,
+        fontSize: 16,
+        fontWeight: "700",
+        flex: 1,
+    },
+    groupListItemTitleSelected: {
+        color: Colors.dark.accentBlueLight,
+    },
+    recentBadge: {
+        backgroundColor: Colors.dark.overlayPrimary12,
+        borderRadius: 999,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        marginLeft: 8,
+    },
+    groupListTeacherRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        marginTop: 6,
+    },
+    groupListTeacherText: {
+        color: Colors.dark.neutral500,
+        fontSize: 13,
+        marginLeft: 6,
+        flex: 1,
+    },
+    groupScreenFeedbackContainer: {
+        alignItems: "center",
+        justifyContent: "center",
+        paddingVertical: 52,
+        paddingHorizontal: 18,
+    },
+    groupScreenFeedbackText: {
+        color: Colors.dark.neutral500,
+        textAlign: "center",
+        marginTop: 12,
+        lineHeight: 20,
     },
     scrollContent: {
         padding: 20,
