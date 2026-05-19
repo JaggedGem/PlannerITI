@@ -529,7 +529,7 @@ export default function Settings() {
 
     // State hooks
     const [settings, setSettings] = useState(scheduleService.getSettings());
-    const [showGroupModal, setShowGroupModal] = useState(false);
+    const [showGroupScreen, setShowGroupScreen] = useState(false);
     const [showPeriodModal, setShowPeriodModal] = useState(false);
     const [editingPeriod, setEditingPeriod] = useState<CustomPeriod | null>(
         null,
@@ -2292,7 +2292,7 @@ export default function Settings() {
                             <TouchableOpacity
                                 style={styles.scheduleDetailRow}
                                 onPress={() =>
-                                    setShowGroupModal(!showGroupModal)
+                                    setShowGroupScreen(!showGroupScreen)
                                 }
                                 activeOpacity={0.7}
                             >
