@@ -3000,9 +3000,8 @@ export default function Settings() {
                             renderItem={({ item }) => {
                                 const isSelected =
                                     item._id === settings.selectedGroupId;
-                                const isInRecentList = prioritizedGroupIds.includes(
-                                    item._id,
-                                );
+                                const isInRecentList =
+                                    prioritizedGroupIds.includes(item._id);
                                 const teacherName = item.diriginte?.name || "—";
 
                                 return (
@@ -3085,15 +3084,22 @@ export default function Settings() {
                                 );
                             }}
                             ListEmptyComponent={
-                                <View style={styles.groupScreenFeedbackContainer}>
+                                <View
+                                    style={styles.groupScreenFeedbackContainer}
+                                >
                                     <MaterialIcons
                                         name='search-off'
                                         size={30}
                                         color={Colors.dark.neutral500}
                                     />
-                                    <Text style={styles.groupScreenFeedbackText}>
+                                    <Text
+                                        style={styles.groupScreenFeedbackText}
+                                    >
                                         {groupLoadError ||
-                                            (groupSearchQuery.trim().length > 0 ?
+                                            ((
+                                                groupSearchQuery.trim().length >
+                                                0
+                                            ) ?
                                                 `${t("settings").group.notFound} "${groupSearchQuery.trim()}"`
                                             :   t("settings").group.failed)}
                                     </Text>
