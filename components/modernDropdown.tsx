@@ -105,6 +105,18 @@ export type ModernDropdownProps = {
     searchPerTab?: boolean;
 };
 
+const MODAL_DROPDOWN_COLORS = {
+    sheet: '#191B1F',
+    surface: '#242A33',
+    surfaceAlt: '#2A313D',
+    border: '#343C4A',
+    textPrimary: '#F3F6FF',
+    textSecondary: '#A8B0C2',
+    accent: '#8FA8FF',
+    accentSurface: '#33429E',
+    accentSoft: 'rgba(51, 66, 158, 0.32)',
+} as const;
+
 const AnimatedTouchableOpacity =
     Animated.createAnimatedComponent(TouchableOpacity);
 
@@ -422,7 +434,7 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
                             <Ionicons
                                 name="checkmark-circle"
                                 size={22}
-                                color={Colors.dark.primary}
+                                color={MODAL_DROPDOWN_COLORS.accent}
                             />
                         )}
                     </View>
@@ -586,13 +598,13 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
                 <Ionicons
                     name="search"
                     size={16}
-                    color={Colors.dark.mutedText}
+                    color={MODAL_DROPDOWN_COLORS.textSecondary}
                     style={styles.searchIcon}
                 />
                 <TextInput
                     style={styles.searchInput}
                     placeholder={searchPlaceholder}
-                    placeholderTextColor={Colors.dark.mutedText}
+                    placeholderTextColor={MODAL_DROPDOWN_COLORS.textSecondary}
                     value={searchText}
                     onChangeText={setSearchText}
                     returnKeyType="search"
@@ -613,7 +625,10 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
     // Render loading state
     const renderLoading = () => (
         <View style={styles.loadingContainer}>
-            <ActivityIndicator size="small" color={Colors.dark.primary} />
+            <ActivityIndicator
+                size="small"
+                color={MODAL_DROPDOWN_COLORS.accent}
+            />
             <Text style={styles.loadingText}>{loadingText}</Text>
         </View>
     );
@@ -766,7 +781,7 @@ ModernDropdown.displayName = 'ModernDropdown';
 
 const styles = StyleSheet.create({
     dropdownContainer: {
-        backgroundColor: Colors.dark.card,
+        backgroundColor: MODAL_DROPDOWN_COLORS.sheet,
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
         overflow: 'hidden',
@@ -794,12 +809,12 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingVertical: 8,
         borderBottomWidth: 1,
-        borderBottomColor: Colors.dark.borderMuted,
+        borderBottomColor: MODAL_DROPDOWN_COLORS.border,
     },
     searchInputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: Colors.dark.borderMuted,
+        backgroundColor: MODAL_DROPDOWN_COLORS.surface,
         borderRadius: 10,
         paddingHorizontal: 12,
         height: 40,
@@ -810,7 +825,7 @@ const styles = StyleSheet.create({
     searchInput: {
         flex: 1,
         fontSize: 16,
-        color: Colors.dark.white,
+        color: MODAL_DROPDOWN_COLORS.textPrimary,
         height: 40,
         padding: 0,
     },
@@ -818,7 +833,7 @@ const styles = StyleSheet.create({
         padding: 4,
     },
     clearButtonText: {
-        color: Colors.dark.mutedText,
+        color: MODAL_DROPDOWN_COLORS.textSecondary,
         fontSize: 12,
         fontWeight: '600',
     },
@@ -826,7 +841,7 @@ const styles = StyleSheet.create({
     // Tabs styles
     tabsContainer: {
         borderBottomWidth: 1,
-        borderBottomColor: Colors.dark.borderMuted,
+        borderBottomColor: MODAL_DROPDOWN_COLORS.border,
         paddingVertical: 8,
     },
     tabsScrollContent: {
@@ -846,15 +861,15 @@ const styles = StyleSheet.create({
         minWidth: 80,
     },
     tabButtonActive: {
-        backgroundColor: Colors.dark.primaryHighlight20,
+        backgroundColor: MODAL_DROPDOWN_COLORS.accentSurface,
     },
     tabButtonText: {
         fontSize: 15,
         fontWeight: '500',
-        color: Colors.dark.white,
+        color: MODAL_DROPDOWN_COLORS.textSecondary,
     },
     tabButtonTextActive: {
-        color: Colors.dark.primary,
+        color: MODAL_DROPDOWN_COLORS.textPrimary,
         fontWeight: '600',
     },
     tabContent: {
@@ -862,7 +877,7 @@ const styles = StyleSheet.create({
     },
     tabsWithSearchContainer: {
         borderBottomWidth: 1,
-        borderBottomColor: Colors.dark.borderMuted,
+        borderBottomColor: MODAL_DROPDOWN_COLORS.border,
     },
 
     // Category styles
@@ -872,28 +887,28 @@ const styles = StyleSheet.create({
     },
     categoryContainer: {
         marginVertical: 4,
-        backgroundColor: Colors.dark.card,
+        backgroundColor: MODAL_DROPDOWN_COLORS.surface,
         borderRadius: 8,
         overflow: 'hidden',
         borderWidth: 1,
-        borderColor: Colors.dark.borderMuted,
+        borderColor: MODAL_DROPDOWN_COLORS.border,
     },
     categoryHeader: {
         paddingHorizontal: 20,
         paddingVertical: 10,
-        backgroundColor: Colors.dark.surfaceNested,
+        backgroundColor: MODAL_DROPDOWN_COLORS.surfaceAlt,
         borderBottomWidth: 1,
-        borderBottomColor: Colors.dark.borderMuted,
+        borderBottomColor: MODAL_DROPDOWN_COLORS.border,
     },
     categoryTitle: {
         fontSize: 14,
         fontWeight: '600',
-        color: Colors.dark.mutedText,
+        color: MODAL_DROPDOWN_COLORS.textSecondary,
         textTransform: 'uppercase',
     },
     categorySeparator: {
         height: 8,
-        backgroundColor: Colors.dark.categorySeparatorBackground,
+        backgroundColor: MODAL_DROPDOWN_COLORS.sheet,
     },
 
     // Item styles
@@ -902,7 +917,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
     },
     itemContainerSelected: {
-        backgroundColor: Colors.dark.primaryHighlight20,
+        backgroundColor: MODAL_DROPDOWN_COLORS.accentSoft,
     },
     itemContent: {
         flexDirection: 'row',
@@ -921,11 +936,11 @@ const styles = StyleSheet.create({
     },
     itemText: {
         fontSize: 16,
-        color: Colors.dark.white,
+        color: MODAL_DROPDOWN_COLORS.textPrimary,
         flex: 1,
     },
     itemTextSelected: {
-        color: Colors.dark.primary,
+        color: MODAL_DROPDOWN_COLORS.accent,
         fontWeight: '600',
     },
     itemTextWithIcon: {
@@ -942,18 +957,18 @@ const styles = StyleSheet.create({
         paddingVertical: 2,
         borderRadius: 4,
         marginLeft: 8,
-        backgroundColor: Colors.dark.primary,
+        backgroundColor: MODAL_DROPDOWN_COLORS.accentSurface,
     },
     badgeText: {
         fontSize: 12,
-        color: Colors.dark.white,
+        color: MODAL_DROPDOWN_COLORS.textPrimary,
         fontWeight: '500',
     },
 
     // Separator
     separator: {
         height: 0.5,
-        backgroundColor: Colors.dark.borderMuted,
+        backgroundColor: MODAL_DROPDOWN_COLORS.border,
         marginHorizontal: 16,
     },
 
@@ -966,7 +981,7 @@ const styles = StyleSheet.create({
     loadingText: {
         marginTop: 8,
         fontSize: 16,
-        color: Colors.dark.mutedText,
+        color: MODAL_DROPDOWN_COLORS.textSecondary,
         textAlign: 'center',
     },
     emptyContainer: {
@@ -976,7 +991,7 @@ const styles = StyleSheet.create({
     },
     emptyText: {
         fontSize: 16,
-        color: Colors.dark.mutedText,
+        color: MODAL_DROPDOWN_COLORS.textSecondary,
         textAlign: 'center',
     },
 
@@ -984,7 +999,7 @@ const styles = StyleSheet.create({
     footerContainer: {
         padding: 16,
         borderTopWidth: 1,
-        borderTopColor: Colors.dark.borderMuted,
+        borderTopColor: MODAL_DROPDOWN_COLORS.border,
         marginTop: 8,
     },
 });

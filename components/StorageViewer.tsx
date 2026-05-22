@@ -7,7 +7,6 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@react-native-vector-icons/material-icons';
 import { BottomSheetScrollView } from '@expo/ui/community/bottom-sheet';
-import { Colors } from '@/constants/Colors';
 import { BottomModalPortal } from './BottomModalPortal';
 
 type StorageViewerProps = {
@@ -15,6 +14,14 @@ type StorageViewerProps = {
     onClose: () => void;
     items: [string, string | null][];
 };
+
+const MODAL_STORAGE_COLORS = {
+    surface: '#242A33',
+    surfaceInset: '#1F242C',
+    textPrimary: '#F3F6FF',
+    textSecondary: '#A8B0C2',
+    accent: '#9AB4FF',
+} as const;
 
 export const StorageViewer = ({
     visible,
@@ -39,7 +46,6 @@ export const StorageViewer = ({
         <BottomModalPortal
             isVisible={visible}
             onClose={onClose}
-            backgroundColor={Colors.dark.storageContainerBackground}
             snapPoints={['90%', '96%']}
             contentContainerStyle={styles.sheetContent}
         >
@@ -62,7 +68,7 @@ export const StorageViewer = ({
                                     :   'expand-more'
                                 }
                                 size={18}
-                                color={Colors.dark.white}
+                                color={MODAL_STORAGE_COLORS.textPrimary}
                             />
                         </TouchableOpacity>
 
@@ -105,7 +111,7 @@ const styles = StyleSheet.create({
         paddingBottom: 24,
     },
     item: {
-        backgroundColor: Colors.dark.surfaceRaisedAlt,
+        backgroundColor: MODAL_STORAGE_COLORS.surface,
         borderRadius: 8,
         padding: 12,
         marginBottom: 12,
@@ -119,26 +125,26 @@ const styles = StyleSheet.create({
     itemKey: {
         fontSize: 16,
         fontWeight: 'bold',
-        color: Colors.dark.randomColors[5],
+        color: MODAL_STORAGE_COLORS.accent,
         flex: 1,
     },
     valueContainer: {
-        backgroundColor: Colors.dark.overlayBlack20,
+        backgroundColor: MODAL_STORAGE_COLORS.surfaceInset,
         borderRadius: 4,
         padding: 8,
     },
     itemValue: {
         fontSize: 14,
-        color: Colors.dark.neutral200,
+        color: MODAL_STORAGE_COLORS.textPrimary,
     },
     nullValue: {
         fontSize: 14,
-        color: Colors.dark.neutral400,
+        color: MODAL_STORAGE_COLORS.textSecondary,
         fontStyle: 'italic',
     },
     showMoreText: {
         fontSize: 12,
-        color: Colors.dark.neutral400,
+        color: MODAL_STORAGE_COLORS.textSecondary,
         marginTop: 4,
         textAlign: 'right',
         fontStyle: 'italic',

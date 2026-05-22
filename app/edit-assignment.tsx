@@ -1631,7 +1631,6 @@ export default function EditAssignmentScreen() {
                 isVisible={isTypeModalVisible}
                 onClose={() => setIsTypeModalVisible(false)}
                 snapPoints={['74%', '92%']}
-                backgroundColor={Colors.dark.card}
                 contentContainerStyle={styles.dropdownSheetContent}
             >
                 <ModernDropdown

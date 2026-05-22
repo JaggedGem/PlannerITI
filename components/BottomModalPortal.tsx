@@ -1,11 +1,8 @@
 import ExpoBottomSheet, {
   BottomSheetView,
 } from "@expo/ui/community/bottom-sheet";
-import React, { useEffect, useMemo } from "react";
+import React, { useMemo } from "react";
 import { StyleSheet, ViewStyle, StyleProp } from "react-native";
-import { Colors } from "@/constants/Colors";
-import { StatusBar } from "expo-status-bar";
-import { NavigationBar } from "expo-navigation-bar";
 
 interface BottomModalPortalProps {
   isVisible: boolean;
@@ -13,7 +10,6 @@ interface BottomModalPortalProps {
   children: React.ReactNode;
   maxHeight?: string | number;
   snapPoints?: (string | number)[];
-  backgroundColor?: string;
   borderRadius?: number;
   showDragIndicator?: boolean;
   enablePanDownToClose?: boolean;
@@ -30,7 +26,6 @@ export function BottomModalPortal({
   children,
   maxHeight,
   snapPoints,
-  backgroundColor = Colors.dark.backgroundApp,
   borderRadius = 20,
   showDragIndicator = true,
   enablePanDownToClose = true,
@@ -38,24 +33,6 @@ export function BottomModalPortal({
 }: BottomModalPortalProps) {
   const isOpenIndex = isVisible ? 0 : -1;
   const hasSnapPoints = Boolean(snapPoints && snapPoints.length > 0);
-
-  useEffect(() => {
-    if (!isVisible) return;
-
-    // BottomSheet uses a native modal layer on Android/iOS; re-apply light
-    // system bar style whenever the sheet is presented.
-    StatusBar.setStyle("light", true);
-    StatusBar.setHidden(false, "none");
-    NavigationBar.setStyle("light");
-    NavigationBar.setHidden(false);
-  }, [isVisible]);
-
-  const sheetBackgroundStyle = useMemo<ViewStyle>(
-    () => ({
-      backgroundColor,
-    }),
-    [backgroundColor],
-  );
 
   const sheetContentStyle = useMemo<ViewStyle>(() => {
     const resolvedStyle: ViewStyle = {
@@ -70,15 +47,12 @@ export function BottomModalPortal({
 
   return (
     <>
-      <StatusBar style='light' hidden={false} />
-      <NavigationBar style='light' hidden={false} />
       <ExpoBottomSheet
         index={isOpenIndex}
         onClose={onClose}
         enablePanDownToClose={enablePanDownToClose}
         enableDynamicSizing={!hasSnapPoints}
         snapPoints={snapPoints}
-        backgroundStyle={sheetBackgroundStyle}
         handleComponent={showDragIndicator ? undefined : null}
       >
         <BottomSheetView

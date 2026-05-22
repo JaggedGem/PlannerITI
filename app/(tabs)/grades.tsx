@@ -208,6 +208,16 @@ const getPdfGradeTextColor = (grade: string): string => {
     return Colors.dark.white;
 };
 
+const GRADES_MODAL_COLORS = {
+    surface: '#242A33',
+    border: '#343C4A',
+    textPrimary: '#F3F6FF',
+    textSecondary: '#A8B0C2',
+    accent: '#33429E',
+    accentDisabled: '#4F5670',
+    successChip: 'rgba(96, 217, 138, 0.3)',
+} as const;
+
 const cloneStudentGrades = (data: StudentGrades): StudentGrades => ({
     studentInfo: { ...data.studentInfo },
     currentGrades: data.currentGrades.map((semester) => ({
@@ -1817,7 +1827,6 @@ const GradeCalculatorModal = ({
             isVisible={isVisible}
             onClose={onClose}
             snapPoints={['66%', '92%']}
-            backgroundColor={Colors.dark.surfaceSecondary}
             contentContainerStyle={styles.calculatorSheetContent}
         >
             <BottomSheetScrollView
@@ -1975,7 +1984,7 @@ const GradeCalculatorModal = ({
                                 </View>
                             :   <Text
                                     style={{
-                                        color: Colors.dark.neutral500,
+                                        color: GRADES_MODAL_COLORS.textSecondary,
                                         fontSize: 14,
                                         textAlign: 'center',
                                         padding: 10,
@@ -2007,7 +2016,7 @@ const GradeCalculatorModal = ({
                         value={targetAverage}
                         onChangeText={setTargetAverage}
                         placeholder="8.50"
-                        placeholderTextColor={Colors.dark.neutral500}
+                        placeholderTextColor={GRADES_MODAL_COLORS.textSecondary}
                         keyboardType="numeric"
                         maxLength={4}
                     />
@@ -2047,7 +2056,7 @@ const GradeCalculatorModal = ({
                                         key={`result-grade-${index}`}
                                         style={{
                                             backgroundColor:
-                                                Colors.dark.overlaySuccess50,
+                                                GRADES_MODAL_COLORS.successChip,
                                             borderRadius: 8,
                                             paddingHorizontal: 12,
                                             paddingVertical: 6,
@@ -4065,19 +4074,19 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     label: {
-        color: Colors.dark.white,
+        color: GRADES_MODAL_COLORS.textPrimary,
         fontSize: 16,
         fontWeight: '600',
         marginBottom: 4,
         marginTop: 8,
     },
     input: {
-        backgroundColor: Colors.dark.surfaceSecondary,
+        backgroundColor: GRADES_MODAL_COLORS.surface,
         borderWidth: 1,
-        borderColor: Colors.dark.surfaceRaisedAlt,
+        borderColor: GRADES_MODAL_COLORS.border,
         borderRadius: 12,
         padding: 16,
-        color: Colors.dark.white,
+        color: GRADES_MODAL_COLORS.textPrimary,
         fontSize: 16,
     },
     notesInput: {
@@ -4867,8 +4876,9 @@ const styles = StyleSheet.create({
         padding: 20,
     },
     pickerContainer: {
+        backgroundColor: GRADES_MODAL_COLORS.surface,
         borderWidth: 1,
-        borderColor: Colors.dark.surfaceRaisedAlt,
+        borderColor: GRADES_MODAL_COLORS.border,
         borderRadius: 12,
         padding: 8,
     },
@@ -4877,19 +4887,20 @@ const styles = StyleSheet.create({
         borderRadius: 8,
     },
     subjectOptionSelected: {
-        backgroundColor: Colors.dark.primaryStrong,
+        backgroundColor: GRADES_MODAL_COLORS.accent,
     },
     subjectOptionText: {
-        color: Colors.dark.white,
+        color: GRADES_MODAL_COLORS.textSecondary,
         fontSize: 16,
     },
     subjectOptionTextSelected: {
+        color: GRADES_MODAL_COLORS.textPrimary,
         fontWeight: '600',
     },
     currentGradesContainer: {
-        backgroundColor: Colors.dark.surfaceSecondary,
+        backgroundColor: GRADES_MODAL_COLORS.surface,
         borderWidth: 1,
-        borderColor: Colors.dark.surfaceRaisedAlt,
+        borderColor: GRADES_MODAL_COLORS.border,
         borderRadius: 12,
         padding: 12,
         marginBottom: 16,
@@ -4910,42 +4921,42 @@ const styles = StyleSheet.create({
         marginTop: 10,
         paddingTop: 10,
         borderTopWidth: 1,
-        borderTopColor: Colors.dark.overlayWhite10,
+        borderTopColor: GRADES_MODAL_COLORS.border,
     },
     currentAverageLabel: {
-        color: Colors.dark.white,
+        color: GRADES_MODAL_COLORS.textSecondary,
         fontSize: 16,
     },
     currentAverageValue: {
-        color: Colors.dark.white,
+        color: GRADES_MODAL_COLORS.textPrimary,
         fontSize: 16,
         fontWeight: 'bold',
     },
     calculateButton: {
-        backgroundColor: Colors.dark.primaryStrong,
+        backgroundColor: GRADES_MODAL_COLORS.accent,
         borderRadius: 12,
         padding: 16,
         alignItems: 'center',
         width: '100%',
     },
     calculateButtonDisabled: {
-        backgroundColor: Colors.dark.neutral500,
+        backgroundColor: GRADES_MODAL_COLORS.accentDisabled,
     },
     calculateButtonText: {
-        color: Colors.dark.white,
+        color: GRADES_MODAL_COLORS.textPrimary,
         fontSize: 16,
         fontWeight: '600',
     },
     resultsContainer: {
         marginTop: 20,
         padding: 12,
-        backgroundColor: Colors.dark.surfaceSecondary,
+        backgroundColor: GRADES_MODAL_COLORS.surface,
         borderWidth: 1,
-        borderColor: Colors.dark.surfaceRaisedAlt,
+        borderColor: GRADES_MODAL_COLORS.border,
         borderRadius: 12,
     },
     resultsTitle: {
-        color: Colors.dark.white,
+        color: GRADES_MODAL_COLORS.textPrimary,
         fontSize: 18,
         fontWeight: 'bold',
         marginBottom: 12,
@@ -4954,13 +4965,13 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.dark.overlaySuccess50,
     },
     noGradesText: {
-        color: Colors.dark.neutral500,
+        color: GRADES_MODAL_COLORS.textSecondary,
         fontSize: 14,
         textAlign: 'center',
         padding: 10,
     },
     noSolutionText: {
-        color: Colors.dark.white,
+        color: GRADES_MODAL_COLORS.textSecondary,
         fontSize: 16,
         textAlign: 'center',
     },
@@ -4994,7 +5005,7 @@ const styles = StyleSheet.create({
     subjectSeparator: {
         width: 1,
         height: 24,
-        backgroundColor: Colors.dark.surfaceRaisedAlt,
+        backgroundColor: GRADES_MODAL_COLORS.border,
         marginHorizontal: 5,
         alignSelf: 'center',
     },
@@ -5006,11 +5017,11 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        backgroundColor: Colors.dark.surfaceSecondary,
+        backgroundColor: GRADES_MODAL_COLORS.surface,
         borderRadius: 12,
         padding: 8,
         borderWidth: 1,
-        borderColor: Colors.dark.surfaceRaisedAlt,
+        borderColor: GRADES_MODAL_COLORS.border,
     },
     toggleOption: {
         paddingHorizontal: 16,
@@ -5020,21 +5031,21 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     toggleOptionActive: {
-        backgroundColor: Colors.dark.primaryStrong,
+        backgroundColor: GRADES_MODAL_COLORS.accent,
     },
     toggleOptionText: {
-        color: Colors.dark.neutral500,
+        color: GRADES_MODAL_COLORS.textSecondary,
         fontSize: 14,
         fontWeight: '500',
     },
     toggleOptionTextActive: {
-        color: Colors.dark.white,
+        color: GRADES_MODAL_COLORS.textPrimary,
         fontWeight: '600',
     },
     toggleSeparator: {
         width: 1,
         height: 24,
-        backgroundColor: Colors.dark.surfaceRaisedAlt,
+        backgroundColor: GRADES_MODAL_COLORS.border,
         marginHorizontal: 5,
         alignSelf: 'center',
     },
