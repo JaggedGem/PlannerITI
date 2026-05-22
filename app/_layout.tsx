@@ -1,275 +1,264 @@
 import {
-    DarkTheme,
-    DefaultTheme,
-    ThemeProvider,
-} from 'expo-router/react-navigation';
-import { useFonts } from 'expo-font';
-import { SplashScreen, Stack } from 'expo-router';
-import { NavigationBar } from 'expo-navigation-bar';
-import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
-import { useColorScheme } from 'react-native';
-import { Colors } from '@/constants/Colors';
-import authService from '../services/authService';
-import LoginNotification from '@/components/LoginNotification';
-import { scheduleService } from '@/services/scheduleService';
-import { updateService } from '@/services/updateService';
-import { AuthProvider } from '@/components/auth/AuthContext';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+  DarkTheme,
+  DefaultTheme,
+  ThemeProvider,
+} from "expo-router/react-navigation";
+import { useFonts } from "expo-font";
+import { SplashScreen, Stack } from "expo-router";
+import { NavigationBar } from "expo-navigation-bar";
+import { StatusBar } from "expo-status-bar";
+import { useEffect, useState } from "react";
+import { useColorScheme } from "react-native";
+import { Colors } from "@/constants/Colors";
+import authService from "../services/authService";
+import LoginNotification from "@/components/LoginNotification";
+import { scheduleService } from "@/services/scheduleService";
+import { updateService } from "@/services/updateService";
+import { AuthProvider } from "@/components/auth/AuthContext";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
-    initializeNotifications,
-    scheduleAllNotifications,
-} from '@/utils/notificationUtils';
-import { getAssignments } from '@/utils/assignmentStorage';
-import { gradesDataService } from '@/services/gradesService';
-import * as SystemUI from 'expo-system-ui';
+  initializeNotifications,
+  scheduleAllNotifications,
+} from "@/utils/notificationUtils";
+import { getAssignments } from "@/utils/assignmentStorage";
+import { gradesDataService } from "@/services/gradesService";
+import * as SystemUI from "expo-system-ui";
 
 export {
-    // Catch any errors thrown by the Layout component.
-    ErrorBoundary,
-} from 'expo-router';
+  // Catch any errors thrown by the Layout component.
+  ErrorBoundary,
+} from "expo-router";
 
 export const unstable_settings = {
-    // Ensure that reloading on /modal/... URLs loads the tab navigator
-    initialRouteName: '(tabs)',
+  // Ensure that reloading on /modal/... URLs loads the tab navigator
+  initialRouteName: "(tabs)",
 };
 
 // Constants
-const USER_CACHE_KEY = '@planner_user_cache';
-const SKIP_LOGIN_KEY = '@planner_skip_login';
+const USER_CACHE_KEY = "@planner_user_cache";
+const SKIP_LOGIN_KEY = "@planner_skip_login";
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-    const [loaded, error] = useFonts({
-        SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-    });
-    const [startupReady, setStartupReady] = useState(false);
+  const [loaded, error] = useFonts({
+    SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
+  });
+  const [startupReady, setStartupReady] = useState(false);
 
-    const colorScheme = useColorScheme();
-    useEffect(() => {
-        const theme = Colors[colorScheme === 'dark' ? 'dark' : 'light'];
-        SystemUI.setBackgroundColorAsync(theme.backgroundApp);
-    }, [colorScheme]);
+  const colorScheme = useColorScheme();
+  useEffect(() => {
+    const theme = Colors[colorScheme === "dark" ? "dark" : "light"];
+    SystemUI.setBackgroundColorAsync(theme.backgroundApp);
+  }, [colorScheme]);
 
-    // Pre-load auth state values for faster app startup
-    useEffect(() => {
-        const preloadAuthState = async () => {
-            try {
-                // Preload values in memory for faster access later
-                await Promise.all([
-                    AsyncStorage.getItem(USER_CACHE_KEY),
-                    AsyncStorage.getItem(SKIP_LOGIN_KEY),
-                ]);
+  // Pre-load auth state values for faster app startup
+  useEffect(() => {
+    const preloadAuthState = async () => {
+      try {
+        // Preload values in memory for faster access later
+        await Promise.all([
+          AsyncStorage.getItem(USER_CACHE_KEY),
+          AsyncStorage.getItem(SKIP_LOGIN_KEY),
+        ]);
 
-                // Start loading user data in background after preloading is done
-                setTimeout(() => {
-                    authService.loadUserData();
-                }, 100);
-            } catch {
-                // Silent error handling
-            }
-        };
+        // Start loading user data in background after preloading is done
+        setTimeout(() => {
+          authService.loadUserData();
+        }, 100);
+      } catch {
+        // Silent error handling
+      }
+    };
 
-        preloadAuthState();
-    }, []);
+    preloadAuthState();
+  }, []);
 
-    // Initialize notifications
-    useEffect(() => {
-        if (loaded) {
-            const setupNotifications = async () => {
-                try {
-                    // Initialize notification system
-                    await initializeNotifications();
+  // Initialize notifications
+  useEffect(() => {
+    if (loaded) {
+      const setupNotifications = async () => {
+        try {
+          // Initialize notification system
+          await initializeNotifications();
 
-                    // Schedule notifications for existing assignments
-                    const assignments = await getAssignments();
-                    await scheduleAllNotifications(assignments);
-                } catch (error) {
-                    console.error('Error setting up notifications:', error);
-                }
-            };
-
-            setupNotifications();
+          // Schedule notifications for existing assignments
+          const assignments = await getAssignments();
+          await scheduleAllNotifications(assignments);
+        } catch (error) {
+          console.error("Error setting up notifications:", error);
         }
-    }, [loaded]);
+      };
 
-    // Setup period times sync interval at a random offset to avoid server stress
-    useEffect(() => {
-        if (loaded) {
-            // Initial sync with random delay between 0-60 seconds to distribute load
-            const initialDelay = Math.random() * 60 * 1000;
-            const syncTimer = setTimeout(() => {
-                scheduleService.syncPeriodTimes();
+      setupNotifications();
+    }
+  }, [loaded]);
 
-                // Then sync every 24 hours at a random minute to distribute load
-                setInterval(
-                    () => {
-                        scheduleService.syncPeriodTimes();
-                    },
-                    24 * 60 * 60 * 1000,
-                );
-            }, initialDelay);
+  // Setup period times sync interval at a random offset to avoid server stress
+  useEffect(() => {
+    if (loaded) {
+      // Initial sync with random delay between 0-60 seconds to distribute load
+      const initialDelay = Math.random() * 60 * 1000;
+      const syncTimer = setTimeout(() => {
+        scheduleService.syncPeriodTimes();
 
-            return () => {
-                clearTimeout(syncTimer);
-            };
+        // Then sync every 24 hours at a random minute to distribute load
+        setInterval(
+          () => {
+            scheduleService.syncPeriodTimes();
+          },
+          24 * 60 * 60 * 1000,
+        );
+      }, initialDelay);
+
+      return () => {
+        clearTimeout(syncTimer);
+      };
+    }
+  }, [loaded]);
+
+  // Initialize schedule on app startup in Expo Router entrypoint
+  useEffect(() => {
+    if (!loaded) return;
+
+    const bootstrapSchedule = async () => {
+      try {
+        await scheduleService.ready();
+        await scheduleService.refreshGroups(true);
+        await scheduleService.ensureSelectedGroup();
+        await scheduleService.refreshSchedule(true);
+
+        // Trigger background grades refresh on app load when IDNP is available.
+        const idnp = await AsyncStorage.getItem("@planner_idnp");
+        if (idnp) {
+          gradesDataService.silentRefresh(idnp).catch(() => {
+            // Silent fallback to cached grades data
+          });
         }
-    }, [loaded]);
+      } catch {
+        // Silent fallback to cached data paths
+      }
+    };
 
-    // Initialize schedule on app startup in Expo Router entrypoint
-    useEffect(() => {
-        if (!loaded) return;
+    bootstrapSchedule();
+  }, [loaded]);
 
-        const bootstrapSchedule = async () => {
-            try {
-                await scheduleService.ready();
-                await scheduleService.refreshGroups(true);
-                await scheduleService.ensureSelectedGroup();
-                await scheduleService.refreshSchedule(true);
+  // Expo Router uses Error Boundaries to catch errors in the navigation tree.
+  useEffect(() => {
+    if (error) throw error;
+  }, [error]);
 
-                // Trigger background grades refresh on app load when IDNP is available.
-                const idnp = await AsyncStorage.getItem('@planner_idnp');
-                if (idnp) {
-                    gradesDataService.silentRefresh(idnp).catch(() => {
-                        // Silent fallback to cached grades data
-                    });
-                }
-            } catch {
-                // Silent fallback to cached data paths
-            }
-        };
-
-        bootstrapSchedule();
-    }, [loaded]);
-
-    // Expo Router uses Error Boundaries to catch errors in the navigation tree.
-    useEffect(() => {
-        if (error) throw error;
-    }, [error]);
-
-    useEffect(() => {
-        if (!loaded) {
-            return;
-        }
-
-        let isMounted = true;
-
-        const runStartupOtaFlow = async () => {
-            try {
-                const didTriggerReload =
-                    await updateService.applyPreparedOtaUpdateOnLaunch();
-
-                // If reload was triggered, this JS runtime will be replaced immediately.
-                if (didTriggerReload) {
-                    return;
-                }
-
-                // Prepare the next OTA update without blocking app startup.
-                updateService
-                    .prepareOtaUpdateForNextLaunch()
-                    .catch((otaError) => {
-                        console.error(
-                            'Error staging OTA update for next launch:',
-                            otaError,
-                        );
-                    });
-            } catch (otaError) {
-                console.error('Error during OTA startup flow:', otaError);
-            } finally {
-                if (isMounted) {
-                    setStartupReady(true);
-                }
-            }
-        };
-
-        runStartupOtaFlow();
-
-        return () => {
-            isMounted = false;
-        };
-    }, [loaded]);
-
-    useEffect(() => {
-        if (loaded && startupReady) {
-            SplashScreen.hideAsync();
-        }
-    }, [loaded, startupReady]);
-
-    if (!loaded || !startupReady) {
-        return null;
+  useEffect(() => {
+    if (!loaded) {
+      return;
     }
 
-    return <RootLayoutNav />;
+    let isMounted = true;
+
+    const runStartupOtaFlow = async () => {
+      try {
+        const didTriggerReload =
+          await updateService.applyPreparedOtaUpdateOnLaunch();
+
+        // If reload was triggered, this JS runtime will be replaced immediately.
+        if (didTriggerReload) {
+          return;
+        }
+
+        // Prepare the next OTA update without blocking app startup.
+        updateService.prepareOtaUpdateForNextLaunch().catch((otaError) => {
+          console.error("Error staging OTA update for next launch:", otaError);
+        });
+      } catch (otaError) {
+        console.error("Error during OTA startup flow:", otaError);
+      } finally {
+        if (isMounted) {
+          setStartupReady(true);
+        }
+      }
+    };
+
+    runStartupOtaFlow();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [loaded]);
+
+  useEffect(() => {
+    if (loaded && startupReady) {
+      SplashScreen.hideAsync();
+    }
+  }, [loaded, startupReady]);
+
+  if (!loaded || !startupReady) {
+    return null;
+  }
+
+  return <RootLayoutNav />;
 }
 
 function RootLayoutNav() {
-    const colorScheme = useColorScheme();
-    const isDark = colorScheme === 'dark';
-    const theme = Colors[isDark ? 'dark' : 'light'];
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === "dark";
+  const theme = Colors[isDark ? "dark" : "light"];
 
-    return (
-        <ThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
-            <StatusBar style="light" />
-            <NavigationBar style={isDark ? 'light' : 'dark'} hidden={false} />
-            <AuthProvider>
-                <Stack
-                    screenOptions={{
-                        headerShown: false,
-                        animation: 'default',
-                        presentation: 'containedTransparentModal',
-                        headerTransparent: true,
-                        headerTintColor: isDark ? theme.white : theme.black,
-                        contentStyle: { backgroundColor: theme.backgroundApp },
-                    }}
-                >
-                    <Stack.Screen
-                        name="index"
-                        options={{ animation: 'none' }}
-                    />
-                    <Stack.Screen name="(tabs)" />
-                    <Stack.Screen
-                        name="auth"
-                        options={{ presentation: 'card' }}
-                    />
-                    <Stack.Screen
-                        name="signup"
-                        options={{ headerShown: false, presentation: 'card' }}
-                    />
-                    <Stack.Screen
-                        name="forgot-password"
-                        options={{
-                            headerShown: false,
-                        }}
-                    />
-                    <Stack.Screen
-                        name="reset-password"
-                        options={{
-                            headerShown: false,
-                        }}
-                    />
-                    <Stack.Screen
-                        name="privacy-policy"
-                        options={{
-                            headerShown: false,
-                        }}
-                    />
-                    <Stack.Screen
-                        name="new-assignment"
-                        options={{
-                            headerShown: false,
-                        }}
-                    />
-                    <Stack.Screen
-                        name="edit-assignment"
-                        options={{
-                            headerShown: false,
-                        }}
-                    />
-                </Stack>
-                <LoginNotification />
-            </AuthProvider>
-        </ThemeProvider>
-    );
+  return (
+    <ThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
+      <StatusBar style='light' hidden={false} />
+      <NavigationBar style='light' hidden={false} />
+      <AuthProvider>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            animation: "default",
+            presentation: "containedTransparentModal",
+            headerTransparent: true,
+            headerTintColor: isDark ? theme.white : theme.black,
+            contentStyle: { backgroundColor: theme.backgroundApp },
+          }}
+        >
+          <Stack.Screen name='index' options={{ animation: "none" }} />
+          <Stack.Screen name='(tabs)' />
+          <Stack.Screen name='auth' options={{ presentation: "card" }} />
+          <Stack.Screen
+            name='signup'
+            options={{ headerShown: false, presentation: "card" }}
+          />
+          <Stack.Screen
+            name='forgot-password'
+            options={{
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name='reset-password'
+            options={{
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name='privacy-policy'
+            options={{
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name='new-assignment'
+            options={{
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name='edit-assignment'
+            options={{
+              headerShown: false,
+            }}
+          />
+        </Stack>
+        <LoginNotification />
+      </AuthProvider>
+    </ThemeProvider>
+  );
 }

@@ -202,6 +202,8 @@ export function LoginScreen() {
                 visible={showAlert}
                 transparent={true}
                 animationType="fade"
+                statusBarTranslucent={true}
+                navigationBarTranslucent={true}
                 onRequestClose={() => setShowAlert(false)}
             >
                 <View style={styles.modalOverlay}>

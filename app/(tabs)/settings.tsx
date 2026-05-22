@@ -338,6 +338,8 @@ const TimePicker = ({
             transparent
             visible
             animationType='none'
+            statusBarTranslucent={true}
+            navigationBarTranslucent={true}
             onRequestClose={onClose}
         >
             <View style={styles.timePickerOverlay}>
@@ -2923,6 +2925,8 @@ export default function Settings() {
                 visible={showGroupScreen}
                 animationType='slide'
                 presentationStyle='fullScreen'
+                statusBarTranslucent={true}
+                navigationBarTranslucent={true}
                 onRequestClose={closeGroupSelectionScreen}
             >
                 <SafeAreaView
