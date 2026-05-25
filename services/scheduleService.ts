@@ -156,6 +156,103 @@ export interface SpecialScheduleResponse {
 }
 
 const API_BASE_URL = 'https://orar-api.ceiti.md/v1';
+const CEITI_REQUEST_TIMEOUT_MS = 10000;
+const CEITI_REQUEST_MAX_ATTEMPTS = 3;
+const CEITI_RETRY_BASE_DELAY_MS = 500;
+
+const sleep = (ms: number): Promise<void> =>
+    new Promise((resolve) => setTimeout(resolve, ms));
+
+const isRetryableCeitiStatus = (status: number): boolean =>
+    status === 408 || status === 425 || status === 429 || status >= 500;
+
+const isRetryableCeitiError = (error: unknown): boolean => {
+    if (!(error instanceof Error)) return false;
+    if (error.name === 'AbortError') return true;
+    const message = error.message.toLowerCase();
+    return (
+        message.includes('network') ||
+        message.includes('failed to fetch') ||
+        message.includes('connection')
+    );
+};
+
+const fetchCeitiWithTimeout = async (
+    url: string,
+    init: RequestInit = {},
+    timeoutMs: number = CEITI_REQUEST_TIMEOUT_MS,
+): Promise<Response> => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    const upstreamSignal = init.signal;
+    const abortListener = () => controller.abort();
+
+    if (upstreamSignal) {
+        if (upstreamSignal.aborted) {
+            controller.abort();
+        } else {
+            upstreamSignal.addEventListener('abort', abortListener, {
+                once: true,
+            });
+        }
+    }
+
+    try {
+        return await fetch(url, {
+            ...init,
+            signal: controller.signal,
+        });
+    } finally {
+        clearTimeout(timeoutId);
+        if (upstreamSignal) {
+            upstreamSignal.removeEventListener('abort', abortListener);
+        }
+    }
+};
+
+const fetchCeitiWithRetry = async (
+    url: string,
+    init: RequestInit = {},
+): Promise<Response> => {
+    let lastError: unknown = null;
+    let lastResponse: Response | null = null;
+
+    for (let attempt = 0; attempt < CEITI_REQUEST_MAX_ATTEMPTS; attempt += 1) {
+        try {
+            const response = await fetchCeitiWithTimeout(url, init);
+            if (response.ok) {
+                return response;
+            }
+
+            lastResponse = response;
+            const shouldRetry =
+                attempt < CEITI_REQUEST_MAX_ATTEMPTS - 1 &&
+                isRetryableCeitiStatus(response.status);
+            if (!shouldRetry) {
+                return response;
+            }
+        } catch (error) {
+            lastError = error;
+            const shouldRetry =
+                attempt < CEITI_REQUEST_MAX_ATTEMPTS - 1 &&
+                isRetryableCeitiError(error);
+            if (!shouldRetry) {
+                throw error;
+            }
+        }
+
+        const delayMs = CEITI_RETRY_BASE_DELAY_MS * (attempt + 1);
+        await sleep(delayMs);
+    }
+
+    if (lastResponse) {
+        return lastResponse;
+    }
+    if (lastError instanceof Error) {
+        throw lastError;
+    }
+    throw new Error('CEITI request failed');
+};
 
 export const DAYS_MAP = {
     1: 'monday',
@@ -1095,7 +1192,7 @@ export const scheduleService = {
             }
 
             // If no cached groups, fetch from API
-            const response = await fetch(`${API_BASE_URL}/grupe`);
+            const response = await fetchCeitiWithRetry(`${API_BASE_URL}/grupe`);
             if (!response.ok) {
                 throw new Error('Failed to fetch groups');
             }
@@ -1137,7 +1234,7 @@ export const scheduleService = {
                 return this.getGroups();
             }
 
-            const response = await fetch(`${API_BASE_URL}/grupe`);
+            const response = await fetchCeitiWithRetry(`${API_BASE_URL}/grupe`);
             if (!response.ok) {
                 throw new Error('Failed to fetch groups');
             }
@@ -1297,7 +1394,7 @@ export const scheduleService = {
 
     async fetchAndCacheSchedule(groupId: string): Promise<ApiResponse> {
         try {
-            const response = await fetch(
+            const response = await fetchCeitiWithRetry(
                 `${API_BASE_URL}/orar?_id=${groupId}&tip=class`,
             );
             if (!response.ok) {

@@ -1,6 +1,6 @@
 import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import { useMemo, useEffect } from 'react';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@react-native-vector-icons/material-icons';
 import Animated, {
     useAnimatedStyle,
     withTiming,
@@ -186,7 +186,11 @@ export default function ViewModeMenu({
 
 const styles = StyleSheet.create({
     overlay: {
-        ...StyleSheet.absoluteFillObject,
+        position: 'absolute',
+        top: 0,
+        right: 0,
+        bottom: 0,
+        left: 0,
         zIndex: 1000,
     },
     backdrop: {

@@ -1,250 +1,184 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    Animated,
-    StyleSheet,
-    View,
-    BackHandler,
-    Pressable,
-    Modal,
-    ViewStyle,
-    Easing,
-} from 'react-native';
-import { Colors } from '@/constants/Colors';
+  BottomSheetModal,
+  BottomSheetBackdrop,
+  type BottomSheetBackdropProps,
+  BottomSheetView,
+} from "@gorhom/bottom-sheet";
+import React, {
+  useCallback,
+  useEffect,
+  useRef,
+  useMemo,
+  useId,
+} from "react";
+import {
+  StyleSheet,
+  ViewStyle,
+  StyleProp,
+  BackHandler,
+  Platform,
+} from "react-native";
+import { Colors } from "@/constants/Colors";
+import { useColorScheme } from "@/hooks/useColorScheme";
 
 interface BottomModalPortalProps {
-    isVisible: boolean;
-    onClose: () => void;
-    children: React.ReactNode;
-    maxHeight?: string | number;
-    backgroundColor?: string;
-    borderRadius?: number;
+  isVisible: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
+  maxHeight?: string | number;
+  snapPoints?: (string | number)[];
+  borderRadius?: number;
+  showDragIndicator?: boolean;
+  enablePanDownToClose?: boolean;
+  enableDynamicSizing?: boolean;
+  contentContainerStyle?: StyleProp<ViewStyle>;
 }
 
 /**
- * A generic portal component for bottom modals that ensures content always renders on top
- * of other content regardless of parent layout or content changes.
- * Provides the same portal pattern as ModernDropdownPortal but for any content.
+ * Standardized bottom-sheet wrapper for app modals.
+ * Powered by @gorhom/bottom-sheet.
  */
 export function BottomModalPortal({
-    isVisible,
-    onClose,
-    children,
-    maxHeight = '80%',
-    backgroundColor = Colors.dark.backgroundApp,
-    borderRadius = 20,
+  isVisible,
+  onClose,
+  children,
+  maxHeight,
+  snapPoints,
+  borderRadius = 20,
+  showDragIndicator = true,
+  enablePanDownToClose = true,
+  enableDynamicSizing = true,
+  contentContainerStyle,
 }: BottomModalPortalProps) {
-    const overlayOpacity = useRef(new Animated.Value(0)).current;
-    const sheetOpacity = useRef(new Animated.Value(0)).current;
-    const sheetTranslateY = useRef(new Animated.Value(28)).current;
-    const closeRunIdRef = useRef(0);
-    const [layoutTick, setLayoutTick] = useState(0);
-    const [isRendered, setIsRendered] = useState(isVisible);
-    const [isLayoutStable, setIsLayoutStable] = useState(false);
+  const bottomSheetModalRef = useRef<BottomSheetModal>(null);
+  const isPresentedRef = useRef(false);
+  const modalId = useId();
+  const colorScheme = useColorScheme();
+  const theme = Colors[colorScheme];
+  const resolvedSnapPoints = useMemo(
+    () => (snapPoints && snapPoints.length > 0 ? snapPoints : undefined),
+    [snapPoints],
+  );
 
-    const resetAnimationValues = useCallback(() => {
-        overlayOpacity.stopAnimation();
-        sheetOpacity.stopAnimation();
-        sheetTranslateY.stopAnimation();
-
-        overlayOpacity.setValue(0);
-        sheetOpacity.setValue(0);
-        sheetTranslateY.setValue(28);
-    }, [overlayOpacity, sheetOpacity, sheetTranslateY]);
-
-    const runEnterAnimation = useCallback(() => {
-        Animated.parallel([
-            Animated.timing(overlayOpacity, {
-                toValue: 1,
-                duration: 220,
-                easing: Easing.out(Easing.cubic),
-                useNativeDriver: true,
-            }),
-            Animated.timing(sheetOpacity, {
-                toValue: 1,
-                duration: 180,
-                easing: Easing.out(Easing.cubic),
-                useNativeDriver: true,
-            }),
-            Animated.timing(sheetTranslateY, {
-                toValue: 0,
-                duration: 260,
-                easing: Easing.out(Easing.cubic),
-                useNativeDriver: true,
-            }),
-        ]).start();
-    }, [overlayOpacity, sheetOpacity, sheetTranslateY]);
-
-    const runExitAnimation = useCallback(
-        (onDone: () => void) => {
-            Animated.parallel([
-                Animated.timing(overlayOpacity, {
-                    toValue: 0,
-                    duration: 130,
-                    easing: Easing.in(Easing.cubic),
-                    useNativeDriver: true,
-                }),
-                Animated.timing(sheetOpacity, {
-                    toValue: 0,
-                    duration: 100,
-                    easing: Easing.in(Easing.cubic),
-                    useNativeDriver: true,
-                }),
-                Animated.timing(sheetTranslateY, {
-                    toValue: 24,
-                    duration: 140,
-                    easing: Easing.in(Easing.cubic),
-                    useNativeDriver: true,
-                }),
-            ]).start(() => {
-                onDone();
-            });
-        },
-        [overlayOpacity, sheetOpacity, sheetTranslateY],
-    );
-
-    // Handle back button on Android
-    useEffect(() => {
-        if (!isRendered) return;
-
-        const backHandler = BackHandler.addEventListener(
-            'hardwareBackPress',
-            () => {
-                if (isRendered) {
-                    onClose();
-                    return true;
-                }
-                return false;
-            },
-        );
-
-        return () => backHandler.remove();
-    }, [isRendered, onClose]);
-
-    useEffect(() => {
-        if (isVisible) {
-            closeRunIdRef.current += 1;
-            setIsRendered(true);
-            setIsLayoutStable(false);
-            resetAnimationValues();
-            return;
-        }
-
-        if (!isRendered) return;
-
-        const closeRunId = closeRunIdRef.current + 1;
-        closeRunIdRef.current = closeRunId;
-
-        runExitAnimation(() => {
-            if (closeRunIdRef.current !== closeRunId) return;
-            setIsRendered(false);
-            setIsLayoutStable(false);
-            resetAnimationValues();
-        });
-    }, [isVisible, isRendered, runExitAnimation, resetAnimationValues]);
-
-    useEffect(() => {
-        if (!isVisible || !isRendered || !isLayoutStable) return;
-        runEnterAnimation();
-    }, [isVisible, isRendered, isLayoutStable, runEnterAnimation]);
-
-    const modalContentStyle: ViewStyle = {
-        maxHeight: maxHeight as any,
-        backgroundColor,
-        borderTopLeftRadius: borderRadius,
-        borderTopRightRadius: borderRadius,
+  const sheetContentStyle = useMemo<ViewStyle>(() => {
+    const resolvedStyle: ViewStyle = {
+      backgroundColor: theme.backgroundApp,
+      borderTopLeftRadius: borderRadius,
+      borderTopRightRadius: borderRadius,
     };
+    if (maxHeight != null) {
+      resolvedStyle.maxHeight = maxHeight as ViewStyle["maxHeight"];
+    }
+    return resolvedStyle;
+  }, [maxHeight, borderRadius, theme.backgroundApp]);
 
-    const handleModalShow = useCallback(() => {
-        // Force one extra layout pass right after open.
-        // This stabilizes Android Modal geometry on some devices.
+  const renderBackdrop = useCallback(
+    (props: BottomSheetBackdropProps) => (
+      <BottomSheetBackdrop
+        {...props}
+        appearsOnIndex={0}
+        disappearsOnIndex={-1}
+        pressBehavior="close"
+        opacity={0.45}
+      />
+    ),
+    [],
+  );
+
+  const handleDismiss = useCallback(() => {
+    isPresentedRef.current = false;
+    onClose();
+  }, [onClose]);
+
+  useEffect(() => {
+    if (isVisible) {
+      if (!isPresentedRef.current) {
         requestAnimationFrame(() => {
-            setLayoutTick((prev) => prev + 1);
-            requestAnimationFrame(() => {
-                setIsLayoutStable(true);
-            });
+          bottomSheetModalRef.current?.present();
+          isPresentedRef.current = true;
         });
-    }, []);
-
-    if (!isRendered) {
-        return null;
+      }
+      return;
     }
 
-    return (
-        <Modal
-            visible={isRendered}
-            transparent
-            animationType="none"
-            presentationStyle="overFullScreen"
-            statusBarTranslucent
-            navigationBarTranslucent
-            hardwareAccelerated
-            onShow={handleModalShow}
-            onRequestClose={onClose}
-        >
-            <View key={layoutTick} style={styles.container}>
-                <View style={styles.overlayContainer}>
-                    <Animated.View
-                        style={[
-                            styles.overlay,
-                            { opacity: overlayOpacity },
-                        ]}
-                    >
-                        <Pressable
-                            style={styles.overlayPressable}
-                            onPress={onClose}
-                        />
-                    </Animated.View>
-                </View>
-                <View style={styles.modalWrapper} pointerEvents="box-none">
-                    <Animated.View
-                        style={[
-                            styles.modalContent,
-                            modalContentStyle,
-                            {
-                                opacity: sheetOpacity,
-                                transform: [{ translateY: sheetTranslateY }],
-                            },
-                        ]}
-                    >
-                        {children}
-                    </Animated.View>
-                </View>
-            </View>
-        </Modal>
+    if (isPresentedRef.current) {
+      bottomSheetModalRef.current?.dismiss();
+    }
+  }, [isVisible]);
+
+  useEffect(() => {
+    if (Platform.OS !== "android" || !isVisible) {
+      return;
+    }
+
+    const subscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      () => {
+        if (isPresentedRef.current) {
+          bottomSheetModalRef.current?.dismiss();
+        } else {
+          onClose();
+        }
+        return true;
+      },
     );
+
+    return () => {
+      subscription.remove();
+    };
+  }, [isVisible, onClose]);
+
+  return (
+    <BottomSheetModal
+      ref={bottomSheetModalRef}
+      name={`bottom-modal-${modalId.replace(/:/g, "")}`}
+      index={0}
+      onDismiss={handleDismiss}
+      enablePanDownToClose={enablePanDownToClose}
+      enableDynamicSizing={enableDynamicSizing}
+      snapPoints={resolvedSnapPoints}
+      handleComponent={showDragIndicator ? undefined : null}
+      backgroundStyle={[
+        styles.sheetBackground,
+        {
+          backgroundColor: theme.backgroundApp,
+          borderTopLeftRadius: borderRadius,
+          borderTopRightRadius: borderRadius,
+        },
+      ]}
+      handleIndicatorStyle={[
+        styles.handleIndicator,
+        { backgroundColor: theme.borderMuted },
+      ]}
+      backdropComponent={renderBackdrop}
+      android_keyboardInputMode="adjustResize"
+    >
+      <BottomSheetView
+        style={[
+          styles.sheetContent,
+          sheetContentStyle,
+          contentContainerStyle,
+        ]}
+      >
+        {children}
+      </BottomSheetView>
+    </BottomSheetModal>
+  );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        justifyContent: 'flex-end',
-        backgroundColor: Colors.dark.transparent,
-    },
-    overlayContainer: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-    },
-    overlay: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: Colors.dark.overlayBlack50,
-    },
-    overlayPressable: {
-        ...StyleSheet.absoluteFillObject,
-    },
-    modalWrapper: {
-        flex: 1,
-        backgroundColor: Colors.dark.transparent,
-        justifyContent: 'flex-end',
-    },
-    modalContent: {
-        padding: 20,
-        width: '100%',
-    },
+  sheetBackground: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  handleIndicator: {
+    width: 40,
+    height: 4,
+  },
+  sheetContent: {
+    paddingTop: 0,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    width: "100%",
+  },
 });

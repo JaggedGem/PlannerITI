@@ -8,7 +8,7 @@ import {
     Modal,
 } from 'react-native';
 import { Link, router } from 'expo-router';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@react-native-vector-icons/material-icons';
 import { ThemedText } from '../ThemedText';
 import { ThemedView } from '../ThemedView';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -142,6 +142,8 @@ export function ForgotPasswordScreen() {
                 visible={showAlert}
                 transparent={true}
                 animationType="fade"
+                statusBarTranslucent={true}
+                navigationBarTranslucent={true}
                 onRequestClose={() => setShowAlert(false)}
             >
                 <View style={styles.modalOverlay}>

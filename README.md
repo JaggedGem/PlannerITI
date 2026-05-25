@@ -5,9 +5,9 @@
   
   **A comprehensive student planner for CEITI students**
   
-  [![React Native](https://img.shields.io/badge/React%20Native-0.81.4-blue.svg)](https://reactnative.dev/)
-  [![Expo](https://img.shields.io/badge/Expo-~54.0.12-000020.svg)](https://expo.dev/)
-  [![TypeScript](https://img.shields.io/badge/TypeScript-5.9.2-blue.svg)](https://www.typescriptlang.org/)
+  [![React Native](https://img.shields.io/badge/React%20Native-0.85.3-blue.svg)](https://reactnative.dev/)
+  [![Expo](https://img.shields.io/badge/Expo-56.0.4-000020.svg)](https://expo.dev/)
+  [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.3-blue.svg)](https://www.typescriptlang.org/)
   [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 </div>
 
@@ -20,6 +20,7 @@ Built with React Native, Expo, and Expo Router, PlannerITI offers an offline-fir
 ## ✨ Key Features
 
 ### 📅 Smart Schedule Management
+
 - **Real-time Class Schedule**: Automatically syncs with CEITI's schedule system
 - **Day & Week Views**: Toggle between detailed daily view and comprehensive weekly overview
 - **Even/Odd Week Detection**: Automatically determines the current week type
@@ -32,6 +33,7 @@ Built with React Native, Expo, and Expo Router, PlannerITI offers an offline-fir
 - **Daily Period Sync**: Period times and overrides sync automatically
 
 ### 📝 Assignment Tracking
+
 - **Multiple Views**: Organize assignments by due date, class, or priority
 - **Rich Assignment Types**: Support for homework, tests, exams, projects, quizzes, labs, essays, and presentations
 - **Subtasks**: Break down complex assignments into manageable subtasks
@@ -42,6 +44,7 @@ Built with React Native, Expo, and Expo Router, PlannerITI offers an offline-fir
 - **Orphaned Assignment Handling**: Smart detection and restoration when switching groups
 
 ### 📊 Grade Monitoring
+
 - **IDNP Integration**: Secure login using your IDNP number
 - **Real-time Grade Display**: View current semester grades and averages
 - **Semester Overview**: Access grades for all semesters (Semester I & II)
@@ -59,6 +62,7 @@ Built with React Native, Expo, and Expo Router, PlannerITI offers an offline-fir
 - **Background Refresh**: Silent updates when opening the app
 
 ### 🔔 Intelligent Notifications
+
 - **Smart Reminders**: Customizable reminder schedules based on assignment type
   - Exams: Default 7 days before
   - Tests: Default 5 days before
@@ -73,6 +77,7 @@ Built with React Native, Expo, and Expo Router, PlannerITI offers an offline-fir
 - **Priority Alerts**: Enhanced notifications for priority assignments
 
 ### 🔐 Account & Sync (Authentication System)
+
 - **Secure Authentication**: Email-based login with token auth and secure credential storage
 - **Email Verification**: Verify your account via email
 - **Password Reset**: Secure password recovery system
@@ -83,7 +88,8 @@ Built with React Native, Expo, and Expo Router, PlannerITI offers an offline-fir
 - **Settings Sync**: Uploads user settings and notification preferences when logged in
 
 ### 🌍 Localization
-- **Multi-Language Support**: 
+
+- **Multi-Language Support**:
   - English (en)
   - Română (ro)
   - Русский (ru)
@@ -92,6 +98,7 @@ Built with React Native, Expo, and Expo Router, PlannerITI offers an offline-fir
 - **Translation Coverage**: Complete UI translation including all features
 
 ### ⚙️ Customization
+
 - **Theme Support**: Automatic light/dark mode with custom styling
 - **Schedule Views**: Switch between day and week views
 - **Group Selection**: Choose from all CEITI groups (e.g., P-2422, M-2422, etc.)
@@ -104,6 +111,7 @@ Built with React Native, Expo, and Expo Router, PlannerITI offers an offline-fir
 - **IDNP Management**: Securely store and manage your student ID
 
 ### 🔄 Updates & Release Channels
+
 - **OTA Updates**: Staged over-the-air updates via Expo Updates
 - **Channel Awareness**: Beta/production filtering based on app variant
 
@@ -120,25 +128,30 @@ Built with React Native, Expo, and Expo Router, PlannerITI offers an offline-fir
 ### Installation
 
 1. **Clone the repository**
+
    ```bash
    git clone https://github.com/JaggedGem/PlannerITI.git
    cd PlannerITI
    ```
 
 2. **Install dependencies**
+
    ```bash
    pnpm install
    ```
 
-3. **Set up environment variables**
-   
-   Create a `.env` file in the root directory:
+3. **Set up environment variables (optional)**
+
+   Create a `.env` file only if you need custom API routing during local development:
+
    ```env
-   GRAVATAR_API_KEY=your_gravatar_api_key
-   API_KEY=your_api_key
+   CUSTOM_API_LOCAL_URL=
+   CUSTOM_API_LOCAL_HOST=
+   CUSTOM_API_LOCAL_PORT=5000
    ```
 
 4. **Start the development server**
+
    ```bash
    npx expo start
    ```
@@ -153,24 +166,28 @@ Built with React Native, Expo, and Expo Router, PlannerITI offers an offline-fir
 ### Using EAS Build
 
 1. **Install EAS CLI**
+
    ```bash
    pnpm add -g eas-cli
    ```
 
 2. **Configure EAS**
+
    ```bash
    eas build:configure
    ```
 
 3. **Build for Android**
-  ```bash
-  pnpm run build
-  ```
+
+```bash
+pnpm run build
+```
 
 4. **Build for iOS**
-  ```bash
-  pnpm run build:ios
-  ```
+
+```bash
+pnpm run build:ios
+```
 
 ### OTA Updates
 
@@ -182,11 +199,13 @@ pnpm run update:ios   # iOS
 ### Local Builds
 
 For Android:
+
 ```bash
 npx expo run:android
 ```
 
 For iOS (Mac only):
+
 ```bash
 npx expo run:ios
 ```
@@ -248,7 +267,7 @@ The app uses `app.config.js` for configuration. Key settings:
 
 - **App Name**: PlannerITI
 - **Slug**: planneriti
-- **Version**: 1.4.0
+- **Version**: 1.5.0
 - **Orientation**: Portrait (locked)
 - **Splash Screen**: Custom splash with icon
 - **Theme**: Automatic light/dark
@@ -259,6 +278,7 @@ The app uses `app.config.js` for configuration. Key settings:
 ### EAS Configuration
 
 Build profiles are defined in `eas.json`:
+
 - **Development**: Development builds with dev client
 - **Beta**: Internal testing builds and OTA updates
 - **Production**: Release builds for stores
@@ -266,21 +286,25 @@ Build profiles are defined in `eas.json`:
 ## 🛠️ Technologies Used
 
 ### Core
+
 - **React Native** 0.81.4 - Mobile framework
 - **Expo** ~54.0.12 - Development platform
 - **TypeScript** 5.9.2 - Type safety
 - **React** 19.1.0 - UI library
 
 ### Navigation & Routing
+
 - **Expo Router** ~6.0.10 - File-based routing
 - **React Navigation** 7.x - Navigation library
 
 ### Data & Storage
+
 - **AsyncStorage** 2.2.0 - Local data persistence
 - **Expo SecureStore** ~15.0.7 - Secure credential storage
 - **Expo Updates** ~29.0.12 - OTA updates
 
 ### UI & Animation
+
 - **React Native Reanimated** ~4.1.1 - Smooth animations
 - **React Native Gesture Handler** ~2.28.0 - Touch gestures
 - **Expo Blur** ~15.0.7 - Blur effects
@@ -288,6 +312,7 @@ Build profiles are defined in `eas.json`:
 - **Expo Haptics** ~15.0.7 - Haptic feedback
 
 ### Utilities
+
 - **date-fns** 4.1.0 - Date manipulation
 - **crypto-js** 4.2.0 - Encryption
 - **Expo Notifications** ~0.32.12 - Push notifications
@@ -296,12 +321,14 @@ Build profiles are defined in `eas.json`:
 ## 📡 API Integration
 
 ### Schedule API
+
 - **Base URL**: `https://orar-api.ceiti.md/v1`
 - **Endpoints**:
   - `/grupe` - Fetch available groups
   - `/orar?_id={groupId}&tip=class` - Fetch class schedule
 
 ### Grades API
+
 - **Base URL**: `https://api.ceiti.md`
 - **Authentication**: IDNP-based login
 - **Endpoints**:
@@ -309,6 +336,7 @@ Build profiles are defined in `eas.json`:
   - `/index.php/date/info/{idnp}` - Fetch student grades
 
 ### Custom Backend API
+
 - **Development resolution order**:
   - `CUSTOM_API_LOCAL_URL` (full URL)
   - `CUSTOM_API_LOCAL_HOST` + `CUSTOM_API_LOCAL_PORT` (defaults to `5000`)
@@ -362,7 +390,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 👥 Authors
 
-- **Bogdan** - *Main developer for the app* - [JaggedGem](https://github.com/JaggedGem)
+- **Bogdan** - _Main developer for the app_ - [JaggedGem](https://github.com/JaggedGem)
 
 ## 🙏 Acknowledgments
 
@@ -374,12 +402,14 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 📞 Support
 
 For issues, questions, or suggestions:
+
 - Open an issue on [GitHub](https://github.com/JaggedGem/PlannerITI/issues)
 - Contact the development team
 
 ## 🗺️ Roadmap
 
 ### Upcoming Features
+
 - [ ] Widget support for iOS and Android
 - [ ] Calendar integration
 - [ ] Study timer and pomodoro technique
@@ -392,6 +422,7 @@ For issues, questions, or suggestions:
 - [ ] Teacher contact information
 
 ### In Progress
+
 - [x] Background refresh optimization
 - [x] Grade calculator improvements
 - [x] Multi-semester subject support

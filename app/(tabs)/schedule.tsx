@@ -7,7 +7,8 @@ import Animated, {
     useAnimatedStyle,
     withTiming,
 } from 'react-native-reanimated';
-import { View, StyleSheet, InteractionManager } from 'react-native';
+import { View, StyleSheet } from 'react-native';
+import { runWhenIdle } from '@/utils/runWhenIdle';
 
 export default function Schedule() {
     const [settings, setSettings] = useState(scheduleService.getSettings());
@@ -40,7 +41,7 @@ export default function Schedule() {
 
     // Background preload of the inactive view after interactions finish (first mount only)
     useEffect(() => {
-        InteractionManager.runAfterInteractions(() => {
+        const idleTask = runWhenIdle(() => {
             if (!hasPreloadedWeek.current) {
                 hasPreloadedWeek.current = true; // WeekView already mounted but mark preloaded
             }
@@ -48,6 +49,8 @@ export default function Schedule() {
                 hasPreloadedDay.current = true; // DayView already mounted but mark preloaded
             }
         });
+
+        return () => idleTask.cancel();
     }, []);
 
     const dayStyle = useAnimatedStyle(() => ({
@@ -73,5 +76,5 @@ export default function Schedule() {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    layer: { ...StyleSheet.absoluteFillObject },
+    layer: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
 });

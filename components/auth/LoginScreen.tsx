@@ -9,7 +9,7 @@ import {
     DeviceEventEmitter,
 } from 'react-native';
 import { router } from 'expo-router';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@react-native-vector-icons/material-icons';
 import { ThemedText } from '../ThemedText';
 import { ThemedView } from '../ThemedView';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -84,6 +84,7 @@ export function LoginScreen() {
 
     const handleSkip = async () => {
         try {
+            await authService.skipLogin();
             router.replace('/(tabs)/schedule');
         } catch {
             // Silent error handling
@@ -202,6 +203,8 @@ export function LoginScreen() {
                 visible={showAlert}
                 transparent={true}
                 animationType="fade"
+                statusBarTranslucent={true}
+                navigationBarTranslucent={true}
                 onRequestClose={() => setShowAlert(false)}
             >
                 <View style={styles.modalOverlay}>

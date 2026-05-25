@@ -6,6 +6,7 @@
 // --- Caching & Silent Refresh Layer ---
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DeviceEventEmitter } from 'react-native';
+import { secureStorageService } from './secureStorageService';
 
 const LOGIN_URL = 'https://api.ceiti.md/date/login';
 const REQUEST_TIMEOUT = 15000;
@@ -1008,8 +1009,6 @@ const ensureBothSemestersExist = (result: SemesterGrades[]): void => {
     }
 };
 
-const IDNP_KEY = '@planner_idnp';
-
 const GRADES_CACHE_KEY_PREFIX = '@grades_cache_html_';
 const GRADES_CACHE_TIME_KEY_PREFIX = '@grades_cache_time_';
 const GRADES_UPDATED_EVENT = 'grades_updated_event';
@@ -1017,7 +1016,7 @@ export const GRADES_REFRESH_START_EVENT = 'grades_refresh_start_event';
 export const GRADES_REFRESH_END_EVENT = 'grades_refresh_end_event';
 
 // Toggle for console logging (can be flipped to false for production noise reduction)
-const GRADES_DEBUG_LOGS = true;
+const GRADES_DEBUG_LOGS = __DEV__;
 
 type GradesListener = () => void;
 const gradeListeners = new Set<GradesListener>();
@@ -1073,7 +1072,7 @@ export const gradesDataService = {
         return html ? { html, timestamp: ts ? parseInt(ts, 10) : null } : null;
     },
     async store(idnp: string, html: string) {
-        const currentIdnp = await AsyncStorage.getItem(IDNP_KEY);
+        const currentIdnp = await secureStorageService.getIdnp();
         if (currentIdnp !== idnp) {
             if (GRADES_DEBUG_LOGS)
                 console.log('[grades] store skipped - IDNP mismatch');
@@ -1099,7 +1098,6 @@ export const gradesDataService = {
         const cached = await this.getCached(idnp);
         if (GRADES_DEBUG_LOGS)
             console.log('[grades] silentRefresh start', {
-                idnp,
                 hasCached: !!cached,
             });
         DeviceEventEmitter.emit(GRADES_REFRESH_START_EVENT, {
@@ -1118,7 +1116,7 @@ export const gradesDataService = {
                         idnp,
                         controller.signal,
                     );
-                    const currentIdnp = await AsyncStorage.getItem(IDNP_KEY);
+                    const currentIdnp = await secureStorageService.getIdnp();
                     if (controller.signal.aborted || currentIdnp !== idnp) {
                         if (GRADES_DEBUG_LOGS)
                             console.log(

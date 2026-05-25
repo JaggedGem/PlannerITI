@@ -13,10 +13,11 @@ import Animated, {
     Layout,
     Easing,
 } from 'react-native-reanimated';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@react-native-vector-icons/ionicons';
 import { Period } from '../../services/scheduleService';
 import { useTranslation } from '@/hooks/useTranslation';
 import { Colors } from '@/constants/Colors';
+import { runWhenIdle } from '@/utils/runWhenIdle';
 
 type DaySectionProps = {
     title: string;
@@ -117,11 +118,14 @@ export default function DaySection({
         ) {
             // Make sure this section is expanded
             if (isCollapsed) {
-                setIsCollapsed(false);
+                const idleTask = runWhenIdle(() => {
+                    setIsCollapsed(false);
+                }, 16);
                 rotation.value = withTiming(0.5, {
                     duration: 150,
                     easing: Easing.bezier(0.25, 0.1, 0.25, 1),
                 });
+                return () => idleTask.cancel();
             }
         }
     }, [memoizedHighlight, assignments, isCollapsed, rotation]);

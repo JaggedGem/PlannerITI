@@ -1,7 +1,7 @@
 import { Tabs } from 'expo-router';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@react-native-vector-icons/material-icons';
 import React from 'react';
-import { Platform, View, StyleSheet } from 'react-native';
+import { Platform, View, StyleSheet, type ColorValue } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from '@/hooks/useTranslation';
 import Animated, {
@@ -16,7 +16,7 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 // Custom tab bar label component with animation
 interface AnimatedTabBarLabelProps {
     focused: boolean;
-    color: string;
+    color: ColorValue;
     children: React.ReactNode;
 }
 
@@ -54,11 +54,13 @@ function AnimatedTabBarLabel({
 // Custom tab bar icon component with animation
 interface AnimatedTabBarIconProps {
     focused: boolean;
-    color: string;
+    color: ColorValue;
     name: React.ComponentProps<typeof MaterialIcons>['name'];
 }
 
 function AnimatedTabBarIcon({ focused, color, name }: AnimatedTabBarIconProps) {
+    const iconColor = typeof color === 'string' ? color : undefined;
+
     const animatedStyle = useAnimatedStyle(() => {
         return {
             transform: [{ scale: withSpring(focused ? 1.2 : 1) }],
@@ -81,7 +83,7 @@ function AnimatedTabBarIcon({ focused, color, name }: AnimatedTabBarIconProps) {
             }}
         >
             <Animated.View style={animatedStyle}>
-                <MaterialIcons name={name} size={24} color={color} />
+                <MaterialIcons name={name} size={24} color={iconColor} />
             </Animated.View>
             <Animated.View
                 style={[

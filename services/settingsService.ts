@@ -9,26 +9,7 @@ import {
     scheduleService as scheduleServiceImport,
     UserSettings,
 } from './scheduleService';
-import Constants from 'expo-constants';
 import { fetchCustomApi } from '../utils/customApi';
-
-// Get environment variables from Expo Constants
-const getEnvVars = () => {
-    const apiKey = Constants.expoConfig?.extra?.apiKey;
-
-    if (!apiKey) {
-        console.warn(
-            'API key not properly configured. Please check .env file or EAS secrets.',
-        );
-    }
-
-    return {
-        API_KEY: apiKey,
-    };
-};
-
-// Get API key from environment variables
-const { API_KEY } = getEnvVars();
 
 interface NotificationSettings {
     enabled: boolean;
@@ -286,11 +267,10 @@ class SettingsService {
 
         const headers: HeadersInit = {
             'Content-Type': 'application/json',
-            'api-key': API_KEY,
         };
 
-        // Get auth token from authService
-        const token = await AsyncStorage.getItem('@auth_token');
+        // Get auth token from authService (stored in SecureStore).
+        const token = await authService.getAccessToken();
         if (token) {
             headers['Authorization'] = `Bearer ${token}`;
         }
