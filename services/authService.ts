@@ -5,6 +5,7 @@ import { fetchCustomApi } from '../utils/customApi';
 import { secureStorageService } from './secureStorageService';
 
 const GRAVATAR_AVATAR_BASE_URL = 'https://www.gravatar.com/avatar';
+const GRAVATAR_PROFILE_BASE_URL = 'https://gravatar.com';
 
 const AUTH_STATE_CHANGE_EVENT = 'auth_state_changed';
 const SKIP_LOGIN_KEY = '@planner_skip_login';
@@ -41,7 +42,26 @@ interface GravatarCache {
     profile: GravatarProfile;
 }
 
+interface GravatarJsonProfileEntry {
+    displayName?: string;
+    preferredUsername?: string;
+    thumbnailUrl?: string;
+    aboutMe?: string;
+    currentLocation?: string;
+    pronouns?: string;
+    photos?: {
+        type?: string;
+        value?: string;
+    }[];
+}
+
+interface GravatarJsonProfileResponse {
+    entry?: GravatarJsonProfileEntry[];
+}
+
 const CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+
+const getGravatarCacheKey = (hash: string) => `${GRAVATAR_CACHE_KEY}:${hash}`;
 
 export const getGravatarHash = (email: string): string => {
     // Convert email to lowercase and trim
@@ -53,9 +73,21 @@ export const getGravatarHash = (email: string): string => {
 export const getGravatarProfile = async (
     email: string,
 ): Promise<GravatarProfile | null> => {
+    const normalizedEmail = email.toLowerCase().trim();
+    if (!normalizedEmail) {
+        return null;
+    }
+
+    const hash = getGravatarHash(normalizedEmail);
+    const cacheKey = getGravatarCacheKey(hash);
+    const fallbackProfile: GravatarProfile = {
+        hash,
+        avatar_url: `${GRAVATAR_AVATAR_BASE_URL}/${hash}?d=mp`,
+    };
+
     try {
         // Check cache first
-        const cachedData = await AsyncStorage.getItem(GRAVATAR_CACHE_KEY);
+        const cachedData = await AsyncStorage.getItem(cacheKey);
         if (cachedData) {
             const cache: GravatarCache = JSON.parse(cachedData);
             // If cache is less than 24 hours old, use it
@@ -64,11 +96,38 @@ export const getGravatarProfile = async (
             }
         }
 
-        const hash = getGravatarHash(email);
-        const profile: GravatarProfile = {
-            hash,
-            avatar_url: `${GRAVATAR_AVATAR_BASE_URL}/${hash}?d=mp`,
-        };
+        let profile: GravatarProfile = fallbackProfile;
+        const profileResponse = await fetch(
+            `${GRAVATAR_PROFILE_BASE_URL}/${hash}.json`,
+        );
+
+        if (profileResponse.ok) {
+            const profileJson =
+                (await profileResponse.json()) as GravatarJsonProfileResponse;
+            const entry = profileJson.entry?.[0];
+            const thumbnailPhoto = entry?.photos?.find(
+                (photo) => photo.type === 'thumbnail',
+            )?.value;
+
+            profile = {
+                ...fallbackProfile,
+                display_name:
+                    entry?.displayName?.trim() ||
+                    entry?.preferredUsername?.trim() ||
+                    undefined,
+                avatar_url:
+                    entry?.thumbnailUrl ||
+                    thumbnailPhoto ||
+                    fallbackProfile.avatar_url,
+                location: entry?.currentLocation || undefined,
+                description: entry?.aboutMe || undefined,
+                pronouns: entry?.pronouns || undefined,
+            };
+        } else if (profileResponse.status !== 404) {
+            console.warn(
+                `Failed to load Gravatar profile metadata (status: ${profileResponse.status})`,
+            );
+        }
 
         // Cache the profile
         const cacheData: GravatarCache = {
@@ -76,14 +135,14 @@ export const getGravatarProfile = async (
             profile,
         };
         await AsyncStorage.setItem(
-            GRAVATAR_CACHE_KEY,
+            cacheKey,
             JSON.stringify(cacheData),
         );
 
         return profile;
     } catch (error) {
         console.error('Error fetching Gravatar profile:', error);
-        return null;
+        return fallbackProfile;
     }
 };
 

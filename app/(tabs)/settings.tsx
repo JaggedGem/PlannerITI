@@ -1247,6 +1247,11 @@ export default function Settings() {
         } | null>(null);
 
         useEffect(() => {
+          if (!userEmail) {
+            setGravatarProfile(null);
+            return;
+          }
+
           const loadGravatarProfile = async () => {
             const profile = await getGravatarProfile(userEmail);
             setGravatarProfile(profile);
@@ -1286,7 +1291,7 @@ export default function Settings() {
             >
               <View style={styles.accountDetailsContent}>
                 <Text style={styles.accountEmail} numberOfLines={1}>
-                  {gravatarProfile?.display_name || displayName || userEmail}
+                  {gravatarProfile?.display_name?.trim() || displayName || userEmail}
                 </Text>
                 {!isVerified && (
                   <View style={styles.verificationBadge}>
@@ -1362,7 +1367,7 @@ export default function Settings() {
           <MemoizedGravatarProfile
             userEmail={user?.email || ""}
             isVerified={user?.is_verified || false}
-            displayName={user?.email}
+            displayName={user?.email?.split("@")[0] || user?.email || ""}
             onActionSheetPress={() => setShowAccountActionSheet(true)}
           />
         </View>
