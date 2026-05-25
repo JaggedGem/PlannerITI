@@ -2,7 +2,7 @@ import ExpoBottomSheet, {
   BottomSheetView,
 } from "@expo/ui/community/bottom-sheet";
 import React, { useMemo } from "react";
-import { StyleSheet, ViewStyle, StyleProp } from "react-native";
+import { Platform, StyleSheet, ViewStyle, StyleProp } from "react-native";
 
 interface BottomModalPortalProps {
   isVisible: boolean;
@@ -31,7 +31,16 @@ export function BottomModalPortal({
   enablePanDownToClose = true,
   contentContainerStyle,
 }: BottomModalPortalProps) {
-  const isOpenIndex = isVisible ? 0 : -1;
+  const isOpenIndex = useMemo(() => {
+    if (!isVisible) {
+      return -1;
+    }
+    if (Platform.OS === "android" && snapPoints && snapPoints.length > 1) {
+      // Work around an Expo UI Android crash in partialExpand() by opening at the max snap point.
+      return snapPoints.length - 1;
+    }
+    return 0;
+  }, [isVisible, snapPoints]);
   const hasSnapPoints = Boolean(snapPoints && snapPoints.length > 0);
 
   const sheetContentStyle = useMemo<ViewStyle>(() => {
