@@ -5,9 +5,9 @@
   
   **A comprehensive student planner for CEITI students**
   
-  [![React Native](https://img.shields.io/badge/React%20Native-0.81.4-blue.svg)](https://reactnative.dev/)
-  [![Expo](https://img.shields.io/badge/Expo-~54.0.12-000020.svg)](https://expo.dev/)
-  [![TypeScript](https://img.shields.io/badge/TypeScript-5.9.2-blue.svg)](https://www.typescriptlang.org/)
+  [![React Native](https://img.shields.io/badge/React%20Native-0.85.3-blue.svg)](https://reactnative.dev/)
+  [![Expo](https://img.shields.io/badge/Expo-56.0.4-000020.svg)](https://expo.dev/)
+  [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.3-blue.svg)](https://www.typescriptlang.org/)
   [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 </div>
 
@@ -130,12 +130,13 @@ Built with React Native, Expo, and Expo Router, PlannerITI offers an offline-fir
    pnpm install
    ```
 
-3. **Set up environment variables**
-   
-   Create a `.env` file in the root directory:
+3. **Set up environment variables (optional)**
+
+   Create a `.env` file only if you need custom API routing during local development:
    ```env
-   GRAVATAR_API_KEY=your_gravatar_api_key
-   API_KEY=your_api_key
+   CUSTOM_API_LOCAL_URL=
+   CUSTOM_API_LOCAL_HOST=
+   CUSTOM_API_LOCAL_PORT=5000
    ```
 
 4. **Start the development server**

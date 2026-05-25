@@ -84,6 +84,7 @@ export function LoginScreen() {
 
     const handleSkip = async () => {
         try {
+            await authService.skipLogin();
             router.replace('/(tabs)/schedule');
         } catch {
             // Silent error handling

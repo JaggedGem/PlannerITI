@@ -7,8 +7,10 @@ import { useFonts } from "expo-font";
 import { SplashScreen, Stack } from "expo-router";
 import { NavigationBar } from "expo-navigation-bar";
 import { StatusBar } from "expo-status-bar";
+import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { useEffect, useState } from "react";
 import { useColorScheme } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Colors } from "@/constants/Colors";
 import authService from "../services/authService";
 import LoginNotification from "@/components/LoginNotification";
@@ -22,6 +24,7 @@ import {
 } from "@/utils/notificationUtils";
 import { getAssignments } from "@/utils/assignmentStorage";
 import { gradesDataService } from "@/services/gradesService";
+import { secureStorageService } from "@/services/secureStorageService";
 import * as SystemUI from "expo-system-ui";
 
 export {
@@ -100,11 +103,12 @@ export default function RootLayout() {
     if (loaded) {
       // Initial sync with random delay between 0-60 seconds to distribute load
       const initialDelay = Math.random() * 60 * 1000;
+      let periodSyncInterval: ReturnType<typeof setInterval> | null = null;
       const syncTimer = setTimeout(() => {
         scheduleService.syncPeriodTimes();
 
         // Then sync every 24 hours at a random minute to distribute load
-        setInterval(
+        periodSyncInterval = setInterval(
           () => {
             scheduleService.syncPeriodTimes();
           },
@@ -114,6 +118,9 @@ export default function RootLayout() {
 
       return () => {
         clearTimeout(syncTimer);
+        if (periodSyncInterval) {
+          clearInterval(periodSyncInterval);
+        }
       };
     }
   }, [loaded]);
@@ -130,7 +137,7 @@ export default function RootLayout() {
         await scheduleService.refreshSchedule(true);
 
         // Trigger background grades refresh on app load when IDNP is available.
-        const idnp = await AsyncStorage.getItem("@planner_idnp");
+        const idnp = await secureStorageService.getIdnp();
         if (idnp) {
           gradesDataService.silentRefresh(idnp).catch(() => {
             // Silent fallback to cached grades data
@@ -205,60 +212,64 @@ function RootLayoutNav() {
   const theme = Colors[isDark ? "dark" : "light"];
 
   return (
-    <ThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
-      <StatusBar style='light' hidden={false} />
-      <NavigationBar style='light' hidden={false} />
-      <AuthProvider>
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            animation: "default",
-            presentation: "containedTransparentModal",
-            headerTransparent: true,
-            headerTintColor: isDark ? theme.white : theme.black,
-            contentStyle: { backgroundColor: theme.backgroundApp },
-          }}
-        >
-          <Stack.Screen name='index' options={{ animation: "none" }} />
-          <Stack.Screen name='(tabs)' />
-          <Stack.Screen name='auth' options={{ presentation: "card" }} />
-          <Stack.Screen
-            name='signup'
-            options={{ headerShown: false, presentation: "card" }}
-          />
-          <Stack.Screen
-            name='forgot-password'
-            options={{
-              headerShown: false,
-            }}
-          />
-          <Stack.Screen
-            name='reset-password'
-            options={{
-              headerShown: false,
-            }}
-          />
-          <Stack.Screen
-            name='privacy-policy'
-            options={{
-              headerShown: false,
-            }}
-          />
-          <Stack.Screen
-            name='new-assignment'
-            options={{
-              headerShown: false,
-            }}
-          />
-          <Stack.Screen
-            name='edit-assignment'
-            options={{
-              headerShown: false,
-            }}
-          />
-        </Stack>
-        <LoginNotification />
-      </AuthProvider>
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <BottomSheetModalProvider>
+        <ThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
+          <StatusBar style='light' hidden={false} />
+          <NavigationBar style='light' hidden={false} />
+          <AuthProvider>
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                animation: "default",
+                presentation: "containedTransparentModal",
+                headerTransparent: true,
+                headerTintColor: isDark ? theme.white : theme.black,
+                contentStyle: { backgroundColor: theme.backgroundApp },
+              }}
+            >
+              <Stack.Screen name='index' options={{ animation: "none" }} />
+              <Stack.Screen name='(tabs)' />
+              <Stack.Screen name='auth' options={{ presentation: "card" }} />
+              <Stack.Screen
+                name='signup'
+                options={{ headerShown: false, presentation: "card" }}
+              />
+              <Stack.Screen
+                name='forgot-password'
+                options={{
+                  headerShown: false,
+                }}
+              />
+              <Stack.Screen
+                name='reset-password'
+                options={{
+                  headerShown: false,
+                }}
+              />
+              <Stack.Screen
+                name='privacy-policy'
+                options={{
+                  headerShown: false,
+                }}
+              />
+              <Stack.Screen
+                name='new-assignment'
+                options={{
+                  headerShown: false,
+                }}
+              />
+              <Stack.Screen
+                name='edit-assignment'
+                options={{
+                  headerShown: false,
+                }}
+              />
+            </Stack>
+            <LoginNotification />
+          </AuthProvider>
+        </ThemeProvider>
+      </BottomSheetModalProvider>
+    </GestureHandlerRootView>
   );
 }

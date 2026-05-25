@@ -1,8 +1,25 @@
-import ExpoBottomSheet, {
+import {
+  BottomSheetModal,
+  BottomSheetBackdrop,
+  type BottomSheetBackdropProps,
   BottomSheetView,
-} from "@expo/ui/community/bottom-sheet";
-import React, { useMemo } from "react";
-import { Platform, StyleSheet, ViewStyle, StyleProp } from "react-native";
+} from "@gorhom/bottom-sheet";
+import React, {
+  useCallback,
+  useEffect,
+  useRef,
+  useMemo,
+  useId,
+} from "react";
+import {
+  StyleSheet,
+  ViewStyle,
+  StyleProp,
+  BackHandler,
+  Platform,
+} from "react-native";
+import { Colors } from "@/constants/Colors";
+import { useColorScheme } from "@/hooks/useColorScheme";
 
 interface BottomModalPortalProps {
   isVisible: boolean;
@@ -13,12 +30,13 @@ interface BottomModalPortalProps {
   borderRadius?: number;
   showDragIndicator?: boolean;
   enablePanDownToClose?: boolean;
+  enableDynamicSizing?: boolean;
   contentContainerStyle?: StyleProp<ViewStyle>;
 }
 
 /**
- * Standardized native bottom-sheet wrapper for app modals.
- * Uses Expo SDK 56 native sheet primitives via @expo/ui/community/bottom-sheet.
+ * Standardized bottom-sheet wrapper for app modals.
+ * Powered by @gorhom/bottom-sheet.
  */
 export function BottomModalPortal({
   isVisible,
@@ -29,64 +47,138 @@ export function BottomModalPortal({
   borderRadius = 20,
   showDragIndicator = true,
   enablePanDownToClose = true,
+  enableDynamicSizing = true,
   contentContainerStyle,
 }: BottomModalPortalProps) {
-  const isOpenIndex = useMemo(() => {
-    if (!isVisible) {
-      return -1;
-    }
-    if (Platform.OS === "android" && snapPoints && snapPoints.length > 1) {
-      // Work around an Expo UI Android crash in partialExpand() by opening at the max snap point.
-      return snapPoints.length - 1;
-    }
-    return 0;
-  }, [isVisible, snapPoints]);
-  const hasSnapPoints = Boolean(snapPoints && snapPoints.length > 0);
+  const bottomSheetModalRef = useRef<BottomSheetModal>(null);
+  const isPresentedRef = useRef(false);
+  const modalId = useId();
+  const colorScheme = useColorScheme();
+  const theme = Colors[colorScheme];
+  const resolvedSnapPoints = useMemo(
+    () => (snapPoints && snapPoints.length > 0 ? snapPoints : undefined),
+    [snapPoints],
+  );
 
   const sheetContentStyle = useMemo<ViewStyle>(() => {
     const resolvedStyle: ViewStyle = {
+      backgroundColor: theme.backgroundApp,
       borderTopLeftRadius: borderRadius,
       borderTopRightRadius: borderRadius,
     };
     if (maxHeight != null) {
-      resolvedStyle.maxHeight = maxHeight as any;
+      resolvedStyle.maxHeight = maxHeight as ViewStyle["maxHeight"];
     }
     return resolvedStyle;
-  }, [maxHeight, borderRadius]);
+  }, [maxHeight, borderRadius, theme.backgroundApp]);
+
+  const renderBackdrop = useCallback(
+    (props: BottomSheetBackdropProps) => (
+      <BottomSheetBackdrop
+        {...props}
+        appearsOnIndex={0}
+        disappearsOnIndex={-1}
+        pressBehavior="close"
+        opacity={0.45}
+      />
+    ),
+    [],
+  );
+
+  const handleDismiss = useCallback(() => {
+    isPresentedRef.current = false;
+    onClose();
+  }, [onClose]);
+
+  useEffect(() => {
+    if (isVisible) {
+      if (!isPresentedRef.current) {
+        requestAnimationFrame(() => {
+          bottomSheetModalRef.current?.present();
+          isPresentedRef.current = true;
+        });
+      }
+      return;
+    }
+
+    if (isPresentedRef.current) {
+      bottomSheetModalRef.current?.dismiss();
+    }
+  }, [isVisible]);
+
+  useEffect(() => {
+    if (Platform.OS !== "android" || !isVisible) {
+      return;
+    }
+
+    const subscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      () => {
+        if (isPresentedRef.current) {
+          bottomSheetModalRef.current?.dismiss();
+        } else {
+          onClose();
+        }
+        return true;
+      },
+    );
+
+    return () => {
+      subscription.remove();
+    };
+  }, [isVisible, onClose]);
 
   return (
-    <>
-      <ExpoBottomSheet
-        index={isOpenIndex}
-        onClose={onClose}
-        enablePanDownToClose={enablePanDownToClose}
-        enableDynamicSizing={!hasSnapPoints}
-        snapPoints={snapPoints}
-        handleComponent={showDragIndicator ? undefined : null}
+    <BottomSheetModal
+      ref={bottomSheetModalRef}
+      name={`bottom-modal-${modalId.replace(/:/g, "")}`}
+      index={0}
+      onDismiss={handleDismiss}
+      enablePanDownToClose={enablePanDownToClose}
+      enableDynamicSizing={enableDynamicSizing}
+      snapPoints={resolvedSnapPoints}
+      handleComponent={showDragIndicator ? undefined : null}
+      backgroundStyle={[
+        styles.sheetBackground,
+        {
+          backgroundColor: theme.backgroundApp,
+          borderTopLeftRadius: borderRadius,
+          borderTopRightRadius: borderRadius,
+        },
+      ]}
+      handleIndicatorStyle={[
+        styles.handleIndicator,
+        { backgroundColor: theme.borderMuted },
+      ]}
+      backdropComponent={renderBackdrop}
+      android_keyboardInputMode="adjustResize"
+    >
+      <BottomSheetView
+        style={[
+          styles.sheetContent,
+          sheetContentStyle,
+          contentContainerStyle,
+        ]}
       >
-        <BottomSheetView
-          style={[
-            styles.sheetContent,
-            sheetContentStyle,
-            hasSnapPoints && styles.sheetContentFill,
-            contentContainerStyle,
-          ]}
-        >
-          {children}
-        </BottomSheetView>
-      </ExpoBottomSheet>
-    </>
+        {children}
+      </BottomSheetView>
+    </BottomSheetModal>
   );
 }
 
 const styles = StyleSheet.create({
+  sheetBackground: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  handleIndicator: {
+    width: 40,
+    height: 4,
+  },
   sheetContent: {
     paddingTop: 0,
     paddingHorizontal: 16,
     paddingBottom: 16,
     width: "100%",
-  },
-  sheetContentFill: {
-    flex: 1,
   },
 });

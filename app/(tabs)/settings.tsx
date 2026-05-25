@@ -38,6 +38,7 @@ import * as Haptics from "expo-haptics";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useAuthContext } from "@/components/auth/AuthContext";
 import authService, { getGravatarProfile } from "@/services/authService";
+import { secureStorageService } from "@/services/secureStorageService";
 import {
   getAssignments,
   handleGroupChange as handleOrphanedAssignments,
@@ -58,7 +59,6 @@ import { BottomModalPortal } from "@/components/BottomModalPortal";
 import { Colors } from "@/constants/Colors";
 
 // Store keys
-const IDNP_KEY = "@planner_idnp";
 const SKIP_LOGIN_KEY = "@planner_skip_login";
 const AUTH_STATE_CHANGE_EVENT = "auth_state_changed";
 const IDNP_UPDATE_EVENT = "IDNP_UPDATE";
@@ -170,20 +170,20 @@ const getGroupMatchScore = (query: string, group: Group): number => {
 // Array of theme-appropriate colors for random selection
 const THEME_COLORS = Colors.dark.randomColors as unknown as string[];
 
+const MODAL_ITEM_COLORS = {
+  surface: Colors.dark.surfaceSecondary,
+  surfaceAccent: Colors.dark.primaryStrong,
+  surfaceDanger: Colors.dark.deleteButton,
+  border: Colors.dark.border,
+  textPrimary: Colors.dark.text,
+  textSecondary: Colors.dark.mutedText,
+  successSurface: Colors.dark.successIconColor,
+  successIcon: Colors.dark.green,
+} as const;
+
 const getRandomColor = () => {
   return THEME_COLORS[Math.floor(Math.random() * THEME_COLORS.length)];
 };
-
-const MODAL_ITEM_COLORS = {
-  surface: "#242A33",
-  surfaceAccent: "#33429E",
-  surfaceDanger: "#4A2E39",
-  border: "#343C4A",
-  textPrimary: "#F3F6FF",
-  textSecondary: "#A8B0C2",
-  successSurface: "rgba(96, 217, 138, 0.16)",
-  successIcon: "#7FE3A1",
-} as const;
 
 // Custom TimePicker component
 const TimePicker = ({
@@ -733,7 +733,7 @@ export default function Settings() {
   useEffect(() => {
     const loadIdnp = async () => {
       try {
-        const idnp = await AsyncStorage.getItem(IDNP_KEY);
+        const idnp = await secureStorageService.getIdnp();
         const hasSkipped = await AsyncStorage.getItem(SKIP_LOGIN_KEY);
         const syncSetting = await AsyncStorage.getItem(IDNP_SYNC_KEY);
         setSavedIdnp(idnp);
@@ -828,10 +828,10 @@ export default function Settings() {
   // Handle IDNP confirmation
   const handleConfirmClearIdnp = useCallback(async () => {
     try {
-      const currentIdnp = await AsyncStorage.getItem(IDNP_KEY);
+      const currentIdnp = await secureStorageService.getIdnp();
 
       // Remove local IDNP
-      await AsyncStorage.removeItem(IDNP_KEY);
+      await secureStorageService.clearIdnp();
       setSavedIdnp(null);
 
       // Clear ALL grades-related cached data (legacy and new cache keys)
@@ -1137,7 +1137,6 @@ export default function Settings() {
   };
 
   const handleDeleteAccount = useCallback(async () => {
-    const AUTH_TOKEN_KEY = "@auth_token";
     // Reset any previous errors
     setPasswordError(null);
 
@@ -1151,7 +1150,6 @@ export default function Settings() {
       await authService.deleteAccount(passwordForDeletion);
 
       // Properly clean up user data
-      await AsyncStorage.removeItem(AUTH_TOKEN_KEY); // Clear cached user data
       await logout(); // This will clear the user state internally
 
       // Immediately update local state

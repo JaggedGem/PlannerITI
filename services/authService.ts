@@ -1,37 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DeviceEventEmitter } from 'react-native';
 import * as crypto from 'crypto-js';
-import Constants from 'expo-constants';
-import * as SecureStore from 'expo-secure-store';
 import { fetchCustomApi } from '../utils/customApi';
+import { secureStorageService } from './secureStorageService';
 
-const GRAVATAR_API_URL = 'https://api.gravatar.com/v3';
-
-// Get environment variables from Expo Constants
-const getEnvVars = () => {
-    const gravatarKey = Constants.expoConfig?.extra?.gravatarApiKey;
-    const apiKey = Constants.expoConfig?.extra?.apiKey;
-
-    if (!gravatarKey || !apiKey) {
-        console.warn(
-            'Environment variables not properly configured. Please check .env file or EAS secrets.',
-        );
-    }
-
-    return {
-        GRAVATAR_API_KEY: gravatarKey,
-        API_KEY: apiKey,
-    };
-};
-
-const envVars = getEnvVars();
+const GRAVATAR_AVATAR_BASE_URL = 'https://www.gravatar.com/avatar';
 
 const AUTH_STATE_CHANGE_EVENT = 'auth_state_changed';
 const SKIP_LOGIN_KEY = '@planner_skip_login';
-const AUTH_TOKEN_KEY = '@auth_token';
 const LOGIN_DISMISSED_KEY = '@login_notification_dismissed';
 const GRAVATAR_CACHE_KEY = '@gravatar_cache';
-const USER_CREDENTIALS_KEY = 'user_credentials';
 const AUTH_VERSION_KEY = '@auth_version';
 const CURRENT_AUTH_VERSION = '3'; // Increment this when auth system changes
 
@@ -63,11 +41,6 @@ interface GravatarCache {
     profile: GravatarProfile;
 }
 
-interface UserCredentials {
-    email: string;
-    password: string;
-}
-
 const CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
 export const getGravatarHash = (email: string): string => {
@@ -80,7 +53,6 @@ export const getGravatarHash = (email: string): string => {
 export const getGravatarProfile = async (
     email: string,
 ): Promise<GravatarProfile | null> => {
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
     try {
         // Check cache first
         const cachedData = await AsyncStorage.getItem(GRAVATAR_CACHE_KEY);
@@ -93,30 +65,10 @@ export const getGravatarProfile = async (
         }
 
         const hash = getGravatarHash(email);
-        const controller = new AbortController();
-        timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
-        const response = await fetch(`${GRAVATAR_API_URL}/profiles/${hash}`, {
-            method: 'GET',
-            headers: {
-                Accept: 'application/json',
-                Bearer: envVars.GRAVATAR_API_KEY,
-            },
-            signal: controller.signal,
-        });
-
-        if (!response.ok) {
-            if (response.status === 404) {
-                // User doesn't have a Gravatar profile, create a default one
-                const defaultProfile: GravatarProfile = {
-                    hash,
-                    avatar_url: `https://www.gravatar.com/avatar/${hash}?d=mp`, // mp = mystery person
-                };
-                return defaultProfile;
-            }
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const profile: GravatarProfile = await response.json();
+        const profile: GravatarProfile = {
+            hash,
+            avatar_url: `${GRAVATAR_AVATAR_BASE_URL}/${hash}?d=mp`,
+        };
 
         // Cache the profile
         const cacheData: GravatarCache = {
@@ -132,10 +84,6 @@ export const getGravatarProfile = async (
     } catch (error) {
         console.error('Error fetching Gravatar profile:', error);
         return null;
-    } finally {
-        if (timeoutId) {
-            clearTimeout(timeoutId);
-        }
     }
 };
 
@@ -143,6 +91,8 @@ class AuthService {
     private static instance: AuthService;
     private token: string | null = null;
     private userData: UserData | null = null;
+    private lastLoginEmail: string | null = null;
+    private sessionPassword: string | null = null;
     private skippedLogin: boolean = false;
     private isLoading: boolean = false;
     private isReloginInProgress: boolean = false;
@@ -198,40 +148,21 @@ class AuthService {
         return getGravatarProfile(email);
     }
 
-    private async storeCredentials(
-        email: string,
-        password: string,
-    ): Promise<void> {
-        try {
-            const credentials: UserCredentials = { email, password };
-            // Use SecureStore instead of AsyncStorage + crypto
-            await SecureStore.setItemAsync(
-                USER_CREDENTIALS_KEY,
-                JSON.stringify(credentials),
-            );
-        } catch (error) {
-            console.error('Error storing credentials:', error);
-        }
+    private async setPersistedToken(token: string): Promise<void> {
+        await secureStorageService.setAuthToken(token);
     }
 
-    private async getStoredCredentials(): Promise<UserCredentials | null> {
-        try {
-            const credentialsJson =
-                await SecureStore.getItemAsync(USER_CREDENTIALS_KEY);
-            if (!credentialsJson) {
-                return null;
-            }
-
-            const credentials = JSON.parse(credentialsJson) as UserCredentials;
-            return credentials;
-        } catch (error) {
-            console.error('Error retrieving credentials:', error);
-            return null;
-        }
+    private async getPersistedToken(): Promise<string | null> {
+        return secureStorageService.getAuthToken();
     }
 
-    private async clearStoredCredentials(): Promise<void> {
-        await SecureStore.deleteItemAsync(USER_CREDENTIALS_KEY);
+    private async clearPersistedToken(): Promise<void> {
+        await secureStorageService.clearAuthToken();
+    }
+
+    private clearInMemoryCredentials(): void {
+        this.lastLoginEmail = null;
+        this.sessionPassword = null;
     }
 
     private async makeAuthRequest(
@@ -242,7 +173,6 @@ class AuthService {
     ): Promise<any> {
         const headers: HeadersInit = {
             'Content-Type': 'application/json',
-            'api-key': envVars.API_KEY,
         };
 
         if (this.token) {
@@ -277,8 +207,23 @@ class AuthService {
                     }
                 }
 
-                const error = await response.json();
-                throw new Error(error.detail || 'Request failed');
+                const errorText = await response.text();
+                const fallbackMessage = `Request failed (${response.status})`;
+                let message = fallbackMessage;
+
+                if (errorText) {
+                    try {
+                        const errorData = JSON.parse(errorText) as {
+                            detail?: string;
+                            message?: string;
+                        };
+                        message = errorData.detail || errorData.message || fallbackMessage;
+                    } catch {
+                        message = errorText;
+                    }
+                }
+
+                throw new Error(message);
             }
 
             // Check if response has content before parsing JSON
@@ -329,11 +274,9 @@ class AuthService {
 
             if (response.access_token) {
                 this.token = response.access_token;
-                await AsyncStorage.setItem(
-                    AUTH_TOKEN_KEY,
-                    response.access_token,
-                );
-                await this.storeCredentials(email, password);
+                this.lastLoginEmail = email;
+                this.sessionPassword = password;
+                await this.setPersistedToken(response.access_token);
                 // Clear skip login flag when user explicitly logs in
                 await AsyncStorage.removeItem(SKIP_LOGIN_KEY);
                 this.skippedLogin = false;
@@ -358,8 +301,7 @@ class AuthService {
 
         this.isReloginInProgress = true;
         try {
-            const credentials = await this.getStoredCredentials();
-            if (!credentials) {
+            if (!this.lastLoginEmail || !this.sessionPassword) {
                 this.isReloginInProgress = false;
                 return false;
             }
@@ -368,18 +310,15 @@ class AuthService {
                 '/auth/login',
                 'POST',
                 {
-                    email: credentials.email,
-                    password: credentials.password,
+                    email: this.lastLoginEmail,
+                    password: this.sessionPassword,
                 },
                 false,
             ); // Don't retry on this login attempt
 
             if (response.access_token) {
                 this.token = response.access_token;
-                await AsyncStorage.setItem(
-                    AUTH_TOKEN_KEY,
-                    response.access_token,
-                );
+                await this.setPersistedToken(response.access_token);
                 await this.loadUserData();
                 this.isReloginInProgress = false;
                 return true;
@@ -456,12 +395,12 @@ class AuthService {
         this.token = null;
         this.userData = null;
         this.skippedLogin = false;
+        this.clearInMemoryCredentials();
         try {
-            // Clear auth tokens and credentials
-            await AsyncStorage.removeItem(AUTH_TOKEN_KEY);
+            // Clear auth tokens and login flags.
+            await this.clearPersistedToken();
             await AsyncStorage.removeItem(SKIP_LOGIN_KEY);
             await AsyncStorage.removeItem(LOGIN_DISMISSED_KEY);
-            await this.clearStoredCredentials();
 
             // Reset settings sync state keys directly
             await AsyncStorage.removeItem('@initial_settings_download_done');
@@ -475,6 +414,20 @@ class AuthService {
         } catch (error) {
             console.error('Error during logout:', error);
         }
+    }
+
+    async skipLogin(): Promise<void> {
+        this.token = null;
+        this.userData = null;
+        this.skippedLogin = true;
+        this.clearInMemoryCredentials();
+        await this.clearPersistedToken();
+        await AsyncStorage.setItem(SKIP_LOGIN_KEY, 'true');
+        DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, {
+            isAuthenticated: false,
+            skipped: true,
+            freshLogin: false,
+        });
     }
 
     async loadUserData(): Promise<UserData | null> {
@@ -509,7 +462,7 @@ class AuthService {
         // Then check for auth token
         if (!this.token) {
             try {
-                const storedToken = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
+                const storedToken = await this.getPersistedToken();
                 if (!storedToken) {
                     this.isLoading = false;
                     return null;
@@ -560,18 +513,21 @@ class AuthService {
         return this.isLoading;
     }
 
-    // Add a public method to get stored credentials for encryption
-    async getCredentialsForEncryption(): Promise<string | null> {
-        try {
-            const credentials = await this.getStoredCredentials();
-            if (!credentials) {
-                return null;
-            }
-            return credentials.password;
-        } catch (error) {
-            console.error('Error getting credentials for encryption:', error);
-            return null;
+    async getAccessToken(): Promise<string | null> {
+        if (this.token) {
+            return this.token;
         }
+
+        const storedToken = await this.getPersistedToken();
+        if (storedToken) {
+            this.token = storedToken;
+        }
+        return this.token;
+    }
+
+    // Session-only credential used for secure sync operations.
+    async getCredentialsForEncryption(): Promise<string | null> {
+        return this.sessionPassword;
     }
 
     /**
@@ -588,8 +544,8 @@ class AuthService {
         }
 
         try {
-            const credentials = await this.getStoredCredentials();
-            if (!credentials || !credentials.password) {
+            const password = await this.getCredentialsForEncryption();
+            if (!password) {
                 console.error('Could not retrieve credentials for encryption.');
                 throw new Error('Credentials not found for encryption.');
             }
@@ -599,7 +555,7 @@ class AuthService {
             await this.makeAuthRequest('/secure/encrypt-data', 'POST', {
                 data_label: key, // Changed from 'key' to 'data_label' to match settingsService pattern
                 plaintext: data,
-                password: credentials.password,
+                password,
             });
         } catch (error) {
             console.error(

@@ -6,8 +6,9 @@ import {
     TouchableOpacity,
 } from 'react-native';
 import { MaterialIcons } from '@react-native-vector-icons/material-icons';
-import { BottomSheetScrollView } from '@expo/ui/community/bottom-sheet';
+import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { BottomModalPortal } from './BottomModalPortal';
+import { Colors } from '@/constants/Colors';
 
 type StorageViewerProps = {
     visible: boolean;
@@ -16,11 +17,11 @@ type StorageViewerProps = {
 };
 
 const MODAL_STORAGE_COLORS = {
-    surface: '#242A33',
-    surfaceInset: '#1F242C',
-    textPrimary: '#F3F6FF',
-    textSecondary: '#A8B0C2',
-    accent: '#9AB4FF',
+    surface: Colors.dark.backgroundTertiary,
+    surfaceInset: Colors.dark.backgroundSecondary,
+    textPrimary: Colors.dark.text,
+    textSecondary: Colors.dark.mutedText,
+    accent: Colors.dark.primary,
 } as const;
 
 export const StorageViewer = ({

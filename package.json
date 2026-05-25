@@ -6,8 +6,10 @@
     "dev": "expo start --go",
     "dev:clear": "expo start --clear --go",
     "dev:dev-client": "expo start --dev-client",
-    "test": "jest --watchAll",
+    "test": "jest --watchAll=false",
+    "test:watch": "jest --watchAll",
     "lint": "expo lint",
+    "typecheck": "tsc --noEmit",
     "build": "eas build --profile production --platform android",
     "build:ios": "eas build --profile production --platform ios",
     "build:dev": "eas build --profile development --platform android",
@@ -19,12 +21,15 @@
     "build:apks": "node scripts/build-apks.js"
   },
   "jest": {
-    "preset": "jest-expo"
+    "preset": "jest-expo",
+    "moduleNameMapper": {
+      "^@/(.*)$": "<rootDir>/$1"
+    }
   },
   "dependencies": {
     "@expo/dom-webview": "~56.0.5",
     "@expo/metro-runtime": "~56.0.12",
-    "@expo/ui": "~56.0.13",
+    "@gorhom/bottom-sheet": "^5.2.14",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-vector-icons/feather": "^13.1.1",
     "@react-native-vector-icons/fontawesome": "^13.1.1",

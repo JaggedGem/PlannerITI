@@ -13,6 +13,10 @@ import {
     Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+    ScrollView as GestureHandlerScrollView,
+    NativeViewGestureHandler,
+} from 'react-native-gesture-handler';
 import React, {
     useState,
     useCallback,
@@ -35,7 +39,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from '@/hooks/useTranslation';
-import { BottomSheetScrollView } from '@expo/ui/community/bottom-sheet';
+import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 
 import {
     fetchStudentInfo,
@@ -49,6 +53,7 @@ import {
     GRADES_REFRESH_START_EVENT,
     GRADES_REFRESH_END_EVENT,
 } from '@/services/gradesService';
+import { secureStorageService } from '@/services/secureStorageService';
 import {
     scheduleService,
     ExamScheduleEvent,
@@ -81,7 +86,6 @@ interface OfficialScheduleState {
 }
 
 // Constants for AsyncStorage keys
-const IDNP_KEY = '@planner_idnp';
 const GRADES_DATA_KEY = '@planner_grades_data';
 const GRADES_TIMESTAMP_KEY = '@planner_grades_timestamp';
 const IDNP_UPDATE_EVENT = 'IDNP_UPDATE';
@@ -209,13 +213,13 @@ const getPdfGradeTextColor = (grade: string): string => {
 };
 
 const GRADES_MODAL_COLORS = {
-    surface: '#242A33',
-    border: '#343C4A',
-    textPrimary: '#F3F6FF',
-    textSecondary: '#A8B0C2',
-    accent: '#33429E',
-    accentDisabled: '#4F5670',
-    successChip: 'rgba(96, 217, 138, 0.3)',
+    surface: Colors.dark.backgroundTertiary,
+    border: Colors.dark.border,
+    textPrimary: Colors.dark.text,
+    textSecondary: Colors.dark.mutedText,
+    accent: Colors.dark.primaryStrong,
+    accentDisabled: Colors.dark.borderStrong,
+    successChip: Colors.dark.overlaySuccess15,
 } as const;
 
 const cloneStudentGrades = (data: StudentGrades): StudentGrades => ({
@@ -1843,45 +1847,50 @@ const GradeCalculatorModal = ({
                         {t('grades').calculator.selectSubject}
                     </Text>
                     <View style={styles.pickerContainer}>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                            {subjects.map((subject, index) => (
-                                <React.Fragment
-                                    key={`subject-option-${index}`}
-                                >
-                                    {index > 0 && (
-                                        <View
-                                            style={styles.subjectSeparator}
-                                        />
-                                    )}
-                                    <TouchableOpacity
-                                        style={[
-                                            styles.subjectOption,
-                                            selectedSubject?.name ===
-                                                subject.name &&
-                                                styles.subjectOptionSelected,
-                                        ]}
-                                        onPress={() => {
-                                            setSelectedSubject(subject);
-                                            setHasCalculated(false);
-                                            setIsAnnualCalculation(false);
-                                            Haptics.selectionAsync();
-                                        }}
+                        <NativeViewGestureHandler disallowInterruption={true}>
+                            <GestureHandlerScrollView
+                                horizontal
+                                showsHorizontalScrollIndicator={false}
+                            >
+                                {subjects.map((subject, index) => (
+                                    <React.Fragment
+                                        key={`subject-option-${index}`}
                                     >
-                                        <Text
+                                        {index > 0 && (
+                                            <View
+                                                style={styles.subjectSeparator}
+                                            />
+                                        )}
+                                        <TouchableOpacity
                                             style={[
-                                                styles.subjectOptionText,
+                                                styles.subjectOption,
                                                 selectedSubject?.name ===
                                                     subject.name &&
-                                                    styles.subjectOptionTextSelected,
+                                                    styles.subjectOptionSelected,
                                             ]}
-                                            numberOfLines={1}
+                                            onPress={() => {
+                                                setSelectedSubject(subject);
+                                                setHasCalculated(false);
+                                                setIsAnnualCalculation(false);
+                                                Haptics.selectionAsync();
+                                            }}
                                         >
-                                            {subject.name}
-                                        </Text>
-                                    </TouchableOpacity>
-                                </React.Fragment>
-                            ))}
-                        </ScrollView>
+                                            <Text
+                                                style={[
+                                                    styles.subjectOptionText,
+                                                    selectedSubject?.name ===
+                                                        subject.name &&
+                                                        styles.subjectOptionTextSelected,
+                                                ]}
+                                                numberOfLines={1}
+                                            >
+                                                {subject.name}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </React.Fragment>
+                                ))}
+                            </GestureHandlerScrollView>
+                        </NativeViewGestureHandler>
                     </View>
                 </View>
 
@@ -3441,7 +3450,7 @@ export default function Grades() {
         // Load stored IDNP and cached grades data
         const loadStoredData = async () => {
             try {
-                const savedIdnp = await AsyncStorage.getItem(IDNP_KEY);
+                const savedIdnp = await secureStorageService.getIdnp();
 
                 if (savedIdnp) {
                     setIdnp(savedIdnp);
@@ -3696,7 +3705,7 @@ export default function Grades() {
                 setResponseHtml(htmlResponse);
 
                 // Save the IDNP since it was successful
-                await AsyncStorage.setItem(IDNP_KEY, studentIdnp);
+                await secureStorageService.setIdnp(studentIdnp);
 
                 // Save the timestamp of the fetch
                 const timestamp = Date.now();
@@ -3728,7 +3737,7 @@ export default function Grades() {
             } catch {
                 // If this was a fresh login attempt, clear the IDNP
                 if (!responseHtml) {
-                    await AsyncStorage.removeItem(IDNP_KEY);
+                    await secureStorageService.clearIdnp();
                     setIdnp(null);
                     setErrorMessage(t('grades').networkError);
                 } else {
