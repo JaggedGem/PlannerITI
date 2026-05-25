@@ -1,7 +1,7 @@
 {
   "name": "planneriti",
   "main": "expo-router/entry",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "scripts": {
     "dev": "expo start --go",
     "dev:clear": "expo start --clear --go",

@@ -1291,7 +1291,9 @@ export default function Settings() {
             >
               <View style={styles.accountDetailsContent}>
                 <Text style={styles.accountEmail} numberOfLines={1}>
-                  {gravatarProfile?.display_name?.trim() || displayName || userEmail}
+                  {gravatarProfile?.display_name?.trim() ||
+                    displayName ||
+                    userEmail}
                 </Text>
                 {!isVerified && (
                   <View style={styles.verificationBadge}>
