@@ -3,6 +3,14 @@ import { Platform, NativeModules } from 'react-native';
 import { format } from 'date-fns';
 import { fetchCustomApi } from '../utils/customApi';
 import { Colors } from '@/constants/Colors';
+import {
+    GraficPeGroup,
+    GraficPePeriod,
+    GraficPePeriodCode,
+    GraficPePeriodType,
+    GraficPeTrackType,
+} from '@/types/academicCalendar';
+import { clearNextClassCache } from '@/utils/nextClassCache';
 // Refactored: remove direct runtime import of settingsService to break cycle.
 // Consumers (settingsService) should call scheduleService.registerSettingsSync({...}) after import.
 
@@ -280,6 +288,9 @@ export const CACHE_KEYS = {
     LAST_FETCH_PREFIX: 'last_schedule_fetch_',
     SPECIAL_SCHEDULE_PREFIX: 'special_schedule_cache_',
     LAST_SPECIAL_FETCH_PREFIX: 'last_special_schedule_fetch_',
+    ACADEMIC_CALENDAR_PREFIX: 'academic_calendar_cache_',
+    LAST_ACADEMIC_CALENDAR_FETCH_PREFIX:
+        'last_academic_calendar_fetch_',
     GROUPS: 'groups_cache',
     RECOVERY_DAYS: 'recovery_days_cache',
     LAST_RECOVERY_SYNC: 'last_recovery_days_sync',
@@ -289,7 +300,45 @@ export const CACHE_KEYS = {
 
 const CACHE_EXPIRY = 3 * 24 * 60 * 60 * 1000; // 3 days in milliseconds
 const SPECIAL_SCHEDULE_CACHE_EXPIRY = 6 * 60 * 60 * 1000; // 6 hours
+const ACADEMIC_CALENDAR_CACHE_EXPIRY = 12 * 60 * 60 * 1000; // 12 hours
 const DEFAULT_GROUP_NAME = 'P-2422';
+
+const GRAFIC_PE_PERIOD_TYPES = new Set<GraficPePeriodType>([
+    'teaching',
+    'exam',
+    'vacation',
+    'practice_intro',
+    'practice_instruire',
+    'practice_tehnologica',
+    'practice_specialitate_1',
+    'practice_specialitate_2',
+    'practice_specialitate_3',
+    'practice_productie',
+    'exam_calificare',
+    'dual_employer_training',
+    'inter_semester_break',
+    'summer_break',
+]);
+
+const GRAFIC_PE_PERIOD_CODES = new Set<Exclude<GraficPePeriodCode, null>>([
+    'EX',
+    'V',
+    'Pis',
+    'Pi',
+    'Pt',
+    'Ps1',
+    'Ps2',
+    'Ps3',
+    'Pp',
+    'EC',
+    'I/A',
+]);
+
+const GRAFIC_PE_TRACK_TYPES = new Set<GraficPeTrackType>([
+    'regular',
+    'evening',
+    'dual',
+]);
 
 const PERIOD_TIMES_CACHE_KEY = 'period_times_cache';
 const LAST_PERIOD_SYNC_KEY = 'last_period_sync';
@@ -470,6 +519,11 @@ export const scheduleService = {
     cachedSubjects: [] as Subject[],
     cachedAssignmentCounts: [] as PeriodAssignmentCount[],
     specialScheduleFetchedThisSession: new Set<string>(),
+    specialScheduleInFlight: new Map<
+        string,
+        Promise<SpecialScheduleResponse>
+    >(),
+    academicCalendarFetchedThisSession: new Set<string>(),
     // Debug controls
     _debug: false,
     _ready: false,
@@ -1624,6 +1678,298 @@ export const scheduleService = {
         return keepTrailingR ? `${canonicalBase}R` : canonicalBase;
     },
 
+    normalizeAcademicCalendarRequestGroup(groupName?: string): string {
+        const rawGroup = String(groupName || '').trim();
+        if (!rawGroup) return '';
+
+        const match = rawGroup.match(
+            /^([A-Za-z])\s*-\s*(\d{4})([A-Za-z]?)/,
+        );
+        if (!match) return rawGroup;
+
+        const suffix = match[3].toUpperCase();
+        const supportedSuffix = suffix === 'D' || suffix === 'R' ? suffix : '';
+        return `${match[1].toUpperCase()}-${match[2]}${supportedSuffix}`;
+    },
+
+    normalizeAcademicCalendarComparisonGroup(groupName?: string): string {
+        return String(groupName || '')
+            .toUpperCase()
+            .replace(/[^A-Z0-9]/g, '');
+    },
+
+    getAcademicYearForDate(date: Date): string {
+        const year = date.getFullYear();
+        const startYear = date.getMonth() >= 8 ? year : year - 1;
+        return `${startYear}-${startYear + 1}`;
+    },
+
+    getAcademicCalendarCacheScope(
+        groupName: string,
+        academicYear: string,
+    ): string {
+        const normalizedGroup =
+            this.normalizeAcademicCalendarComparisonGroup(groupName);
+        return `${normalizedGroup || '__meta__'}_${academicYear}`;
+    },
+
+    getAcademicCalendarCacheKey(
+        groupName: string,
+        academicYear: string,
+    ): string {
+        return `${CACHE_KEYS.ACADEMIC_CALENDAR_PREFIX}${this.getAcademicCalendarCacheScope(groupName, academicYear)}`;
+    },
+
+    getAcademicCalendarLastFetchKey(
+        groupName: string,
+        academicYear: string,
+    ): string {
+        return `${CACHE_KEYS.LAST_ACADEMIC_CALENDAR_FETCH_PREFIX}${this.getAcademicCalendarCacheScope(groupName, academicYear)}`;
+    },
+
+    normalizeAcademicCalendarGroup(
+        payload: unknown,
+        requestedGroup: string,
+    ): GraficPeGroup | null {
+        if (!payload || typeof payload !== 'object') return null;
+        const raw = payload as Record<string, unknown>;
+        const rawGroup = typeof raw.group === 'string' ? raw.group : '';
+        if (
+            this.normalizeAcademicCalendarComparisonGroup(rawGroup) !==
+            this.normalizeAcademicCalendarComparisonGroup(requestedGroup)
+        ) {
+            return null;
+        }
+
+        const periods = (Array.isArray(raw.periods) ? raw.periods : [])
+            .map((period): GraficPePeriod | null => {
+                if (!period || typeof period !== 'object') return null;
+                const candidate = period as Record<string, unknown>;
+                const type = candidate.type;
+                const startDate = candidate.startDate;
+                const endDate = candidate.endDate;
+
+                if (
+                    typeof type !== 'string' ||
+                    !GRAFIC_PE_PERIOD_TYPES.has(type as GraficPePeriodType) ||
+                    typeof startDate !== 'string' ||
+                    typeof endDate !== 'string'
+                ) {
+                    return null;
+                }
+
+                const rawCode = candidate.code;
+                const code: GraficPePeriodCode =
+                    rawCode === null ? null
+                    : typeof rawCode === 'string' &&
+                      GRAFIC_PE_PERIOD_CODES.has(
+                          rawCode as Exclude<GraficPePeriodCode, null>,
+                      ) ?
+                        (rawCode as Exclude<GraficPePeriodCode, null>)
+                    :   null;
+
+                return {
+                    type: type as GraficPePeriodType,
+                    code,
+                    startDate,
+                    endDate,
+                    weekNumbers:
+                        Array.isArray(candidate.weekNumbers) ?
+                            candidate.weekNumbers.filter(
+                                (week): week is number =>
+                                    typeof week === 'number' &&
+                                    Number.isFinite(week),
+                            )
+                        :   [],
+                    confidence:
+                        candidate.confidence === 'inferred' ?
+                            'inferred'
+                        :   'explicit',
+                };
+            })
+            .filter(
+                (period): period is GraficPePeriod => period !== null,
+            );
+
+        const trackType =
+            typeof raw.trackType === 'string' &&
+            GRAFIC_PE_TRACK_TYPES.has(raw.trackType as GraficPeTrackType) ?
+                (raw.trackType as GraficPeTrackType)
+            :   'regular';
+
+        return {
+            group: rawGroup,
+            trackType,
+            academicYear:
+                typeof raw.academicYear === 'string' ? raw.academicYear : '',
+            periods,
+        };
+    },
+
+    async readAcademicCalendarCache(
+        groupName: string,
+        academicYear: string,
+        enforceExpiry: boolean = true,
+    ): Promise<GraficPeGroup | null> {
+        try {
+            const [cachedRaw, lastFetchRaw] = await Promise.all([
+                AsyncStorage.getItem(
+                    this.getAcademicCalendarCacheKey(groupName, academicYear),
+                ),
+                AsyncStorage.getItem(
+                    this.getAcademicCalendarLastFetchKey(
+                        groupName,
+                        academicYear,
+                    ),
+                ),
+            ]);
+            if (!cachedRaw) return null;
+
+            if (enforceExpiry) {
+                if (!lastFetchRaw) return null;
+                const lastFetchMs = new Date(lastFetchRaw).getTime();
+                if (
+                    !Number.isFinite(lastFetchMs) ||
+                    Date.now() - lastFetchMs >
+                        ACADEMIC_CALENDAR_CACHE_EXPIRY
+                ) {
+                    return null;
+                }
+            }
+
+            return this.normalizeAcademicCalendarGroup(
+                JSON.parse(cachedRaw),
+                groupName,
+            );
+        } catch (error) {
+            this.log('Failed to read academic calendar cache', error);
+            return null;
+        }
+    },
+
+    async cacheAcademicCalendar(
+        groupName: string,
+        academicYear: string,
+        group: GraficPeGroup,
+    ): Promise<void> {
+        try {
+            await Promise.all([
+                AsyncStorage.setItem(
+                    this.getAcademicCalendarCacheKey(groupName, academicYear),
+                    JSON.stringify(group),
+                ),
+                AsyncStorage.setItem(
+                    this.getAcademicCalendarLastFetchKey(
+                        groupName,
+                        academicYear,
+                    ),
+                    new Date().toISOString(),
+                ),
+            ]);
+        } catch (error) {
+            this.log('Failed to cache academic calendar', error);
+        }
+    },
+
+    async getAcademicCalendarForDate(
+        date: Date,
+        groupName?: string,
+        forceRefresh: boolean = false,
+    ): Promise<GraficPeGroup | null> {
+        await this.ready();
+        const requestGroup = this.normalizeAcademicCalendarRequestGroup(
+            groupName || this.settings.selectedGroupName,
+        );
+        if (!requestGroup) return null;
+
+        const academicYear = this.getAcademicYearForDate(date);
+        const sessionKey = this.getAcademicCalendarCacheScope(
+            requestGroup,
+            academicYear,
+        );
+
+        if (
+            !forceRefresh &&
+            this.academicCalendarFetchedThisSession.has(sessionKey)
+        ) {
+            const cached = await this.readAcademicCalendarCache(
+                requestGroup,
+                academicYear,
+                false,
+            );
+            if (cached) return cached;
+        }
+
+        if (!forceRefresh) {
+            const freshCached = await this.readAcademicCalendarCache(
+                requestGroup,
+                academicYear,
+                true,
+            );
+            if (freshCached) return freshCached;
+        }
+
+        const currentAcademicYear = this.getAcademicYearForDate(new Date());
+        const historic = academicYear !== currentAcademicYear;
+        const endpoint =
+            historic ?
+                '/api/schedule/grafic-pe/historic'
+            :   '/api/schedule/grafic-pe';
+        const params = new URLSearchParams({ group: requestGroup });
+        if (historic) params.set('academic_year', academicYear);
+
+        try {
+            const response = await fetchCustomApi(
+                `${endpoint}?${params.toString()}`,
+            );
+            if (!response.ok) {
+                throw new Error(
+                    `Failed to fetch academic calendar: ${response.status}`,
+                );
+            }
+
+            const payload = await response.json();
+            if (!payload?.available || !Array.isArray(payload?.events)) {
+                throw new Error(
+                    payload?.reasonCode || 'academic_calendar_unavailable',
+                );
+            }
+
+            const expectedGroup =
+                this.normalizeAcademicCalendarComparisonGroup(requestGroup);
+            const rawGroup = payload.events.find(
+                (event: unknown) =>
+                    event &&
+                    typeof event === 'object' &&
+                    this.normalizeAcademicCalendarComparisonGroup(
+                        (event as { group?: string }).group,
+                    ) === expectedGroup,
+            );
+            const normalized = this.normalizeAcademicCalendarGroup(
+                rawGroup,
+                requestGroup,
+            );
+            if (!normalized) {
+                throw new Error('academic_calendar_group_not_found');
+            }
+
+            await this.cacheAcademicCalendar(
+                requestGroup,
+                academicYear,
+                normalized,
+            );
+            this.academicCalendarFetchedThisSession.add(sessionKey);
+            return normalized;
+        } catch (error) {
+            this.log('Academic calendar fetch failed', error);
+            return this.readAcademicCalendarCache(
+                requestGroup,
+                academicYear,
+                false,
+            );
+        }
+    },
+
     getSpecialScheduleCacheScope(groupName?: string): string {
         const normalizedGroup =
             this.normalizeSpecialScheduleGroupName(groupName);
@@ -2379,6 +2725,9 @@ export const scheduleService = {
             }
         }
 
+        const inFlightRequest = this.specialScheduleInFlight.get(sessionKey);
+        if (inFlightRequest) return inFlightRequest;
+
         const endpoint =
             type === 'exam' ? '/api/schedule/exams' : '/api/schedule/theses';
         const params = new URLSearchParams();
@@ -2389,54 +2738,70 @@ export const scheduleService = {
         const requestPath =
             params.toString() ? `${endpoint}?${params.toString()}` : endpoint;
 
-        try {
-            const response = await fetchCustomApi(requestPath);
-            if (!response.ok) {
-                throw new Error(
-                    `Failed to fetch ${type} schedule: ${response.status}`,
-                );
-            }
+        const request = (async (): Promise<SpecialScheduleResponse> => {
+            try {
+                const response = await fetchCustomApi(requestPath);
+                if (!response.ok) {
+                    throw new Error(
+                        `Failed to fetch ${type} schedule: ${response.status}`,
+                    );
+                }
 
-            const payload = await response.json();
-            let normalized = this.normalizeSpecialScheduleResponse(
-                type,
-                normalizedGroup || null,
-                payload,
-            );
-            if (type === 'thesis') {
-                normalized = await this.resolveSubgroupDependentThesisEvents(
-                    normalized,
-                    normalizedGroup,
+                const payload = await response.json();
+                let normalized = this.normalizeSpecialScheduleResponse(
+                    type,
+                    normalizedGroup || null,
+                    payload,
                 );
-            }
-            await this.cacheSpecialSchedule(type, normalizedGroup, normalized);
-            this.specialScheduleFetchedThisSession.add(sessionKey);
-            return normalized;
-        } catch (error) {
-            const staleCached = await this.readSpecialScheduleCache(
-                type,
-                normalizedGroup,
-                false,
-            );
-            if (staleCached) {
-                return type === 'thesis' ?
+                if (type === 'thesis') {
+                    normalized =
                         await this.resolveSubgroupDependentThesisEvents(
-                            staleCached,
+                            normalized,
                             normalizedGroup,
-                        )
-                    :   staleCached;
-            }
+                        );
+                }
+                await this.cacheSpecialSchedule(
+                    type,
+                    normalizedGroup,
+                    normalized,
+                );
+                this.specialScheduleFetchedThisSession.add(sessionKey);
+                return normalized;
+            } catch (error) {
+                const staleCached = await this.readSpecialScheduleCache(
+                    type,
+                    normalizedGroup,
+                    false,
+                );
+                if (staleCached) {
+                    return type === 'thesis' ?
+                            await this.resolveSubgroupDependentThesisEvents(
+                                staleCached,
+                                normalizedGroup,
+                            )
+                        :   staleCached;
+                }
 
-            const message =
-                error instanceof Error ?
-                    error.message
-                :   `Unable to fetch ${type} schedule`;
-            return this.buildUnavailableSpecialSchedule(
-                type,
-                normalizedGroup || null,
-                'fetch_failed',
-                message,
-            );
+                const message =
+                    error instanceof Error ?
+                        error.message
+                    :   `Unable to fetch ${type} schedule`;
+                return this.buildUnavailableSpecialSchedule(
+                    type,
+                    normalizedGroup || null,
+                    'fetch_failed',
+                    message,
+                );
+            }
+        })();
+
+        this.specialScheduleInFlight.set(sessionKey, request);
+        try {
+            return await request;
+        } finally {
+            if (this.specialScheduleInFlight.get(sessionKey) === request) {
+                this.specialScheduleInFlight.delete(sessionKey);
+            }
         }
     },
 
@@ -3154,6 +3519,9 @@ export const scheduleService = {
         this.cachedAssignmentCounts = [];
         AsyncStorage.removeItem(CACHE_KEYS.ASSIGNMENT_COUNTS);
         this.specialScheduleFetchedThisSession.clear();
+        this.specialScheduleInFlight.clear();
+        this.academicCalendarFetchedThisSession.clear();
+        void clearNextClassCache();
 
         this.saveSettings();
         this.notifyListeners();
@@ -3246,6 +3614,7 @@ export const scheduleService = {
 
             if (force) {
                 await this.clearPeriodTimesCache();
+                await clearNextClassCache();
             }
 
             // Ensure we have a selected group; attempt to find default if missing
@@ -3265,7 +3634,14 @@ export const scheduleService = {
 
             // Online: attempt fresh fetch (always, per requirement)
             try {
-                await Promise.all([this.syncPeriodTimes(true)]);
+                await Promise.all([
+                    this.syncPeriodTimes(true),
+                    this.getAcademicCalendarForDate(
+                        new Date(),
+                        this.settings.selectedGroupName,
+                        true,
+                    ),
+                ]);
                 let fresh = await this.fetchAndCacheSchedule(groupId);
                 let transformed = this.transformScheduleData(fresh);
                 const targetGroupName = this.settings.selectedGroupName;

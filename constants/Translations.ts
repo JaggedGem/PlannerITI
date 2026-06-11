@@ -134,6 +134,38 @@ type TranslationType = {
         assignments: string;
         assessments: string;
         loadingAssignments: string;
+        noRegularClassesToday: string;
+        noRegularClassesWeek: string;
+        modifiedAcademicSchedule: string;
+        modifiedAcademicWeek: string;
+        nextClass: string;
+        nextClassLoading: string;
+        noUpcomingClasses: string;
+        noUpcomingClassesHint: string;
+        inferredPeriod: string;
+        examDayTitle: string;
+        examWeekTitle: string;
+        examDaySubtitle: string;
+        examWeekSubtitle: string;
+        officialExamSchedule: string;
+        noOfficialExams: string;
+        noOfficialExamsHint: string;
+        academicPeriod: {
+            teaching: string;
+            exam: string;
+            vacation: string;
+            practiceIntro: string;
+            practiceInstructional: string;
+            practiceTechnological: string;
+            practiceSpecialty1: string;
+            practiceSpecialty2: string;
+            practiceSpecialty3: string;
+            practiceProduction: string;
+            qualificationExam: string;
+            dualEmployerTraining: string;
+            interSemesterBreak: string;
+            summerBreak: string;
+        };
     };
     subgroup: {
         group1: string;
@@ -669,6 +701,44 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
             assignments: 'Assignments',
             assessments: 'Assessments',
             loadingAssignments: 'Loading assignments...',
+            noRegularClassesToday: 'No regular classes today',
+            noRegularClassesWeek: 'No regular classes this week',
+            modifiedAcademicSchedule:
+                'This day has a modified academic schedule',
+            modifiedAcademicWeek:
+                'This week has a modified academic schedule',
+            nextClass: 'Next class',
+            nextClassLoading: 'Finding the next scheduled class...',
+            noUpcomingClasses: 'No upcoming regular classes found',
+            noUpcomingClassesHint:
+                'The academic calendar may not include the next study period yet.',
+            inferredPeriod: 'Calendar estimate',
+            examDayTitle: 'Exam schedule today',
+            examWeekTitle: 'Exam session this week',
+            examDaySubtitle:
+                'Regular classes are paused. Follow the official exam schedule.',
+            examWeekSubtitle:
+                'Regular classes are paused during the exam session.',
+            officialExamSchedule: 'Official exam schedule',
+            noOfficialExams: 'No official exams are listed yet',
+            noOfficialExamsHint:
+                'Published exam dates, times, and rooms will appear here automatically.',
+            academicPeriod: {
+                teaching: 'Teaching period',
+                exam: 'Exam period',
+                vacation: 'Vacation',
+                practiceIntro: 'Introductory specialty practice',
+                practiceInstructional: 'Instructional practice',
+                practiceTechnological: 'Technological practice',
+                practiceSpecialty1: 'Specialty practice I',
+                practiceSpecialty2: 'Specialty practice II',
+                practiceSpecialty3: 'Specialty practice III',
+                practiceProduction: 'Production practice',
+                qualificationExam: 'Qualification exam',
+                dualEmployerTraining: 'Employer training',
+                interSemesterBreak: 'Inter-semester break',
+                summerBreak: 'Summer break',
+            },
         },
         subgroup: {
             group1: 'Subgroup 1',
@@ -1239,6 +1309,46 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
             assignments: 'Teme',
             assessments: 'Evaluări',
             loadingAssignments: 'Se încarcă temele...',
+            noRegularClassesToday: 'Astăzi nu sunt lecții obișnuite',
+            noRegularClassesWeek:
+                'Nu sunt lecții obișnuite în această săptămână',
+            modifiedAcademicSchedule:
+                'Această zi are un program academic modificat',
+            modifiedAcademicWeek:
+                'Această săptămână are un program academic modificat',
+            nextClass: 'Următoarea lecție',
+            nextClassLoading: 'Se caută următoarea lecție programată...',
+            noUpcomingClasses:
+                'Nu au fost găsite lecții obișnuite viitoare',
+            noUpcomingClassesHint:
+                'Calendarul academic poate să nu includă încă următoarea perioadă de studii.',
+            inferredPeriod: 'Estimare din calendar',
+            examDayTitle: 'Programul examenelor de astăzi',
+            examWeekTitle: 'Sesiune de examene în această săptămână',
+            examDaySubtitle:
+                'Lecțiile obișnuite sunt suspendate. Urmează programul oficial al examenelor.',
+            examWeekSubtitle:
+                'Lecțiile obișnuite sunt suspendate pe durata sesiunii.',
+            officialExamSchedule: 'Programul oficial al examenelor',
+            noOfficialExams: 'Nu sunt publicate încă examene oficiale',
+            noOfficialExamsHint:
+                'Datele, orele și sălile publicate vor apărea automat aici.',
+            academicPeriod: {
+                teaching: 'Perioadă de studii',
+                exam: 'Sesiune de examene',
+                vacation: 'Vacanță',
+                practiceIntro: 'Practică de inițiere în specialitate',
+                practiceInstructional: 'Practică de instruire',
+                practiceTechnological: 'Practică tehnologică',
+                practiceSpecialty1: 'Practică de specialitate I',
+                practiceSpecialty2: 'Practică de specialitate II',
+                practiceSpecialty3: 'Practică de specialitate III',
+                practiceProduction: 'Practică de producție',
+                qualificationExam: 'Examen de calificare',
+                dualEmployerTraining: 'Instruire la angajator',
+                interSemesterBreak: 'Vacanță intersemestrială',
+                summerBreak: 'Vacanță de vară',
+            },
         },
         subgroup: {
             group1: 'Subgrupa 1',
@@ -1814,6 +1924,44 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
             assignments: 'Задания',
             assessments: 'Оценивания',
             loadingAssignments: 'Загрузка заданий...',
+            noRegularClassesToday: 'Сегодня обычных занятий нет',
+            noRegularClassesWeek: 'На этой неделе обычных занятий нет',
+            modifiedAcademicSchedule:
+                'На этот день действует измененный учебный график',
+            modifiedAcademicWeek:
+                'На эту неделю действует измененный учебный график',
+            nextClass: 'Следующее занятие',
+            nextClassLoading: 'Поиск следующего занятия...',
+            noUpcomingClasses: 'Ближайшие обычные занятия не найдены',
+            noUpcomingClassesHint:
+                'В учебном календаре может еще не быть следующего периода обучения.',
+            inferredPeriod: 'Оценка по календарю',
+            examDayTitle: 'Расписание экзаменов на сегодня',
+            examWeekTitle: 'Экзаменационная сессия на этой неделе',
+            examDaySubtitle:
+                'Обычные занятия приостановлены. Следуйте официальному расписанию экзаменов.',
+            examWeekSubtitle:
+                'Обычные занятия приостановлены на время экзаменационной сессии.',
+            officialExamSchedule: 'Официальное расписание экзаменов',
+            noOfficialExams: 'Официальные экзамены пока не опубликованы',
+            noOfficialExamsHint:
+                'Опубликованные даты, время и кабинеты появятся здесь автоматически.',
+            academicPeriod: {
+                teaching: 'Учебный период',
+                exam: 'Экзаменационный период',
+                vacation: 'Каникулы',
+                practiceIntro: 'Вводная практика по специальности',
+                practiceInstructional: 'Учебная практика',
+                practiceTechnological: 'Технологическая практика',
+                practiceSpecialty1: 'Практика по специальности I',
+                practiceSpecialty2: 'Практика по специальности II',
+                practiceSpecialty3: 'Практика по специальности III',
+                practiceProduction: 'Производственная практика',
+                qualificationExam: 'Квалификационный экзамен',
+                dualEmployerTraining: 'Обучение у работодателя',
+                interSemesterBreak: 'Межсеместровые каникулы',
+                summerBreak: 'Летние каникулы',
+            },
         },
         subgroup: {
             group1: 'Подгруппа 1',

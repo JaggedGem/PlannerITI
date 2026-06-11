@@ -51,6 +51,25 @@ import {
 } from '@/utils/specialScheduleUtils';
 import { Colors } from '@/constants/Colors';
 import { runWhenIdle } from '@/utils/runWhenIdle';
+import AcademicEmptyState from './AcademicEmptyState';
+import {
+    academicPeriodSuppressesClasses,
+    academicYearForDate,
+    findAcademicPeriodForDate,
+    findNextScheduledClass,
+    isDateInSameWeek,
+} from '@/utils/academicCalendarUtils';
+import {
+    GraficPeGroup,
+    NextScheduledClass,
+} from '@/types/academicCalendar';
+import { scheduleNavigation } from '@/utils/scheduleNavigation';
+import {
+    buildNextClassCacheKey,
+    peekNextClassCache,
+    readNextClassCache,
+    writeNextClassCache,
+} from '@/utils/nextClassCache';
 
 // Key for storing whether the tutorial has been shown
 const TUTORIAL_SHOWN_KEY = 'schedule_tutorial_shown';
@@ -274,6 +293,12 @@ export default function DayView() {
         useState<SpecialScheduleResponse | null>(null);
     const [examSchedule, setExamSchedule] =
         useState<SpecialScheduleResponse | null>(null);
+    const [academicCalendar, setAcademicCalendar] =
+        useState<GraficPeGroup | null>(null);
+    const [nextClassResult, setNextClassResult] = useState<{
+        cacheKey: string;
+        value: NextScheduledClass | null;
+    } | null>(null);
     const [initialLoadAttempted, setInitialLoadAttempted] = useState(false);
     const currentDate = useRef(new Date()).current;
     const isEvenWeek = scheduleService.isEvenWeek(selectedDate);
@@ -282,6 +307,52 @@ export default function DayView() {
         () => scheduleService.isRecoveryDay(selectedDate),
         [selectedDate],
     );
+    const isWeekend =
+        selectedDate.getDay() === 0 || selectedDate.getDay() === 6;
+    const selectedAcademicPeriod = useMemo(
+        () =>
+            findAcademicPeriodForDate(
+                academicCalendar?.periods || [],
+                selectedDate,
+            ),
+        [academicCalendar, selectedDate],
+    );
+    const regularClassesSuppressed = academicPeriodSuppressesClasses(
+        selectedAcademicPeriod,
+    );
+    const nextClassSearchDate = useMemo(
+        () =>
+            regularClassesSuppressed && selectedAcademicPeriod ?
+                new Date(`${selectedAcademicPeriod.endDate}T00:00:00`)
+            :   selectedDate,
+        [
+            regularClassesSuppressed,
+            selectedAcademicPeriod,
+            selectedDate,
+        ],
+    );
+    const nextClassCacheKey = useMemo(
+        () =>
+            buildNextClassCacheKey({
+                selectedGroupId: settings.selectedGroupId,
+                selectedGroupName: settings.selectedGroupName,
+                subgroup: settings.group,
+                scheduleRefreshVersion:
+                    scheduleService.getScheduleRefreshVersion(),
+                fromDate: nextClassSearchDate,
+                sharedAcademicPeriod:
+                    regularClassesSuppressed ? selectedAcademicPeriod : null,
+            }),
+        [
+            nextClassSearchDate,
+            regularClassesSuppressed,
+            selectedAcademicPeriod,
+            settings.group,
+            settings.selectedGroupId,
+            settings.selectedGroupName,
+        ],
+    );
+    const cachedNextClass = peekNextClassCache(nextClassCacheKey);
     const scheduleOverride = useMemo(() => {
         if (!Array.isArray(todaySchedule)) return null;
         const itemWithReason = todaySchedule.find(
@@ -302,7 +373,7 @@ export default function DayView() {
         };
     }, [todaySchedule, recoveryDay]);
     const visibleTodaySchedule = useMemo(() => {
-        if (!Array.isArray(todaySchedule)) return [];
+        if (!Array.isArray(todaySchedule) || regularClassesSuppressed) return [];
         return todaySchedule.filter(
             (item) =>
                 item &&
@@ -310,7 +381,9 @@ export default function DayView() {
                 (item.isEvenWeek === undefined ||
                     item.isEvenWeek === isEvenWeek),
         );
-    }, [todaySchedule, isEvenWeek]);
+    }, [todaySchedule, isEvenWeek, regularClassesSuppressed]);
+    const shouldShowEmptyState =
+        (isWeekend && !recoveryDay) || visibleTodaySchedule.length === 0;
     const thesisEvents = useMemo(
         () =>
             (thesisSchedule?.events || []).filter(
@@ -363,8 +436,19 @@ export default function DayView() {
             ),
         [selectedDateThesisEvents, matchedThesisEventKeys],
     );
+    const assessmentExamEvents =
+        shouldShowEmptyState ? [] : selectedDateExamEvents;
     const hasStandaloneAssessments =
-        selectedDateExamEvents.length > 0 || standaloneThesisEvents.length > 0;
+        assessmentExamEvents.length > 0 || standaloneThesisEvents.length > 0;
+    const nextClass =
+        cachedNextClass.found ? cachedNextClass.value
+        : nextClassResult?.cacheKey === nextClassCacheKey ?
+            nextClassResult.value
+        :   null;
+    const isNextClassLoading =
+        shouldShowEmptyState &&
+        !cachedNextClass.found &&
+        nextClassResult?.cacheKey !== nextClassCacheKey;
     const currentTime = useTimeUpdate();
 
     // Initialize refs at the top level
@@ -396,6 +480,23 @@ export default function DayView() {
     useEffect(() => {
         selectedDateRef.current = selectedDate;
     }, [selectedDate]);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const loadAcademicCalendar = async () => {
+            const calendar = await scheduleService.getAcademicCalendarForDate(
+                selectedDate,
+                settings.selectedGroupName,
+            );
+            if (!cancelled) setAcademicCalendar(calendar);
+        };
+
+        void loadAcademicCalendar();
+        return () => {
+            cancelled = true;
+        };
+    }, [selectedDate, settings.selectedGroupName]);
 
     // Check if tutorial has been shown before
     useEffect(() => {
@@ -745,7 +846,7 @@ export default function DayView() {
             }
             try {
                 const { thesis, exam } =
-                    await scheduleService.getCachedExamAndThesisSchedule(
+                    await scheduleService.getExamAndThesisSchedule(
                         resolvedGroupName,
                     );
                 setThesisSchedule(thesis);
@@ -790,7 +891,7 @@ export default function DayView() {
                     await rebuildDisplayCache(data);
                 }
 
-                await loadCachedSpecialSchedules(
+                void loadCachedSpecialSchedules(
                     scheduleService.getSettings().selectedGroupName,
                 );
             } catch {
@@ -931,10 +1032,6 @@ export default function DayView() {
             }, 100);
         }
     }, []); // Empty dependency array ensures this only runs once
-
-    // Handle empty schedule differently for weekends
-    const isWeekend =
-        selectedDate.getDay() === 0 || selectedDate.getDay() === 6;
 
     const currentTimestamp = currentTime.getTime();
 
@@ -1123,6 +1220,118 @@ export default function DayView() {
         selectedDate,
         toDateKey,
     ]);
+
+    useEffect(() => {
+        if (!scheduleData || !shouldShowEmptyState) {
+            return;
+        }
+        if (peekNextClassCache(nextClassCacheKey).found) return;
+
+        let cancelled = false;
+        const calendarByYear = new Map<string, GraficPeGroup | null>();
+        const selectedAcademicYear = academicYearForDate(nextClassSearchDate);
+        if (academicCalendar?.academicYear === selectedAcademicYear) {
+            calendarByYear.set(selectedAcademicYear, academicCalendar);
+        }
+
+        const loadNextClass = async () => {
+            try {
+                const cached = await readNextClassCache(nextClassCacheKey);
+                if (cached.found) {
+                    if (!cancelled) {
+                        setNextClassResult({
+                            cacheKey: nextClassCacheKey,
+                            value: cached.value,
+                        });
+                    }
+                    return;
+                }
+
+                const result = await findNextScheduledClass({
+                    fromDate: nextClassSearchDate,
+                    isEvenWeek: (date) => scheduleService.isEvenWeek(date),
+                    isDateBlocked: async (date) => {
+                        const academicYear = academicYearForDate(date);
+                        if (!calendarByYear.has(academicYear)) {
+                            calendarByYear.set(
+                                academicYear,
+                                await scheduleService.getAcademicCalendarForDate(
+                                    date,
+                                    settings.selectedGroupName,
+                                ),
+                            );
+                        }
+                        const calendar = calendarByYear.get(academicYear);
+                        return academicPeriodSuppressesClasses(
+                            findAcademicPeriodForDate(
+                                calendar?.periods || [],
+                                date,
+                            ),
+                        );
+                    },
+                    getScheduleForDate: async (date) => {
+                        const dateKey = toDateKey(date);
+                        const weekday =
+                            DAYS_MAP[date.getDay() as keyof typeof DAYS_MAP];
+                        return (await scheduleService.getScheduleForDay(
+                            scheduleData,
+                            weekday || `weekend_${dateKey}`,
+                            date,
+                        )) as ScheduleItem[];
+                    },
+                });
+
+                void writeNextClassCache(nextClassCacheKey, result);
+                if (!cancelled) {
+                    setNextClassResult({
+                        cacheKey: nextClassCacheKey,
+                        value: result,
+                    });
+                }
+            } catch {
+                if (!cancelled) {
+                    setNextClassResult({
+                        cacheKey: nextClassCacheKey,
+                        value: null,
+                    });
+                }
+            }
+        };
+
+        void loadNextClass();
+        return () => {
+            cancelled = true;
+        };
+    }, [
+        academicCalendar,
+        nextClassCacheKey,
+        nextClassSearchDate,
+        scheduleData,
+        settings.selectedGroupName,
+        shouldShowEmptyState,
+        toDateKey,
+    ]);
+
+    const nextClassRef = useRef<NextScheduledClass | null>(nextClass);
+    const handleDatePressRef = useRef(handleDatePress);
+
+    useEffect(() => {
+        nextClassRef.current = nextClass;
+        handleDatePressRef.current = handleDatePress;
+    }, [handleDatePress, nextClass]);
+
+    const handleNextClassPress = useCallback(() => {
+        const targetClass = nextClassRef.current;
+        if (!targetClass) return;
+
+        if (isDateInSameWeek(selectedDateRef.current, targetClass.date)) {
+            handleDatePressRef.current(targetClass.date);
+            return;
+        }
+
+        scheduleNavigation.request({ date: targetClass.date, view: 'week' });
+        scheduleService.updateSettings({ scheduleView: 'week' });
+    }, []);
 
     useEffect(() => {
         // Skip animation if data isn't loaded yet or if tutorial has been shown before
@@ -1678,7 +1887,7 @@ export default function DayView() {
                                 {t('schedule').assessments}
                             </Text>
 
-                            {selectedDateExamEvents.map((examEvent) => (
+                            {assessmentExamEvents.map((examEvent) => (
                                 <View
                                     key={buildSpecialEventKey(examEvent)}
                                     style={[
@@ -1807,18 +2016,15 @@ export default function DayView() {
                         </View>
                     )}
 
-                    {isWeekend && !recoveryDay ?
-                        <View style={styles.noSchedule}>
-                            <Text style={styles.noScheduleText}>
-                                {t('schedule').noClassesWeekend}
-                            </Text>
-                        </View>
-                    : visibleTodaySchedule.length === 0 ?
-                        <View style={styles.noSchedule}>
-                            <Text style={styles.noScheduleText}>
-                                {t('schedule').noClassesDay}
-                            </Text>
-                        </View>
+                    {shouldShowEmptyState ?
+                        <AcademicEmptyState
+                            variant="day"
+                            period={selectedAcademicPeriod}
+                            examEvents={selectedDateExamEvents}
+                            nextClass={nextClass}
+                            isNextClassLoading={isNextClassLoading}
+                            onNextClassPress={handleNextClassPress}
+                        />
                     :   visibleTodaySchedule.map((item, index) => {
                             // Add null check for item
                             if (!item) return null;
