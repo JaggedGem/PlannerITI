@@ -328,7 +328,6 @@ class AuthService {
 
   async login(email: string, password: string): Promise<AuthResponse> {
     try {
-      console.log("Attempting login with email:", email);
       const response = await this.makeAuthRequest(
         "/auth/login",
         "POST",
@@ -342,8 +341,6 @@ class AuthService {
       );
 
       const accessToken = response.access_token || response.token;
-
-      console.log("Login successful, received access token:", accessToken);
 
       if (accessToken) {
         this.token = accessToken;
