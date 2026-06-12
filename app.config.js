@@ -81,6 +81,7 @@ module.exports = () => {
           projectId: "fe01b043-f283-48db-a683-3c5f23546a96",
         },
         environment: appVariant,
+        apiKey: process.env.API_KEY || "",
         customApiLocalUrl: process.env.CUSTOM_API_LOCAL_URL || "",
         customApiLocalHost: process.env.CUSTOM_API_LOCAL_HOST || "",
         customApiLocalPort: process.env.CUSTOM_API_LOCAL_PORT || "5000",

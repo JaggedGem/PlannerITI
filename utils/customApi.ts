@@ -4,10 +4,12 @@ import { Platform } from 'react-native';
 const LOCAL_BIND_ADDRESS = '0.0.0.0';
 const LOCAL_DEFAULT_PORT = '5000';
 const REMOTE_CUSTOM_API_BASE_URL = 'https://papi.jagged.site';
+const LOCAL_PROBE_TIMEOUT_MS = 750;
 
 let hasWarnedLocalFallback = false;
 let hasLoggedResolutionInfo = false;
 let lastLoggedSuccessfulBaseUrl: string | null = null;
+let useRemoteOnlyForSession = false;
 
 const getConfiguredEnvironment = (): string =>
     String(Constants.expoConfig?.extra?.environment || '').toLowerCase();
@@ -129,6 +131,10 @@ interface CustomApiFetchOptions extends RequestInit {
 }
 
 export const getCustomApiBaseUrls = (): string[] => {
+    if (useRemoteOnlyForSession) {
+        return [REMOTE_CUSTOM_API_BASE_URL];
+    }
+
     if (!isDevelopmentMode()) {
         return [REMOTE_CUSTOM_API_BASE_URL];
     }
@@ -153,13 +159,40 @@ export const fetchCustomApi = async (
     options: CustomApiFetchOptions = {},
 ): Promise<Response> => {
     const { timeoutMs = 8000, ...requestInit } = options;
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+    const developmentMode = isDevelopmentMode();
+
+    if (!developmentMode) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+        try {
+            return await fetch(
+                `${REMOTE_CUSTOM_API_BASE_URL}${normalizedPath}`,
+                {
+                    ...requestInit,
+                    signal: controller.signal,
+                },
+            );
+        } catch (error) {
+            clearTimeout(timeoutId);
+
+            if (error instanceof Error && error.name === 'AbortError') {
+                throw new Error('Request timeout');
+            }
+
+            throw error;
+        } finally {
+            clearTimeout(timeoutId);
+        }
+    }
+
     const baseUrls = getCustomApiBaseUrls();
     const remoteIndex = baseUrls.indexOf(REMOTE_CUSTOM_API_BASE_URL);
     const localCandidates =
         remoteIndex >= 0 ? baseUrls.slice(0, remoteIndex) : [];
-    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-    const developmentMode = isDevelopmentMode();
     let lastError: unknown = null;
+    let triedLocalDevelopmentEndpoint = false;
 
     if (developmentMode && !hasLoggedResolutionInfo) {
         hasLoggedResolutionInfo = true;
@@ -168,8 +201,15 @@ export const fetchCustomApi = async (
 
     for (let index = 0; index < baseUrls.length; index += 1) {
         const baseUrl = baseUrls[index];
+        const isRemoteBaseUrl = baseUrl === REMOTE_CUSTOM_API_BASE_URL;
+        const requestTimeoutMs = isRemoteBaseUrl ? timeoutMs : LOCAL_PROBE_TIMEOUT_MS;
+
+        if (!isRemoteBaseUrl) {
+            triedLocalDevelopmentEndpoint = true;
+        }
+
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        const timeoutId = setTimeout(() => controller.abort(), requestTimeoutMs);
 
         try {
             const response = await fetch(`${baseUrl}${normalizedPath}`, {
@@ -182,6 +222,10 @@ export const fetchCustomApi = async (
             if (developmentMode && lastLoggedSuccessfulBaseUrl !== baseUrl) {
                 lastLoggedSuccessfulBaseUrl = baseUrl;
                 console.log(`[custom-api] Using endpoint: ${baseUrl}`);
+            }
+
+            if (developmentMode && isRemoteBaseUrl && triedLocalDevelopmentEndpoint) {
+                useRemoteOnlyForSession = true;
             }
 
             return response;
@@ -205,6 +249,10 @@ export const fetchCustomApi = async (
                 );
             }
         }
+    }
+
+    if (developmentMode && triedLocalDevelopmentEndpoint) {
+        useRemoteOnlyForSession = true;
     }
 
     if (lastError instanceof Error) {
