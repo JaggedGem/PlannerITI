@@ -1,9 +1,9 @@
-import Constants from 'expo-constants';
-import { Platform } from 'react-native';
+import Constants from "expo-constants";
+import { Platform } from "react-native";
 
-const LOCAL_BIND_ADDRESS = '0.0.0.0';
-const LOCAL_DEFAULT_PORT = '5000';
-const REMOTE_CUSTOM_API_BASE_URL = 'https://papi.jagged.site';
+const LOCAL_BIND_ADDRESS = "0.0.0.0";
+const LOCAL_DEFAULT_PORT = "5000";
+const REMOTE_CUSTOM_API_BASE_URL = "https://papi.jagged.site";
 const LOCAL_PROBE_TIMEOUT_MS = 750;
 
 let hasWarnedLocalFallback = false;
@@ -12,252 +12,249 @@ let lastLoggedSuccessfulBaseUrl: string | null = null;
 let useRemoteOnlyForSession = false;
 
 const getConfiguredEnvironment = (): string =>
-    String(Constants.expoConfig?.extra?.environment || '').toLowerCase();
+  String(Constants.expoConfig?.extra?.environment || "").toLowerCase();
 
 const isDevelopmentMode = (): boolean => {
-    const env = getConfiguredEnvironment();
-    return (
-        (typeof __DEV__ !== 'undefined' && __DEV__) ||
-        env === 'development' ||
-        env === 'dev'
-    );
+  const env = getConfiguredEnvironment();
+  return (
+    (typeof __DEV__ !== "undefined" && __DEV__) ||
+    env === "development" ||
+    env === "dev"
+  );
 };
 
 const normalizePort = (rawPort?: unknown): string => {
-    const value = String(rawPort || LOCAL_DEFAULT_PORT).trim();
-    return /^\d+$/.test(value) ? value : LOCAL_DEFAULT_PORT;
+  const value = String(rawPort || LOCAL_DEFAULT_PORT).trim();
+  return /^\d+$/.test(value) ? value : LOCAL_DEFAULT_PORT;
 };
 
 const extractHostFromUri = (uri?: string | null): string | null => {
-    if (!uri || typeof uri !== 'string') return null;
-    const trimmed = uri.trim();
-    if (!trimmed) return null;
+  if (!uri || typeof uri !== "string") return null;
+  const trimmed = uri.trim();
+  if (!trimmed) return null;
 
-    const withoutProtocol = trimmed.replace(/^https?:\/\//, '');
-    const hostPort = withoutProtocol.split('/')[0];
-    const host = hostPort.split(':')[0]?.trim();
+  const withoutProtocol = trimmed.replace(/^https?:\/\//, "");
+  const hostPort = withoutProtocol.split("/")[0];
+  const host = hostPort.split(":")[0]?.trim();
 
-    if (!host) return null;
-    return host;
+  if (!host) return null;
+  return host;
 };
 
 const getExpoHostCandidates = (): string[] => {
-    const possibleHostUris: (string | undefined)[] = [
-        Constants.expoConfig?.hostUri,
-        (Constants as any).manifest?.debuggerHost,
-        (Constants as any).manifest?.hostUri,
-        (Constants as any).manifest2?.extra?.expoClient?.hostUri,
-    ];
+  const possibleHostUris: (string | undefined)[] = [
+    Constants.expoConfig?.hostUri,
+    (Constants as any).manifest?.debuggerHost,
+    (Constants as any).manifest?.hostUri,
+    (Constants as any).manifest2?.extra?.expoClient?.hostUri,
+  ];
 
-    const blockedHosts = new Set(['localhost', '127.0.0.1', '0.0.0.0']);
-    const hosts = new Set<string>();
+  const blockedHosts = new Set(["localhost", "127.0.0.1", "0.0.0.0"]);
+  const hosts = new Set<string>();
 
-    possibleHostUris.forEach((uri) => {
-        const host = extractHostFromUri(uri);
-        if (!host) return;
-        if (blockedHosts.has(host)) return;
-        hosts.add(host);
-    });
+  possibleHostUris.forEach((uri) => {
+    const host = extractHostFromUri(uri);
+    if (!host) return;
+    if (blockedHosts.has(host)) return;
+    hosts.add(host);
+  });
 
-    return Array.from(hosts);
+  return Array.from(hosts);
 };
 
 const getConfiguredLocalBaseUrls = (): string[] => {
-    const extra = Constants.expoConfig?.extra as
-        | Record<string, unknown>
-        | undefined;
-    const configuredLocalUrl =
-        typeof extra?.customApiLocalUrl === 'string' ?
-            extra.customApiLocalUrl.trim()
-        :   '';
-    const configuredLocalHost =
-        typeof extra?.customApiLocalHost === 'string' ?
-            extra.customApiLocalHost.trim()
-        :   '';
-    const port = normalizePort(extra?.customApiLocalPort);
+  const extra = Constants.expoConfig?.extra as
+    | Record<string, unknown>
+    | undefined;
+  const configuredLocalUrl =
+    typeof extra?.customApiLocalUrl === "string" ?
+      extra.customApiLocalUrl.trim()
+    : "";
+  const configuredLocalHost =
+    typeof extra?.customApiLocalHost === "string" ?
+      extra.customApiLocalHost.trim()
+    : "";
+  const port = normalizePort(extra?.customApiLocalPort);
 
-    const urls: string[] = [];
-    if (configuredLocalUrl) {
-        urls.push(configuredLocalUrl.replace(/\/$/, ''));
-    }
-    if (configuredLocalHost) {
-        urls.push(`http://${configuredLocalHost}:${port}`);
-    }
+  const urls: string[] = [];
+  if (configuredLocalUrl) {
+    urls.push(configuredLocalUrl.replace(/\/$/, ""));
+  }
+  if (configuredLocalHost) {
+    urls.push(`http://${configuredLocalHost}:${port}`);
+  }
 
-    return urls;
+  return urls;
 };
 
 const getConfiguredLocalPort = (): string => {
-    const extra = Constants.expoConfig?.extra as
-        | Record<string, unknown>
-        | undefined;
-    return normalizePort(extra?.customApiLocalPort);
+  const extra = Constants.expoConfig?.extra as
+    | Record<string, unknown>
+    | undefined;
+  return normalizePort(extra?.customApiLocalPort);
 };
 
 const getDefaultLocalBaseUrls = (): string[] => {
-    const urls: string[] = [];
-    const port = getConfiguredLocalPort();
+  const urls: string[] = [];
+  const port = getConfiguredLocalPort();
 
-    getExpoHostCandidates().forEach((host) => {
-        urls.push(`http://${host}:${port}`);
-    });
+  getExpoHostCandidates().forEach((host) => {
+    urls.push(`http://${host}:${port}`);
+  });
 
-    if (Platform.OS === 'android') {
-        urls.push(`http://10.0.2.2:${port}`);
-    }
+  if (Platform.OS === "android") {
+    urls.push(`http://10.0.2.2:${port}`);
+  }
 
-    if (Platform.OS === 'ios') {
-        urls.push(`http://127.0.0.1:${port}`);
-    }
+  if (Platform.OS === "ios") {
+    urls.push(`http://127.0.0.1:${port}`);
+  }
 
-    // Keep bind address as last local attempt for desktop/web edge-cases.
-    urls.push(`http://${LOCAL_BIND_ADDRESS}:${port}`);
+  // Keep bind address as last local attempt for desktop/web edge-cases.
+  urls.push(`http://${LOCAL_BIND_ADDRESS}:${port}`);
 
-    return urls;
+  return urls;
 };
 
 const dedupeUrls = (urls: string[]): string[] => {
-    const seen = new Set<string>();
-    return urls.filter((url) => {
-        const normalized = url.trim().replace(/\/$/, '');
-        if (!normalized || seen.has(normalized)) return false;
-        seen.add(normalized);
-        return true;
-    });
+  const seen = new Set<string>();
+  return urls.filter((url) => {
+    const normalized = url.trim().replace(/\/$/, "");
+    if (!normalized || seen.has(normalized)) return false;
+    seen.add(normalized);
+    return true;
+  });
 };
 
 interface CustomApiFetchOptions extends RequestInit {
-    timeoutMs?: number;
+  timeoutMs?: number;
 }
 
 export const getCustomApiBaseUrls = (): string[] => {
-    if (useRemoteOnlyForSession) {
-        return [REMOTE_CUSTOM_API_BASE_URL];
-    }
+  if (useRemoteOnlyForSession) {
+    return [REMOTE_CUSTOM_API_BASE_URL];
+  }
 
-    if (!isDevelopmentMode()) {
-        return [REMOTE_CUSTOM_API_BASE_URL];
-    }
+  if (!isDevelopmentMode()) {
+    return [REMOTE_CUSTOM_API_BASE_URL];
+  }
 
-    const localCandidates = dedupeUrls([
-        ...getConfiguredLocalBaseUrls(),
-        ...getDefaultLocalBaseUrls(),
-    ]);
+  const localCandidates = dedupeUrls([
+    ...getConfiguredLocalBaseUrls(),
+    ...getDefaultLocalBaseUrls(),
+  ]);
 
-    return [...localCandidates, REMOTE_CUSTOM_API_BASE_URL];
+  return [...localCandidates, REMOTE_CUSTOM_API_BASE_URL];
 };
 
 const isAbortError = (error: unknown): boolean =>
-    Boolean(
-        error &&
-        typeof error === 'object' &&
-        (error as { name?: string }).name === 'AbortError',
-    );
+  Boolean(
+    error &&
+    typeof error === "object" &&
+    (error as { name?: string }).name === "AbortError",
+  );
 
 export const fetchCustomApi = async (
-    path: string,
-    options: CustomApiFetchOptions = {},
+  path: string,
+  options: CustomApiFetchOptions = {},
 ): Promise<Response> => {
-    const { timeoutMs = 8000, ...requestInit } = options;
-    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-    const developmentMode = isDevelopmentMode();
+  const { timeoutMs = 8000, ...requestInit } = options;
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const developmentMode = isDevelopmentMode();
 
-    if (!developmentMode) {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  if (!developmentMode) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-        try {
-            return await fetch(
-                `${REMOTE_CUSTOM_API_BASE_URL}${normalizedPath}`,
-                {
-                    ...requestInit,
-                    signal: controller.signal,
-                },
-            );
-        } catch (error) {
-            clearTimeout(timeoutId);
+    try {
+      return await fetch(`${REMOTE_CUSTOM_API_BASE_URL}${normalizedPath}`, {
+        ...requestInit,
+        signal: controller.signal,
+      });
+    } catch (error) {
+      clearTimeout(timeoutId);
 
-            if (error instanceof Error && error.name === 'AbortError') {
-                throw new Error('Request timeout');
-            }
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new Error("Request timeout");
+      }
 
-            throw error;
-        } finally {
-            clearTimeout(timeoutId);
-        }
+      throw error;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  const baseUrls = getCustomApiBaseUrls();
+  const remoteIndex = baseUrls.indexOf(REMOTE_CUSTOM_API_BASE_URL);
+  const localCandidates =
+    remoteIndex >= 0 ? baseUrls.slice(0, remoteIndex) : [];
+  let lastError: unknown = null;
+  let triedLocalDevelopmentEndpoint = false;
+
+  if (developmentMode && !hasLoggedResolutionInfo) {
+    hasLoggedResolutionInfo = true;
+    console.log(`[custom-api] Resolution order: ${baseUrls.join(" -> ")}`);
+  }
+
+  for (let index = 0; index < baseUrls.length; index += 1) {
+    const baseUrl = baseUrls[index];
+    const isRemoteBaseUrl = baseUrl === REMOTE_CUSTOM_API_BASE_URL;
+    const requestTimeoutMs =
+      isRemoteBaseUrl ? timeoutMs : LOCAL_PROBE_TIMEOUT_MS;
+
+    if (!isRemoteBaseUrl) {
+      triedLocalDevelopmentEndpoint = true;
     }
 
-    const baseUrls = getCustomApiBaseUrls();
-    const remoteIndex = baseUrls.indexOf(REMOTE_CUSTOM_API_BASE_URL);
-    const localCandidates =
-        remoteIndex >= 0 ? baseUrls.slice(0, remoteIndex) : [];
-    let lastError: unknown = null;
-    let triedLocalDevelopmentEndpoint = false;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), requestTimeoutMs);
 
-    if (developmentMode && !hasLoggedResolutionInfo) {
-        hasLoggedResolutionInfo = true;
-        console.log(`[custom-api] Resolution order: ${baseUrls.join(' -> ')}`);
-    }
+    try {
+      const response = await fetch(`${baseUrl}${normalizedPath}`, {
+        ...requestInit,
+        signal: controller.signal,
+      });
 
-    for (let index = 0; index < baseUrls.length; index += 1) {
-        const baseUrl = baseUrls[index];
-        const isRemoteBaseUrl = baseUrl === REMOTE_CUSTOM_API_BASE_URL;
-        const requestTimeoutMs = isRemoteBaseUrl ? timeoutMs : LOCAL_PROBE_TIMEOUT_MS;
+      clearTimeout(timeoutId);
 
-        if (!isRemoteBaseUrl) {
-            triedLocalDevelopmentEndpoint = true;
-        }
+      if (developmentMode && lastLoggedSuccessfulBaseUrl !== baseUrl) {
+        lastLoggedSuccessfulBaseUrl = baseUrl;
+        console.log(`[custom-api] Using endpoint: ${baseUrl}`);
+      }
 
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), requestTimeoutMs);
-
-        try {
-            const response = await fetch(`${baseUrl}${normalizedPath}`, {
-                ...requestInit,
-                signal: controller.signal,
-            });
-
-            clearTimeout(timeoutId);
-
-            if (developmentMode && lastLoggedSuccessfulBaseUrl !== baseUrl) {
-                lastLoggedSuccessfulBaseUrl = baseUrl;
-                console.log(`[custom-api] Using endpoint: ${baseUrl}`);
-            }
-
-            if (developmentMode && isRemoteBaseUrl && triedLocalDevelopmentEndpoint) {
-                useRemoteOnlyForSession = true;
-            }
-
-            return response;
-        } catch (error) {
-            clearTimeout(timeoutId);
-            lastError = error;
-
-            if (
-                developmentMode &&
-                index === remoteIndex - 1 &&
-                remoteIndex > 0 &&
-                !hasWarnedLocalFallback &&
-                !isAbortError(error)
-            ) {
-                hasWarnedLocalFallback = true;
-                const detail =
-                    error instanceof Error ? error.message : String(error);
-                console.warn(
-                    `[custom-api] Local development endpoints failed (${localCandidates.join(', ')}); falling back to ${REMOTE_CUSTOM_API_BASE_URL}.`,
-                    detail,
-                );
-            }
-        }
-    }
-
-    if (developmentMode && triedLocalDevelopmentEndpoint) {
+      if (developmentMode && isRemoteBaseUrl && triedLocalDevelopmentEndpoint) {
         useRemoteOnlyForSession = true;
-    }
+      }
 
-    if (lastError instanceof Error) {
-        throw lastError;
-    }
+      return response;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      lastError = error;
 
-    throw new Error('Custom API request failed');
+      if (
+        developmentMode &&
+        index === remoteIndex - 1 &&
+        remoteIndex > 0 &&
+        !hasWarnedLocalFallback &&
+        !isAbortError(error)
+      ) {
+        hasWarnedLocalFallback = true;
+        const detail = error instanceof Error ? error.message : String(error);
+        console.warn(
+          `[custom-api] Local development endpoints failed (${localCandidates.join(", ")}); falling back to ${REMOTE_CUSTOM_API_BASE_URL}.`,
+          detail,
+        );
+      }
+    }
+  }
+
+  if (developmentMode && triedLocalDevelopmentEndpoint) {
+    useRemoteOnlyForSession = true;
+  }
+
+  if (lastError instanceof Error) {
+    throw lastError;
+  }
+
+  throw new Error("Custom API request failed");
 };
