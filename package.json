@@ -84,15 +84,6 @@
     "react-test-renderer": "19.2.3",
     "typescript": "~6.0.3"
   },
-  "pnpm": {
-    "overrides": {
-      "react-dom": "19.2.3"
-    },
-    "onlyBuiltDependencies": [
-      "msgpackr-extract",
-      "unrs-resolver"
-    ]
-  },
   "packageManager": "pnpm@11.1.2",
   "private": true
 }
