@@ -560,130 +560,147 @@ export default function AssignmentItem({
 
   return (
     <View style={styles.outerContainer}>
-      <AnimatedPressable
-        style={[
-          styles.container,
-          containerStyle,
-          isOrphaned && styles.orphanedContainer,
-          isOverdue && styles.overdueContainer,
-          inOrphanedCourse && styles.inOrphanedCourseContainer,
-        ]}
-        onPress={handleItemPress}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        entering={FadeIn.duration(300)}
-        layout={Layout.springify()}
-      >
-        {/* Highlight overlay for animation - always present but controlled by opacity */}
-        <Animated.View style={highlightStyle} pointerEvents="none" />
+      <Animated.View entering={FadeIn.duration(300)} layout={Layout.springify()}>
+        <AnimatedPressable
+          style={[
+            styles.container,
+            containerStyle,
+            isOrphaned && styles.orphanedContainer,
+            isOverdue && styles.overdueContainer,
+            inOrphanedCourse && styles.inOrphanedCourseContainer,
+          ]}
+          onPress={handleItemPress}
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+        >
+          {/* Highlight overlay for animation - always present but controlled by opacity */}
+          <Animated.View style={highlightStyle} pointerEvents="none" />
 
-        <View style={styles.leftSection}>
-          <TouchableOpacity
-            style={styles.checkboxContainer}
-            onPress={handleToggleAssignment}
-            hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
-          >
-            <View style={[styles.checkbox, assignment.isCompleted && styles.checkboxChecked]}>
-              <View style={styles.checkIconWrapper}>
-                <Animated.View style={[styles.checkIcon, checkboxStyle]}>
-                  <Ionicons name="checkmark" size={14} color={Colors.dark.white} />
-                </Animated.View>
+          <View style={styles.leftSection}>
+            <TouchableOpacity
+              style={styles.checkboxContainer}
+              onPress={handleToggleAssignment}
+              hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
+            >
+              <View style={[styles.checkbox, assignment.isCompleted && styles.checkboxChecked]}>
+                <View style={styles.checkIconWrapper}>
+                  <Animated.View style={[styles.checkIcon, checkboxStyle]}>
+                    <Ionicons name="checkmark" size={14} color={Colors.dark.white} />
+                  </Animated.View>
+                </View>
               </View>
-            </View>
-          </TouchableOpacity>
+            </TouchableOpacity>
 
-          <View style={styles.contentContainer}>
-            <View style={styles.titleRow}>
-              <View
-                style={[
-                  styles.typeIndicator,
-                  {
-                    backgroundColor: isOrphaned ? Colors.dark.gray : typeColor,
-                  },
-                ]}
-              >
-                <Ionicons
-                  name={isOrphaned ? 'alert-circle' : typeIcon}
-                  size={12}
-                  color={Colors.dark.white}
-                />
-              </View>
-              <Text
-                style={[
-                  styles.title,
-                  assignment.isCompleted && styles.completedTitle,
-                  isOrphaned && styles.orphanedText,
-                  inOrphanedCourse && styles.inOrphanedCourseText,
-                ]}
-                numberOfLines={2}
-              >
-                {assignment.title}
-              </Text>
-
-              {hasSubtasks && (
-                <TouchableOpacity
-                  style={styles.expandButton}
-                  onPress={toggleExpanded}
-                  hitSlop={{
-                    top: 10,
-                    right: 10,
-                    bottom: 10,
-                    left: 10,
-                  }}
+            <View style={styles.contentContainer}>
+              <View style={styles.titleRow}>
+                <View
+                  style={[
+                    styles.typeIndicator,
+                    {
+                      backgroundColor: isOrphaned ? Colors.dark.gray : typeColor,
+                    },
+                  ]}
                 >
                   <Ionicons
-                    name={expanded ? 'chevron-up' : 'chevron-down'}
-                    size={16}
-                    color={Colors.dark.mutedText}
+                    name={isOrphaned ? 'alert-circle' : typeIcon}
+                    size={12}
+                    color={Colors.dark.white}
                   />
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {/* Subtask progress indicator */}
-            {hasSubtasks && !expanded && (
-              <View style={styles.subtaskProgressContainer}>
-                <View style={styles.subtaskProgressBar}>
-                  <View style={[styles.subtaskProgressFill, { width: `${subtaskProgress}%` }]} />
                 </View>
-                <Text style={styles.subtaskProgressText}>
-                  {completedSubtasks}/{subtasks.length}
+                <Text
+                  style={[
+                    styles.title,
+                    assignment.isCompleted && styles.completedTitle,
+                    isOrphaned && styles.orphanedText,
+                    inOrphanedCourse && styles.inOrphanedCourseText,
+                  ]}
+                  numberOfLines={2}
+                >
+                  {assignment.title}
                 </Text>
-              </View>
-            )}
 
-            {/* Show description if available and no subtasks or not expanded */}
-            {assignment.description && (!hasSubtasks || !expanded) ? (
-              <Animated.View
-                style={styles.descriptionContainer}
-                layout={Layout.springify().mass(0.3)}
-              >
-                <View style={styles.descriptionRow}>
-                  <Text
-                    ref={descriptionRef}
-                    style={[
-                      styles.description,
-                      isOrphaned && styles.orphanedDescription,
-                      inOrphanedCourse && styles.inOrphanedCourseText,
-                    ]}
-                    numberOfLines={isDescriptionExpanded ? undefined : 1}
-                    onLayout={(event) => {
-                      // Check if text is clipped (needs expansion)
-                      const { height } = event.nativeEvent.layout;
-                      // If the height is greater than a single line (approx 18-20px),
-                      // we consider it multiline
-                      if (height > 20 && !isDescriptionMultiline) {
-                        setIsDescriptionMultiline(true);
-                      }
+                {hasSubtasks && (
+                  <TouchableOpacity
+                    style={styles.expandButton}
+                    onPress={toggleExpanded}
+                    hitSlop={{
+                      top: 10,
+                      right: 10,
+                      bottom: 10,
+                      left: 10,
                     }}
                   >
-                    {assignment.description}
-                  </Text>
+                    <Ionicons
+                      name={expanded ? 'chevron-up' : 'chevron-down'}
+                      size={16}
+                      color={Colors.dark.mutedText}
+                    />
+                  </TouchableOpacity>
+                )}
+              </View>
 
-                  {/* Show expand/collapse button only if description is multiline and not expanded */}
-                  {isDescriptionMultiline && !isDescriptionExpanded && (
+              {/* Subtask progress indicator */}
+              {hasSubtasks && !expanded && (
+                <View style={styles.subtaskProgressContainer}>
+                  <View style={styles.subtaskProgressBar}>
+                    <View style={[styles.subtaskProgressFill, { width: `${subtaskProgress}%` }]} />
+                  </View>
+                  <Text style={styles.subtaskProgressText}>
+                    {completedSubtasks}/{subtasks.length}
+                  </Text>
+                </View>
+              )}
+
+              {/* Show description if available and no subtasks or not expanded */}
+              {assignment.description && (!hasSubtasks || !expanded) ? (
+                <Animated.View
+                  style={styles.descriptionContainer}
+                  layout={Layout.springify().mass(0.3)}
+                >
+                  <View style={styles.descriptionRow}>
+                    <Text
+                      ref={descriptionRef}
+                      style={[
+                        styles.description,
+                        isOrphaned && styles.orphanedDescription,
+                        inOrphanedCourse && styles.inOrphanedCourseText,
+                      ]}
+                      numberOfLines={isDescriptionExpanded ? undefined : 1}
+                      onLayout={(event) => {
+                        // Check if text is clipped (needs expansion)
+                        const { height } = event.nativeEvent.layout;
+                        // If the height is greater than a single line (approx 18-20px),
+                        // we consider it multiline
+                        if (height > 20 && !isDescriptionMultiline) {
+                          setIsDescriptionMultiline(true);
+                        }
+                      }}
+                    >
+                      {assignment.description}
+                    </Text>
+
+                    {/* Show expand/collapse button only if description is multiline and not expanded */}
+                    {isDescriptionMultiline && !isDescriptionExpanded && (
+                      <TouchableOpacity
+                        style={styles.expandDescriptionButton}
+                        onPress={toggleDescriptionExpanded}
+                        hitSlop={{
+                          top: 10,
+                          right: 10,
+                          bottom: 10,
+                          left: 10,
+                        }}
+                      >
+                        <Text style={styles.expandDescriptionText}>{t('general').more}</Text>
+                        <Ionicons name="chevron-down" size={14} color={Colors.dark.primary} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  {/* Show less button if expanded */}
+                  {isDescriptionExpanded && (
                     <TouchableOpacity
-                      style={styles.expandDescriptionButton}
+                      style={styles.collapseDescriptionButton}
                       onPress={toggleDescriptionExpanded}
                       hitSlop={{
                         top: 10,
@@ -692,73 +709,56 @@ export default function AssignmentItem({
                         left: 10,
                       }}
                     >
-                      <Text style={styles.expandDescriptionText}>{t('general').more}</Text>
-                      <Ionicons name="chevron-down" size={14} color={Colors.dark.primary} />
+                      <Text style={styles.expandDescriptionText}>{t('general').less}</Text>
+                      <Ionicons name="chevron-up" size={14} color={Colors.dark.primary} />
                     </TouchableOpacity>
                   )}
-                </View>
-
-                {/* Show less button if expanded */}
-                {isDescriptionExpanded && (
-                  <TouchableOpacity
-                    style={styles.collapseDescriptionButton}
-                    onPress={toggleDescriptionExpanded}
-                    hitSlop={{
-                      top: 10,
-                      right: 10,
-                      bottom: 10,
-                      left: 10,
-                    }}
-                  >
-                    <Text style={styles.expandDescriptionText}>{t('general').less}</Text>
-                    <Ionicons name="chevron-up" size={14} color={Colors.dark.primary} />
-                  </TouchableOpacity>
-                )}
-              </Animated.View>
-            ) : null}
-          </View>
-        </View>
-
-        <View style={styles.rightSection}>
-          {assignment.isPriority && (
-            <View style={[styles.priorityIndicator, { backgroundColor: priorityColor }]}>
-              <Ionicons name="star" size={14} color={Colors.dark.white} />
+                </Animated.View>
+              ) : null}
             </View>
-          )}
-          <Text style={[styles.timeText, inOrphanedCourse && styles.inOrphanedCourseMetadata]}>
-            {formattedTime}
-          </Text>
-
-          {/* Remaining time display */}
-          {!assignment.isCompleted && (
-            <Text
-              style={[
-                styles.remainingTime,
-                isOverdue && styles.overdueText,
-                inOrphanedCourse && styles.inOrphanedCourseMetadata,
-              ]}
-            >
-              {remainingTime}
-            </Text>
-          )}
-
-          {/* Wrapper for options button with margin */}
-          <View style={{ marginTop: 8 }} ref={optionsButtonRef}>
-            <TouchableOpacity
-              style={styles.optionsButton}
-              onPress={handleOpenOptions}
-              hitSlop={{
-                top: 10,
-                right: 10,
-                bottom: 10,
-                left: 10,
-              }}
-            >
-              <Ionicons name="ellipsis-horizontal" size={16} color={Colors.dark.mutedText} />
-            </TouchableOpacity>
           </View>
-        </View>
-      </AnimatedPressable>
+
+          <View style={styles.rightSection}>
+            {assignment.isPriority && (
+              <View style={[styles.priorityIndicator, { backgroundColor: priorityColor }]}>
+                <Ionicons name="star" size={14} color={Colors.dark.white} />
+              </View>
+            )}
+            <Text style={[styles.timeText, inOrphanedCourse && styles.inOrphanedCourseMetadata]}>
+              {formattedTime}
+            </Text>
+
+            {/* Remaining time display */}
+            {!assignment.isCompleted && (
+              <Text
+                style={[
+                  styles.remainingTime,
+                  isOverdue && styles.overdueText,
+                  inOrphanedCourse && styles.inOrphanedCourseMetadata,
+                ]}
+              >
+                {remainingTime}
+              </Text>
+            )}
+
+            {/* Wrapper for options button with margin */}
+            <View style={{ marginTop: 8 }} ref={optionsButtonRef}>
+              <TouchableOpacity
+                style={styles.optionsButton}
+                onPress={handleOpenOptions}
+                hitSlop={{
+                  top: 10,
+                  right: 10,
+                  bottom: 10,
+                  left: 10,
+                }}
+              >
+                <Ionicons name="ellipsis-horizontal" size={16} color={Colors.dark.mutedText} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </AnimatedPressable>
+      </Animated.View>
 
       {/* Subtasks dropdown section */}
       {expanded && hasSubtasks && (

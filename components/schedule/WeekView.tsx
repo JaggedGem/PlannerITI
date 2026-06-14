@@ -1581,15 +1581,17 @@ export default function WeekView() {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.weekEmptyContent}
           >
-            <Animated.View style={containerStyle} entering={FadeIn.duration(200)}>
-              <AcademicEmptyState
-                variant="week"
-                period={representativeAcademicPeriod}
-                examEvents={weekExamEvents}
-                nextClass={nextClass}
-                isNextClassLoading={isNextClassLoading}
-                onNextClassPress={handleNextClassPress}
-              />
+            <Animated.View entering={FadeIn.duration(200)}>
+              <Animated.View style={containerStyle}>
+                <AcademicEmptyState
+                  variant="week"
+                  period={representativeAcademicPeriod}
+                  examEvents={weekExamEvents}
+                  nextClass={nextClass}
+                  isNextClassLoading={isNextClassLoading}
+                  onNextClassPress={handleNextClassPress}
+                />
+              </Animated.View>
             </Animated.View>
           </ScrollView>
         ) : (
@@ -1605,153 +1607,153 @@ export default function WeekView() {
                 <ExamAgendaCard events={weekExamEvents} />
               </View>
             )}
-            <Animated.View
-              style={[styles.timetableContainer, containerStyle]}
-              entering={FadeIn.duration(200)}
-            >
-              <View style={[styles.timeColumn, { width: timeColumnWidth }]}>
-                {timeSlots.map((hour, index) => {
-                  const formattedHour = formatHour(hour);
-                  const isCurrentHour = hour === nowHour && weekOffset === 0;
+            <Animated.View entering={FadeIn.duration(200)}>
+              <Animated.View style={[styles.timetableContainer, containerStyle]}>
+                <View style={[styles.timeColumn, { width: timeColumnWidth }]}>
+                  {timeSlots.map((hour, index) => {
+                    const formattedHour = formatHour(hour);
+                    const isCurrentHour = hour === nowHour && weekOffset === 0;
 
-                  return (
+                    return (
+                      <View
+                        key={index}
+                        style={[
+                          styles.timeSlot,
+                          { height: hourHeight },
+                          isCurrentHour && styles.currentHourHighlight,
+                        ]}
+                      >
+                        {typeof formattedHour === 'string' ? (
+                          <Text style={styles.timeHour}>{formattedHour}</Text>
+                        ) : (
+                          <>
+                            <Text style={styles.timeHour}>{formattedHour.hour}</Text>
+                            <Text style={styles.timePeriod}>{formattedHour.period}</Text>
+                          </>
+                        )}
+                      </View>
+                    );
+                  })}
+                </View>
+
+                <View
+                  style={[
+                    styles.gridContainer,
+                    {
+                      width: windowWidth - timeColumnWidth - 8,
+                    },
+                  ]}
+                >
+                  {timeSlots.map((hour, index) => (
                     <View
-                      key={index}
+                      key={`grid-${index}`}
                       style={[
-                        styles.timeSlot,
-                        { height: hourHeight },
-                        isCurrentHour && styles.currentHourHighlight,
-                      ]}
-                    >
-                      {typeof formattedHour === 'string' ? (
-                        <Text style={styles.timeHour}>{formattedHour}</Text>
-                      ) : (
-                        <>
-                          <Text style={styles.timeHour}>{formattedHour.hour}</Text>
-                          <Text style={styles.timePeriod}>{formattedHour.period}</Text>
-                        </>
-                      )}
-                    </View>
-                  );
-                })}
-              </View>
-
-              <View
-                style={[
-                  styles.gridContainer,
-                  {
-                    width: windowWidth - timeColumnWidth - 8,
-                  },
-                ]}
-              >
-                {timeSlots.map((hour, index) => (
-                  <View
-                    key={`grid-${index}`}
-                    style={[
-                      styles.gridLine,
-                      {
-                        top: index * hourHeight,
-                        width: '100%',
-                      },
-                      hour === nowHour &&
-                        weekOffset === 0 && {
-                          backgroundColor: Colors.dark.overlayPrimary12,
-                        },
-                    ]}
-                  />
-                ))}
-
-                {dayDates.map((day, dayIndex) => {
-                  const isToday = day.isToday;
-                  const isWeekend = day.isWeekend;
-                  const isRecoveryDay = day.recoveryDay != null;
-                  const dayThesisEvents = filterThesisEventsForDate(
-                    thesisEvents,
-                    day.date,
-                    settings.group,
-                  );
-                  const dayExamEvents = filterExamEventsForDate(
-                    examEvents,
-                    day.date,
-                    settings.group,
-                  );
-                  const filteredItems = getVisibleItemsForDay(day);
-
-                  return (
-                    <Animated.View
-                      key={`day_${day.dayKey}`}
-                      style={[
-                        styles.dayContent,
+                        styles.gridLine,
                         {
-                          width: dayColumnWidth,
-                          height: timetableHeight,
-                          left: dayIndex * dayColumnWidth,
+                          top: index * hourHeight,
+                          width: '100%',
                         },
-                        isToday && {
-                          backgroundColor: Colors.dark.overlayPrimary03,
-                        },
-                        dayExamEvents.length > 0 &&
-                          dayThesisEvents.length === 0 &&
-                          styles.dayContentExam,
-                        dayThesisEvents.length > 0 && styles.dayContentThesis,
-                        (isRecoveryDay || isWeekend) && {
-                          backgroundColor: Colors.dark.overlayRecovery05,
-                        },
+                        hour === nowHour &&
+                          weekOffset === 0 && {
+                            backgroundColor: Colors.dark.overlayPrimary12,
+                          },
                       ]}
-                      entering={FadeIn.duration(150).delay(dayIndex * 30)}
-                    >
-                      {filteredItems.map((item, itemIndex) => {
-                        if (!item || !item.startTime || !item.endTime) return null;
+                    />
+                  ))}
 
-                        const { top, height } = calculateItemPosition(
-                          item.startTime,
-                          item.endTime,
-                          hourHeight,
-                          firstHour,
-                        );
-                        const color =
-                          item.isCustom && item.color
-                            ? item.color
-                            : getSubjectColor(item.className);
-                        const isActive = isToday && isCurrentTimeSlot(item.startTime, item.endTime);
+                  {dayDates.map((day, dayIndex) => {
+                    const isToday = day.isToday;
+                    const isWeekend = day.isWeekend;
+                    const isRecoveryDay = day.recoveryDay != null;
+                    const dayThesisEvents = filterThesisEventsForDate(
+                      thesisEvents,
+                      day.date,
+                      settings.group,
+                    );
+                    const dayExamEvents = filterExamEventsForDate(
+                      examEvents,
+                      day.date,
+                      settings.group,
+                    );
+                    const filteredItems = getVisibleItemsForDay(day);
 
-                        return (
-                          <TimetableItem
-                            key={`${item.period || itemIndex}-${item.startTime}-${item.endTime}-${item.className}`}
-                            item={item}
-                            top={top}
-                            height={height}
-                            color={color}
-                            isActive={isActive}
+                    return (
+                      <Animated.View
+                        key={`day_${day.dayKey}`}
+                        style={[
+                          styles.dayContent,
+                          {
+                            width: dayColumnWidth,
+                            height: timetableHeight,
+                            left: dayIndex * dayColumnWidth,
+                          },
+                          isToday && {
+                            backgroundColor: Colors.dark.overlayPrimary03,
+                          },
+                          dayExamEvents.length > 0 &&
+                            dayThesisEvents.length === 0 &&
+                            styles.dayContentExam,
+                          dayThesisEvents.length > 0 && styles.dayContentThesis,
+                          (isRecoveryDay || isWeekend) && {
+                            backgroundColor: Colors.dark.overlayRecovery05,
+                          },
+                        ]}
+                        entering={FadeIn.duration(150).delay(dayIndex * 30)}
+                      >
+                        {filteredItems.map((item, itemIndex) => {
+                          if (!item || !item.startTime || !item.endTime) return null;
+
+                          const { top, height } = calculateItemPosition(
+                            item.startTime,
+                            item.endTime,
+                            hourHeight,
+                            firstHour,
+                          );
+                          const color =
+                            item.isCustom && item.color
+                              ? item.color
+                              : getSubjectColor(item.className);
+                          const isActive =
+                            isToday && isCurrentTimeSlot(item.startTime, item.endTime);
+
+                          return (
+                            <TimetableItem
+                              key={`${item.period || itemIndex}-${item.startTime}-${item.endTime}-${item.className}`}
+                              item={item}
+                              top={top}
+                              height={height}
+                              color={color}
+                              isActive={isActive}
+                            />
+                          );
+                        })}
+
+                        {filteredItems.length === 0 && (
+                          <Text
+                            style={[
+                              styles.emptySchedule,
+                              isRecoveryDay && {
+                                marginTop: 30,
+                              },
+                            ]}
+                          >
+                            {t('schedule').noClassesDay}
+                          </Text>
+                        )}
+
+                        {isToday && weekOffset === 0 && (
+                          <CurrentTimeIndicator
+                            hourHeight={hourHeight}
+                            firstHour={firstHour}
+                            timestamp={currentTime.getTime()}
+                            schedule={weekSchedule}
                           />
-                        );
-                      })}
-
-                      {filteredItems.length === 0 && (
-                        <Text
-                          style={[
-                            styles.emptySchedule,
-                            isRecoveryDay && {
-                              marginTop: 30,
-                            },
-                          ]}
-                        >
-                          {t('schedule').noClassesDay}
-                        </Text>
-                      )}
-
-                      {isToday && weekOffset === 0 && (
-                        <CurrentTimeIndicator
-                          hourHeight={hourHeight}
-                          firstHour={firstHour}
-                          timestamp={currentTime.getTime()}
-                          schedule={weekSchedule}
-                        />
-                      )}
-                    </Animated.View>
-                  );
-                })}
-              </View>
+                        )}
+                      </Animated.View>
+                    );
+                  })}
+                </View>
+              </Animated.View>
             </Animated.View>
           </ScrollView>
         )}

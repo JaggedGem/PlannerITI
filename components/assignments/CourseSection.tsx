@@ -110,67 +110,66 @@ export default function CourseSection({
     !courseCode.includes(courseName);
 
   return (
-    <Animated.View
-      style={[styles.container, isCourseOrphaned && styles.orphanedContainer]}
-      layout={Layout.springify().mass(0.5)}
-    >
-      <View style={styles.header}>
-        <View style={[styles.courseAccent, { backgroundColor: courseColor }]} />
-        <View style={[styles.headerContent, isCourseOrphaned && styles.orphanedHeaderContent]}>
-          <View style={styles.courseInfo}>
-            <Text style={[styles.courseCode, isCourseOrphaned && styles.orphanedText]}>
-              {courseCode}
-              {isCourseOrphaned && ` (${t('assignments').common.orphaned})`}
-            </Text>
-            {shouldShowCourseName && (
-              <Text
-                style={[styles.courseName, isCourseOrphaned && styles.orphanedText]}
-                numberOfLines={1}
-              >
-                {courseName}
+    <Animated.View layout={Layout.springify().mass(0.5)}>
+      <View style={[styles.container, isCourseOrphaned && styles.orphanedContainer]}>
+        <View style={styles.header}>
+          <View style={[styles.courseAccent, { backgroundColor: courseColor }]} />
+          <View style={[styles.headerContent, isCourseOrphaned && styles.orphanedHeaderContent]}>
+            <View style={styles.courseInfo}>
+              <Text style={[styles.courseCode, isCourseOrphaned && styles.orphanedText]}>
+                {courseCode}
+                {isCourseOrphaned && ` (${t('assignments').common.orphaned})`}
               </Text>
-            )}
-            {isCourseOrphaned && (
-              <Text style={styles.orphanedDescription}>
-                {t('assignments').common.orphanedReason}
+              {shouldShowCourseName && (
+                <Text
+                  style={[styles.courseName, isCourseOrphaned && styles.orphanedText]}
+                  numberOfLines={1}
+                >
+                  {courseName}
+                </Text>
+              )}
+              {isCourseOrphaned && (
+                <Text style={styles.orphanedDescription}>
+                  {t('assignments').common.orphanedReason}
+                </Text>
+              )}
+            </View>
+            <View style={styles.headerRight}>
+              <Text style={[styles.count, isCourseOrphaned && styles.orphanedText]}>
+                {assignments.length}
               </Text>
-            )}
-          </View>
-          <View style={styles.headerRight}>
-            <Text style={[styles.count, isCourseOrphaned && styles.orphanedText]}>
-              {assignments.length}
-            </Text>
+            </View>
           </View>
         </View>
-      </View>
 
-      <View style={styles.content}>
-        {sortedAssignments.map((assignment, index) => {
-          // Create a copy of the assignment with modified properties for orphaned courses
-          const assignmentToRender = isCourseOrphaned
-            ? {
-                ...assignment,
-                isOrphaned: false,
-                inOrphanedCourse: true,
-              }
-            : assignment;
+        <View style={styles.content}>
+          {sortedAssignments.map((assignment, index) => {
+            // Create a copy of the assignment with modified properties for orphaned courses
+            const assignmentToRender = isCourseOrphaned
+              ? {
+                  ...assignment,
+                  isOrphaned: false,
+                  inOrphanedCourse: true,
+                }
+              : assignment;
 
-          // Check if this assignment should be highlighted
-          const isHighlighted = highlightedAssignmentId === assignment.id;
+            // Check if this assignment should be highlighted
+            const isHighlighted = highlightedAssignmentId === assignment.id;
 
-          return (
-            <AssignmentItem
-              key={assignment.id}
-              assignment={assignmentToRender}
-              onToggle={() => onToggleAssignment(assignment.id)}
-              onDelete={onDeleteAssignment ? () => onDeleteAssignment(assignment.id) : undefined}
-              showDueDate={showDueDate}
-              dueDateLabel={showDueDate ? formatDueDate(assignment.dueDate, t) : undefined}
-              inOrphanedCourse={isCourseOrphaned}
-              isHighlighted={isHighlighted}
-            />
-          );
-        })}
+            return (
+              <AssignmentItem
+                key={assignment.id}
+                assignment={assignmentToRender}
+                onToggle={() => onToggleAssignment(assignment.id)}
+                onDelete={onDeleteAssignment ? () => onDeleteAssignment(assignment.id) : undefined}
+                showDueDate={showDueDate}
+                dueDateLabel={showDueDate ? formatDueDate(assignment.dueDate, t) : undefined}
+                inOrphanedCourse={isCourseOrphaned}
+                isHighlighted={isHighlighted}
+              />
+            );
+          })}
+        </View>
       </View>
     </Animated.View>
   );

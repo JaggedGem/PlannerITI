@@ -2448,11 +2448,10 @@ export default function NewAssignmentScreen() {
                 </View>
 
                 {subtasks.length === 0 && (
-                  <Animated.View
-                    entering={FadeIn.duration(400)}
-                    style={styles.subtasksHintContainer}
-                  >
-                    <Text style={styles.subtasksHintText}>{t('assignments').subtasks.hint}</Text>
+                  <Animated.View entering={FadeIn.duration(400)}>
+                    <View style={styles.subtasksHintContainer}>
+                      <Text style={styles.subtasksHintText}>{t('assignments').subtasks.hint}</Text>
+                    </View>
                   </Animated.View>
                 )}
               </View>
