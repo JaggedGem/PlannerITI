@@ -1,83 +1,80 @@
-import {
-  StyleSheet,
-  View,
-  Text,
-  TouchableOpacity,
-  TextInput,
-  Platform,
-  KeyboardAvoidingView,
-  ActivityIndicator,
-  DeviceEventEmitter,
-  ScrollView,
-  Keyboard,
-  Alert,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { MaterialIcons } from '@react-native-vector-icons/material-icons';
 import {
   ScrollView as GestureHandlerScrollView,
   NativeViewGestureHandler,
-} from "react-native-gesture-handler";
-import React, {
-  useState,
-  useCallback,
-  useMemo,
-  useEffect,
-  useRef,
-} from "react";
-import { MaterialIcons } from "@react-native-vector-icons/material-icons";
+} from 'react-native-gesture-handler';
 import Animated, {
   FadeInUp,
   Layout,
-  useSharedValue,
   useAnimatedStyle,
+  useSharedValue,
   withRepeat,
   withSequence,
   withTiming,
-} from "react-native-reanimated";
-import * as Haptics from "expo-haptics";
-import * as Print from "expo-print";
-import * as Sharing from "expo-sharing";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useTranslation } from "@/hooks/useTranslation";
-import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
+} from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
-  fetchStudentInfo,
-  parseStudentGradesData,
+  ActivityIndicator,
+  Alert,
+  DeviceEventEmitter,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+
+import * as Haptics from 'expo-haptics';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
+
+import { BottomModalPortal } from '@/components/BottomModalPortal';
+import { Colors } from '@/constants/Colors';
+import { useTranslation } from '@/hooks/useTranslation';
+import {
+  Exam,
+  GRADES_REFRESH_END_EVENT,
+  GRADES_REFRESH_START_EVENT,
+  GradeSubject,
+  SemesterGrades,
   StudentGrades,
   StudentInfo,
-  SemesterGrades,
-  GradeSubject,
-  Exam,
+  fetchStudentInfo,
   gradesDataService,
-  GRADES_REFRESH_START_EVENT,
-  GRADES_REFRESH_END_EVENT,
-} from "@/services/gradesService";
-import { secureStorageService } from "@/services/secureStorageService";
+  parseStudentGradesData,
+} from '@/services/gradesService';
 import {
-  scheduleService,
   ExamScheduleEvent,
-  ThesisScheduleEvent,
   SpecialScheduleResponse,
-} from "@/services/scheduleService";
+  ThesisScheduleEvent,
+  scheduleService,
+} from '@/services/scheduleService';
+import { secureStorageService } from '@/services/secureStorageService';
+import { runWhenIdle } from '@/utils/runWhenIdle';
 import {
   eventMatchesSelectedSubgroup,
   formatExamTimeLabel,
   formatThesisTimeLabel,
-} from "@/utils/specialScheduleUtils";
-import { Colors } from "@/constants/Colors";
-import { BottomModalPortal } from "@/components/BottomModalPortal";
-import { runWhenIdle } from "@/utils/runWhenIdle";
+} from '@/utils/specialScheduleUtils';
 
 // Types for local grades
-type ViewMode = "grades" | "exams";
+type ViewMode = 'grades' | 'exams';
 
 // Map of newly detected grades/exams keyed by semester-subject
 type NewGradeHighlight = { gradeIndices: number[]; newExam?: boolean };
 type NewGradeHighlightsMap = Record<string, NewGradeHighlight>;
 type OfficialAssessmentEvent =
-  | (ExamScheduleEvent & { type: "exam" })
-  | (ThesisScheduleEvent & { type: "thesis" });
+  | (ExamScheduleEvent & { type: 'exam' })
+  | (ThesisScheduleEvent & { type: 'thesis' });
 
 interface OfficialScheduleState {
   thesis: SpecialScheduleResponse | null;
@@ -86,12 +83,12 @@ interface OfficialScheduleState {
 }
 
 // Constants for AsyncStorage keys
-const GRADES_DATA_KEY = "@planner_grades_data";
-const GRADES_TIMESTAMP_KEY = "@planner_grades_timestamp";
-const IDNP_UPDATE_EVENT = "IDNP_UPDATE";
-const DEV_GRADE_TOGGLE_KEY = "@dev_grade_toggle_active";
-const DEV_GRADE_TOGGLE_EVENT = "dev_grade_toggle_event";
-const GRADES_HIGHLIGHTS_KEY_PREFIX = "@planner_grades_new_highlights_";
+const GRADES_DATA_KEY = '@planner_grades_data';
+const GRADES_TIMESTAMP_KEY = '@planner_grades_timestamp';
+const IDNP_UPDATE_EVENT = 'IDNP_UPDATE';
+const DEV_GRADE_TOGGLE_KEY = '@dev_grade_toggle_active';
+const DEV_GRADE_TOGGLE_EVENT = 'dev_grade_toggle_event';
+const GRADES_HIGHLIGHTS_KEY_PREFIX = '@planner_grades_new_highlights_';
 
 // Number of days before data is considered stale
 const STALE_DATA_DAYS = 7;
@@ -130,7 +127,7 @@ const getCurrentSemester = (): number => {
 
 // Lightweight grade parser for local calculations
 const parseNumericGrade = (grade: string): number => {
-  const normalized = grade.replace(",", ".").trim();
+  const normalized = grade.replace(',', '.').trim();
   const value = parseFloat(normalized);
   return Number.isFinite(value) ? value : NaN;
 };
@@ -147,14 +144,11 @@ const resolveAbsoluteSemesterNumber = (
 
   const studentYearNumber = options?.studentYearNumber ?? 1;
   const currentSemester = options?.currentSemester;
-  const semesterNumbers =
-    options?.semesters?.map((semester) => semester.semester) ?? [];
+  const semesterNumbers = options?.semesters?.map((semester) => semester.semester) ?? [];
   const hasOnlyRelativeSemesters =
-    semesterNumbers.length > 0 &&
-    semesterNumbers.every((value) => value >= 1 && value <= 2);
+    semesterNumbers.length > 0 && semesterNumbers.every((value) => value >= 1 && value <= 2);
   const shouldMapRelativeSemesters =
-    hasOnlyRelativeSemesters &&
-    (studentYearNumber > 1 || (currentSemester ?? 0) > 2);
+    hasOnlyRelativeSemesters && (studentYearNumber > 1 || (currentSemester ?? 0) > 2);
 
   if (!shouldMapRelativeSemesters) {
     return semesterNumber;
@@ -178,22 +172,19 @@ const formatSemesterYearLabel = (
     semesters?: SemesterGrades[];
   },
 ): string => {
-  const absoluteSemester = resolveAbsoluteSemesterNumber(
-    semesterNumber,
-    options,
-  );
+  const absoluteSemester = resolveAbsoluteSemesterNumber(semesterNumber, options);
   const year = Math.ceil(absoluteSemester / 2);
   const semesterInYear = absoluteSemester % 2 === 0 ? 2 : 1;
 
   return yearSemesterTemplate
-    .replace("{{year}}", year.toString())
-    .replace("{{semester}}", semesterInYear.toString());
+    .replace('{{year}}', year.toString())
+    .replace('{{semester}}', semesterInYear.toString());
 };
 
 const getGradeColor = (grade: string): string => {
   const normalized = grade.trim().toLowerCase();
-  if (normalized === "a") return Colors.dark.overlayAbsenceUnexcused65;
-  if (normalized === "m") return Colors.dark.overlayAbsenceExcused65;
+  if (normalized === 'a') return Colors.dark.overlayAbsenceUnexcused65;
+  if (normalized === 'm') return Colors.dark.overlayAbsenceExcused65;
   const numericGrade = parseNumericGrade(grade);
   if (Number.isNaN(numericGrade)) return Colors.dark.overlayPrimaryStrong50;
   if (numericGrade < 5) return Colors.dark.overlayFail50;
@@ -204,11 +195,11 @@ const getGradeColor = (grade: string): string => {
 
 const getPdfGradeTextColor = (grade: string): string => {
   const normalized = grade.trim().toLowerCase();
-  if (normalized === "a" || normalized === "m") return Colors.dark.white;
+  if (normalized === 'a' || normalized === 'm') return Colors.dark.white;
 
   const numericGrade = parseNumericGrade(grade);
   if (Number.isNaN(numericGrade)) return Colors.dark.white;
-  if (numericGrade >= 7) return "#11181C";
+  if (numericGrade >= 7) return '#11181C';
   return Colors.dark.white;
 };
 
@@ -240,71 +231,70 @@ const parseEventDate = (date: string): Date => new Date(`${date}T00:00:00`);
 
 const parseTimeToMinutes = (time?: string | null): number => {
   if (!time) return Number.MAX_SAFE_INTEGER;
-  const [hoursRaw, minutesRaw] = time.split(":");
+  const [hoursRaw, minutesRaw] = time.split(':');
   const hours = Number(hoursRaw);
   const minutes = Number(minutesRaw);
-  if (!Number.isFinite(hours) || !Number.isFinite(minutes))
-    return Number.MAX_SAFE_INTEGER;
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return Number.MAX_SAFE_INTEGER;
   return hours * 60 + minutes;
 };
 
 const normalizeAssessmentText = (value: string): string => {
   const normalized = value
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
     .toLowerCase()
-    .replace(/[^a-z0-9.\s]/g, " ")
-    .replace(/\s+/g, " ")
+    .replace(/[^a-z0-9.\s]/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim();
 
   // Expand common short forms used in schedules/grade portals.
   const expanded = normalized
-    .replace(/\bl\.\s*/g, "limba ")
-    .replace(/\blimba\b/g, "limba")
-    .replace(/\bl engleza\b/g, "limba engleza")
-    .replace(/\bl romana\b/g, "limba romana")
-    .replace(/\bl franceza\b/g, "limba franceza")
-    .replace(/\bl germana\b/g, "limba germana")
-    .replace(/\binf\.?\b/g, "informatica")
-    .replace(/\bmat\.?\b/g, "matematica")
-    .replace(/\bfiz\.?\b/g, "fizica")
-    .replace(/\bchim\.?\b/g, "chimie")
-    .replace(/\bist\.?\b/g, "istorie")
-    .replace(/\bgeo\.?\b/g, "geografie")
-    .replace(/\bsec\.?\b/g, "securitate")
-    .replace(/\btehn\.?\b/g, "tehnologii")
-    .replace(/\bcomunic\.?\b/g, "comunicare")
-    .replace(/\bimpliment\.?\b/g, "implementare");
+    .replace(/\bl\.\s*/g, 'limba ')
+    .replace(/\blimba\b/g, 'limba')
+    .replace(/\bl engleza\b/g, 'limba engleza')
+    .replace(/\bl romana\b/g, 'limba romana')
+    .replace(/\bl franceza\b/g, 'limba franceza')
+    .replace(/\bl germana\b/g, 'limba germana')
+    .replace(/\binf\.?\b/g, 'informatica')
+    .replace(/\bmat\.?\b/g, 'matematica')
+    .replace(/\bfiz\.?\b/g, 'fizica')
+    .replace(/\bchim\.?\b/g, 'chimie')
+    .replace(/\bist\.?\b/g, 'istorie')
+    .replace(/\bgeo\.?\b/g, 'geografie')
+    .replace(/\bsec\.?\b/g, 'securitate')
+    .replace(/\btehn\.?\b/g, 'tehnologii')
+    .replace(/\bcomunic\.?\b/g, 'comunicare')
+    .replace(/\bimpliment\.?\b/g, 'implementare');
 
   return expanded
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim();
 };
 
 const ASSESSMENT_STOPWORDS = new Set([
-  "de",
-  "si",
-  "la",
-  "pe",
-  "cu",
-  "in",
-  "din",
-  "the",
-  "and",
-  "of",
+  'de',
+  'si',
+  'la',
+  'pe',
+  'cu',
+  'in',
+  'din',
+  'the',
+  'and',
+  'of',
 ]);
 
 const tokenizeAssessmentText = (value: string): string[] =>
-  normalizeAssessmentText(value).split(" ").filter(Boolean);
+  normalizeAssessmentText(value).split(' ').filter(Boolean);
 
 const buildAssessmentAcronym = (tokens: string[]): string => {
   const letters = tokens
     .filter((token) => !ASSESSMENT_STOPWORDS.has(token) && token.length > 1)
     .map((token) => token[0])
-    .join("");
+    .join('');
 
-  return letters.length >= 2 ? letters : "";
+  return letters.length >= 2 ? letters : '';
 };
 
 const computeLevenshteinDistance = (left: string, right: string): number => {
@@ -312,10 +302,7 @@ const computeLevenshteinDistance = (left: string, right: string): number => {
   if (!left.length) return right.length;
   if (!right.length) return left.length;
 
-  const previousRow = Array.from(
-    { length: right.length + 1 },
-    (_, index) => index,
-  );
+  const previousRow = Array.from({ length: right.length + 1 }, (_, index) => index);
   const currentRow = new Array<number>(right.length + 1);
 
   for (let rowIndex = 1; rowIndex <= left.length; rowIndex++) {
@@ -338,10 +325,7 @@ const computeLevenshteinDistance = (left: string, right: string): number => {
   return previousRow[right.length];
 };
 
-const scoreAssessmentTokenMatch = (
-  leftToken: string,
-  rightToken: string,
-): number => {
+const scoreAssessmentTokenMatch = (leftToken: string, rightToken: string): number => {
   if (leftToken === rightToken) return 1;
   if (leftToken.length < 3 || rightToken.length < 3) return 0;
 
@@ -366,10 +350,7 @@ const scoreAssessmentTokenMatch = (
   return 0;
 };
 
-const scoreFuzzyTokenOverlap = (
-  leftTokens: string[],
-  rightTokens: string[],
-): number => {
+const scoreFuzzyTokenOverlap = (leftTokens: string[], rightTokens: string[]): number => {
   if (leftTokens.length === 0 || rightTokens.length === 0) return 0;
 
   const consumedRightIndexes = new Set<number>();
@@ -405,9 +386,7 @@ const scoreAssessmentTextMatch = (left: string, right: string): number => {
 
   const leftTokens = tokenizeAssessmentText(left);
   const rightTokens = tokenizeAssessmentText(right);
-  const tokenIntersection = leftTokens.filter((token) =>
-    rightTokens.includes(token),
-  ).length;
+  const tokenIntersection = leftTokens.filter((token) => rightTokens.includes(token)).length;
   const tokenUnion = new Set<string>([...leftTokens, ...rightTokens]).size || 1;
 
   let score = tokenIntersection / tokenUnion;
@@ -442,35 +421,27 @@ const scoreAssessmentTextMatch = (left: string, right: string): number => {
   return Math.max(0, Math.min(1, score));
 };
 
-const normalizeExamType = (type: string): "exam" | "thesis" | "other" => {
+const normalizeExamType = (type: string): 'exam' | 'thesis' | 'other' => {
   const key = normalizeAssessmentText(type);
-  if (key.includes("teza") || key.includes("thesis")) return "thesis";
-  if (key.includes("examen") || key.includes("exam")) return "exam";
-  return "other";
+  if (key.includes('teza') || key.includes('thesis')) return 'thesis';
+  if (key.includes('examen') || key.includes('exam')) return 'exam';
+  return 'other';
 };
 
-const formatOfficialEventSummary = (
-  event: OfficialAssessmentEvent,
-  roomLabel: string,
-): string => {
+const formatOfficialEventSummary = (event: OfficialAssessmentEvent, roomLabel: string): string => {
   const eventDate = parseEventDate(event.date);
-  const dateLabel =
-    Number.isFinite(eventDate.getTime()) ?
-      `${String(eventDate.getDate()).padStart(2, "0")}.${String(eventDate.getMonth() + 1).padStart(2, "0")}`
+  const dateLabel = Number.isFinite(eventDate.getTime())
+    ? `${String(eventDate.getDate()).padStart(2, '0')}.${String(eventDate.getMonth() + 1).padStart(2, '0')}`
     : event.date;
 
-  const thesisTime =
-    event.type === "thesis" ? formatThesisTimeLabel(event) : "";
-  const thesisPeriod =
-    event.type === "thesis" && event.period ? `P${event.period}` : "";
+  const thesisTime = event.type === 'thesis' ? formatThesisTimeLabel(event) : '';
+  const thesisPeriod = event.type === 'thesis' && event.period ? `P${event.period}` : '';
   const timingLabel =
-    event.type === "exam" ?
-      formatExamTimeLabel(event)
-    : thesisTime || thesisPeriod;
-  const room = event.room ? `${roomLabel} ${event.room}` : "";
-  const subgroup = event.subgroup ? `${event.subgroup}` : "";
+    event.type === 'exam' ? formatExamTimeLabel(event) : thesisTime || thesisPeriod;
+  const room = event.room ? `${roomLabel} ${event.room}` : '';
+  const subgroup = event.subgroup ? `${event.subgroup}` : '';
 
-  return [dateLabel, timingLabel, room, subgroup].filter(Boolean).join(" • ");
+  return [dateLabel, timingLabel, room, subgroup].filter(Boolean).join(' • ');
 };
 
 const buildExamToOfficialEventMap = (
@@ -495,33 +466,27 @@ const buildExamToOfficialEventMap = (
 
     const normalizedType = normalizeExamType(exam.type);
     const typedEvents =
-      normalizedType === "other" ? officialEvents : (
-        officialEvents.filter((event) => event.type === normalizedType)
-      );
+      normalizedType === 'other'
+        ? officialEvents
+        : officialEvents.filter((event) => event.type === normalizedType);
     if (typedEvents.length === 0) return;
 
     typedEvents.forEach((event) => {
       const subjectScore = scoreAssessmentTextMatch(exam.name, event.subject);
-      const minimumSubjectScore = normalizedType === "other" ? 0.58 : 0.3;
+      const minimumSubjectScore = normalizedType === 'other' ? 0.58 : 0.3;
       if (subjectScore < minimumSubjectScore) return;
 
       const eventDateMs = parseEventDate(event.date).getTime();
       const isFutureEvent =
-        Number.isFinite(eventDateMs) &&
-        eventDateMs >= Date.now() - 12 * 60 * 60 * 1000;
-      const dateBonus =
-        exam.isUpcoming ?
-          isFutureEvent ? 0.12
-          : -0.12
-        : 0;
+        Number.isFinite(eventDateMs) && eventDateMs >= Date.now() - 12 * 60 * 60 * 1000;
+      const dateBonus = exam.isUpcoming ? (isFutureEvent ? 0.12 : -0.12) : 0;
 
       candidates.push({
         exam,
         event,
         totalScore: subjectScore + dateBonus,
         subjectScore,
-        eventDateMs:
-          Number.isFinite(eventDateMs) ? eventDateMs : Number.MAX_SAFE_INTEGER,
+        eventDateMs: Number.isFinite(eventDateMs) ? eventDateMs : Number.MAX_SAFE_INTEGER,
       });
     });
   });
@@ -540,10 +505,7 @@ const buildExamToOfficialEventMap = (
   const matchedEvents = new Set<OfficialAssessmentEvent>();
 
   candidates.forEach((candidate) => {
-    if (
-      matchedExams.has(candidate.exam) ||
-      matchedEvents.has(candidate.event)
-    ) {
+    if (matchedExams.has(candidate.exam) || matchedEvents.has(candidate.event)) {
       return;
     }
 
@@ -556,34 +518,31 @@ const buildExamToOfficialEventMap = (
 };
 
 const recalculateSubjectAverages = (subject: GradeSubject) => {
-  const numericGrades = subject.grades
-    .map(parseNumericGrade)
-    .filter((g) => !isNaN(g));
+  const numericGrades = subject.grades.map(parseNumericGrade).filter((g) => !isNaN(g));
 
   if (numericGrades.length === 0) {
     subject.baseAverage = undefined;
-    subject.baseDisplayedAverage = "-";
+    subject.baseDisplayedAverage = '-';
     subject.finalAverage = undefined;
-    subject.finalDisplayedAverage = "-";
+    subject.finalDisplayedAverage = '-';
     subject.average = undefined;
-    subject.displayedAverage = "-";
+    subject.displayedAverage = '-';
     return;
   }
 
-  const baseAvg =
-    numericGrades.reduce((sum, g) => sum + g, 0) / numericGrades.length;
+  const baseAvg = numericGrades.reduce((sum, g) => sum + g, 0) / numericGrades.length;
   const roundedBase = Math.floor(baseAvg * 100) / 100;
   subject.baseAverage = roundedBase;
   subject.baseDisplayedAverage = roundedBase.toFixed(2);
 
   const examGrade = subject.appliedExamGrade;
-  const typeKey = subject.appliedExamType?.toLowerCase() || "";
+  const typeKey = subject.appliedExamType?.toLowerCase() || '';
   let finalAvg = roundedBase;
 
   if (examGrade !== undefined && !isNaN(examGrade)) {
-    if (typeKey.includes("teza") || typeKey.includes("thesis")) {
+    if (typeKey.includes('teza') || typeKey.includes('thesis')) {
       finalAvg = (roundedBase + examGrade) / 2;
-    } else if (typeKey.includes("examen") || typeKey.includes("exam")) {
+    } else if (typeKey.includes('examen') || typeKey.includes('exam')) {
       finalAvg = roundedBase * 0.6 + examGrade * 0.4;
     }
   }
@@ -629,8 +588,7 @@ const buildGradeCountMap = (grades: string[]): Record<string, number> => {
   }, {});
 };
 
-const getHighlightsStorageKey = (idnp: string): string =>
-  `${GRADES_HIGHLIGHTS_KEY_PREFIX}${idnp}`;
+const getHighlightsStorageKey = (idnp: string): string => `${GRADES_HIGHLIGHTS_KEY_PREFIX}${idnp}`;
 
 const mergeNewGradeHighlights = (
   existing: NewGradeHighlightsMap,
@@ -649,10 +607,7 @@ const mergeNewGradeHighlights = (
     }
 
     const combinedIndices = Array.from(
-      new Set([
-        ...(prev.gradeIndices || []),
-        ...(highlight.gradeIndices || []),
-      ]),
+      new Set([...(prev.gradeIndices || []), ...(highlight.gradeIndices || [])]),
     ).sort((a, b) => a - b);
 
     merged[key] = {
@@ -668,22 +623,17 @@ const parseStoredHighlights = (raw: string | null): NewGradeHighlightsMap => {
   if (!raw) return {};
 
   try {
-    const parsed = JSON.parse(raw) as Record<
-      string,
-      { gradeIndices?: unknown; newExam?: unknown }
-    >;
+    const parsed = JSON.parse(raw) as Record<string, { gradeIndices?: unknown; newExam?: unknown }>;
     const normalized: NewGradeHighlightsMap = {};
 
     Object.entries(parsed).forEach(([key, value]) => {
-      const indices =
-        Array.isArray(value?.gradeIndices) ?
-          value.gradeIndices.filter(
+      const indices = Array.isArray(value?.gradeIndices)
+        ? value.gradeIndices.filter(
             (item): item is number =>
-              typeof item === "number" && Number.isInteger(item) && item >= 0,
+              typeof item === 'number' && Number.isInteger(item) && item >= 0,
           )
         : [];
-      const hasExam =
-        typeof value?.newExam === "boolean" ? value.newExam : false;
+      const hasExam = typeof value?.newExam === 'boolean' ? value.newExam : false;
 
       if (indices.length > 0 || hasExam) {
         normalized[key] = {
@@ -707,14 +657,10 @@ const computeNewGradeHighlights = (
   const highlights: NewGradeHighlightsMap = {};
 
   nextData.currentGrades.forEach((nextSemester) => {
-    const prevSemester = prevData?.currentGrades.find(
-      (s) => s.semester === nextSemester.semester,
-    );
+    const prevSemester = prevData?.currentGrades.find((s) => s.semester === nextSemester.semester);
 
     nextSemester.subjects.forEach((nextSubject) => {
-      const prevSubject = prevSemester?.subjects.find(
-        (s) => s.name === nextSubject.name,
-      );
+      const prevSubject = prevSemester?.subjects.find((s) => s.name === nextSubject.name);
       const prevCounts = buildGradeCountMap(prevSubject?.grades || []);
       const remaining = { ...prevCounts };
       const newIndices: number[] = [];
@@ -748,16 +694,16 @@ const computeNewGradeHighlights = (
 const escapeHtml = (value: string): string =>
   value.replace(/[&<>"]|'/g, (character) => {
     switch (character) {
-      case "&":
-        return "&amp;";
-      case "<":
-        return "&lt;";
-      case ">":
-        return "&gt;";
+      case '&':
+        return '&amp;';
+      case '<':
+        return '&lt;';
+      case '>':
+        return '&gt;';
       case '"':
-        return "&quot;";
+        return '&quot;';
       case "'":
-        return "&#39;";
+        return '&#39;';
       default:
         return character;
     }
@@ -773,8 +719,8 @@ const IDNPScreen = ({
   errorMessage?: string;
   isSubmitting: boolean;
 }) => {
-  const [idnp, setIdnp] = useState("");
-  const [error, setError] = useState(errorMessage || "");
+  const [idnp, setIdnp] = useState('');
+  const [error, setError] = useState(errorMessage || '');
   const { t } = useTranslation();
 
   useEffect(() => {
@@ -793,11 +739,11 @@ const IDNPScreen = ({
 
   const handleSubmit = () => {
     if (!/^\d{13}$/.test(idnp)) {
-      setError(t("grades").idnp.error);
+      setError(t('grades').idnp.error);
       return;
     }
 
-    setError("");
+    setError('');
 
     // Let the parent component handle the API call
     onSave(idnp, true);
@@ -805,57 +751,48 @@ const IDNPScreen = ({
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.idnpContainer}
     >
       <View style={styles.idnpContent}>
-        <Text style={styles.idnpTitle}>{t("grades").idnp.title}</Text>
-        <Text style={styles.idnpDescription}>
-          {t("grades").idnp.description}
-        </Text>
+        <Text style={styles.idnpTitle}>{t('grades').idnp.title}</Text>
+        <Text style={styles.idnpDescription}>{t('grades').idnp.description}</Text>
 
         <TextInput
           style={[styles.idnpInput, error ? styles.idnpInputError : null]}
           value={idnp}
           onChangeText={(text) => {
-            setIdnp(text.replace(/[^0-9]/g, ""));
-            setError("");
+            setIdnp(text.replace(/[^0-9]/g, ''));
+            setError('');
           }}
-          placeholder={t("grades").idnp.placeholder}
+          placeholder={t('grades').idnp.placeholder}
           placeholderTextColor={Colors.dark.neutral500}
-          keyboardType='numeric'
+          keyboardType="numeric"
           maxLength={13}
           editable={!isSubmitting}
         />
 
-        {error ?
-          <Text style={styles.errorText}>{error}</Text>
-        : null}
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-        <Text style={styles.disclaimerText}>{t("grades").idnp.disclaimer}</Text>
+        <Text style={styles.disclaimerText}>{t('grades').idnp.disclaimer}</Text>
 
-        {isSubmitting ?
+        {isSubmitting ? (
           <View style={styles.loadingNotice}>
-            <ActivityIndicator size='small' color={Colors.dark.primaryStrong} />
-            <Text style={styles.loadingText}>
-              {t("grades").semesters.connecting}
-            </Text>
+            <ActivityIndicator size="small" color={Colors.dark.primaryStrong} />
+            <Text style={styles.loadingText}>{t('grades').semesters.connecting}</Text>
           </View>
-        : null}
+        ) : null}
 
         <TouchableOpacity
           style={[
             styles.submitButton,
-            (!/^\d{13}$/.test(idnp) || isSubmitting) &&
-              styles.submitButtonDisabled,
+            (!/^\d{13}$/.test(idnp) || isSubmitting) && styles.submitButtonDisabled,
           ]}
           onPress={handleSubmit}
           disabled={!/^\d{13}$/.test(idnp) || isSubmitting}
         >
           <Text style={styles.submitButtonText}>
-            {isSubmitting ?
-              t("grades").semesters.connecting
-            : t("grades").idnp.continue}
+            {isSubmitting ? t('grades').semesters.connecting : t('grades').idnp.continue}
           </Text>
         </TouchableOpacity>
       </View>
@@ -869,8 +806,8 @@ const LoadingScreen = ({ message }: { message?: string }) => {
 
   return (
     <View style={styles.loadingContainer}>
-      <ActivityIndicator size='large' color={Colors.dark.primaryStrong} />
-      <Text style={styles.loadingText}>{message || t("loading")}</Text>
+      <ActivityIndicator size="large" color={Colors.dark.primaryStrong} />
+      <Text style={styles.loadingText}>{message || t('loading')}</Text>
     </View>
   );
 };
@@ -892,23 +829,17 @@ const SubjectCard = ({
   hasNewExam?: boolean;
 }) => {
   const { t } = useTranslation();
-  const displayedAverage =
-    subject.finalDisplayedAverage || subject.displayedAverage;
+  const displayedAverage = subject.finalDisplayedAverage || subject.displayedAverage;
   const baseAverage = subject.baseDisplayedAverage || subject.displayedAverage;
-  const hasExamAdjustment =
-    displayedAverage && baseAverage && displayedAverage !== baseAverage;
+  const hasExamAdjustment = displayedAverage && baseAverage && displayedAverage !== baseAverage;
 
   // Determine if this subject received any fresh data
-  const isRecentlyUpdated =
-    (newGradeIndices && newGradeIndices.length > 0) || hasNewExam;
+  const isRecentlyUpdated = (newGradeIndices && newGradeIndices.length > 0) || hasNewExam;
 
   return (
     <Animated.View layout={Layout.springify()} style={styles.subjectCard}>
       <TouchableOpacity
-        style={[
-          styles.subjectHeader,
-          subject.grades.length === 0 && styles.subjectHeaderEmpty,
-        ]}
+        style={[styles.subjectHeader, subject.grades.length === 0 && styles.subjectHeaderEmpty]}
         onPress={subject.grades.length > 0 ? onToggle : undefined}
         activeOpacity={subject.grades.length > 0 ? 0.7 : 1}
       >
@@ -918,24 +849,19 @@ const SubjectCard = ({
         <View style={styles.subjectHeaderRight}>
           {isRecentlyUpdated && (
             <View style={styles.newBadge}>
-              <Text style={styles.newBadgeText}>
-                {t("grades").subjects.newBadge}
-              </Text>
+              <Text style={styles.newBadgeText}>{t('grades').subjects.newBadge}</Text>
             </View>
           )}
           {displayedAverage && (
             <Text
-              style={[
-                styles.averageGrade,
-                parseFloat(displayedAverage) < 5 && styles.failingGrade,
-              ]}
+              style={[styles.averageGrade, parseFloat(displayedAverage) < 5 && styles.failingGrade]}
             >
               {displayedAverage}
             </Text>
           )}
           {subject.grades.length > 0 && (
             <MaterialIcons
-              name={expanded ? "keyboard-arrow-up" : "keyboard-arrow-down"}
+              name={expanded ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
               size={24}
               color={Colors.dark.white}
             />
@@ -944,35 +870,23 @@ const SubjectCard = ({
       </TouchableOpacity>
 
       {expanded && subject.grades.length > 0 && (
-        <Animated.View
-          entering={FadeInUp.springify()}
-          style={styles.gradesContainer}
-        >
+        <Animated.View entering={FadeInUp.springify()} style={styles.gradesContainer}>
           {hasExamAdjustment && (
             <View style={styles.averageSummaryRow}>
               <View style={styles.averagePillPrimary}>
-                <Text style={styles.averagePillLabel}>
-                  {t("grades").subjects.finalAverage}
-                </Text>
+                <Text style={styles.averagePillLabel}>{t('grades').subjects.finalAverage}</Text>
                 <Text style={styles.averagePillValue}>
-                  {subject.finalDisplayedAverage ||
-                    subject.displayedAverage ||
-                    "-"}
+                  {subject.finalDisplayedAverage || subject.displayedAverage || '-'}
                 </Text>
                 {subject.appliedExamType &&
-                  typeof subject.appliedExamGrade === "number" &&
+                  typeof subject.appliedExamGrade === 'number' &&
                   !isNaN(subject.appliedExamGrade) && (
                     <Text style={styles.averagePillMeta}>
                       {(() => {
-                        const typeKey =
-                          subject.appliedExamType?.toLowerCase() || "";
-                        const isTeza =
-                          typeKey.includes("teza") ||
-                          typeKey.includes("thesis");
-                        return isTeza ?
-                            t("grades").subjects.thesis
-                          : t("grades").subjects.exam;
-                      })()}{" "}
+                        const typeKey = subject.appliedExamType?.toLowerCase() || '';
+                        const isTeza = typeKey.includes('teza') || typeKey.includes('thesis');
+                        return isTeza ? t('grades').subjects.thesis : t('grades').subjects.exam;
+                      })()}{' '}
                       • {subject.appliedExamGrade.toFixed(2)}
                     </Text>
                   )}
@@ -980,9 +894,7 @@ const SubjectCard = ({
 
               {baseAverage && (
                 <View style={styles.averagePillSecondary}>
-                  <Text style={styles.averagePillLabel}>
-                    {t("grades").subjects.withoutExam}
-                  </Text>
+                  <Text style={styles.averagePillLabel}>{t('grades').subjects.withoutExam}</Text>
                   <Text style={styles.averagePillValue}>{baseAverage}</Text>
                 </View>
               )}
@@ -1024,7 +936,7 @@ const ExamsView = ({
   exams: Exam[];
   studentInfo: StudentInfo;
   officialSchedule: OfficialScheduleState;
-  selectedSubgroup: "Subgroup 1" | "Subgroup 2";
+  selectedSubgroup: 'Subgroup 1' | 'Subgroup 2';
 }) => {
   const { t } = useTranslation();
   const safeExams = useMemo(() => exams ?? [], [exams]);
@@ -1043,37 +955,29 @@ const ExamsView = ({
   const studentCurrentSemester = calculateStudentSemester();
 
   // Add state for selected semester - initialize with calculated student semester if it exists in the data
-  const [selectedSemester, setSelectedSemester] = useState<number | null>(
-    () => {
-      // Check if the student's current semester exists in the exams data
-      const hasSemester = safeExams.some(
-        (exam) => exam.semester === studentCurrentSemester,
-      );
-      return hasSemester ? studentCurrentSemester : null;
-    },
-  );
+  const [selectedSemester, setSelectedSemester] = useState<number | null>(() => {
+    // Check if the student's current semester exists in the exams data
+    const hasSemester = safeExams.some((exam) => exam.semester === studentCurrentSemester);
+    return hasSemester ? studentCurrentSemester : null;
+  });
 
   const [isOpen, setIsOpen] = useState(false);
 
   // Get unique semesters from exams
   const semesters = useMemo(() => {
-    const uniqueSemesters = Array.from(
-      new Set(safeExams.map((exam) => exam.semester)),
-    ).sort((a, b) => a - b);
+    const uniqueSemesters = Array.from(new Set(safeExams.map((exam) => exam.semester))).sort(
+      (a, b) => a - b,
+    );
 
     return uniqueSemesters;
   }, [safeExams]);
 
   // Helper function to convert semester number to year and semester
   const formatSemesterLabel = (semesterNumber: number) =>
-    formatSemesterYearLabel(
-      t("grades").semesters.yearSemester,
-      semesterNumber,
-      {
-        studentYearNumber: studentInfo.yearNumber,
-        currentSemester: studentCurrentSemester,
-      },
-    );
+    formatSemesterYearLabel(t('grades').semesters.yearSemester, semesterNumber, {
+      studentYearNumber: studentInfo.yearNumber,
+      currentSemester: studentCurrentSemester,
+    });
 
   // Filter exams by semester if one is selected
   const filteredExams = useMemo(() => {
@@ -1100,48 +1004,34 @@ const ExamsView = ({
   const officialEvents = useMemo(() => {
     const thesisEvents = (officialSchedule.thesis?.events || []).filter(
       (event): event is ThesisScheduleEvent =>
-        event.type === "thesis" &&
-        eventMatchesSelectedSubgroup(event.subgroup, selectedSubgroup),
+        event.type === 'thesis' && eventMatchesSelectedSubgroup(event.subgroup, selectedSubgroup),
     );
     const examEvents = (officialSchedule.exam?.events || []).filter(
       (event): event is ExamScheduleEvent =>
-        event.type === "exam" &&
-        eventMatchesSelectedSubgroup(event.subgroup, selectedSubgroup),
+        event.type === 'exam' && eventMatchesSelectedSubgroup(event.subgroup, selectedSubgroup),
     );
 
     return [...examEvents, ...thesisEvents]
       .map(
         (event): OfficialAssessmentEvent =>
-          event.type === "exam" ?
-            { ...event, type: "exam" }
-          : { ...event, type: "thesis" },
+          event.type === 'exam' ? { ...event, type: 'exam' } : { ...event, type: 'thesis' },
       )
       .sort((left, right) => {
-        if (left.date !== right.date)
-          return left.date.localeCompare(right.date);
+        if (left.date !== right.date) return left.date.localeCompare(right.date);
         const leftTime =
-          left.type === "exam" ?
-            parseTimeToMinutes(left.time)
-          : parseTimeToMinutes(left.startTime || left.endTime);
+          left.type === 'exam'
+            ? parseTimeToMinutes(left.time)
+            : parseTimeToMinutes(left.startTime || left.endTime);
         const rightTime =
-          right.type === "exam" ?
-            parseTimeToMinutes(right.time)
-          : parseTimeToMinutes(right.startTime || right.endTime);
+          right.type === 'exam'
+            ? parseTimeToMinutes(right.time)
+            : parseTimeToMinutes(right.startTime || right.endTime);
         return leftTime - rightTime;
       });
-  }, [
-    officialSchedule.exam?.events,
-    officialSchedule.thesis?.events,
-    selectedSubgroup,
-  ]);
+  }, [officialSchedule.exam?.events, officialSchedule.thesis?.events, selectedSubgroup]);
 
   const officialMatchesByExam = useMemo(
-    () =>
-      buildExamToOfficialEventMap(
-        filteredExams,
-        officialEvents,
-        studentCurrentSemester,
-      ),
+    () => buildExamToOfficialEventMap(filteredExams, officialEvents, studentCurrentSemester),
     [filteredExams, officialEvents, studentCurrentSemester],
   );
 
@@ -1162,27 +1052,21 @@ const ExamsView = ({
     <View style={{ flex: 1 }}>
       {/* Semester selector */}
       <View style={styles.semesterDropdownContainer}>
-        <TouchableOpacity
-          style={styles.semesterDropdownButton}
-          onPress={toggleDropdown}
-        >
+        <TouchableOpacity style={styles.semesterDropdownButton} onPress={toggleDropdown}>
           <Text style={styles.semesterDropdownButtonText}>
-            {selectedSemester !== null ?
-              formatSemesterLabel(selectedSemester)
-            : t("grades").semesters.all}
+            {selectedSemester !== null
+              ? formatSemesterLabel(selectedSemester)
+              : t('grades').semesters.all}
           </Text>
           <MaterialIcons
-            name={isOpen ? "arrow-drop-up" : "arrow-drop-down"}
+            name={isOpen ? 'arrow-drop-up' : 'arrow-drop-down'}
             size={24}
             color={Colors.dark.white}
           />
         </TouchableOpacity>
 
         {isOpen && (
-          <Animated.View
-            entering={FadeInUp.duration(200)}
-            style={styles.semesterDropdownMenu}
-          >
+          <Animated.View entering={FadeInUp.duration(200)} style={styles.semesterDropdownMenu}>
             {/* Option to show all semesters */}
             <TouchableOpacity
               style={[
@@ -1194,11 +1078,10 @@ const ExamsView = ({
               <Text
                 style={[
                   styles.semesterDropdownItemText,
-                  selectedSemester === null &&
-                    styles.semesterDropdownItemTextActive,
+                  selectedSemester === null && styles.semesterDropdownItemTextActive,
                 ]}
               >
-                {t("grades").semesters.all}
+                {t('grades').semesters.all}
               </Text>
             </TouchableOpacity>
 
@@ -1208,16 +1091,14 @@ const ExamsView = ({
                 key={`semester-${semester}`}
                 style={[
                   styles.semesterDropdownItem,
-                  selectedSemester === semester &&
-                    styles.semesterDropdownItemActive,
+                  selectedSemester === semester && styles.semesterDropdownItemActive,
                 ]}
                 onPress={() => selectSemester(semester)}
               >
                 <Text
                   style={[
                     styles.semesterDropdownItemText,
-                    selectedSemester === semester &&
-                      styles.semesterDropdownItemTextActive,
+                    selectedSemester === semester && styles.semesterDropdownItemTextActive,
                   ]}
                 >
                   {formatSemesterLabel(semester)}
@@ -1229,19 +1110,15 @@ const ExamsView = ({
       </View>
 
       {/* Exams list */}
-      <ScrollView
-        style={styles.examsList}
-        contentContainerStyle={styles.examsListContent}
-      >
+      <ScrollView style={styles.examsList} contentContainerStyle={styles.examsListContent}>
         {Object.entries(examsByType).map(([type, examList]) => (
           <View key={type} style={styles.examTypeSection}>
             {examList.map((exam, index) => {
               const normalizedType = normalizeExamType(exam.type);
               const officialMatch = officialMatchesByExam.get(exam) || null;
-              const officialSummary =
-                officialMatch ?
-                  formatOfficialEventSummary(officialMatch, t("schedule").room)
-                : "";
+              const officialSummary = officialMatch
+                ? formatOfficialEventSummary(officialMatch, t('schedule').room)
+                : '';
 
               return (
                 <Animated.View
@@ -1249,8 +1126,8 @@ const ExamsView = ({
                   entering={FadeInUp.delay(index * 80).springify()}
                   style={[
                     styles.examCard,
-                    normalizedType === "thesis" && styles.examCardThesis,
-                    normalizedType === "exam" && styles.examCardExamVariant,
+                    normalizedType === 'thesis' && styles.examCardThesis,
+                    normalizedType === 'exam' && styles.examCardExamVariant,
                   ]}
                 >
                   <View style={styles.examHeaderRow}>
@@ -1260,65 +1137,58 @@ const ExamsView = ({
                     <View
                       style={[
                         styles.examTypePill,
-                        normalizedType === "thesis" &&
-                          styles.examTypePillThesis,
-                        normalizedType === "exam" &&
-                          styles.examTypePillExamVariant,
-                        normalizedType === "other" && styles.examTypePillOther,
+                        normalizedType === 'thesis' && styles.examTypePillThesis,
+                        normalizedType === 'exam' && styles.examTypePillExamVariant,
+                        normalizedType === 'other' && styles.examTypePillOther,
                       ]}
                     >
                       <Text style={styles.examTypePillText}>{exam.type}</Text>
                     </View>
                   </View>
                   <View style={styles.examDetails}>
-                    <Text style={styles.examSemester}>
-                      {formatSemesterLabel(exam.semester)}
-                    </Text>
-                    {!exam.isUpcoming ?
+                    <Text style={styles.examSemester}>{formatSemesterLabel(exam.semester)}</Text>
+                    {!exam.isUpcoming ? (
                       <Text
                         style={[
                           styles.examGrade,
-                          normalizedType === "thesis" && styles.examGradeThesis,
-                          normalizedType === "exam" && styles.examGradeExam,
+                          normalizedType === 'thesis' && styles.examGradeThesis,
+                          normalizedType === 'exam' && styles.examGradeExam,
                         ]}
                       >
                         {exam.grade}
                       </Text>
-                    : <Text style={styles.upcomingExamGrade}>TBD</Text>}
+                    ) : (
+                      <Text style={styles.upcomingExamGrade}>TBD</Text>
+                    )}
                   </View>
                   {exam.isUpcoming && (
                     <View
                       style={[
                         styles.upcomingIndicatorContainer,
-                        officialSummary &&
-                          styles.upcomingIndicatorContainerInfo,
+                        officialSummary && styles.upcomingIndicatorContainerInfo,
                       ]}
                     >
                       <MaterialIcons
-                        name={officialSummary ? "event-note" : "schedule"}
+                        name={officialSummary ? 'event-note' : 'schedule'}
                         size={16}
                         color={
-                          officialSummary ?
-                            Colors.dark.accentBlueLight
-                          : Colors.dark.lightOrange
+                          officialSummary ? Colors.dark.accentBlueLight : Colors.dark.lightOrange
                         }
                       />
                       <Text
                         style={[
                           styles.upcomingIndicatorText,
-                          officialSummary ?
-                            styles.upcomingIndicatorInfoText
-                          : styles.upcomingIndicatorDefaultText,
+                          officialSummary
+                            ? styles.upcomingIndicatorInfoText
+                            : styles.upcomingIndicatorDefaultText,
                         ]}
                       >
-                        {officialSummary || t("grades").subjects.upcoming}
+                        {officialSummary || t('grades').subjects.upcoming}
                       </Text>
                     </View>
                   )}
                   {officialSummary && !exam.isUpcoming && (
-                    <Text style={styles.examOfficialMeta}>
-                      {officialSummary}
-                    </Text>
+                    <Text style={styles.examOfficialMeta}>{officialSummary}</Text>
                   )}
                 </Animated.View>
               );
@@ -1328,12 +1198,12 @@ const ExamsView = ({
 
         {Object.keys(examsByType).length === 0 && (
           <Text style={styles.emptyText}>
-            {selectedSemester !== null ?
-              t("grades").semesters.noDataSemester.replace(
-                "{{semester}}",
-                selectedSemester.toString(),
-              )
-            : t("grades").semesters.noData}
+            {selectedSemester !== null
+              ? t('grades').semesters.noDataSemester.replace(
+                  '{{semester}}',
+                  selectedSemester.toString(),
+                )
+              : t('grades').semesters.noData}
           </Text>
         )}
 
@@ -1425,33 +1295,20 @@ const ViewModeSwitcher = ({
   return (
     <View style={styles.viewModeSwitcher}>
       <TouchableOpacity
-        style={[
-          styles.modeTab,
-          activeMode === "grades" && styles.activeModeTab,
-        ]}
-        onPress={() => onModeChange("grades")}
+        style={[styles.modeTab, activeMode === 'grades' && styles.activeModeTab]}
+        onPress={() => onModeChange('grades')}
       >
-        <Text
-          style={[
-            styles.modeTabText,
-            activeMode === "grades" && styles.activeModeTabText,
-          ]}
-        >
-          {t("grades").title}
+        <Text style={[styles.modeTabText, activeMode === 'grades' && styles.activeModeTabText]}>
+          {t('grades').title}
         </Text>
       </TouchableOpacity>
 
       <TouchableOpacity
-        style={[styles.modeTab, activeMode === "exams" && styles.activeModeTab]}
-        onPress={() => onModeChange("exams")}
+        style={[styles.modeTab, activeMode === 'exams' && styles.activeModeTab]}
+        onPress={() => onModeChange('exams')}
       >
-        <Text
-          style={[
-            styles.modeTabText,
-            activeMode === "exams" && styles.activeModeTabText,
-          ]}
-        >
-          {t("grades").categories.exam}
+        <Text style={[styles.modeTabText, activeMode === 'exams' && styles.activeModeTabText]}>
+          {t('grades').categories.exam}
         </Text>
       </TouchableOpacity>
     </View>
@@ -1465,10 +1322,7 @@ const ViewModeSwitcher = ({
  * @param targetAverage The desired average to achieve
  * @returns Array of grades to add to reach target average
  */
-const findGradesToReachAverage = (
-  currentGrades: number[],
-  targetAverage: number,
-): number[] => {
+const findGradesToReachAverage = (currentGrades: number[], targetAverage: number): number[] => {
   // Handle edge cases
   if (!currentGrades.length) {
     return [Math.round(targetAverage)]; // If no current grades, just return the target as a single grade
@@ -1493,8 +1347,7 @@ const findGradesToReachAverage = (
   const calculateReasonablenessScore = (grades: number[], avgDiff: number) => {
     // Calculate variance as a measure of how spread out the grades are
     const avg = grades.reduce((sum, g) => sum + g, 0) / grades.length;
-    const variance =
-      grades.reduce((sum, g) => sum + Math.pow(g - avg, 2), 0) / grades.length;
+    const variance = grades.reduce((sum, g) => sum + Math.pow(g - avg, 2), 0) / grades.length;
 
     // Count extreme grades (1-3 and 9-10)
     const extremeGrades = grades.filter((g) => g <= 3 || g >= 9).length;
@@ -1506,8 +1359,7 @@ const findGradesToReachAverage = (
   // Recursive backtracking function
   const backtrack = (newGrades: number[], depth: number, maxDepth: number) => {
     // Calculate new average with these added grades
-    const newSum =
-      currentSum + newGrades.reduce((sum, grade) => sum + grade, 0);
+    const newSum = currentSum + newGrades.reduce((sum, grade) => sum + grade, 0);
     const newCount = currentCount + newGrades.length;
     const newAverage = newSum / newCount;
     const newDifference = Math.abs(targetAverage - newAverage);
@@ -1520,8 +1372,7 @@ const findGradesToReachAverage = (
       // Update best solution if this one is more reasonable or closer to target
       if (
         score < lowestVariance ||
-        (Math.abs(score - lowestVariance) < 0.01 &&
-          newDifference < closestDifference)
+        (Math.abs(score - lowestVariance) < 0.01 && newDifference < closestDifference)
       ) {
         lowestVariance = score;
         closestDifference = newDifference;
@@ -1550,9 +1401,7 @@ const findGradesToReachAverage = (
     }
 
     // Prioritize grades closer to the target average
-    gradeRange.sort(
-      (a, b) => Math.abs(a - targetAverage) - Math.abs(b - targetAverage),
-    );
+    gradeRange.sort((a, b) => Math.abs(a - targetAverage) - Math.abs(b - targetAverage));
 
     // Try adding each possible grade
     for (const grade of gradeRange) {
@@ -1599,7 +1448,7 @@ const GradeCalculatorModal = ({
   const [selectedSubject, setSelectedSubject] = useState<GradeSubject | null>(
     subjects.length > 0 ? subjects[0] : null,
   );
-  const [targetAverage, setTargetAverage] = useState("");
+  const [targetAverage, setTargetAverage] = useState('');
   const [calculatedGrades, setCalculatedGrades] = useState<number[]>([]);
   const [hasCalculated, setHasCalculated] = useState(false);
   const [isAnnualCalculation, setIsAnnualCalculation] = useState(false);
@@ -1607,9 +1456,7 @@ const GradeCalculatorModal = ({
 
   // Convert string grades to numbers
   const getNumericGrades = (subject: GradeSubject): number[] => {
-    return subject.grades
-      .map((g) => parseFloat(g.replace(",", ".")))
-      .filter((g) => !isNaN(g));
+    return subject.grades.map((g) => parseFloat(g.replace(',', '.'))).filter((g) => !isNaN(g));
   };
 
   // Get all grades for the selected subject from all semesters
@@ -1618,9 +1465,7 @@ const GradeCalculatorModal = ({
 
     // Iterate through all semesters to find the subject
     allSemesters.forEach((semester) => {
-      const subjectInSemester = semester.subjects.find(
-        (s) => s.name === subjectName,
-      );
+      const subjectInSemester = semester.subjects.find((s) => s.name === subjectName);
       if (subjectInSemester) {
         const numericGrades = getNumericGrades(subjectInSemester);
         allGrades.push(...numericGrades);
@@ -1632,15 +1477,14 @@ const GradeCalculatorModal = ({
 
   // Calculate the current average of the selected subject
   const getCurrentAverage = (): string => {
-    if (!selectedSubject) return "-";
+    if (!selectedSubject) return '-';
 
     // Decide which grades to use based on calculation mode
-    const numericGrades =
-      isAnnualCalculation ?
-        getAllGradesForSubject(selectedSubject.name)
+    const numericGrades = isAnnualCalculation
+      ? getAllGradesForSubject(selectedSubject.name)
       : getNumericGrades(selectedSubject);
 
-    if (numericGrades.length === 0) return "-";
+    if (numericGrades.length === 0) return '-';
 
     const sum = numericGrades.reduce((a, b) => a + b, 0);
     return (sum / numericGrades.length).toFixed(2);
@@ -1651,9 +1495,8 @@ const GradeCalculatorModal = ({
     if (!selectedSubject || !targetAverage) return;
 
     // Decide which grades to use based on calculation mode
-    const numericGrades =
-      isAnnualCalculation ?
-        getAllGradesForSubject(selectedSubject.name)
+    const numericGrades = isAnnualCalculation
+      ? getAllGradesForSubject(selectedSubject.name)
       : getNumericGrades(selectedSubject);
 
     const target = parseFloat(targetAverage);
@@ -1705,9 +1548,7 @@ const GradeCalculatorModal = ({
     // Collect grades from all semesters for this subject
     const allGrades: string[] = [];
     allSemesters.forEach((semester) => {
-      const subjectInSemester = semester.subjects.find(
-        (s) => s.name === selectedSubject.name,
-      );
+      const subjectInSemester = semester.subjects.find((s) => s.name === selectedSubject.name);
       if (subjectInSemester) {
         allGrades.push(...subjectInSemester.grades);
       }
@@ -1718,9 +1559,7 @@ const GradeCalculatorModal = ({
 
   // Determine if annual calculation option should be shown
   const showAnnualOption = useMemo(() => {
-    return selectedSubject ?
-        isSubjectInMultipleSemesters(selectedSubject.name)
-      : false;
+    return selectedSubject ? isSubjectInMultipleSemesters(selectedSubject.name) : false;
   }, [selectedSubject, isSubjectInMultipleSemesters]);
 
   return (
@@ -1734,28 +1573,22 @@ const GradeCalculatorModal = ({
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: 20 }}
         showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps='handled'
-        keyboardDismissMode='on-drag'
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
         {/* Subject Selection */}
         <View style={styles.formGroup}>
-          <Text style={styles.label}>
-            {t("grades").calculator.selectSubject}
-          </Text>
+          <Text style={styles.label}>{t('grades').calculator.selectSubject}</Text>
           <View style={styles.pickerContainer}>
             <NativeViewGestureHandler disallowInterruption={true}>
-              <GestureHandlerScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-              >
+              <GestureHandlerScrollView horizontal showsHorizontalScrollIndicator={false}>
                 {subjects.map((subject, index) => (
                   <React.Fragment key={`subject-option-${index}`}>
                     {index > 0 && <View style={styles.subjectSeparator} />}
                     <TouchableOpacity
                       style={[
                         styles.subjectOption,
-                        selectedSubject?.name === subject.name &&
-                          styles.subjectOptionSelected,
+                        selectedSubject?.name === subject.name && styles.subjectOptionSelected,
                       ]}
                       onPress={() => {
                         setSelectedSubject(subject);
@@ -1787,14 +1620,11 @@ const GradeCalculatorModal = ({
           <View style={styles.formGroup}>
             <View style={styles.calculationTypeContainer}>
               <Text style={styles.label}>
-                {t("grades").calculator.calculationType || "Calculation Type:"}
+                {t('grades').calculator.calculationType || 'Calculation Type:'}
               </Text>
               <View style={styles.calculationToggle}>
                 <TouchableOpacity
-                  style={[
-                    styles.toggleOption,
-                    !isAnnualCalculation && styles.toggleOptionActive,
-                  ]}
+                  style={[styles.toggleOption, !isAnnualCalculation && styles.toggleOptionActive]}
                   onPress={() => {
                     setIsAnnualCalculation(false);
                     setHasCalculated(false);
@@ -1807,17 +1637,14 @@ const GradeCalculatorModal = ({
                       !isAnnualCalculation && styles.toggleOptionTextActive,
                     ]}
                   >
-                    {t("grades").calculator.semesterOnly || "Current Semester"}
+                    {t('grades').calculator.semesterOnly || 'Current Semester'}
                   </Text>
                 </TouchableOpacity>
 
                 <View style={styles.toggleSeparator} />
 
                 <TouchableOpacity
-                  style={[
-                    styles.toggleOption,
-                    isAnnualCalculation && styles.toggleOptionActive,
-                  ]}
+                  style={[styles.toggleOption, isAnnualCalculation && styles.toggleOptionActive]}
                   onPress={() => {
                     setIsAnnualCalculation(true);
                     setHasCalculated(false);
@@ -1830,7 +1657,7 @@ const GradeCalculatorModal = ({
                       isAnnualCalculation && styles.toggleOptionTextActive,
                     ]}
                   >
-                    {t("grades").calculator.annualAverage || "Annual Average"}
+                    {t('grades').calculator.annualAverage || 'Annual Average'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1842,12 +1669,12 @@ const GradeCalculatorModal = ({
         {selectedSubject && (
           <View style={styles.formGroup}>
             <Text style={styles.label}>
-              {isAnnualCalculation ?
-                t("grades").calculator.allGrades || "All Grades"
-              : t("grades").calculator.currentGrades}
+              {isAnnualCalculation
+                ? t('grades').calculator.allGrades || 'All Grades'
+                : t('grades').calculator.currentGrades}
             </Text>
             <View style={styles.currentGradesContainer}>
-              {getAllCurrentGrades().length > 0 ?
+              {getAllCurrentGrades().length > 0 ? (
                 <View style={styles.gradesGrid}>
                   {getAllCurrentGrades().map((grade, index) => (
                     <View
@@ -1858,7 +1685,7 @@ const GradeCalculatorModal = ({
                         paddingHorizontal: 12,
                         paddingVertical: 6,
                         minWidth: 40,
-                        alignItems: "center",
+                        alignItems: 'center',
                         marginBottom: 8,
                       }}
                     >
@@ -1866,25 +1693,24 @@ const GradeCalculatorModal = ({
                     </View>
                   ))}
                 </View>
-              : <Text
+              ) : (
+                <Text
                   style={{
                     color: GRADES_MODAL_COLORS.textSecondary,
                     fontSize: 14,
-                    textAlign: "center",
+                    textAlign: 'center',
                     padding: 10,
                   }}
                 >
-                  {t("grades").calculator.noGrades}
+                  {t('grades').calculator.noGrades}
                 </Text>
-              }
+              )}
 
               <View style={styles.currentAverageContainer}>
                 <Text style={styles.currentAverageLabel}>
-                  {t("grades").calculator.currentAverage}:
+                  {t('grades').calculator.currentAverage}:
                 </Text>
-                <Text style={styles.currentAverageValue}>
-                  {getCurrentAverage()}
-                </Text>
+                <Text style={styles.currentAverageValue}>{getCurrentAverage()}</Text>
               </View>
             </View>
           </View>
@@ -1892,16 +1718,14 @@ const GradeCalculatorModal = ({
 
         {/* Target Average Input */}
         <View style={[styles.formGroup, { marginBottom: 20 }]}>
-          <Text style={styles.label}>
-            {t("grades").calculator.targetAverage}
-          </Text>
+          <Text style={styles.label}>{t('grades').calculator.targetAverage}</Text>
           <TextInput
             style={styles.input}
             value={targetAverage}
             onChangeText={setTargetAverage}
-            placeholder='8.50'
+            placeholder="8.50"
             placeholderTextColor={GRADES_MODAL_COLORS.textSecondary}
-            keyboardType='numeric'
+            keyboardType="numeric"
             maxLength={4}
           />
         </View>
@@ -1910,30 +1734,24 @@ const GradeCalculatorModal = ({
         <TouchableOpacity
           style={[
             styles.calculateButton,
-            (!selectedSubject || !targetAverage) &&
-              styles.calculateButtonDisabled,
+            (!selectedSubject || !targetAverage) && styles.calculateButtonDisabled,
           ]}
           onPress={handleCalculate}
           disabled={!selectedSubject || !targetAverage}
         >
-          <Text style={styles.calculateButtonText}>
-            {t("grades").calculator.calculate}
-          </Text>
+          <Text style={styles.calculateButtonText}>{t('grades').calculator.calculate}</Text>
         </TouchableOpacity>
 
         {/* Results */}
         {hasCalculated && (
-          <Animated.View
-            entering={FadeInUp.springify()}
-            style={styles.resultsContainer}
-          >
+          <Animated.View entering={FadeInUp.springify()} style={styles.resultsContainer}>
             <Text style={styles.resultsTitle}>
-              {calculatedGrades.length > 0 ?
-                t("grades").calculator.resultsTitle
-              : t("grades").calculator.noSolution}
+              {calculatedGrades.length > 0
+                ? t('grades').calculator.resultsTitle
+                : t('grades').calculator.noSolution}
             </Text>
 
-            {calculatedGrades.length > 0 ?
+            {calculatedGrades.length > 0 ? (
               <View style={styles.gradesGrid}>
                 {calculatedGrades.map((grade, index) => (
                   <View
@@ -1944,7 +1762,7 @@ const GradeCalculatorModal = ({
                       paddingHorizontal: 12,
                       paddingVertical: 6,
                       minWidth: 40,
-                      alignItems: "center",
+                      alignItems: 'center',
                       marginBottom: 8,
                     }}
                   >
@@ -1952,10 +1770,9 @@ const GradeCalculatorModal = ({
                   </View>
                 ))}
               </View>
-            : <Text style={styles.noSolutionText}>
-                {t("grades").calculator.alreadyAchieved}
-              </Text>
-            }
+            ) : (
+              <Text style={styles.noSolutionText}>{t('grades').calculator.alreadyAchieved}</Text>
+            )}
           </Animated.View>
         )}
       </BottomSheetScrollView>
@@ -1993,29 +1810,20 @@ const GradesScreen = ({
   useEffect(() => {
     if (isBackgroundRefreshing) {
       dot1.value = withRepeat(
-        withSequence(
-          withTiming(1, { duration: 600 }),
-          withTiming(0.25, { duration: 600 }),
-        ),
+        withSequence(withTiming(1, { duration: 600 }), withTiming(0.25, { duration: 600 })),
         -1,
         false,
       );
       setTimeout(() => {
         dot2.value = withRepeat(
-          withSequence(
-            withTiming(1, { duration: 600 }),
-            withTiming(0.25, { duration: 600 }),
-          ),
+          withSequence(withTiming(1, { duration: 600 }), withTiming(0.25, { duration: 600 })),
           -1,
           false,
         );
       }, 200);
       setTimeout(() => {
         dot3.value = withRepeat(
-          withSequence(
-            withTiming(1, { duration: 600 }),
-            withTiming(0.25, { duration: 600 }),
-          ),
+          withSequence(withTiming(1, { duration: 600 }), withTiming(0.25, { duration: 600 })),
           -1,
           false,
         );
@@ -2043,31 +1851,26 @@ const GradesScreen = ({
 
   // Format semester labels with support for relative 1/2 semester numbering.
   const formatSemesterLabel = (semesterNumber: number) =>
-    formatSemesterYearLabel(
-      t("grades").semesters.yearSemester,
-      semesterNumber,
-      {
-        studentYearNumber: studentGrades?.studentInfo.yearNumber,
-        currentSemester: studentGrades?.currentSemester,
-        semesters: studentGrades?.currentGrades,
-      },
-    );
+    formatSemesterYearLabel(t('grades').semesters.yearSemester, semesterNumber, {
+      studentYearNumber: studentGrades?.studentInfo.yearNumber,
+      currentSemester: studentGrades?.currentSemester,
+      semesters: studentGrades?.currentGrades,
+    });
 
   // Get current semester number based on date
   const currentSemesterNumber = useMemo(() => getCurrentSemester(), []);
 
   // UI state
   const [refreshing, setRefreshing] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>("grades");
-  const [selectedSubgroup, setSelectedSubgroup] = useState<
-    "Subgroup 1" | "Subgroup 2"
-  >(scheduleService.getSettings().group);
-  const [officialSchedule, setOfficialSchedule] =
-    useState<OfficialScheduleState>({
-      thesis: null,
-      exam: null,
-      loading: false,
-    });
+  const [viewMode, setViewMode] = useState<ViewMode>('grades');
+  const [selectedSubgroup, setSelectedSubgroup] = useState<'Subgroup 1' | 'Subgroup 2'>(
+    scheduleService.getSettings().group,
+  );
+  const [officialSchedule, setOfficialSchedule] = useState<OfficialScheduleState>({
+    thesis: null,
+    exam: null,
+    loading: false,
+  });
 
   // Grade calculator modal state
   const [calculatorVisible, setCalculatorVisible] = useState(false);
@@ -2075,22 +1878,15 @@ const GradesScreen = ({
   const [isExportingPdf, setIsExportingPdf] = useState(false);
 
   // Track expanded semester dropdowns and subjects
-  const [expandedSemesters, setExpandedSemesters] = useState<
-    Record<number, boolean>
-  >({});
-  const [expandedSubjects, setExpandedSubjects] = useState<
-    Record<string, boolean>
-  >({});
-  const [staleCheckTimestamp, setStaleCheckTimestamp] = useState(() =>
-    Date.now(),
-  );
+  const [expandedSemesters, setExpandedSemesters] = useState<Record<number, boolean>>({});
+  const [expandedSubjects, setExpandedSubjects] = useState<Record<string, boolean>>({});
+  const [staleCheckTimestamp, setStaleCheckTimestamp] = useState(() => Date.now());
 
   // Calculate if data is stale (older than STALE_DATA_DAYS)
   const isDataStale = useMemo(() => {
     if (!lastUpdated) return false;
 
-    const daysDifference =
-      (staleCheckTimestamp - lastUpdated) / (1000 * 60 * 60 * 24);
+    const daysDifference = (staleCheckTimestamp - lastUpdated) / (1000 * 60 * 60 * 24);
 
     return daysDifference >= STALE_DATA_DAYS;
   }, [lastUpdated, staleCheckTimestamp]);
@@ -2104,24 +1900,18 @@ const GradesScreen = ({
 
   // Listen to background refresh start/end events for anonymous indicator
   useEffect(() => {
-    const startListener = DeviceEventEmitter.addListener(
-      GRADES_REFRESH_START_EVENT,
-      () => {
-        setIsBackgroundRefreshing(true);
-        setBackgroundJustUpdated(false);
-      },
-    );
-    const endListener = DeviceEventEmitter.addListener(
-      GRADES_REFRESH_END_EVENT,
-      (payload: any) => {
-        setIsBackgroundRefreshing(false);
-        if (payload?.updated) {
-          setBackgroundJustUpdated(true);
-          // Fade out the updated state after a short period
-          setTimeout(() => setBackgroundJustUpdated(false), 2500);
-        }
-      },
-    );
+    const startListener = DeviceEventEmitter.addListener(GRADES_REFRESH_START_EVENT, () => {
+      setIsBackgroundRefreshing(true);
+      setBackgroundJustUpdated(false);
+    });
+    const endListener = DeviceEventEmitter.addListener(GRADES_REFRESH_END_EVENT, (payload: any) => {
+      setIsBackgroundRefreshing(false);
+      if (payload?.updated) {
+        setBackgroundJustUpdated(true);
+        // Fade out the updated state after a short period
+        setTimeout(() => setBackgroundJustUpdated(false), 2500);
+      }
+    });
     const sub = gradesDataService.subscribe(() => {
       // Data updated event also clears spinner if missed
       setIsBackgroundRefreshing(false);
@@ -2142,9 +1932,7 @@ const GradesScreen = ({
 
   const loadCachedOfficialSchedule = useCallback(async () => {
     const fallbackGroup = scheduleService.getSettings().selectedGroupName;
-    const groupName = String(
-      studentGrades?.studentInfo.group || fallbackGroup || "",
-    ).trim();
+    const groupName = String(studentGrades?.studentInfo.group || fallbackGroup || '').trim();
 
     if (!groupName) {
       setOfficialSchedule((prev) => ({
@@ -2159,8 +1947,8 @@ const GradesScreen = ({
     setOfficialSchedule((prev) => ({ ...prev, loading: true }));
     try {
       const [thesis, exam] = await Promise.all([
-        scheduleService.getCachedSpecialSchedule("thesis", groupName),
-        scheduleService.getCachedSpecialSchedule("exam", groupName),
+        scheduleService.getCachedSpecialSchedule('thesis', groupName),
+        scheduleService.getCachedSpecialSchedule('exam', groupName),
       ]);
 
       setOfficialSchedule({
@@ -2174,18 +1962,18 @@ const GradesScreen = ({
         thesis:
           prev.thesis ||
           scheduleService.buildUnavailableSpecialSchedule(
-            "thesis",
+            'thesis',
             groupName,
-            "cache_read_failed",
-            "Unable to load cached thesis schedule",
+            'cache_read_failed',
+            'Unable to load cached thesis schedule',
           ),
         exam:
           prev.exam ||
           scheduleService.buildUnavailableSpecialSchedule(
-            "exam",
+            'exam',
             groupName,
-            "cache_read_failed",
-            "Unable to load cached exam schedule",
+            'cache_read_failed',
+            'Unable to load cached exam schedule',
           ),
         loading: false,
       }));
@@ -2199,11 +1987,9 @@ const GradesScreen = ({
       void loadCachedOfficialSchedule();
 
       // Also trigger a background network refresh when viewing exams
-      if (viewMode === "exams") {
+      if (viewMode === 'exams') {
         const groupName = String(
-          studentGrades?.studentInfo.group ||
-            scheduleService.getSettings().selectedGroupName ||
-            "",
+          studentGrades?.studentInfo.group || scheduleService.getSettings().selectedGroupName || '',
         ).trim();
         if (groupName) {
           void scheduleService
@@ -2242,12 +2028,7 @@ const GradesScreen = ({
         }
       }, 8000);
     }
-  }, [
-    onRefresh,
-    refreshing,
-    isBackgroundRefreshing,
-    loadCachedOfficialSchedule,
-  ]);
+  }, [onRefresh, refreshing, isBackgroundRefreshing, loadCachedOfficialSchedule]);
 
   // Get current semester data
   const currentSemesterData = useMemo(() => {
@@ -2293,7 +2074,7 @@ const GradesScreen = ({
 
   // Format last updated date
   const lastUpdatedFormatted = useMemo(() => {
-    if (!lastUpdated) return t("grades").neverUpdated;
+    if (!lastUpdated) return t('grades').neverUpdated;
 
     const date = new Date(lastUpdated);
     return formatFullDate(date, true);
@@ -2301,9 +2082,7 @@ const GradesScreen = ({
 
   const exportableSubjects = useMemo(() => {
     if (!studentGrades) return [];
-    return studentGrades.currentGrades.flatMap(
-      (semester: SemesterGrades) => semester.subjects,
-    );
+    return studentGrades.currentGrades.flatMap((semester: SemesterGrades) => semester.subjects);
   }, [studentGrades]);
 
   const hasExportableGrades = exportableSubjects.length > 0;
@@ -2312,7 +2091,7 @@ const GradesScreen = ({
     const gradesData = studentGrades;
 
     if (!gradesData || !hasExportableGrades) {
-      Alert.alert(t("grades").pdf.errorTitle, t("grades").noGrades);
+      Alert.alert(t('grades').pdf.errorTitle, t('grades').noGrades);
       return;
     }
 
@@ -2320,24 +2099,20 @@ const GradesScreen = ({
 
     try {
       const { studentInfo, currentGrades } = gradesData;
-      const allSubjects = currentGrades.flatMap(
-        (semester: SemesterGrades) => semester.subjects,
-      );
+      const allSubjects = currentGrades.flatMap((semester: SemesterGrades) => semester.subjects);
       const subjectAverages = allSubjects
         .map((subject: GradeSubject) => subject.finalAverage ?? subject.average)
         .filter(
           (value: number | undefined): value is number =>
-            typeof value === "number" && Number.isFinite(value),
+            typeof value === 'number' && Number.isFinite(value),
         );
       const overallAverage =
-        subjectAverages.length > 0 ?
-          (
-            subjectAverages.reduce(
-              (sum: number, value: number) => sum + value,
-              0,
-            ) / subjectAverages.length
-          ).toFixed(2)
-        : "-";
+        subjectAverages.length > 0
+          ? (
+              subjectAverages.reduce((sum: number, value: number) => sum + value, 0) /
+              subjectAverages.length
+            ).toFixed(2)
+          : '-';
       const impactedSubjects = allSubjects.filter(
         (subject: GradeSubject) =>
           subject.appliedExamGrade !== undefined || !!subject.appliedExamType,
@@ -2349,27 +2124,22 @@ const GradesScreen = ({
       const now = new Date();
       const generatedOn = formatFullDate(now, true);
       const buildSemesterLabel = (semesterNumber: number) =>
-        formatSemesterYearLabel(
-          t("grades").semesters.yearSemester,
-          semesterNumber,
-          {
-            studentYearNumber: studentInfo.yearNumber,
-            currentSemester: gradesData.currentSemester,
-            semesters: currentGrades,
-          },
-        );
-      const currentSemesterLabel =
-        gradesData.currentSemester ?
-          buildSemesterLabel(gradesData.currentSemester)
-        : studentInfo.yearNumber ?
-          formatSemesterYearLabel(
-            t("grades").semesters.yearSemester,
-            (studentInfo.yearNumber - 1) * 2 + getCurrentSemester(),
-            {
-              studentYearNumber: studentInfo.yearNumber,
-            },
-          )
-        : null;
+        formatSemesterYearLabel(t('grades').semesters.yearSemester, semesterNumber, {
+          studentYearNumber: studentInfo.yearNumber,
+          currentSemester: gradesData.currentSemester,
+          semesters: currentGrades,
+        });
+      const currentSemesterLabel = gradesData.currentSemester
+        ? buildSemesterLabel(gradesData.currentSemester)
+        : studentInfo.yearNumber
+          ? formatSemesterYearLabel(
+              t('grades').semesters.yearSemester,
+              (studentInfo.yearNumber - 1) * 2 + getCurrentSemester(),
+              {
+                studentYearNumber: studentInfo.yearNumber,
+              },
+            )
+          : null;
 
       const html = `
         <!doctype html>
@@ -2377,7 +2147,7 @@ const GradesScreen = ({
           <head>
             <meta charset="utf-8" />
             <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-            <title>${escapeHtml(t("grades").pdf.exportTitle)}</title>
+            <title>${escapeHtml(t('grades').pdf.exportTitle)}</title>
             <style>
               @page {
                 size: A4;
@@ -2613,89 +2383,70 @@ const GradesScreen = ({
           <body>
             <div class="page">
               <section class="header">
-                <div class="eyebrow">${escapeHtml(t("grades").pdf.exportTitle)}</div>
+                <div class="eyebrow">${escapeHtml(t('grades').pdf.exportTitle)}</div>
                 <h1 class="title">${escapeHtml(`${studentInfo.firstName} ${studentInfo.name}`.trim())}</h1>
-                <p class="subhead">${escapeHtml(studentInfo.group)}${studentInfo.specialization ? ` • ${escapeHtml(studentInfo.specialization)}` : ""}</p>
+                <p class="subhead">${escapeHtml(studentInfo.group)}${studentInfo.specialization ? ` • ${escapeHtml(studentInfo.specialization)}` : ''}</p>
                 <div class="meta-row">
-                  ${currentSemesterLabel ? `<div class="meta-chip">${escapeHtml(currentSemesterLabel)}</div>` : ""}
-                  <div class="meta-chip">${escapeHtml(t("grades").pdf.generatedOn)} ${escapeHtml(generatedOn)}</div>
-                  <div class="meta-chip">${escapeHtml(t("grades").pdf.totalSemesters)}: ${currentGrades.length}</div>
-                  <div class="meta-chip">${escapeHtml(t("grades").pdf.totalSubjects)}: ${allSubjects.length}</div>
-                  <div class="meta-chip">${escapeHtml(t("grades").average)}: ${escapeHtml(overallAverage)}</div>
-                  <div class="meta-chip">${escapeHtml(t("grades").pdf.totalGrades)}: ${totalGrades}</div>
-                  <div class="meta-chip">${escapeHtml(t("grades").pdf.impactedSubjects)}: ${impactedSubjects}</div>
+                  ${currentSemesterLabel ? `<div class="meta-chip">${escapeHtml(currentSemesterLabel)}</div>` : ''}
+                  <div class="meta-chip">${escapeHtml(t('grades').pdf.generatedOn)} ${escapeHtml(generatedOn)}</div>
+                  <div class="meta-chip">${escapeHtml(t('grades').pdf.totalSemesters)}: ${currentGrades.length}</div>
+                  <div class="meta-chip">${escapeHtml(t('grades').pdf.totalSubjects)}: ${allSubjects.length}</div>
+                  <div class="meta-chip">${escapeHtml(t('grades').average)}: ${escapeHtml(overallAverage)}</div>
+                  <div class="meta-chip">${escapeHtml(t('grades').pdf.totalGrades)}: ${totalGrades}</div>
+                  <div class="meta-chip">${escapeHtml(t('grades').pdf.impactedSubjects)}: ${impactedSubjects}</div>
                 </div>
               </section>
 
               ${currentGrades
                 .map((semester: SemesterGrades) => {
                   const semesterAverage = semester.subjects
-                    .map(
-                      (subject: GradeSubject) =>
-                        subject.finalAverage ?? subject.average,
-                    )
+                    .map((subject: GradeSubject) => subject.finalAverage ?? subject.average)
                     .filter(
                       (value: number | undefined): value is number =>
-                        typeof value === "number" && Number.isFinite(value),
+                        typeof value === 'number' && Number.isFinite(value),
                     );
                   const semesterAverageValue =
-                    semesterAverage.length > 0 ?
-                      (
-                        semesterAverage.reduce(
-                          (sum: number, value: number) => sum + value,
-                          0,
-                        ) / semesterAverage.length
-                      ).toFixed(2)
-                    : "-";
+                    semesterAverage.length > 0
+                      ? (
+                          semesterAverage.reduce((sum: number, value: number) => sum + value, 0) /
+                          semesterAverage.length
+                        ).toFixed(2)
+                      : '-';
 
                   return `
                   <section class="semester-card">
                     <div class="semester-head">
                       <div>
                         <h3 class="semester-name">${escapeHtml(buildSemesterLabel(semester.semester))}</h3>
-                        <div class="summary-note">${escapeHtml(studentInfo.group)}${studentInfo.specialization ? ` • ${escapeHtml(studentInfo.specialization)}` : ""}</div>
+                        <div class="summary-note">${escapeHtml(studentInfo.group)}${studentInfo.specialization ? ` • ${escapeHtml(studentInfo.specialization)}` : ''}</div>
                       </div>
                       <div class="semester-average">
-                        ${escapeHtml(t("grades").average)}<br />${escapeHtml(semesterAverageValue)}
+                        ${escapeHtml(t('grades').average)}<br />${escapeHtml(semesterAverageValue)}
                       </div>
                     </div>
 
                     ${semester.subjects
                       .map((subject: GradeSubject) => {
                         const displayedAverage =
-                          subject.finalDisplayedAverage ||
-                          subject.displayedAverage ||
-                          "-";
+                          subject.finalDisplayedAverage || subject.displayedAverage || '-';
                         const baseAverage =
-                          subject.baseDisplayedAverage ||
-                          subject.displayedAverage ||
-                          "-";
+                          subject.baseDisplayedAverage || subject.displayedAverage || '-';
                         const isExamImpact = !!subject.appliedExamType;
                         const appliedExamGrade =
-                          (
-                            typeof subject.appliedExamGrade === "number" &&
-                            Number.isFinite(subject.appliedExamGrade)
-                          ) ?
-                            subject.appliedExamGrade.toFixed(2)
-                          : "";
-                        const impactLabel =
-                          subject.appliedExamType ?
-                            (() => {
-                              const typeKey =
-                                subject.appliedExamType?.toLowerCase() || "";
-                              if (
-                                typeKey.includes("teza") ||
-                                typeKey.includes("thesis")
-                              )
-                                return escapeHtml(t("grades").subjects.thesis);
-                              if (
-                                typeKey.includes("examen") ||
-                                typeKey.includes("exam")
-                              )
-                                return escapeHtml(t("grades").subjects.exam);
+                          typeof subject.appliedExamGrade === 'number' &&
+                          Number.isFinite(subject.appliedExamGrade)
+                            ? subject.appliedExamGrade.toFixed(2)
+                            : '';
+                        const impactLabel = subject.appliedExamType
+                          ? (() => {
+                              const typeKey = subject.appliedExamType?.toLowerCase() || '';
+                              if (typeKey.includes('teza') || typeKey.includes('thesis'))
+                                return escapeHtml(t('grades').subjects.thesis);
+                              if (typeKey.includes('examen') || typeKey.includes('exam'))
+                                return escapeHtml(t('grades').subjects.exam);
                               return escapeHtml(subject.appliedExamType);
                             })()
-                          : "";
+                          : '';
 
                         return `
                         <article class="subject-card">
@@ -2705,48 +2456,47 @@ const GradesScreen = ({
                           </div>
 
                           <div class="subject-meta">
-                            <span class="chip chip-neutral">${escapeHtml(t("grades").form.subject)}</span>
-                            <span class="chip chip-accent">${escapeHtml(t("grades").average)}: ${escapeHtml(baseAverage)}</span>
-                            ${subject.finalDisplayedAverage && subject.finalDisplayedAverage !== baseAverage ? `<span class="chip chip-success">${escapeHtml(t("grades").subjects.finalAverage)}: ${escapeHtml(subject.finalDisplayedAverage)}</span>` : ""}
-                            <span class="chip chip-neutral">${escapeHtml(t("grades").pdf.totalGrades)}: ${subject.grades.length}</span>
+                            <span class="chip chip-neutral">${escapeHtml(t('grades').form.subject)}</span>
+                            <span class="chip chip-accent">${escapeHtml(t('grades').average)}: ${escapeHtml(baseAverage)}</span>
+                            ${subject.finalDisplayedAverage && subject.finalDisplayedAverage !== baseAverage ? `<span class="chip chip-success">${escapeHtml(t('grades').subjects.finalAverage)}: ${escapeHtml(subject.finalDisplayedAverage)}</span>` : ''}
+                            <span class="chip chip-neutral">${escapeHtml(t('grades').pdf.totalGrades)}: ${subject.grades.length}</span>
                           </div>
 
                           <div class="grade-row">
                             ${
-                              subject.grades.length > 0 ?
-                                subject.grades
-                                  .map((grade: string) => {
-                                    const gradeColor = getGradeColor(grade);
-                                    const gradeTextColor =
-                                      getPdfGradeTextColor(grade);
-                                    return `<span class="grade-pill" style="background:${escapeHtml(gradeColor)};color:${escapeHtml(gradeTextColor)};">${escapeHtml(grade)}</span>`;
-                                  })
-                                  .join("")
-                              : `<span class="chip chip-neutral">${escapeHtml(t("grades").noGrades)}</span>`
+                              subject.grades.length > 0
+                                ? subject.grades
+                                    .map((grade: string) => {
+                                      const gradeColor = getGradeColor(grade);
+                                      const gradeTextColor = getPdfGradeTextColor(grade);
+                                      return `<span class="grade-pill" style="background:${escapeHtml(gradeColor)};color:${escapeHtml(gradeTextColor)};">${escapeHtml(grade)}</span>`;
+                                    })
+                                    .join('')
+                                : `<span class="chip chip-neutral">${escapeHtml(t('grades').noGrades)}</span>`
                             }
                           </div>
 
                           ${
-                            isExamImpact ?
-                              `
+                            isExamImpact
+                              ? `
                             <div class="impact-card">
-                              <div class="impact-label">${escapeHtml(t("grades").pdf.impactedSubjects)}</div>
-                              <div class="impact-text">${impactLabel} ${appliedExamGrade ? `• ${escapeHtml(appliedExamGrade)}` : ""}</div>
-                              <div class="impact-subtext">${escapeHtml(t("grades").subjects.withoutExam)}: ${escapeHtml(baseAverage)} • ${escapeHtml(t("grades").subjects.finalAverage)}: ${escapeHtml(displayedAverage)}</div>
+                              <div class="impact-label">${escapeHtml(t('grades').pdf.impactedSubjects)}</div>
+                              <div class="impact-text">${impactLabel} ${appliedExamGrade ? `• ${escapeHtml(appliedExamGrade)}` : ''}</div>
+                              <div class="impact-subtext">${escapeHtml(t('grades').subjects.withoutExam)}: ${escapeHtml(baseAverage)} • ${escapeHtml(t('grades').subjects.finalAverage)}: ${escapeHtml(displayedAverage)}</div>
                             </div>
                           `
-                            : ""
+                              : ''
                           }
                         </article>
                       `;
                       })
-                      .join("")}
+                      .join('')}
                   </section>
                 `;
                 })
-                .join("")}
+                .join('')}
 
-              <div class="footer">${escapeHtml(t("grades").pdf.generatedOn)} ${escapeHtml(generatedOn)}</div>
+              <div class="footer">${escapeHtml(t('grades').pdf.generatedOn)} ${escapeHtml(generatedOn)}</div>
             </div>
           </body>
         </html>
@@ -2756,20 +2506,20 @@ const GradesScreen = ({
       const sharingAvailable = await Sharing.isAvailableAsync();
 
       if (!sharingAvailable) {
-        Alert.alert(t("grades").pdf.shareTitle, t("grades").pdf.shareMessage);
+        Alert.alert(t('grades').pdf.shareTitle, t('grades').pdf.shareMessage);
         return;
       }
 
       await Sharing.shareAsync(pdf.uri, {
-        mimeType: "application/pdf",
-        dialogTitle: t("grades").pdf.shareTitle,
-        UTI: "com.adobe.pdf",
+        mimeType: 'application/pdf',
+        dialogTitle: t('grades').pdf.shareTitle,
+        UTI: 'com.adobe.pdf',
       });
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert(t("grades").pdf.errorTitle, t("grades").pdf.errorMessage);
+      Alert.alert(t('grades').pdf.errorTitle, t('grades').pdf.errorMessage);
     } finally {
       setIsExportingPdf(false);
     }
@@ -2809,8 +2559,7 @@ const GradesScreen = ({
 
   const isSemesterExpanded = useCallback(
     (semesterNumber: number) =>
-      expandedSemesters[semesterNumber] ??
-      semesterNumber === currentSemesterNumber,
+      expandedSemesters[semesterNumber] ?? semesterNumber === currentSemesterNumber,
     [expandedSemesters, currentSemesterNumber],
   );
 
@@ -2818,45 +2567,38 @@ const GradesScreen = ({
   if (!studentGrades) {
     return (
       <View style={styles.errorContainer}>
-        <Text style={styles.errorTitle}>{t("schedule").error}</Text>
-        <Text style={styles.errorMessage}>{t("schedule").error}</Text>
+        <Text style={styles.errorTitle}>{t('schedule').error}</Text>
+        <Text style={styles.errorMessage}>{t('schedule').error}</Text>
       </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       {/* Header with student info and buttons */}
       <View style={[styles.headerContainer, refreshing && { opacity: 0.7 }]}>
         <View style={styles.headerLeft}>
           <Text style={[styles.studentName, textOpacity]}>
-            {studentGrades.studentInfo.firstName}{" "}
-            {studentGrades.studentInfo.name}
+            {studentGrades.studentInfo.firstName} {studentGrades.studentInfo.name}
           </Text>
           <Text style={[styles.studentDetails, textOpacity]}>
-            {studentGrades.studentInfo.group} |{" "}
-            {studentGrades.studentInfo.specialization}
+            {studentGrades.studentInfo.group} | {studentGrades.studentInfo.specialization}
           </Text>
         </View>
         <View style={styles.headerButtons}>
-          {currentSemesterData?.subjects &&
-            currentSemesterData.subjects.length > 0 && (
-              <TouchableOpacity
-                style={styles.calculatorButton}
-                onPress={() => {
-                  setCalculatorSession((prev) => prev + 1);
-                  setCalculatorVisible(true);
-                  Haptics.selectionAsync();
-                }}
-                disabled={refreshing}
-              >
-                <MaterialIcons
-                  name='calculate'
-                  size={22}
-                  color={Colors.dark.white}
-                />
-              </TouchableOpacity>
-            )}
+          {currentSemesterData?.subjects && currentSemesterData.subjects.length > 0 && (
+            <TouchableOpacity
+              style={styles.calculatorButton}
+              onPress={() => {
+                setCalculatorSession((prev) => prev + 1);
+                setCalculatorVisible(true);
+                Haptics.selectionAsync();
+              }}
+              disabled={refreshing}
+            >
+              <MaterialIcons name="calculate" size={22} color={Colors.dark.white} />
+            </TouchableOpacity>
+          )}
           <View style={styles.headerActionColumn}>
             <TouchableOpacity
               style={styles.refreshButton}
@@ -2864,7 +2606,7 @@ const GradesScreen = ({
               disabled={refreshing}
             >
               <MaterialIcons
-                name='refresh'
+                name="refresh"
                 size={24}
                 color={Colors.dark.white}
                 style={[refreshing && styles.refreshingIcon]}
@@ -2873,21 +2615,17 @@ const GradesScreen = ({
             <TouchableOpacity
               style={[
                 styles.exportIconButton,
-                (!hasExportableGrades || isExportingPdf) &&
-                  styles.exportIconButtonDisabled,
+                (!hasExportableGrades || isExportingPdf) && styles.exportIconButtonDisabled,
               ]}
               onPress={handleExportGradesPdf}
               disabled={!hasExportableGrades || isExportingPdf}
               activeOpacity={0.85}
             >
-              {isExportingPdf ?
-                <ActivityIndicator size='small' color={Colors.dark.white} />
-              : <MaterialIcons
-                  name='picture-as-pdf'
-                  size={20}
-                  color={Colors.dark.white}
-                />
-              }
+              {isExportingPdf ? (
+                <ActivityIndicator size="small" color={Colors.dark.white} />
+              ) : (
+                <MaterialIcons name="picture-as-pdf" size={20} color={Colors.dark.white} />
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -2899,14 +2637,9 @@ const GradesScreen = ({
           entering={FadeInUp.springify()}
           style={[styles.warningBanner, refreshing && { opacity: 0.5 }]}
         >
-          <MaterialIcons
-            name='info-outline'
-            size={24}
-            color={Colors.dark.warningGold}
-          />
+          <MaterialIcons name="info-outline" size={24} color={Colors.dark.warningGold} />
           <Text style={[styles.warningText, textOpacity]}>
-            {t("grades").lastUpdated} {lastUpdatedFormatted}.{" "}
-            {t("grades").dataStale}
+            {t('grades').lastUpdated} {lastUpdatedFormatted}. {t('grades').dataStale}
           </Text>
         </Animated.View>
       )}
@@ -2914,7 +2647,7 @@ const GradesScreen = ({
       {/* Tab Switcher */}
       <ViewModeSwitcher activeMode={viewMode} onModeChange={setViewMode} />
 
-      {viewMode === "grades" ?
+      {viewMode === 'grades' ? (
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollViewContent}
@@ -2925,15 +2658,11 @@ const GradesScreen = ({
               entering={FadeInUp.springify()}
               style={[styles.averageCard, refreshing && { opacity: 0.7 }]}
             >
-              <Text style={[styles.averageLabel, textOpacity]}>
-                {t("grades").average}
-              </Text>
+              <Text style={[styles.averageLabel, textOpacity]}>{t('grades').average}</Text>
               <Text style={[styles.averageValue, textOpacity]}>
                 {(
-                  allSemestersAverages.reduce(
-                    (acc, item) => acc + parseFloat(item!.average),
-                    0,
-                  ) / allSemestersAverages.length
+                  allSemestersAverages.reduce((acc, item) => acc + parseFloat(item!.average), 0) /
+                  allSemestersAverages.length
                 ).toFixed(2)}
               </Text>
             </Animated.View>
@@ -2959,15 +2688,14 @@ const GradesScreen = ({
                   {/* Display semester average if available */}
                   {allSemestersAverages[index] && (
                     <Text style={[styles.semesterAverageText, textOpacity]}>
-                      {t("grades").average}:{" "}
-                      {allSemestersAverages[index]!.average}
+                      {t('grades').average}: {allSemestersAverages[index]!.average}
                     </Text>
                   )}
                   <MaterialIcons
                     name={
-                      isSemesterExpanded(semester.semester) ?
-                        "keyboard-arrow-up"
-                      : "keyboard-arrow-down"
+                      isSemesterExpanded(semester.semester)
+                        ? 'keyboard-arrow-up'
+                        : 'keyboard-arrow-down'
                     }
                     size={24}
                     color={Colors.dark.white}
@@ -2978,21 +2706,11 @@ const GradesScreen = ({
 
               {/* Semester content (subjects) when expanded */}
               {isSemesterExpanded(semester.semester) && (
-                <Animated.View
-                  entering={FadeInUp.springify()}
-                  style={styles.semesterContent}
-                >
+                <Animated.View entering={FadeInUp.springify()} style={styles.semesterContent}>
                   {/* Semester average and absences */}
                   {allSemestersAverages[index] && (
-                    <View
-                      style={[
-                        styles.semesterAverageCard,
-                        refreshing && { opacity: 0.7 },
-                      ]}
-                    >
-                      <Text style={[styles.averageLabel, textOpacity]}>
-                        {t("grades").average}
-                      </Text>
+                    <View style={[styles.semesterAverageCard, refreshing && { opacity: 0.7 }]}>
+                      <Text style={[styles.averageLabel, textOpacity]}>{t('grades').average}</Text>
                       <Text style={[styles.averageValue, textOpacity]}>
                         {allSemestersAverages[index]!.average}
                       </Text>
@@ -3001,14 +2719,12 @@ const GradesScreen = ({
                       {semester.absences && (
                         <View style={styles.absencesContainer}>
                           <Text style={[styles.absencesLabel, textOpacity]}>
-                            {t("grades").absences}:{" "}
+                            {t('grades').absences}:{' '}
                             <Text style={[styles.absencesValue, textOpacity]}>
                               {semester.absences.total}
-                            </Text>{" "}
-                            ({t("grades").unexcused}:{" "}
-                            <Text
-                              style={[styles.absencesUnexcused, textOpacity]}
-                            >
+                            </Text>{' '}
+                            ({t('grades').unexcused}:{' '}
+                            <Text style={[styles.absencesUnexcused, textOpacity]}>
                               {semester.absences.unexcused}
                             </Text>
                             )
@@ -3026,14 +2742,8 @@ const GradesScreen = ({
                       <SubjectCard
                         key={`subject-${semester.semester}-${subject.name}-${subjectIndex}`}
                         subject={subject}
-                        expanded={
-                          !!expandedSubjects[
-                            `${semester.semester}-${subject.name}`
-                          ]
-                        }
-                        onToggle={() =>
-                          toggleSubject(subject.name, semester.semester)
-                        }
+                        expanded={!!expandedSubjects[`${semester.semester}-${subject.name}`]}
+                        onToggle={() => toggleSubject(subject.name, semester.semester)}
                         semesterNumber={semester.semester}
                         newGradeIndices={highlight?.gradeIndices}
                         hasNewExam={highlight?.newExam}
@@ -3044,8 +2754,8 @@ const GradesScreen = ({
                   {/* Empty state if no subjects */}
                   {semester.subjects.length === 0 && (
                     <Text style={[styles.emptyText, textOpacity]}>
-                      {t("grades").subjects.noSubjects.replace(
-                        "{{semester}}",
+                      {t('grades').subjects.noSubjects.replace(
+                        '{{semester}}',
                         semester.semester.toString(),
                       )}
                     </Text>
@@ -3057,23 +2767,22 @@ const GradesScreen = ({
 
           {/* No data message if no semesters */}
           {studentGrades.currentGrades.length === 0 && (
-            <Text style={[styles.emptyText, textOpacity]}>
-              {t("grades").noGrades}
-            </Text>
+            <Text style={[styles.emptyText, textOpacity]}>{t('grades').noGrades}</Text>
           )}
 
           {/* Last updated info at the bottom */}
           <Text style={[styles.lastUpdatedText, textOpacity]}>
-            {t("grades").lastUpdated}: {lastUpdatedFormatted}
+            {t('grades').lastUpdated}: {lastUpdatedFormatted}
           </Text>
         </ScrollView>
-      : <ExamsView
+      ) : (
+        <ExamsView
           exams={studentGrades.exams}
           studentInfo={studentGrades.studentInfo}
           officialSchedule={officialSchedule}
           selectedSubgroup={selectedSubgroup}
         />
-      }
+      )}
 
       {/* Grade Calculator Modal */}
       {currentSemesterData && (
@@ -3090,29 +2799,28 @@ const GradesScreen = ({
       {/* Overlay only for initial/explicit pull refresh; background uses subtle bar */}
       {refreshing && (
         <View style={styles.refreshOverlay}>
-          <ActivityIndicator size='large' color={Colors.dark.primaryStrong} />
-          <Text style={styles.refreshingText}>{t("grades").refreshing}</Text>
+          <ActivityIndicator size="large" color={Colors.dark.primaryStrong} />
+          <Text style={styles.refreshingText}>{t('grades').refreshing}</Text>
         </View>
       )}
       {/* Anonymous background refresh indicator (pulsing dots) */}
       {(isBackgroundRefreshing || backgroundJustUpdated) && (
-        <View style={styles.backgroundIndicatorWrapper} pointerEvents='none'>
+        <View style={styles.backgroundIndicatorWrapper} pointerEvents="none">
           <View
             style={[
               styles.backgroundIndicatorPill,
               backgroundJustUpdated && styles.backgroundIndicatorUpdated,
             ]}
           >
-            {!backgroundJustUpdated ?
+            {!backgroundJustUpdated ? (
               <View style={styles.dotsContainer}>
                 <Animated.View style={[styles.dot, dotStyle1]} />
                 <Animated.View style={[styles.dot, dotStyle2]} />
                 <Animated.View style={[styles.dot, dotStyle3]} />
               </View>
-            : <Text style={styles.backgroundUpdatedText}>
-                {t("grades").updatedLabel}
-              </Text>
-            }
+            ) : (
+              <Text style={styles.backgroundUpdatedText}>{t('grades').updatedLabel}</Text>
+            )}
           </View>
         </View>
       )}
@@ -3129,14 +2837,12 @@ export default function Grades() {
   const [idnp, setIdnp] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isFetching, setIsFetching] = useState(false);
-  const [responseHtml, setResponseHtml] = useState<string>("");
+  const [responseHtml, setResponseHtml] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   // Prevent multiple initial cache hydrations overwriting fresh data
   const initialLoadDoneRef = useRef(false);
-  const [displayGrades, setDisplayGrades] = useState<StudentGrades | null>(
-    null,
-  );
+  const [displayGrades, setDisplayGrades] = useState<StudentGrades | null>(null);
   const [newHighlights, setNewHighlights] = useState<NewGradeHighlightsMap>({});
   const [devInjected, setDevInjected] = useState<boolean>(false);
   const [refreshNonce, setRefreshNonce] = useState(0);
@@ -3150,10 +2856,7 @@ export default function Grades() {
     async (targetIdnp: string | null, highlights: NewGradeHighlightsMap) => {
       if (!targetIdnp) return;
       try {
-        await AsyncStorage.setItem(
-          getHighlightsStorageKey(targetIdnp),
-          JSON.stringify(highlights),
-        );
+        await AsyncStorage.setItem(getHighlightsStorageKey(targetIdnp), JSON.stringify(highlights));
       } catch {
         // Silent storage failure; highlighting still works in-memory.
       }
@@ -3217,10 +2920,7 @@ export default function Grades() {
                 // New cache is fresher
                 chosenHtml = newCached.html;
                 chosenTimestamp = newTs || Date.now();
-              } else if (
-                newTs === legacyTs &&
-                newCached.html !== legacyData.html
-              ) {
+              } else if (newTs === legacyTs && newCached.html !== legacyData.html) {
                 // Same timestamp (or missing) but different content – prefer new cache to avoid stale reversion
                 chosenHtml = newCached.html;
                 chosenTimestamp = newTs || legacyTs || Date.now();
@@ -3253,10 +2953,7 @@ export default function Grades() {
                   }),
                 );
                 if (newCached.timestamp) {
-                  await AsyncStorage.setItem(
-                    GRADES_TIMESTAMP_KEY,
-                    newCached.timestamp.toString(),
-                  );
+                  await AsyncStorage.setItem(GRADES_TIMESTAMP_KEY, newCached.timestamp.toString());
                 }
               } catch {
                 /* silent */
@@ -3265,8 +2962,7 @@ export default function Grades() {
 
             // If we still have no explicit timestamp set (e.g., only legacy html stored earlier), attempt legacy timestamp key
             if (!lastUpdated && !chosenTimestamp) {
-              const timestamp =
-                await AsyncStorage.getItem(GRADES_TIMESTAMP_KEY);
+              const timestamp = await AsyncStorage.getItem(GRADES_TIMESTAMP_KEY);
               if (timestamp) {
                 setLastUpdated(parseInt(timestamp, 10));
               }
@@ -3289,7 +2985,7 @@ export default function Grades() {
       (newIdnp: string | null) => {
         setIdnp(newIdnp);
         if (!newIdnp) {
-          setResponseHtml("");
+          setResponseHtml('');
           setLastUpdated(null);
           setErrorMessage(null);
           setDisplayGrades(null);
@@ -3339,10 +3035,7 @@ export default function Grades() {
           }),
         );
         if (updated.timestamp) {
-          await AsyncStorage.setItem(
-            GRADES_TIMESTAMP_KEY,
-            updated.timestamp.toString(),
-          );
+          await AsyncStorage.setItem(GRADES_TIMESTAMP_KEY, updated.timestamp.toString());
         }
       } catch {}
     });
@@ -3358,22 +3051,21 @@ export default function Grades() {
     if (!responseHtml) return;
 
     const refreshChanged =
-      responseHtml !== prevResponseRef.current ||
-      refreshNonce !== lastHandledRefreshRef.current;
+      responseHtml !== prevResponseRef.current || refreshNonce !== lastHandledRefreshRef.current;
     if (!refreshChanged) return;
 
     const baseParsed = parseStudentGradesData(responseHtml);
     baseParsedRef.current = baseParsed;
 
-    const displayData =
-      devInjected ? injectRandomGrades(baseParsed) : baseParsed;
+    const displayData = devInjected ? injectRandomGrades(baseParsed) : baseParsed;
 
     const prevParsed = prevParsedRef.current;
 
     // First hydration: avoid marking everything new unless devInjected adds items
     if (!initialHydratedRef.current) {
-      const initialHighlights =
-        devInjected ? computeNewGradeHighlights(baseParsed, displayData) : {};
+      const initialHighlights = devInjected
+        ? computeNewGradeHighlights(baseParsed, displayData)
+        : {};
 
       setDisplayGrades(displayData);
       setNewHighlights((prev) => {
@@ -3390,10 +3082,7 @@ export default function Grades() {
 
     setDisplayGrades(displayData);
     setNewHighlights((prev) => {
-      const freshHighlights = computeNewGradeHighlights(
-        prevParsed,
-        displayData,
-      );
+      const freshHighlights = computeNewGradeHighlights(prevParsed, displayData);
       const merged = mergeNewGradeHighlights(prev, freshHighlights);
       void persistHighlights(idnp, merged);
       return merged;
@@ -3418,8 +3107,8 @@ export default function Grades() {
         // Fetch student info - this handles both login and info retrieval
         const htmlResponse = await fetchStudentInfo(studentIdnp);
 
-        if (!htmlResponse || htmlResponse.trim() === "") {
-          throw new Error("Empty response received");
+        if (!htmlResponse || htmlResponse.trim() === '') {
+          throw new Error('Empty response received');
         }
 
         // If we got here, the fetch was successful
@@ -3455,11 +3144,11 @@ export default function Grades() {
         if (!responseHtml) {
           await secureStorageService.clearIdnp();
           setIdnp(null);
-          setErrorMessage(t("grades").networkError);
+          setErrorMessage(t('grades').networkError);
         } else {
           // If we have cached data, just show an error toast but keep the cached data
           setErrorMessage(
-            `${t("grades").networkErrorCache} ${formatFullDate(new Date(lastUpdated || 0), false)}`,
+            `${t('grades').networkErrorCache} ${formatFullDate(new Date(lastUpdated || 0), false)}`,
           );
 
           // Error notification
@@ -3532,19 +3221,14 @@ export default function Grades() {
   const recomputeDisplayFromToggle = useCallback(
     (active: boolean) => {
       const base =
-        baseParsedRef.current ||
-        (responseHtml ? parseStudentGradesData(responseHtml) : null);
+        baseParsedRef.current || (responseHtml ? parseStudentGradesData(responseHtml) : null);
       if (!base) return;
       const nextDisplay = active ? injectRandomGrades(base) : base;
       const prev = prevParsedRef.current;
       setDisplayGrades(nextDisplay);
       setNewHighlights((previousHighlights) => {
-        const freshHighlights =
-          prev ? computeNewGradeHighlights(prev, nextDisplay) : {};
-        const merged = mergeNewGradeHighlights(
-          previousHighlights,
-          freshHighlights,
-        );
+        const freshHighlights = prev ? computeNewGradeHighlights(prev, nextDisplay) : {};
+        const merged = mergeNewGradeHighlights(previousHighlights, freshHighlights);
         void persistHighlights(idnp, merged);
         return merged;
       });
@@ -3557,7 +3241,7 @@ export default function Grades() {
     (async () => {
       try {
         const stored = await AsyncStorage.getItem(DEV_GRADE_TOGGLE_KEY);
-        if (stored === "true") {
+        if (stored === 'true') {
           setDevInjected(true);
           recomputeDisplayFromToggle(true);
         }
@@ -3595,11 +3279,11 @@ export default function Grades() {
   }, [idnp, responseHtml, errorMessage]);
 
   if (isLoading && !responseHtml) {
-    return <LoadingScreen message={t("schedule").loading} />;
+    return <LoadingScreen message={t('schedule').loading} />;
   }
 
   if (isFetching && !responseHtml) {
-    return <LoadingScreen message={t("grades").semesters.connecting} />;
+    return <LoadingScreen message={t('grades').semesters.connecting} />;
   }
 
   // Show IDNP screen if no IDNP or there was an error with no cached data
@@ -3621,11 +3305,7 @@ export default function Grades() {
           entering={FadeInUp.springify().delay(100)}
           style={[styles.errorNotification]}
         >
-          <MaterialIcons
-            name='error-outline'
-            size={24}
-            color={Colors.dark.lightPink}
-          />
+          <MaterialIcons name="error-outline" size={24} color={Colors.dark.lightPink} />
           <Text style={styles.errorNotificationText}>{errorMessage}</Text>
         </Animated.View>
       )}
@@ -3662,14 +3342,14 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.dark.backgroundTertiary,
   },
   header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     padding: 20,
   },
   title: {
     fontSize: 28,
-    fontWeight: "bold",
+    fontWeight: 'bold',
     color: Colors.dark.white,
   },
   addButton: {
@@ -3677,8 +3357,8 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   averageCard: {
     backgroundColor: Colors.dark.surfaceSecondary,
@@ -3686,7 +3366,7 @@ const styles = StyleSheet.create({
     marginTop: 0,
     borderRadius: 16,
     padding: 20,
-    alignItems: "center",
+    alignItems: 'center',
   },
   averageLabel: {
     color: Colors.dark.neutral500,
@@ -3696,10 +3376,10 @@ const styles = StyleSheet.create({
   averageValue: {
     color: Colors.dark.white,
     fontSize: 32,
-    fontWeight: "bold",
+    fontWeight: 'bold',
   },
   sortContainer: {
-    flexDirection: "row",
+    flexDirection: 'row',
     paddingHorizontal: 20,
     marginBottom: 16,
     gap: 8,
@@ -3709,7 +3389,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.dark.surfaceRaisedAlt,
     padding: 12,
     borderRadius: 12,
-    alignItems: "center",
+    alignItems: 'center',
   },
   sortButtonActive: {
     backgroundColor: Colors.dark.primaryStrong,
@@ -3720,7 +3400,7 @@ const styles = StyleSheet.create({
   },
   sortButtonTextActive: {
     color: Colors.dark.white,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   list: {
     padding: 20,
@@ -3730,30 +3410,30 @@ const styles = StyleSheet.create({
   gradeCard: {
     marginBottom: 12,
     borderRadius: 16,
-    overflow: "hidden",
+    overflow: 'hidden',
   },
   gradientCard: {
     padding: 16,
   },
   gradeHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 8,
   },
   subject: {
     color: Colors.dark.white,
     fontSize: 18,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   gradeValue: {
     color: Colors.dark.white,
     fontSize: 24,
-    fontWeight: "bold",
+    fontWeight: 'bold',
   },
   gradeDetails: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     marginBottom: 8,
   },
   category: {
@@ -3770,8 +3450,8 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   actions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
     gap: 12,
   },
   actionButton: {
@@ -3779,14 +3459,14 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     color: Colors.dark.neutral500,
-    textAlign: "center",
+    textAlign: 'center',
     marginTop: 40,
     fontSize: 16,
   },
   calculatorSheetContent: {
     flex: 1,
     paddingTop: 0,
-    paddingBottom: Platform.OS === "ios" ? 20 : 12,
+    paddingBottom: Platform.OS === 'ios' ? 20 : 12,
   },
   form: {
     gap: 16,
@@ -3797,7 +3477,7 @@ const styles = StyleSheet.create({
   label: {
     color: GRADES_MODAL_COLORS.textPrimary,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
     marginBottom: 4,
     marginTop: 8,
   },
@@ -3812,11 +3492,11 @@ const styles = StyleSheet.create({
   },
   notesInput: {
     height: 100,
-    textAlignVertical: "top",
+    textAlignVertical: 'top',
   },
   categoryContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
   },
   categoryButton: {
@@ -3834,7 +3514,7 @@ const styles = StyleSheet.create({
   },
   categoryButtonTextActive: {
     color: Colors.dark.white,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   dateButton: {
     backgroundColor: Colors.dark.surfaceRaisedAlt,
@@ -3849,39 +3529,39 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.dark.primaryStrong,
     borderRadius: 12,
     padding: 16,
-    alignItems: "center",
+    alignItems: 'center',
     marginTop: 20,
   },
   saveButtonText: {
     color: Colors.dark.white,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   idnpContainer: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: Colors.dark.backgroundTertiary,
     padding: 20,
   },
   idnpContent: {
-    width: "100%",
+    width: '100%',
     maxWidth: 400,
     backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 16,
     padding: 20,
-    alignItems: "center",
+    alignItems: 'center',
   },
   idnpTitle: {
     fontSize: 24,
-    fontWeight: "bold",
+    fontWeight: 'bold',
     color: Colors.dark.white,
     marginBottom: 16,
   },
   idnpDescription: {
     color: Colors.dark.neutral500,
     fontSize: 16,
-    textAlign: "center",
+    textAlign: 'center',
     marginBottom: 16,
   },
   idnpInput: {
@@ -3890,27 +3570,27 @@ const styles = StyleSheet.create({
     padding: 16,
     color: Colors.dark.white,
     fontSize: 16,
-    width: "100%",
+    width: '100%',
     marginBottom: 16,
   },
   errorText: {
     color: Colors.dark.lightPink,
     fontSize: 14,
     marginBottom: 16,
-    textAlign: "center",
+    textAlign: 'center',
   },
   disclaimerText: {
     color: Colors.dark.neutral500,
     fontSize: 12,
-    textAlign: "center",
+    textAlign: 'center',
     marginBottom: 16,
   },
   submitButton: {
     backgroundColor: Colors.dark.primaryStrong,
     borderRadius: 12,
     padding: 16,
-    alignItems: "center",
-    width: "100%",
+    alignItems: 'center',
+    width: '100%',
   },
   submitButtonDisabled: {
     backgroundColor: Colors.dark.neutral500,
@@ -3918,23 +3598,23 @@ const styles = StyleSheet.create({
   submitButtonText: {
     color: Colors.dark.white,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: Colors.dark.backgroundTertiary,
   },
   loadingText: {
     color: Colors.dark.white,
     marginTop: 12,
-    textAlign: "center",
+    textAlign: 'center',
     paddingHorizontal: 12,
   },
   loadingNotice: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: Colors.dark.surfaceRaisedAlt,
     padding: 12,
     borderRadius: 8,
@@ -3944,21 +3624,21 @@ const styles = StyleSheet.create({
   // Error styles
   errorContainer: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: Colors.dark.backgroundTertiary,
     padding: 20,
   },
   errorTitle: {
     color: Colors.dark.lightPink,
     fontSize: 24,
-    fontWeight: "bold",
+    fontWeight: 'bold',
     marginBottom: 12,
   },
   errorMessage: {
     color: Colors.dark.white,
     fontSize: 16,
-    textAlign: "center",
+    textAlign: 'center',
     marginBottom: 24,
   },
   retryButton: {
@@ -3970,7 +3650,7 @@ const styles = StyleSheet.create({
   retryButtonText: {
     color: Colors.dark.white,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   idnpInputError: {
     borderColor: Colors.dark.lightPink,
@@ -3982,9 +3662,9 @@ const styles = StyleSheet.create({
     marginVertical: 16,
   },
   semesterDropdownButton: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     backgroundColor: Colors.dark.surfaceSecondary,
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -3993,7 +3673,7 @@ const styles = StyleSheet.create({
   semesterDropdownButtonText: {
     color: Colors.dark.white,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   semesterDropdownMenu: {
     backgroundColor: Colors.dark.surfaceSecondary,
@@ -4013,31 +3693,31 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   semesterDropdownItemTextActive: {
-    fontWeight: "600",
+    fontWeight: '600',
   },
   // New styles for subject cards
   subjectCard: {
     backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 16,
     marginBottom: 12,
-    overflow: "hidden",
+    overflow: 'hidden',
   },
   subjectHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     padding: 16,
   },
   subjectNameRow: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
     flex: 1,
   },
   subjectName: {
     color: Colors.dark.white,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
     flex: 1,
     paddingRight: 8,
   },
@@ -4050,24 +3730,24 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     marginLeft: 0,
     marginRight: 8,
-    alignSelf: "center",
+    alignSelf: 'center',
   },
   newBadgeText: {
     color: Colors.dark.lightYellow,
     fontSize: 11,
-    fontWeight: "700",
-    textTransform: "uppercase",
+    fontWeight: '700',
+    textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   subjectHeaderRight: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
   },
   averageGrade: {
     color: Colors.dark.white,
     fontSize: 18,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   gradesContainer: {
     borderTopWidth: 1,
@@ -4075,8 +3755,8 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   gradesGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
   },
   gradeItem: {
@@ -4085,8 +3765,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     minWidth: 40,
-    alignItems: "center",
-    position: "relative",
+    alignItems: 'center',
+    position: 'relative',
   },
   newGradeItem: {
     borderWidth: 1.5,
@@ -4101,15 +3781,15 @@ const styles = StyleSheet.create({
   gradeText: {
     color: Colors.dark.white,
     fontSize: 14,
-    fontWeight: "500",
+    fontWeight: '500',
   },
   gradePip: {
-    position: "absolute",
+    position: 'absolute',
     top: 4,
     right: 6,
     color: Colors.dark.lightYellow,
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: '700',
   },
   // New styles for exams view
   examsList: {
@@ -4119,8 +3799,8 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: Colors.dark.offWhite,
     fontSize: 15,
-    fontWeight: "700",
-    textTransform: "uppercase",
+    fontWeight: '700',
+    textTransform: 'uppercase',
     letterSpacing: 0.4,
     marginBottom: 10,
   },
@@ -4128,7 +3808,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   examTypeTitle: {
-    display: "none",
+    display: 'none',
   },
   examCard: {
     backgroundColor: Colors.dark.surfaceSecondary,
@@ -4139,7 +3819,7 @@ const styles = StyleSheet.create({
   examSubject: {
     color: Colors.dark.white,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
     marginBottom: 0,
     flex: 1,
     flexShrink: 1,
@@ -4148,9 +3828,9 @@ const styles = StyleSheet.create({
     lineHeight: 21,
   },
   examDetails: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   examSemester: {
     color: Colors.dark.neutral500,
@@ -4159,7 +3839,7 @@ const styles = StyleSheet.create({
   examGrade: {
     color: Colors.dark.accentBlue,
     fontSize: 18,
-    fontWeight: "bold",
+    fontWeight: 'bold',
   },
   examCardThesis: {
     borderLeftWidth: 3,
@@ -4176,7 +3856,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.dark.overlayGray20,
     marginLeft: 8,
     flexShrink: 0,
-    alignSelf: "flex-start",
+    alignSelf: 'flex-start',
   },
   examTypePillThesis: {
     backgroundColor: Colors.dark.overlayAccentBlue20,
@@ -4190,7 +3870,7 @@ const styles = StyleSheet.create({
   examTypePillText: {
     color: Colors.dark.examTypePillText,
     fontSize: 11,
-    fontWeight: "600",
+    fontWeight: '600',
     letterSpacing: 0.2,
   },
   examGradeThesis: {
@@ -4208,16 +3888,16 @@ const styles = StyleSheet.create({
   noOfficialDataText: {
     color: Colors.dark.neutral500,
     fontSize: 13,
-    fontStyle: "italic",
+    fontStyle: 'italic',
     marginTop: 4,
     paddingHorizontal: 4,
   },
   officialSectionHeader: {
     marginTop: 8,
     marginBottom: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   officialSectionSubtitle: {
     color: Colors.dark.neutral500,
@@ -4229,14 +3909,14 @@ const styles = StyleSheet.create({
     height: 34,
     borderRadius: 17,
     backgroundColor: Colors.dark.officialRefreshSurface,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
     borderColor: Colors.dark.overlayAccentBlue35,
   },
   officialLoadingRow: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
     marginBottom: 14,
   },
@@ -4250,7 +3930,7 @@ const styles = StyleSheet.create({
   officialDateTitle: {
     color: Colors.dark.officialDateTitle,
     fontSize: 13,
-    fontWeight: "700",
+    fontWeight: '700',
     marginBottom: 8,
   },
   officialEventCard: {
@@ -4268,9 +3948,9 @@ const styles = StyleSheet.create({
     borderColor: Colors.dark.overlayAccentBlue30,
   },
   officialEventHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 6,
   },
   officialEventTypePill: {
@@ -4287,19 +3967,19 @@ const styles = StyleSheet.create({
   officialEventTypeText: {
     color: Colors.dark.white,
     fontSize: 11,
-    fontWeight: "700",
+    fontWeight: '700',
     letterSpacing: 0.2,
-    textTransform: "uppercase",
+    textTransform: 'uppercase',
   },
   officialEventSubgroup: {
     color: Colors.dark.officialEventSubgroup,
     fontSize: 11,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   officialEventSubject: {
     color: Colors.dark.white,
     fontSize: 15,
-    fontWeight: "600",
+    fontWeight: '600',
     marginBottom: 6,
   },
   officialEventMeta: {
@@ -4309,8 +3989,8 @@ const styles = StyleSheet.create({
   },
   // View mode switcher styles
   viewModeSwitcher: {
-    flexDirection: "row",
-    justifyContent: "center",
+    flexDirection: 'row',
+    justifyContent: 'center',
     marginHorizontal: 20,
     marginVertical: 12,
     backgroundColor: Colors.dark.surfaceSecondary,
@@ -4322,7 +4002,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 10,
     flex: 1,
-    alignItems: "center",
+    alignItems: 'center',
   },
   activeModeTab: {
     backgroundColor: Colors.dark.primaryStrong,
@@ -4330,11 +4010,11 @@ const styles = StyleSheet.create({
   modeTabText: {
     color: Colors.dark.neutral500,
     fontSize: 14,
-    fontWeight: "500",
+    fontWeight: '500',
   },
   activeModeTabText: {
     color: Colors.dark.white,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   // Student info header styles
   studentInfoHeader: {
@@ -4344,7 +4024,7 @@ const styles = StyleSheet.create({
   studentName: {
     color: Colors.dark.white,
     fontSize: 22,
-    fontWeight: "bold",
+    fontWeight: 'bold',
   },
   studentDetails: {
     color: Colors.dark.neutral500,
@@ -4357,20 +4037,20 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: Colors.dark.overlayWhite10,
     paddingTop: 10,
-    width: "100%",
-    alignItems: "center",
+    width: '100%',
+    alignItems: 'center',
   },
   absencesLabel: {
     color: Colors.dark.neutral500,
     fontSize: 14,
   },
   absencesValue: {
-    fontWeight: "bold",
+    fontWeight: 'bold',
     color: Colors.dark.white,
   },
   absencesUnexcused: {
     color: Colors.dark.lightPink,
-    fontWeight: "bold",
+    fontWeight: 'bold',
   },
   subjectHeaderEmpty: {
     opacity: 0.5,
@@ -4388,9 +4068,9 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   semesterHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     backgroundColor: Colors.dark.surfaceSecondary,
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -4400,11 +4080,11 @@ const styles = StyleSheet.create({
   semesterTitle: {
     color: Colors.dark.white,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   semesterHeaderRight: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   semesterAverageText: {
     color: Colors.dark.white,
@@ -4420,18 +4100,18 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
-    alignItems: "center",
+    alignItems: 'center',
   },
   lastUpdatedText: {
     color: Colors.dark.neutral500,
     fontSize: 12,
-    textAlign: "center",
+    textAlign: 'center',
     marginTop: 16,
   },
   headerContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     paddingHorizontal: 20,
     paddingVertical: 20,
   },
@@ -4444,9 +4124,9 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    justifyContent: "center",
-    alignItems: "center",
-    alignSelf: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
+    alignSelf: 'center',
     elevation: 2,
     shadowColor: Colors.dark.black,
     shadowOffset: { width: 0, height: 2 },
@@ -4454,11 +4134,11 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
   },
   refreshingIcon: {
-    transform: [{ rotate: "45deg" }],
+    transform: [{ rotate: '45deg' }],
   },
   warningBanner: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: Colors.dark.overlayGold10,
     padding: 12,
     borderRadius: 8,
@@ -4473,14 +4153,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   errorNotification: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: Colors.dark.errorBannerSurface,
     padding: 16,
     borderRadius: 12,
     marginHorizontal: 20,
     marginTop: 60,
-    position: "absolute",
+    position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
@@ -4501,44 +4181,44 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   refreshOverlay: {
-    position: "absolute",
+    position: 'absolute',
     top: 0,
     right: 0,
     bottom: 0,
     left: 0,
     backgroundColor: Colors.dark.overlayBlack50,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   refreshingText: {
     color: Colors.dark.white,
     marginTop: 12,
-    textAlign: "center",
+    textAlign: 'center',
   },
   bottomRefreshBarContainer: {
-    position: "absolute",
+    position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
     paddingHorizontal: 20,
     paddingBottom: 12,
-    alignItems: "center",
-    justifyContent: "flex-end",
+    alignItems: 'center',
+    justifyContent: 'flex-end',
   },
   bottomRefreshBarTrack: {
-    width: "60%",
+    width: '60%',
     height: 4,
     backgroundColor: Colors.dark.overlayWhite10,
     borderRadius: 2,
-    overflow: "hidden",
+    overflow: 'hidden',
     marginBottom: 6,
   },
   bottomRefreshBarFill: {
-    position: "absolute",
+    position: 'absolute',
     left: 0,
     top: 0,
     bottom: 0,
-    width: "40%",
+    width: '40%',
     backgroundColor: Colors.dark.primaryStrong,
     borderRadius: 2,
   },
@@ -4547,14 +4227,14 @@ const styles = StyleSheet.create({
     color: Colors.dark.neutral500,
   },
   examHeaderRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     marginBottom: 8,
   },
   upcomingIndicatorContainer: {
-    flexDirection: "row",
-    alignItems: "flex-start",
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     backgroundColor: Colors.dark.overlayOrange12,
     borderWidth: 1,
     borderColor: Colors.dark.overlayOrange30,
@@ -4571,7 +4251,7 @@ const styles = StyleSheet.create({
   upcomingIndicatorText: {
     fontSize: 12,
     flex: 1,
-    flexWrap: "wrap",
+    flexWrap: 'wrap',
     lineHeight: 16,
   },
   upcomingIndicatorDefaultText: {
@@ -4591,8 +4271,8 @@ const styles = StyleSheet.create({
   },
   emptyContainer: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: Colors.dark.backgroundTertiary,
     padding: 20,
   },
@@ -4616,7 +4296,7 @@ const styles = StyleSheet.create({
   },
   subjectOptionTextSelected: {
     color: GRADES_MODAL_COLORS.textPrimary,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   currentGradesContainer: {
     backgroundColor: GRADES_MODAL_COLORS.surface,
@@ -4632,13 +4312,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     minWidth: 40,
-    alignItems: "center",
+    alignItems: 'center',
     marginBottom: 8,
   },
   currentAverageContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginTop: 10,
     paddingTop: 10,
     borderTopWidth: 1,
@@ -4651,14 +4331,14 @@ const styles = StyleSheet.create({
   currentAverageValue: {
     color: GRADES_MODAL_COLORS.textPrimary,
     fontSize: 16,
-    fontWeight: "bold",
+    fontWeight: 'bold',
   },
   calculateButton: {
     backgroundColor: GRADES_MODAL_COLORS.accent,
     borderRadius: 12,
     padding: 16,
-    alignItems: "center",
-    width: "100%",
+    alignItems: 'center',
+    width: '100%',
   },
   calculateButtonDisabled: {
     backgroundColor: GRADES_MODAL_COLORS.accentDisabled,
@@ -4666,7 +4346,7 @@ const styles = StyleSheet.create({
   calculateButtonText: {
     color: GRADES_MODAL_COLORS.textPrimary,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   resultsContainer: {
     marginTop: 20,
@@ -4679,7 +4359,7 @@ const styles = StyleSheet.create({
   resultsTitle: {
     color: GRADES_MODAL_COLORS.textPrimary,
     fontSize: 18,
-    fontWeight: "bold",
+    fontWeight: 'bold',
     marginBottom: 12,
   },
   resultGradeItem: {
@@ -4688,17 +4368,17 @@ const styles = StyleSheet.create({
   noGradesText: {
     color: GRADES_MODAL_COLORS.textSecondary,
     fontSize: 14,
-    textAlign: "center",
+    textAlign: 'center',
     padding: 10,
   },
   noSolutionText: {
     color: GRADES_MODAL_COLORS.textSecondary,
     fontSize: 16,
-    textAlign: "center",
+    textAlign: 'center',
   },
   headerButtons: {
-    flexDirection: "row",
-    alignItems: "flex-start",
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: 10,
   },
   headerActionColumn: {
@@ -4709,16 +4389,16 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   exportIconButton: {
     backgroundColor: Colors.dark.primaryStrong,
     width: 40,
     height: 40,
     borderRadius: 20,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   exportIconButtonDisabled: {
     opacity: 0.55,
@@ -4728,16 +4408,16 @@ const styles = StyleSheet.create({
     height: 24,
     backgroundColor: GRADES_MODAL_COLORS.border,
     marginHorizontal: 5,
-    alignSelf: "center",
+    alignSelf: 'center',
   },
   calculationTypeContainer: {
-    flexDirection: "column",
+    flexDirection: 'column',
     marginBottom: 10,
   },
   calculationToggle: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     backgroundColor: GRADES_MODAL_COLORS.surface,
     borderRadius: 12,
     padding: 8,
@@ -4749,7 +4429,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 10,
     flex: 1,
-    alignItems: "center",
+    alignItems: 'center',
   },
   toggleOptionActive: {
     backgroundColor: GRADES_MODAL_COLORS.accent,
@@ -4757,32 +4437,32 @@ const styles = StyleSheet.create({
   toggleOptionText: {
     color: GRADES_MODAL_COLORS.textSecondary,
     fontSize: 14,
-    fontWeight: "500",
+    fontWeight: '500',
   },
   toggleOptionTextActive: {
     color: GRADES_MODAL_COLORS.textPrimary,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   toggleSeparator: {
     width: 1,
     height: 24,
     backgroundColor: GRADES_MODAL_COLORS.border,
     marginHorizontal: 5,
-    alignSelf: "center",
+    alignSelf: 'center',
   },
   // Anonymous background refresh indicator
   backgroundIndicatorWrapper: {
-    position: "absolute",
+    position: 'absolute',
     left: 0,
     right: 0,
     bottom: 28,
-    alignItems: "center",
-    justifyContent: "flex-end",
+    alignItems: 'center',
+    justifyContent: 'flex-end',
   },
   backgroundIndicatorPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: Colors.dark.overlayWhite08,
     borderRadius: 20,
     paddingHorizontal: 14,
@@ -4790,9 +4470,9 @@ const styles = StyleSheet.create({
     minWidth: 70,
   },
   dotsContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
   },
   dot: {
@@ -4810,14 +4490,14 @@ const styles = StyleSheet.create({
   backgroundUpdatedText: {
     color: Colors.dark.successTintText,
     fontSize: 12,
-    fontWeight: "600",
+    fontWeight: '600',
     letterSpacing: 0.5,
   },
   averageSummaryRow: {
-    flexDirection: "row",
+    flexDirection: 'row',
     gap: 8,
     marginBottom: 12,
-    flexWrap: "wrap",
+    flexWrap: 'wrap',
   },
   averagePillPrimary: {
     flexGrow: 1,
@@ -4836,13 +4516,13 @@ const styles = StyleSheet.create({
     color: Colors.dark.neutral500,
     fontSize: 12,
     marginBottom: 4,
-    textTransform: "uppercase",
+    textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   averagePillValue: {
     color: Colors.dark.white,
     fontSize: 20,
-    fontWeight: "700",
+    fontWeight: '700',
   },
   averagePillMeta: {
     color: Colors.dark.primarySoftText,

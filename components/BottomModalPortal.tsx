@@ -1,25 +1,16 @@
 import {
-  BottomSheetModal,
   BottomSheetBackdrop,
   type BottomSheetBackdropProps,
+  BottomSheetModal,
   BottomSheetView,
-} from "@gorhom/bottom-sheet";
-import React, {
-  useCallback,
-  useEffect,
-  useRef,
-  useMemo,
-  useId,
-} from "react";
-import {
-  StyleSheet,
-  ViewStyle,
-  StyleProp,
-  BackHandler,
-  Platform,
-} from "react-native";
-import { Colors } from "@/constants/Colors";
-import { useColorScheme } from "@/hooks/useColorScheme";
+} from '@gorhom/bottom-sheet';
+
+import React, { useCallback, useEffect, useId, useMemo, useRef } from 'react';
+
+import { BackHandler, Platform, StyleProp, StyleSheet, ViewStyle } from 'react-native';
+
+import { Colors } from '@/constants/Colors';
+import { useColorScheme } from '@/hooks/useColorScheme';
 
 interface BottomModalPortalProps {
   isVisible: boolean;
@@ -67,7 +58,7 @@ export function BottomModalPortal({
       borderTopRightRadius: borderRadius,
     };
     if (maxHeight != null) {
-      resolvedStyle.maxHeight = maxHeight as ViewStyle["maxHeight"];
+      resolvedStyle.maxHeight = maxHeight as ViewStyle['maxHeight'];
     }
     return resolvedStyle;
   }, [maxHeight, borderRadius, theme.backgroundApp]);
@@ -107,21 +98,18 @@ export function BottomModalPortal({
   }, [isVisible]);
 
   useEffect(() => {
-    if (Platform.OS !== "android" || !isVisible) {
+    if (Platform.OS !== 'android' || !isVisible) {
       return;
     }
 
-    const subscription = BackHandler.addEventListener(
-      "hardwareBackPress",
-      () => {
-        if (isPresentedRef.current) {
-          bottomSheetModalRef.current?.dismiss();
-        } else {
-          onClose();
-        }
-        return true;
-      },
-    );
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (isPresentedRef.current) {
+        bottomSheetModalRef.current?.dismiss();
+      } else {
+        onClose();
+      }
+      return true;
+    });
 
     return () => {
       subscription.remove();
@@ -131,7 +119,7 @@ export function BottomModalPortal({
   return (
     <BottomSheetModal
       ref={bottomSheetModalRef}
-      name={`bottom-modal-${modalId.replace(/:/g, "")}`}
+      name={`bottom-modal-${modalId.replace(/:/g, '')}`}
       index={0}
       onDismiss={handleDismiss}
       enablePanDownToClose={enablePanDownToClose}
@@ -146,20 +134,11 @@ export function BottomModalPortal({
           borderTopRightRadius: borderRadius,
         },
       ]}
-      handleIndicatorStyle={[
-        styles.handleIndicator,
-        { backgroundColor: theme.borderMuted },
-      ]}
+      handleIndicatorStyle={[styles.handleIndicator, { backgroundColor: theme.borderMuted }]}
       backdropComponent={renderBackdrop}
       android_keyboardInputMode="adjustResize"
     >
-      <BottomSheetView
-        style={[
-          styles.sheetContent,
-          sheetContentStyle,
-          contentContainerStyle,
-        ]}
-      >
+      <BottomSheetView style={[styles.sheetContent, sheetContentStyle, contentContainerStyle]}>
         {children}
       </BottomSheetView>
     </BottomSheetModal>
@@ -179,6 +158,6 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     paddingHorizontal: 16,
     paddingBottom: 16,
-    width: "100%",
+    width: '100%',
   },
 });

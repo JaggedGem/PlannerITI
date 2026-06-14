@@ -1,89 +1,87 @@
-import React, {
-  useState,
-  useEffect,
-  useRef,
-  useCallback,
-  memo,
-  useMemo,
-} from "react";
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { MaterialIcons } from '@react-native-vector-icons/material-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
 import {
-  StyleSheet,
-  View,
-  Text,
-  TouchableOpacity,
-  FlatList,
   ActivityIndicator,
-  Modal,
-  TextInput,
-  Platform,
   Alert,
   Animated,
-  ScrollView,
-  Linking,
-  Image,
   DeviceEventEmitter,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+  FlatList,
+  Image,
+  Linking,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+
+import * as Haptics from 'expo-haptics';
+import { useFocusEffect, useRouter } from 'expo-router';
+
+import { BottomModalPortal } from '@/components/BottomModalPortal';
+import { useAuthContext } from '@/components/auth/AuthContext';
+import { Colors } from '@/constants/Colors';
+import { useTranslation } from '@/hooks/useTranslation';
+import authService, { getGravatarProfile } from '@/services/authService';
 import {
-  scheduleService,
-  SubGroupType,
-  Language,
   CustomPeriod,
   Group,
-} from "@/services/scheduleService";
-import { useTranslation } from "@/hooks/useTranslation";
-import { MaterialIcons } from "@react-native-vector-icons/material-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as Haptics from "expo-haptics";
-import { useRouter, useFocusEffect } from "expo-router";
-import { useAuthContext } from "@/components/auth/AuthContext";
-import authService, { getGravatarProfile } from "@/services/authService";
-import { secureStorageService } from "@/services/secureStorageService";
+  Language,
+  SubGroupType,
+  scheduleService,
+} from '@/services/scheduleService';
+import { secureStorageService } from '@/services/secureStorageService';
+import { updateService } from '@/services/updateService';
+
+import { StorageViewer } from '../../components/StorageViewer';
 import {
   getAssignments,
   handleGroupChange as handleOrphanedAssignments,
-} from "../../utils/assignmentStorage";
+} from '../../utils/assignmentStorage';
 import {
-  getNotificationSettings,
-  saveNotificationSettings,
   DEFAULT_NOTIFICATION_SETTINGS,
   NotificationSettings,
-  scheduleAllNotifications,
-  createAndScheduleDailyDigest,
   areNotificationsAvailable,
+  createAndScheduleDailyDigest,
+  getNotificationSettings,
   initializeNotifications,
-} from "../../utils/notificationUtils";
-import { StorageViewer } from "../../components/StorageViewer";
-import { updateService } from "@/services/updateService";
-import { BottomModalPortal } from "@/components/BottomModalPortal";
-import { Colors } from "@/constants/Colors";
+  saveNotificationSettings,
+  scheduleAllNotifications,
+} from '../../utils/notificationUtils';
 
 // Store keys
-const SKIP_LOGIN_KEY = "@planner_skip_login";
-const AUTH_STATE_CHANGE_EVENT = "auth_state_changed";
-const IDNP_UPDATE_EVENT = "IDNP_UPDATE";
-const IDNP_SYNC_KEY = "@planner_idnp_sync";
-const DEV_GRADE_TOGGLE_KEY = "@dev_grade_toggle_active";
-const DEV_GRADE_TOGGLE_EVENT = "dev_grade_toggle_event";
-const RECENT_GROUP_IDS_KEY = "@planner_recent_group_ids";
+const SKIP_LOGIN_KEY = '@planner_skip_login';
+const AUTH_STATE_CHANGE_EVENT = 'auth_state_changed';
+const IDNP_UPDATE_EVENT = 'IDNP_UPDATE';
+const IDNP_SYNC_KEY = '@planner_idnp_sync';
+const DEV_GRADE_TOGGLE_KEY = '@dev_grade_toggle_active';
+const DEV_GRADE_TOGGLE_EVENT = 'dev_grade_toggle_event';
+const RECENT_GROUP_IDS_KEY = '@planner_recent_group_ids';
 
 // Check if app is running in development mode
 const IS_DEV = __DEV__;
 
 const languages = {
-  en: { name: "English", icon: "🇬🇧" },
-  ro: { name: "Română", icon: "🇷🇴" },
-  ru: { name: "Русский", icon: "🇷🇺" },
+  en: { name: 'English', icon: '🇬🇧' },
+  ro: { name: 'Română', icon: '🇷🇴' },
+  ru: { name: 'Русский', icon: '🇷🇺' },
 };
 
-const SUBGROUPS: SubGroupType[] = ["Subgroup 1", "Subgroup 2"];
+const SUBGROUPS: SubGroupType[] = ['Subgroup 1', 'Subgroup 2'];
 
 const normalizeSearchValue = (value: string) =>
   value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
     .toUpperCase()
-    .replace(/[^A-Z0-9]/g, "");
+    .replace(/[^A-Z0-9]/g, '');
 
 const levenshteinDistance = (a: string, b: string): number => {
   if (!a.length) return b.length;
@@ -137,11 +135,9 @@ const fuzzySimilarityScore = (query: string, target: string): number => {
   const prefixScore = resolvedPrefixLength / query.length;
   const subsequenceScore = subsequenceMatchRatio(query, target);
   const editDistance = levenshteinDistance(query, target);
-  const levenshteinScore =
-    1 - editDistance / Math.max(query.length, target.length);
+  const levenshteinScore = 1 - editDistance / Math.max(query.length, target.length);
 
-  const weightedScore =
-    prefixScore * 0.3 + subsequenceScore * 0.45 + levenshteinScore * 0.25;
+  const weightedScore = prefixScore * 0.3 + subsequenceScore * 0.45 + levenshteinScore * 0.25;
 
   return Math.max(0, Math.min(1, weightedScore));
 };
@@ -150,18 +146,12 @@ const getGroupMatchScore = (query: string, group: Group): number => {
   const normalizedQuery = normalizeSearchValue(query);
   if (!normalizedQuery) return 1;
 
-  const normalizedGroupName = normalizeSearchValue(group.name || "");
-  const normalizedTeacherName = normalizeSearchValue(
-    group.diriginte?.name || "",
-  );
+  const normalizedGroupName = normalizeSearchValue(group.name || '');
+  const normalizedTeacherName = normalizeSearchValue(group.diriginte?.name || '');
 
-  const groupNameScore = fuzzySimilarityScore(
-    normalizedQuery,
-    normalizedGroupName,
-  );
-  const teacherScore =
-    normalizedTeacherName ?
-      fuzzySimilarityScore(normalizedQuery, normalizedTeacherName) * 0.7
+  const groupNameScore = fuzzySimilarityScore(normalizedQuery, normalizedGroupName);
+  const teacherScore = normalizedTeacherName
+    ? fuzzySimilarityScore(normalizedQuery, normalizedTeacherName) * 0.7
     : 0;
 
   return Math.max(groupNameScore, teacherScore);
@@ -193,7 +183,7 @@ const TimePicker = ({
   onClose,
   onConfirm,
   use12HourFormat = false,
-  translations = { cancel: "Cancel", confirm: "Confirm" },
+  translations = { cancel: 'Cancel', confirm: 'Confirm' },
 }: {
   value: Date;
   onChange: (date: Date) => void;
@@ -207,7 +197,7 @@ const TimePicker = ({
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
   const [localValue, setLocalValue] = useState(value);
-  const [period, setPeriod] = useState(value.getHours() >= 12 ? "PM" : "AM");
+  const [period, setPeriod] = useState(value.getHours() >= 12 ? 'PM' : 'AM');
   const hoursRef = useRef<ScrollView>(null);
   const minutesRef = useRef<ScrollView>(null);
   const itemHeight = 56;
@@ -264,7 +254,7 @@ const TimePicker = ({
   }, [localValue, use12HourFormat, fadeAnim, scaleAnim]);
 
   const formatNumber = (num: number, padLength = 2) => {
-    return num.toString().padStart(padLength, "0");
+    return num.toString().padStart(padLength, '0');
   };
 
   const handleHourScroll = (event: any) => {
@@ -277,7 +267,7 @@ const TimePicker = ({
       let newHour = selectedHour;
       if (use12HourFormat) {
         if (newHour === 12) newHour = 0;
-        if (period === "PM") newHour += 12;
+        if (period === 'PM') newHour += 12;
       }
 
       const newDate = new Date(localValue);
@@ -308,9 +298,9 @@ const TimePicker = ({
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
-  const handleScrollEndDrag = (event: any, type: "hours" | "minutes") => {
+  const handleScrollEndDrag = (event: any, type: 'hours' | 'minutes') => {
     setIsScrolling(false);
-    if (type === "hours") {
+    if (type === 'hours') {
       handleHourScroll(event);
     } else {
       handleMinuteScroll(event);
@@ -318,15 +308,12 @@ const TimePicker = ({
   };
 
   const togglePeriod = () => {
-    const newPeriod = period === "AM" ? "PM" : "AM";
+    const newPeriod = period === 'AM' ? 'PM' : 'AM';
     setPeriod(newPeriod);
 
     const newDate = new Date(localValue);
     const currentHours = newDate.getHours();
-    const newHours =
-      newPeriod === "PM" ?
-        (currentHours + 12) % 24
-      : (currentHours - 12 + 24) % 24;
+    const newHours = newPeriod === 'PM' ? (currentHours + 12) % 24 : (currentHours - 12 + 24) % 24;
 
     newDate.setHours(newHours);
     setLocalValue(newDate);
@@ -346,7 +333,7 @@ const TimePicker = ({
     <Modal
       transparent
       visible
-      animationType='none'
+      animationType="none"
       statusBarTranslucent={true}
       navigationBarTranslucent={true}
       onRequestClose={onClose}
@@ -363,9 +350,7 @@ const TimePicker = ({
         >
           <View style={styles.timePickerHeader}>
             <Text style={styles.timePickerTitle}>{label}</Text>
-            <Text style={styles.timePickerValue}>
-              {formatTimeFromDate(localValue)}
-            </Text>
+            <Text style={styles.timePickerValue}>{formatTimeFromDate(localValue)}</Text>
           </View>
 
           <View style={styles.timePickerContent}>
@@ -380,7 +365,7 @@ const TimePicker = ({
                 })}
                 onScroll={handleHourScroll}
                 onScrollBeginDrag={handleScrollBeginDrag}
-                onScrollEndDrag={(e) => handleScrollEndDrag(e, "hours")}
+                onScrollEndDrag={(e) => handleScrollEndDrag(e, 'hours')}
                 onMomentumScrollEnd={() => Haptics.selectionAsync()}
                 scrollEventThrottle={16}
                 style={{ height: itemHeight * visibleItems }}
@@ -398,10 +383,9 @@ const TimePicker = ({
                       style={[
                         styles.timePickerItemText,
                         hour ===
-                          (use12HourFormat ?
-                            localValue.getHours() % 12 || 12
-                          : localValue.getHours()) &&
-                          styles.timePickerItemTextSelected,
+                          (use12HourFormat
+                            ? localValue.getHours() % 12 || 12
+                            : localValue.getHours()) && styles.timePickerItemTextSelected,
                       ]}
                     >
                       {formatNumber(hour, use12HourFormat ? 1 : 2)}
@@ -424,7 +408,7 @@ const TimePicker = ({
                 })}
                 onScroll={handleMinuteScroll}
                 onScrollBeginDrag={handleScrollBeginDrag}
-                onScrollEndDrag={(e) => handleScrollEndDrag(e, "minutes")}
+                onScrollEndDrag={(e) => handleScrollEndDrag(e, 'minutes')}
                 onMomentumScrollEnd={() => Haptics.selectionAsync()}
                 scrollEventThrottle={16}
                 style={{ height: itemHeight * visibleItems }}
@@ -441,8 +425,7 @@ const TimePicker = ({
                     <Text
                       style={[
                         styles.timePickerItemText,
-                        minute === localValue.getMinutes() &&
-                          styles.timePickerItemTextSelected,
+                        minute === localValue.getMinutes() && styles.timePickerItemTextSelected,
                       ]}
                     >
                       {formatNumber(minute)}
@@ -453,18 +436,12 @@ const TimePicker = ({
             </View>
 
             {use12HourFormat && (
-              <TouchableOpacity
-                style={styles.timePickerPeriodButton}
-                onPress={togglePeriod}
-              >
+              <TouchableOpacity style={styles.timePickerPeriodButton} onPress={togglePeriod}>
                 <Text
                   style={[
                     styles.timePickerPeriodText,
                     {
-                      color:
-                        period === "AM" ?
-                          Colors.dark.white
-                        : Colors.dark.mutedText,
+                      color: period === 'AM' ? Colors.dark.white : Colors.dark.mutedText,
                     },
                   ]}
                 >
@@ -474,10 +451,7 @@ const TimePicker = ({
                   style={[
                     styles.timePickerPeriodText,
                     {
-                      color:
-                        period === "PM" ?
-                          Colors.dark.white
-                        : Colors.dark.mutedText,
+                      color: period === 'PM' ? Colors.dark.white : Colors.dark.mutedText,
                     },
                   ]}
                 >
@@ -492,20 +466,13 @@ const TimePicker = ({
               style={[styles.timePickerButton, styles.timePickerCancelButton]}
               onPress={onClose}
             >
-              <Text style={styles.timePickerButtonText}>
-                {translations.cancel}
-              </Text>
+              <Text style={styles.timePickerButtonText}>{translations.cancel}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.timePickerButton, styles.timePickerConfirmButton]}
               onPress={handleConfirm}
             >
-              <Text
-                style={[
-                  styles.timePickerButtonText,
-                  styles.timePickerConfirmText,
-                ]}
-              >
+              <Text style={[styles.timePickerButtonText, styles.timePickerConfirmText]}>
                 {translations.confirm}
               </Text>
             </TouchableOpacity>
@@ -569,28 +536,19 @@ const CustomToggle = ({
   return (
     <TouchableOpacity activeOpacity={disabled ? 1 : 0.8} onPress={toggleSwitch}>
       <Animated.View
-        style={[
-          styles.toggleContainer,
-          { backgroundColor, opacity: disabled ? 0.6 : 1 },
-        ]}
+        style={[styles.toggleContainer, { backgroundColor, opacity: disabled ? 0.6 : 1 }]}
       >
         <Animated.View
           style={[
             styles.toggleThumb,
             {
               transform: [{ translateX }],
-              backgroundColor:
-                disabled ? Colors.dark.toggleDisabledAlt : thumbColor,
+              backgroundColor: disabled ? Colors.dark.toggleDisabledAlt : thumbColor,
             },
           ]}
         >
           {value && !disabled && (
-            <MaterialIcons
-              name='check'
-              size={14}
-              color={activeColor}
-              style={styles.toggleIcon}
-            />
+            <MaterialIcons name="check" size={14} color={activeColor} style={styles.toggleIcon} />
           )}
         </Animated.View>
       </Animated.View>
@@ -606,14 +564,14 @@ export default function Settings() {
   // State hooks
   const [settings, setSettings] = useState(scheduleService.getSettings());
   const [showGroupScreen, setShowGroupScreen] = useState(false);
-  const [groupSearchQuery, setGroupSearchQuery] = useState("");
+  const [groupSearchQuery, setGroupSearchQuery] = useState('');
   const [availableGroups, setAvailableGroups] = useState<Group[]>([]);
   const [recentGroupIds, setRecentGroupIds] = useState<string[]>([]);
   const [isLoadingGroups, setIsLoadingGroups] = useState(false);
   const [groupLoadError, setGroupLoadError] = useState<string | null>(null);
   const [showPeriodModal, setShowPeriodModal] = useState(false);
   const [editingPeriod, setEditingPeriod] = useState<CustomPeriod | null>(null);
-  const [periodName, setPeriodName] = useState("");
+  const [periodName, setPeriodName] = useState('');
   const [startTime, setStartTime] = useState(new Date());
   const [endTime, setEndTime] = useState(new Date());
   const [selectedDays, setSelectedDays] = useState<number[]>([]);
@@ -623,39 +581,31 @@ export default function Settings() {
   const [showEndPicker, setShowEndPicker] = useState(false);
   const [savedIdnp, setSavedIdnp] = useState<string | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const [confirmDialogType, setConfirmDialogType] = useState<
-    "idnp" | "period" | "account"
-  >("idnp");
+  const [confirmDialogType, setConfirmDialogType] = useState<'idnp' | 'period' | 'account'>('idnp');
   const [periodToDelete, setPeriodToDelete] = useState<string | null>(null);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [showAccountActionSheet, setShowAccountActionSheet] = useState(false);
-  const [showDeleteAccountConfirm, setShowDeleteAccountConfirm] =
-    useState(false);
-  const [passwordForDeletion, setPasswordForDeletion] = useState("");
+  const [showDeleteAccountConfirm, setShowDeleteAccountConfirm] = useState(false);
+  const [passwordForDeletion, setPasswordForDeletion] = useState('');
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [showDeletionSuccessModal, setShowDeletionSuccessModal] =
-    useState(false);
+  const [showDeletionSuccessModal, setShowDeletionSuccessModal] = useState(false);
   // Use a single source of truth for current auth state that can be updated from multiple places
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!user);
   // Add state for tracking whether the user has skipped login
   const [, setSkipLogin] = useState<boolean>(false);
-  const [notificationSettings, setNotificationSettings] =
-    useState<NotificationSettings>(DEFAULT_NOTIFICATION_SETTINGS);
-  const [showNotificationTimeModal, setShowNotificationTimeModal] =
-    useState(false);
+  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(
+    DEFAULT_NOTIFICATION_SETTINGS,
+  );
+  const [showNotificationTimeModal, setShowNotificationTimeModal] = useState(false);
   const [tempNotificationTime, setTempNotificationTime] = useState(new Date());
   const [storageModalVisible, setStorageModalVisible] = useState(false);
-  const [storageItems, setStorageItems] = useState<[string, string | null][]>(
-    [],
-  );
+  const [storageItems, setStorageItems] = useState<[string, string | null][]>([]);
   const [, setSyncIdnp] = useState<boolean>(true);
   // Schedule refresh state
   const [isRefreshingSchedule, setIsRefreshingSchedule] = useState(false);
-  const [lastScheduleRefresh, setLastScheduleRefresh] = useState<Date | null>(
-    null,
-  );
+  const [lastScheduleRefresh, setLastScheduleRefresh] = useState<Date | null>(null);
   const [devGradeActive, setDevGradeActive] = useState<boolean>(false);
 
   // Load last refresh time on mount
@@ -670,7 +620,7 @@ export default function Settings() {
     (async () => {
       try {
         const storedToggle = await AsyncStorage.getItem(DEV_GRADE_TOGGLE_KEY);
-        if (storedToggle === "true") setDevGradeActive(true);
+        if (storedToggle === 'true') setDevGradeActive(true);
       } catch {
         // ignore
       }
@@ -689,11 +639,11 @@ export default function Settings() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        Alert.alert("Offline", "Using cached schedule");
+        Alert.alert('Offline', 'Using cached schedule');
       }
     } catch {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert("Schedule", "Failed to refresh schedule");
+      Alert.alert('Schedule', 'Failed to refresh schedule');
     } finally {
       setIsRefreshingSchedule(false);
     }
@@ -713,19 +663,19 @@ export default function Settings() {
   const handleDevInjectGrades = useCallback(async () => {
     try {
       const next = !devGradeActive;
-      await AsyncStorage.setItem(DEV_GRADE_TOGGLE_KEY, next ? "true" : "false");
+      await AsyncStorage.setItem(DEV_GRADE_TOGGLE_KEY, next ? 'true' : 'false');
       setDevGradeActive(next);
       DeviceEventEmitter.emit(DEV_GRADE_TOGGLE_EVENT, next);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert(
-        next ? "Injected" : "Removed",
-        next ?
-          "Added 5 random grades immediately. Tap again to remove."
-        : "Removed injected grades. Tap again to add back.",
+        next ? 'Injected' : 'Removed',
+        next
+          ? 'Added 5 random grades immediately. Tap again to remove.'
+          : 'Removed injected grades. Tap again to add back.',
       );
     } catch {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert("Error", "Could not toggle grade injection");
+      Alert.alert('Error', 'Could not toggle grade injection');
     }
   }, [devGradeActive]);
 
@@ -737,8 +687,8 @@ export default function Settings() {
         const hasSkipped = await AsyncStorage.getItem(SKIP_LOGIN_KEY);
         const syncSetting = await AsyncStorage.getItem(IDNP_SYNC_KEY);
         setSavedIdnp(idnp);
-        setSkipLogin(hasSkipped === "true");
-        setSyncIdnp(syncSetting !== "false"); // Default to true if not set
+        setSkipLogin(hasSkipped === 'true');
+        setSyncIdnp(syncSetting !== 'false'); // Default to true if not set
       } catch {
         // Silent error handling
       }
@@ -759,7 +709,7 @@ export default function Settings() {
       AUTH_STATE_CHANGE_EVENT,
       (authState: { isAuthenticated: boolean; skipped?: boolean }) => {
         setIsAuthenticated(authState.isAuthenticated);
-        if (typeof authState.skipped === "boolean") {
+        if (typeof authState.skipped === 'boolean') {
           setSkipLogin(authState.skipped);
         }
         // Reload user data when auth state changes to true
@@ -788,7 +738,7 @@ export default function Settings() {
         try {
           // Check if the skip login flag is set
           const hasSkipped = await AsyncStorage.getItem(SKIP_LOGIN_KEY);
-          setSkipLogin(hasSkipped === "true");
+          setSkipLogin(hasSkipped === 'true');
         } catch {
           // Silent error handling
         }
@@ -809,7 +759,7 @@ export default function Settings() {
         try {
           // Check if the skip login flag is set
           const hasSkipped = await AsyncStorage.getItem(SKIP_LOGIN_KEY);
-          setSkipLogin(hasSkipped === "true");
+          setSkipLogin(hasSkipped === 'true');
         } catch {
           // Silent error handling
         }
@@ -821,7 +771,7 @@ export default function Settings() {
 
   // Custom clear IDNP function
   const handleClearIdnp = useCallback(() => {
-    setConfirmDialogType("idnp");
+    setConfirmDialogType('idnp');
     setShowConfirmDialog(true);
   }, []);
 
@@ -835,8 +785,8 @@ export default function Settings() {
       setSavedIdnp(null);
 
       // Clear ALL grades-related cached data (legacy and new cache keys)
-      await AsyncStorage.removeItem("@planner_grades_data");
-      await AsyncStorage.removeItem("@planner_grades_timestamp");
+      await AsyncStorage.removeItem('@planner_grades_data');
+      await AsyncStorage.removeItem('@planner_grades_timestamp');
 
       // Clear the new gradesService cache keys if we have an IDNP
       if (currentIdnp) {
@@ -861,16 +811,16 @@ export default function Settings() {
       setShowConfirmDialog(false);
 
       // Use replace instead of push to force a screen refresh
-      router.replace("/(tabs)/grades");
+      router.replace('/(tabs)/grades');
     } catch (error) {
-      console.error("Error clearing IDNP:", error);
+      console.error('Error clearing IDNP:', error);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
   }, [router]);
 
   const handleDeletePeriod = useCallback((periodId: string) => {
     setPeriodToDelete(periodId);
-    setConfirmDialogType("period");
+    setConfirmDialogType('period');
     setShowConfirmDialog(true);
   }, []);
 
@@ -916,18 +866,18 @@ export default function Settings() {
           if (Array.isArray(parsedRecentGroups)) {
             setRecentGroupIds(
               parsedRecentGroups
-                .filter((value): value is string => typeof value === "string")
+                .filter((value): value is string => typeof value === 'string')
                 .slice(0, 5),
             );
           }
         }
 
         if (groupsFromApi.length === 0) {
-          setGroupLoadError(t("settings").group.failed);
+          setGroupLoadError(t('settings').group.failed);
         }
       } catch {
         if (!isCancelled) {
-          setGroupLoadError(t("settings").group.failed);
+          setGroupLoadError(t('settings').group.failed);
         }
       } finally {
         if (!isCancelled) {
@@ -945,17 +895,14 @@ export default function Settings() {
 
   const prioritizedGroupIds = useMemo(() => {
     const mergedIds = [settings.selectedGroupId, ...recentGroupIds].filter(
-      (value): value is string =>
-        typeof value === "string" && value.trim().length > 0,
+      (value): value is string => typeof value === 'string' && value.trim().length > 0,
     );
     return Array.from(new Set(mergedIds)).slice(0, 5);
   }, [settings.selectedGroupId, recentGroupIds]);
 
   const orderedGroups = useMemo(() => {
     const uniquePinnedIds = new Set(prioritizedGroupIds);
-    const groupsById = new Map(
-      availableGroups.map((group) => [group._id, group]),
-    );
+    const groupsById = new Map(availableGroups.map((group) => [group._id, group]));
 
     const pinnedGroups = prioritizedGroupIds
       .map((groupId) => groupsById.get(groupId))
@@ -991,7 +938,7 @@ export default function Settings() {
 
   const closeGroupSelectionScreen = useCallback(() => {
     setShowGroupScreen(false);
-    setGroupSearchQuery("");
+    setGroupSearchQuery('');
     setGroupLoadError(null);
   }, []);
 
@@ -1008,25 +955,22 @@ export default function Settings() {
     setLastScheduleRefresh(new Date());
 
     setRecentGroupIds((previous) => {
-      const nextRecentGroups = [
-        group._id,
-        ...previous.filter((item) => item !== group._id),
-      ].slice(0, 5);
-      AsyncStorage.setItem(
-        RECENT_GROUP_IDS_KEY,
-        JSON.stringify(nextRecentGroups),
-      ).catch(() => {});
+      const nextRecentGroups = [group._id, ...previous.filter((item) => item !== group._id)].slice(
+        0,
+        5,
+      );
+      AsyncStorage.setItem(RECENT_GROUP_IDS_KEY, JSON.stringify(nextRecentGroups)).catch(() => {});
       return nextRecentGroups;
     });
 
     setShowGroupScreen(false);
-    setGroupSearchQuery("");
+    setGroupSearchQuery('');
 
     setTimeout(async () => {
       try {
         await handleOrphanedAssignments(group._id);
       } catch (error) {
-        console.error("Error handling group change for assignments:", error);
+        console.error('Error handling group change for assignments:', error);
       }
     }, 100);
   }, []);
@@ -1042,7 +986,7 @@ export default function Settings() {
   }, []);
 
   const resetPeriodForm = useCallback(() => {
-    setPeriodName("");
+    setPeriodName('');
     setStartTime(new Date());
     setEndTime(new Date());
     setSelectedDays([]);
@@ -1058,7 +1002,7 @@ export default function Settings() {
 
   const handleEditPeriod = useCallback((period: CustomPeriod) => {
     setEditingPeriod(period);
-    setPeriodName(period.name || "");
+    setPeriodName(period.name || '');
     setStartTime(new Date(`2000-01-01T${period.starttime}`));
     setEndTime(new Date(`2000-01-01T${period.endtime}`));
     setSelectedDays(period.daysOfWeek || []);
@@ -1099,15 +1043,13 @@ export default function Settings() {
 
   const toggleDay = useCallback((day: number) => {
     setSelectedDays((prev) =>
-      prev.includes(day) ?
-        prev.filter((d) => d !== day)
-      : [...prev, day].sort(),
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort(),
     );
   }, []);
 
   const handleTimePickerChange = useCallback(
-    (type: "start" | "end") => (date: Date) => {
-      if (type === "start") {
+    (type: 'start' | 'end') => (date: Date) => {
+      if (type === 'start') {
         setStartTime(date);
       } else {
         setEndTime(date);
@@ -1132,7 +1074,7 @@ export default function Settings() {
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
-      console.error("Logout error:", error);
+      console.error('Logout error:', error);
     }
   };
 
@@ -1141,7 +1083,7 @@ export default function Settings() {
     setPasswordError(null);
 
     if (!passwordForDeletion.trim()) {
-      setPasswordError("Please enter your password");
+      setPasswordError('Please enter your password');
       return;
     }
 
@@ -1167,20 +1109,17 @@ export default function Settings() {
       // Show success modal instead of navigating away immediately
       setShowPasswordModal(false);
       setShowDeletionSuccessModal(true);
-      setPasswordForDeletion("");
+      setPasswordForDeletion('');
     } catch (error) {
       // Check if it's a network error or authentication error
       if (error instanceof Error) {
-        if (
-          error.message === "Request timeout" ||
-          error.message.includes("network")
-        ) {
-          setPasswordError("Network error. Please check your connection.");
+        if (error.message === 'Request timeout' || error.message.includes('network')) {
+          setPasswordError('Network error. Please check your connection.');
         } else {
-          setPasswordError("Incorrect password. Please try again.");
+          setPasswordError('Incorrect password. Please try again.');
         }
       } else {
-        setPasswordError("Something went wrong. Please try again.");
+        setPasswordError('Something went wrong. Please try again.');
       }
     } finally {
       setDeletingAccount(false);
@@ -1189,13 +1128,13 @@ export default function Settings() {
 
   const openEmailApp = useCallback(() => {
     // Try to open the default email app
-    Linking.canOpenURL("mailto:")
+    Linking.canOpenURL('mailto:')
       .then((supported) => {
         if (supported) {
-          Linking.openURL("mailto:");
+          Linking.openURL('mailto:');
         } else {
           // If generic mailto doesn't work, try popular email apps
-          Linking.openURL("gmail://").catch(() => Linking.openURL("mailto:"));
+          Linking.openURL('gmail://').catch(() => Linking.openURL('mailto:'));
         }
       })
       .catch(() => {
@@ -1205,7 +1144,7 @@ export default function Settings() {
 
   const completeAccountDeletion = useCallback(() => {
     setShowDeletionSuccessModal(false);
-    router.replace("/auth");
+    router.replace('/auth');
   }, [router]);
 
   // todo: Add "Refresh Account" button that calls reloadUser to sync with server - useful for users who choose to skip login but later want to log in without restarting the app. This will ensure we have the latest user data and auth state without needing a full app restart. We can place this button in the account section when the user is authenticated but has limited functionality due to skipping login.
@@ -1263,7 +1202,7 @@ export default function Settings() {
           <>
             <TouchableOpacity
               style={styles.accountAvatar}
-              onPress={() => Linking.openURL("https://gravatar.com")}
+              onPress={() => Linking.openURL('https://gravatar.com')}
               hitSlop={{
                 top: 10,
                 bottom: 10,
@@ -1271,18 +1210,17 @@ export default function Settings() {
                 right: 10,
               }}
             >
-              {gravatarProfile?.avatar_url ?
+              {gravatarProfile?.avatar_url ? (
                 <Image
                   source={{
                     uri: gravatarProfile.avatar_url,
                   }}
                   style={styles.avatarImage}
-                  defaultSource={require("../../assets/images/default-avatar.jpg")}
+                  defaultSource={require('../../assets/images/default-avatar.jpg')}
                 />
-              : <Text style={styles.avatarText}>
-                  {userEmail.charAt(0).toUpperCase()}
-                </Text>
-              }
+              ) : (
+                <Text style={styles.avatarText}>{userEmail.charAt(0).toUpperCase()}</Text>
+              )}
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.accountDetails}
@@ -1291,28 +1229,16 @@ export default function Settings() {
             >
               <View style={styles.accountDetailsContent}>
                 <Text style={styles.accountEmail} numberOfLines={1}>
-                  {gravatarProfile?.display_name?.trim() ||
-                    displayName ||
-                    userEmail}
+                  {gravatarProfile?.display_name?.trim() || displayName || userEmail}
                 </Text>
                 {!isVerified && (
                   <View style={styles.verificationBadge}>
-                    <MaterialIcons
-                      name='warning'
-                      size={14}
-                      color={Colors.dark.orange}
-                    />
-                    <Text style={styles.verificationText}>
-                      {t("settings").account.notVerified}
-                    </Text>
+                    <MaterialIcons name="warning" size={14} color={Colors.dark.orange} />
+                    <Text style={styles.verificationText}>{t('settings').account.notVerified}</Text>
                   </View>
                 )}
               </View>
-              <MaterialIcons
-                name='chevron-right'
-                size={24}
-                color={Colors.dark.mutedText}
-              />
+              <MaterialIcons name="chevron-right" size={24} color={Colors.dark.mutedText} />
             </TouchableOpacity>
           </>
         );
@@ -1322,7 +1248,7 @@ export default function Settings() {
         prevProps.isVerified === nextProps.isVerified &&
         prevProps.displayName === nextProps.displayName,
     );
-    GravatarProfile.displayName = "MemoizedGravatarProfile";
+    GravatarProfile.displayName = 'MemoizedGravatarProfile';
     return GravatarProfile;
   }, [t]);
 
@@ -1333,22 +1259,15 @@ export default function Settings() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <MaterialIcons
-              name='account-circle'
+              name="account-circle"
               size={24}
               color={Colors.dark.primaryStrong}
               style={styles.sectionIcon}
             />
-            <Text style={styles.sectionTitle}>
-              {t("settings").account.title}
-            </Text>
+            <Text style={styles.sectionTitle}>{t('settings').account.title}</Text>
           </View>
-          <TouchableOpacity
-            style={styles.signInButton}
-            onPress={() => router.push("/auth")}
-          >
-            <Text style={styles.signInButtonText}>
-              {t("settings").account.signIn}
-            </Text>
+          <TouchableOpacity style={styles.signInButton} onPress={() => router.push('/auth')}>
+            <Text style={styles.signInButtonText}>{t('settings').account.signIn}</Text>
           </TouchableOpacity>
         </View>
       );
@@ -1358,31 +1277,24 @@ export default function Settings() {
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <MaterialIcons
-            name='account-circle'
+            name="account-circle"
             size={24}
             color={Colors.dark.primaryStrong}
             style={styles.sectionIcon}
           />
-          <Text style={styles.sectionTitle}>{t("settings").account.title}</Text>
+          <Text style={styles.sectionTitle}>{t('settings').account.title}</Text>
         </View>
         <View style={styles.accountInfo}>
           <MemoizedGravatarProfile
-            userEmail={user?.email || ""}
+            userEmail={user?.email || ''}
             isVerified={user?.is_verified || false}
-            displayName={user?.email?.split("@")[0] || user?.email || ""}
+            displayName={user?.email?.split('@')[0] || user?.email || ''}
             onActionSheetPress={() => setShowAccountActionSheet(true)}
           />
         </View>
       </View>
     );
-  }, [
-    isAuthenticated,
-    MemoizedGravatarProfile,
-    router,
-    t,
-    user?.email,
-    user?.is_verified,
-  ]);
+  }, [isAuthenticated, MemoizedGravatarProfile, router, t, user?.email, user?.is_verified]);
 
   // Function to render the developer section
   const renderDeveloperSection = () => {
@@ -1392,7 +1304,7 @@ export default function Settings() {
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <MaterialIcons
-            name='bug-report'
+            name="bug-report"
             size={24}
             color={Colors.dark.purple}
             style={styles.sectionIcon}
@@ -1405,17 +1317,11 @@ export default function Settings() {
             style={styles.devToolButton}
             onPress={async () => {
               await AsyncStorage.clear();
-              Haptics.notificationAsync(
-                Haptics.NotificationFeedbackType.Success,
-              );
-              Alert.alert("Success", "AsyncStorage has been cleared");
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert('Success', 'AsyncStorage has been cleared');
             }}
           >
-            <MaterialIcons
-              name='delete-sweep'
-              size={24}
-              color={Colors.dark.red}
-            />
+            <MaterialIcons name="delete-sweep" size={24} color={Colors.dark.red} />
             <Text style={styles.devToolText}>Clear AsyncStorage</Text>
           </TouchableOpacity>
 
@@ -1423,17 +1329,11 @@ export default function Settings() {
             style={styles.devToolButton}
             onPress={() => {
               scheduleService.resetSettings();
-              Haptics.notificationAsync(
-                Haptics.NotificationFeedbackType.Success,
-              );
-              Alert.alert("Success", "Schedule settings have been reset");
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert('Success', 'Schedule settings have been reset');
             }}
           >
-            <MaterialIcons
-              name='restart-alt'
-              size={24}
-              color={Colors.dark.yellow}
-            />
+            <MaterialIcons name="restart-alt" size={24} color={Colors.dark.yellow} />
             <Text style={styles.devToolText}>Reset Schedule Settings</Text>
           </TouchableOpacity>
 
@@ -1443,23 +1343,21 @@ export default function Settings() {
               try {
                 if (!areNotificationsAvailable()) {
                   Alert.alert(
-                    "Unavailable in Expo Go",
-                    "Notifications are disabled in Expo Go. Use a development build to test notifications.",
+                    'Unavailable in Expo Go',
+                    'Notifications are disabled in Expo Go. Use a development build to test notifications.',
                   );
                   return;
                 }
 
-                const Notifications = await import("expo-notifications");
+                const Notifications = await import('expo-notifications');
 
                 // Cancel all existing notifications
                 await Notifications.cancelAllScheduledNotificationsAsync();
 
                 // Reset notification channels (Android only)
-                if (Platform.OS === "android") {
+                if (Platform.OS === 'android') {
                   try {
-                    await Notifications.deleteNotificationChannelAsync(
-                      "assignments",
-                    );
+                    await Notifications.deleteNotificationChannelAsync('assignments');
                   } catch {
                     // Channel may not exist, ignore error
                   }
@@ -1472,24 +1370,18 @@ export default function Settings() {
                 const assignments = await getAssignments();
                 await scheduleAllNotifications(assignments);
 
-                Haptics.notificationAsync(
-                  Haptics.NotificationFeedbackType.Success,
-                );
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                 Alert.alert(
-                  "Success",
-                  "Notification system reset. This can resolve issues with timing.",
+                  'Success',
+                  'Notification system reset. This can resolve issues with timing.',
                 );
               } catch (error) {
-                console.error("Error resetting notification system:", error);
-                Alert.alert("Error", "Failed to reset notification system");
+                console.error('Error resetting notification system:', error);
+                Alert.alert('Error', 'Failed to reset notification system');
               }
             }}
           >
-            <MaterialIcons
-              name='refresh'
-              size={24}
-              color={Colors.dark.purple}
-            />
+            <MaterialIcons name="refresh" size={24} color={Colors.dark.purple} />
             <Text style={styles.devToolText}>Reset Notification System</Text>
           </TouchableOpacity>
 
@@ -1507,20 +1399,14 @@ export default function Settings() {
                 setStorageItems([...results]);
                 setStorageModalVisible(true);
 
-                Haptics.notificationAsync(
-                  Haptics.NotificationFeedbackType.Success,
-                );
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               } catch (error) {
-                console.error("Error viewing AsyncStorage:", error);
-                Alert.alert("Error", "Failed to view AsyncStorage contents");
+                console.error('Error viewing AsyncStorage:', error);
+                Alert.alert('Error', 'Failed to view AsyncStorage contents');
               }
             }}
           >
-            <MaterialIcons
-              name='storage'
-              size={24}
-              color={Colors.dark.randomColors[5]}
-            />
+            <MaterialIcons name="storage" size={24} color={Colors.dark.randomColors[5]} />
             <Text style={styles.devToolText}>View AsyncStorage</Text>
           </TouchableOpacity>
 
@@ -1529,20 +1415,16 @@ export default function Settings() {
             onPress={handleDevInjectGrades}
           >
             <MaterialIcons
-              name='insert-chart'
+              name="insert-chart"
               size={24}
               color={devGradeActive ? Colors.dark.green : Colors.dark.yellow}
             />
             <View style={styles.devToolTextGroup}>
               <Text style={[styles.devToolText, styles.devToolTextLeft]}>
-                {devGradeActive ?
-                  "Remove injected grades"
-                : "Inject 5 random grades"}
+                {devGradeActive ? 'Remove injected grades' : 'Inject 5 random grades'}
               </Text>
               <Text style={styles.devToolSubtext}>
-                {devGradeActive ?
-                  "Injected now • tap to remove"
-                : "Tap to add instantly"}
+                {devGradeActive ? 'Injected now • tap to remove' : 'Tap to add instantly'}
               </Text>
             </View>
           </TouchableOpacity>
@@ -1565,7 +1447,7 @@ export default function Settings() {
         notificationTime.setMinutes(timeFromSettings.getMinutes());
         setTempNotificationTime(notificationTime);
       } catch (error) {
-        console.error("Error loading notification settings:", error);
+        console.error('Error loading notification settings:', error);
       }
     };
 
@@ -1589,7 +1471,7 @@ export default function Settings() {
           await scheduleAllNotifications(assignments);
         }
       } catch (error) {
-        console.error("Error toggling notifications:", error);
+        console.error('Error toggling notifications:', error);
       }
     },
     [notificationSettings],
@@ -1640,7 +1522,7 @@ export default function Settings() {
         const assignments = await getAssignments();
         await scheduleAllNotifications(assignments);
       } catch (error) {
-        console.error("Error updating reminder days:", error);
+        console.error('Error updating reminder days:', error);
       }
     },
     [notificationSettings],
@@ -1661,7 +1543,7 @@ export default function Settings() {
         const assignments = await getAssignments();
         await scheduleAllNotifications(assignments);
       } catch (error) {
-        console.error("Error toggling daily reminders:", error);
+        console.error('Error toggling daily reminders:', error);
       }
     },
     [notificationSettings],
@@ -1689,27 +1571,23 @@ export default function Settings() {
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <MaterialIcons
-            name='notifications'
+            name="notifications"
             size={24}
             color={Colors.dark.primary}
             style={styles.sectionIcon}
           />
-          <Text style={styles.sectionTitle}>
-            {t("settings").notifications.title}
-          </Text>
+          <Text style={styles.sectionTitle}>{t('settings').notifications.title}</Text>
         </View>
 
         {/* Master toggle card */}
         <View style={styles.card}>
           <View style={styles.settingItem}>
             <View style={styles.settingLabelContainer}>
-              <Text style={styles.settingLabel}>
-                {t("settings").notifications.enabled}
-              </Text>
+              <Text style={styles.settingLabel}>{t('settings').notifications.enabled}</Text>
               <Text style={styles.settingDescription}>
-                {notificationSettings.enabled ?
-                  t("settings").notifications.enabledDescription
-                : t("settings").notifications.disabledDescription}
+                {notificationSettings.enabled
+                  ? t('settings').notifications.enabledDescription
+                  : t('settings').notifications.disabledDescription}
               </Text>
             </View>
             <CustomToggle
@@ -1725,23 +1603,15 @@ export default function Settings() {
             {/* Time settings card */}
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <MaterialIcons
-                  name='access-time'
-                  size={20}
-                  color={Colors.dark.primary}
-                />
-                <Text style={styles.cardTitle}>
-                  {t("settings").notifications.timeSettings}
-                </Text>
+                <MaterialIcons name="access-time" size={20} color={Colors.dark.primary} />
+                <Text style={styles.cardTitle}>{t('settings').notifications.timeSettings}</Text>
               </View>
 
               <View style={styles.settingItem}>
                 <View style={styles.settingLabelContainer}>
-                  <Text style={styles.settingLabel}>
-                    {t("settings").notifications.time}
-                  </Text>
+                  <Text style={styles.settingLabel}>{t('settings').notifications.time}</Text>
                   <Text style={styles.settingDescription}>
-                    {t("settings").notifications.timeDescription}
+                    {t('settings').notifications.timeDescription}
                   </Text>
                 </View>
                 <TouchableOpacity
@@ -1749,12 +1619,10 @@ export default function Settings() {
                   onPress={handleShowNotificationTimePicker}
                 >
                   <Text style={styles.timeButtonText}>
-                    {formatTimeDisplay(
-                      new Date(notificationSettings.notificationTime),
-                    )}
+                    {formatTimeDisplay(new Date(notificationSettings.notificationTime))}
                   </Text>
                   <MaterialIcons
-                    name='edit'
+                    name="edit"
                     size={16}
                     color={Colors.dark.primary}
                     style={styles.timeButtonIcon}
@@ -1766,83 +1634,77 @@ export default function Settings() {
             {/* Reminder days card */}
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <MaterialIcons
-                  name='event'
-                  size={20}
-                  color={Colors.dark.primary}
-                />
-                <Text style={styles.cardTitle}>
-                  {t("settings").notifications.reminderDays}
-                </Text>
+                <MaterialIcons name="event" size={20} color={Colors.dark.primary} />
+                <Text style={styles.cardTitle}>{t('settings').notifications.reminderDays}</Text>
               </View>
 
               <Text style={styles.cardDescription}>
-                {t("settings").notifications.reminderDaysDescription}
+                {t('settings').notifications.reminderDaysDescription}
               </Text>
 
               {/* Important assignments group */}
               <View style={styles.reminderGroup}>
                 <Text style={styles.reminderGroupTitle}>
-                  {t("settings").notifications.importantAssignments}
+                  {t('settings').notifications.importantAssignments}
                 </Text>
 
                 <ReminderSetting
-                  label={t("settings").notifications.exams}
+                  label={t('settings').notifications.exams}
                   value={notificationSettings.examReminderDays}
                   onDecrease={() =>
                     handleUpdateReminderDays(
-                      "examReminderDays",
+                      'examReminderDays',
                       notificationSettings.examReminderDays - 1,
                     )
                   }
                   onIncrease={() =>
                     handleUpdateReminderDays(
-                      "examReminderDays",
+                      'examReminderDays',
                       notificationSettings.examReminderDays + 1,
                     )
                   }
                   isMinValue={notificationSettings.examReminderDays <= 1}
-                  icon='school'
+                  icon="school"
                   accentColor={Colors.dark.danger}
                 />
 
                 <ReminderSetting
-                  label={t("settings").notifications.tests}
+                  label={t('settings').notifications.tests}
                   value={notificationSettings.testReminderDays}
                   onDecrease={() =>
                     handleUpdateReminderDays(
-                      "testReminderDays",
+                      'testReminderDays',
                       notificationSettings.testReminderDays - 1,
                     )
                   }
                   onIncrease={() =>
                     handleUpdateReminderDays(
-                      "testReminderDays",
+                      'testReminderDays',
                       notificationSettings.testReminderDays + 1,
                     )
                   }
                   isMinValue={notificationSettings.testReminderDays <= 1}
-                  icon='assignment'
+                  icon="assignment"
                   accentColor={Colors.dark.primary}
                 />
 
                 <ReminderSetting
-                  label={t("settings").notifications.quizzes}
+                  label={t('settings').notifications.quizzes}
                   value={notificationSettings.quizReminderDays}
                   onDecrease={() =>
                     handleUpdateReminderDays(
-                      "quizReminderDays",
+                      'quizReminderDays',
                       notificationSettings.quizReminderDays - 1,
                     )
                   }
                   onIncrease={() =>
                     handleUpdateReminderDays(
-                      "quizReminderDays",
+                      'quizReminderDays',
                       notificationSettings.quizReminderDays + 1,
                     )
                   }
                   isMinValue={notificationSettings.quizReminderDays <= 1}
-                  icon='quiz'
+                  icon="quiz"
                   accentColor={Colors.dark.yellow}
                 />
               </View>
@@ -1850,66 +1712,66 @@ export default function Settings() {
               {/* Other assignments group */}
               <View style={styles.reminderGroup}>
                 <Text style={styles.reminderGroupTitle}>
-                  {t("settings").notifications.otherAssignments}
+                  {t('settings').notifications.otherAssignments}
                 </Text>
 
                 <ReminderSetting
-                  label={t("settings").notifications.projects}
+                  label={t('settings').notifications.projects}
                   value={notificationSettings.projectReminderDays}
                   onDecrease={() =>
                     handleUpdateReminderDays(
-                      "projectReminderDays",
+                      'projectReminderDays',
                       notificationSettings.projectReminderDays - 1,
                     )
                   }
                   onIncrease={() =>
                     handleUpdateReminderDays(
-                      "projectReminderDays",
+                      'projectReminderDays',
                       notificationSettings.projectReminderDays + 1,
                     )
                   }
                   isMinValue={notificationSettings.projectReminderDays <= 1}
-                  icon='category'
+                  icon="category"
                   accentColor={Colors.dark.green}
                 />
 
                 <ReminderSetting
-                  label={t("settings").notifications.homework}
+                  label={t('settings').notifications.homework}
                   value={notificationSettings.homeworkReminderDays}
                   onDecrease={() =>
                     handleUpdateReminderDays(
-                      "homeworkReminderDays",
+                      'homeworkReminderDays',
                       notificationSettings.homeworkReminderDays - 1,
                     )
                   }
                   onIncrease={() =>
                     handleUpdateReminderDays(
-                      "homeworkReminderDays",
+                      'homeworkReminderDays',
                       notificationSettings.homeworkReminderDays + 1,
                     )
                   }
                   isMinValue={notificationSettings.homeworkReminderDays <= 1}
-                  icon='book'
+                  icon="book"
                   accentColor={Colors.dark.lightPurple}
                 />
 
                 <ReminderSetting
-                  label={t("settings").notifications.other}
+                  label={t('settings').notifications.other}
                   value={notificationSettings.otherReminderDays}
                   onDecrease={() =>
                     handleUpdateReminderDays(
-                      "otherReminderDays",
+                      'otherReminderDays',
                       notificationSettings.otherReminderDays - 1,
                     )
                   }
                   onIncrease={() =>
                     handleUpdateReminderDays(
-                      "otherReminderDays",
+                      'otherReminderDays',
                       notificationSettings.otherReminderDays + 1,
                     )
                   }
                   isMinValue={notificationSettings.otherReminderDays <= 1}
-                  icon='more-horiz'
+                  icon="more-horiz"
                   accentColor={Colors.dark.neutral500}
                 />
               </View>
@@ -1918,38 +1780,32 @@ export default function Settings() {
             {/* Daily reminders card */}
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <MaterialIcons
-                  name='update'
-                  size={20}
-                  color={Colors.dark.primary}
-                />
-                <Text style={styles.cardTitle}>
-                  {t("settings").notifications.dailyReminders}
-                </Text>
+                <MaterialIcons name="update" size={20} color={Colors.dark.primary} />
+                <Text style={styles.cardTitle}>{t('settings').notifications.dailyReminders}</Text>
               </View>
 
               <Text style={styles.cardDescription}>
-                {t("settings").notifications.dailyRemindersDescription}
+                {t('settings').notifications.dailyRemindersDescription}
               </Text>
 
               <View style={styles.settingItem}>
                 <View style={styles.settingLabelContainer}>
                   <View style={styles.settingLabelWithIcon}>
                     <MaterialIcons
-                      name='school'
+                      name="school"
                       size={18}
                       color={Colors.dark.danger}
                       style={styles.settingItemIcon}
                     />
                     <Text style={styles.settingLabel}>
-                      {t("settings").notifications.dailyExams}
+                      {t('settings').notifications.dailyExams}
                     </Text>
                   </View>
                 </View>
                 <CustomToggle
                   value={notificationSettings.dailyRemindersForExams}
                   onValueChange={(value) =>
-                    handleToggleDailyReminders("dailyRemindersForExams", value)
+                    handleToggleDailyReminders('dailyRemindersForExams', value)
                   }
                   activeColor={Colors.dark.danger}
                 />
@@ -1959,20 +1815,20 @@ export default function Settings() {
                 <View style={styles.settingLabelContainer}>
                   <View style={styles.settingLabelWithIcon}>
                     <MaterialIcons
-                      name='assignment'
+                      name="assignment"
                       size={18}
                       color={Colors.dark.primary}
                       style={styles.settingItemIcon}
                     />
                     <Text style={styles.settingLabel}>
-                      {t("settings").notifications.dailyTests}
+                      {t('settings').notifications.dailyTests}
                     </Text>
                   </View>
                 </View>
                 <CustomToggle
                   value={notificationSettings.dailyRemindersForTests}
                   onValueChange={(value) =>
-                    handleToggleDailyReminders("dailyRemindersForTests", value)
+                    handleToggleDailyReminders('dailyRemindersForTests', value)
                   }
                   activeColor={Colors.dark.primary}
                 />
@@ -1982,23 +1838,20 @@ export default function Settings() {
                 <View style={styles.settingLabelContainer}>
                   <View style={styles.settingLabelWithIcon}>
                     <MaterialIcons
-                      name='quiz'
+                      name="quiz"
                       size={18}
                       color={Colors.dark.yellow}
                       style={styles.settingItemIcon}
                     />
                     <Text style={styles.settingLabel}>
-                      {t("settings").notifications.dailyQuizzes}
+                      {t('settings').notifications.dailyQuizzes}
                     </Text>
                   </View>
                 </View>
                 <CustomToggle
                   value={notificationSettings.dailyRemindersForQuizzes}
                   onValueChange={(value) =>
-                    handleToggleDailyReminders(
-                      "dailyRemindersForQuizzes",
-                      value,
-                    )
+                    handleToggleDailyReminders('dailyRemindersForQuizzes', value)
                   }
                   activeColor={Colors.dark.yellow}
                 />
@@ -2020,33 +1873,29 @@ export default function Settings() {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                     const assignments = await getAssignments();
                     await createAndScheduleDailyDigest(assignments, true);
-                    Haptics.notificationAsync(
-                      Haptics.NotificationFeedbackType.Success,
-                    );
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                     Alert.alert(
-                      t("settings").notifications.digestSentTitle,
-                      t("settings").notifications.digestSentMessage,
+                      t('settings').notifications.digestSentTitle,
+                      t('settings').notifications.digestSentMessage,
                     );
                   } catch (error) {
-                    Haptics.notificationAsync(
-                      Haptics.NotificationFeedbackType.Error,
-                    );
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
                     Alert.alert(
-                      t("settings").notifications.errorTitle,
-                      t("settings").notifications.digestErrorMessage,
+                      t('settings').notifications.errorTitle,
+                      t('settings').notifications.digestErrorMessage,
                     );
-                    console.error("Daily digest error:", error);
+                    console.error('Daily digest error:', error);
                   }
                 }}
               >
                 <MaterialIcons
-                  name='calendar-today'
+                  name="calendar-today"
                   size={20}
                   color={Colors.dark.white}
                   style={styles.testNotificationIcon}
                 />
                 <Text style={styles.testNotificationText}>
-                  {t("settings").notifications.sendDigestNow}
+                  {t('settings').notifications.sendDigestNow}
                 </Text>
               </TouchableOpacity>
             )}
@@ -2071,46 +1920,34 @@ export default function Settings() {
     onDecrease: () => void;
     onIncrease: () => void;
     isMinValue: boolean;
-    icon: React.ComponentProps<typeof MaterialIcons>["name"];
+    icon: React.ComponentProps<typeof MaterialIcons>['name'];
     accentColor?: string;
   }) => (
     <View style={styles.reminderSettingItem}>
       <View style={styles.settingLabelWithIcon}>
-        <MaterialIcons
-          name={icon}
-          size={18}
-          color={accentColor}
-          style={styles.settingItemIcon}
-        />
+        <MaterialIcons name={icon} size={18} color={accentColor} style={styles.settingItemIcon} />
         <Text style={styles.settingLabel}>{label}</Text>
       </View>
       <View style={styles.dayCounter}>
         <TouchableOpacity
-          style={[
-            styles.counterButton,
-            isMinValue && styles.counterButtonDisabled,
-          ]}
+          style={[styles.counterButton, isMinValue && styles.counterButtonDisabled]}
           onPress={onDecrease}
           disabled={isMinValue}
         >
           <MaterialIcons
-            name='remove'
+            name="remove"
             size={18}
             color={isMinValue ? Colors.dark.neutral650 : accentColor}
           />
         </TouchableOpacity>
 
-        <View
-          style={[styles.counterValueContainer, { borderColor: accentColor }]}
-        >
+        <View style={[styles.counterValueContainer, { borderColor: accentColor }]}>
           <Text style={styles.counterValue}>{value}</Text>
-          <Text style={styles.counterUnit}>
-            {t("settings").notifications.days}
-          </Text>
+          <Text style={styles.counterUnit}>{t('settings').notifications.days}</Text>
         </View>
 
         <TouchableOpacity style={styles.counterButton} onPress={onIncrease}>
-          <MaterialIcons name='add' size={18} color={accentColor} />
+          <MaterialIcons name="add" size={18} color={accentColor} />
         </TouchableOpacity>
       </View>
     </View>
@@ -2152,7 +1989,7 @@ export default function Settings() {
 
         // Debugging
       } catch (error) {
-        console.error("Error saving notification time:", error);
+        console.error('Error saving notification time:', error);
       }
     },
     [notificationSettings],
@@ -2190,11 +2027,8 @@ export default function Settings() {
   }, [savedIdnp, isAuthenticated, router]); */
 
   return (
-    <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* Account Section */}
         {renderAccountSection()}
 
@@ -2257,31 +2091,20 @@ export default function Settings() {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <MaterialIcons
-                name='security'
+                name="security"
                 size={24}
                 color={Colors.dark.orange}
                 style={styles.sectionIcon}
               />
-              <Text style={styles.sectionTitle}>
-                {t("settings").idnp.title}
-              </Text>
+              <Text style={styles.sectionTitle}>{t('settings').idnp.title}</Text>
             </View>
             <View style={styles.idnpInfo}>
               <Text style={styles.idnpValue}>
-                {savedIdnp.substring(0, 4) + "••••••" + savedIdnp.substring(10)}
+                {savedIdnp.substring(0, 4) + '••••••' + savedIdnp.substring(10)}
               </Text>
-              <TouchableOpacity
-                style={styles.clearIdnpButton}
-                onPress={handleClearIdnp}
-              >
-                <MaterialIcons
-                  name='delete-outline'
-                  size={24}
-                  color={Colors.dark.lightPink}
-                />
-                <Text style={styles.clearIdnpText}>
-                  {t("settings").idnp.clearButton}
-                </Text>
+              <TouchableOpacity style={styles.clearIdnpButton} onPress={handleClearIdnp}>
+                <MaterialIcons name="delete-outline" size={24} color={Colors.dark.lightPink} />
+                <Text style={styles.clearIdnpText}>{t('settings').idnp.clearButton}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -2291,29 +2114,21 @@ export default function Settings() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <MaterialIcons
-              name='language'
+              name="language"
               size={24}
               color={Colors.dark.lightBlue}
               style={styles.sectionIcon}
             />
-            <Text style={styles.sectionTitle}>{t("settings").language}</Text>
+            <Text style={styles.sectionTitle}>{t('settings').language}</Text>
           </View>
           <TouchableOpacity
             style={styles.languageSelector}
             onPress={() => setShowLanguageModal(true)}
           >
             <View style={styles.languageSelectorContent}>
-              <Text style={styles.selectedLanguageIcon}>
-                {languages[settings.language].icon}
-              </Text>
-              <Text style={styles.selectedLanguageName}>
-                {languages[settings.language].name}
-              </Text>
-              <MaterialIcons
-                name='keyboard-arrow-down'
-                size={24}
-                color={Colors.dark.neutral500}
-              />
+              <Text style={styles.selectedLanguageIcon}>{languages[settings.language].icon}</Text>
+              <Text style={styles.selectedLanguageName}>{languages[settings.language].name}</Text>
+              <MaterialIcons name="keyboard-arrow-down" size={24} color={Colors.dark.neutral500} />
             </View>
           </TouchableOpacity>
         </View>
@@ -2322,14 +2137,12 @@ export default function Settings() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <MaterialIcons
-              name='schedule'
+              name="schedule"
               size={24}
               color={Colors.dark.primaryStrong}
               style={styles.sectionIcon}
             />
-            <Text style={styles.sectionTitle}>
-              {t("settings").schedule.title}
-            </Text>
+            <Text style={styles.sectionTitle}>{t('settings').schedule.title}</Text>
           </View>
           <View style={[styles.card, styles.scheduleCard]}>
             <View style={styles.scheduleDetails}>
@@ -2340,21 +2153,19 @@ export default function Settings() {
                 activeOpacity={0.7}
               >
                 <MaterialIcons
-                  name='group'
+                  name="group"
                   size={20}
                   color={Colors.dark.neutral500}
                   style={styles.scheduleDetailIcon}
                 />
                 <View style={styles.scheduleDetailTextGroup}>
-                  <Text style={styles.scheduleDetailLabel}>
-                    {t("settings").schedule.group}
-                  </Text>
+                  <Text style={styles.scheduleDetailLabel}>{t('settings').schedule.group}</Text>
                   <View style={styles.scheduleGroupValueContainer}>
                     <Text style={styles.scheduleDetailValue} numberOfLines={1}>
-                      {settings.selectedGroupName || t("settings").group.select}
+                      {settings.selectedGroupName || t('settings').group.select}
                     </Text>
                     <MaterialIcons
-                      name='arrow-drop-down'
+                      name="arrow-drop-down"
                       size={20}
                       color={Colors.dark.neutral500}
                     />
@@ -2363,23 +2174,21 @@ export default function Settings() {
               </TouchableOpacity>
 
               {/* Last Updated */}
-              <View
-                style={[styles.scheduleDetailRow, styles.scheduleDetailRowLast]}
-              >
+              <View style={[styles.scheduleDetailRow, styles.scheduleDetailRowLast]}>
                 <MaterialIcons
-                  name='update'
+                  name="update"
                   size={20}
                   color={Colors.dark.neutral500}
                   style={styles.scheduleDetailIcon}
                 />
                 <View style={styles.scheduleDetailTextGroup}>
                   <Text style={styles.scheduleDetailLabel}>
-                    {t("settings").schedule.lastUpdated}
+                    {t('settings').schedule.lastUpdated}
                   </Text>
                   <Text style={styles.scheduleDetailValue}>
-                    {lastScheduleRefresh ?
-                      formatCompactDate(lastScheduleRefresh, true)
-                    : t("settings").schedule.noRecentRefresh}
+                    {lastScheduleRefresh
+                      ? formatCompactDate(lastScheduleRefresh, true)
+                      : t('settings').schedule.noRecentRefresh}
                   </Text>
                 </View>
               </View>
@@ -2394,23 +2203,15 @@ export default function Settings() {
               onPress={handleManualScheduleRefresh}
               disabled={isRefreshingSchedule}
             >
-              {isRefreshingSchedule ?
-                <ActivityIndicator size='small' color={Colors.dark.white} />
-              : <MaterialIcons
-                  name='refresh'
-                  size={20}
-                  color={Colors.dark.white}
-                />
-              }
-              <Text
-                style={[
-                  styles.refreshButtonText,
-                  styles.scheduleRefreshButtonText,
-                ]}
-              >
-                {isRefreshingSchedule ?
-                  t("settings").schedule.refreshing
-                : t("settings").schedule.refresh}
+              {isRefreshingSchedule ? (
+                <ActivityIndicator size="small" color={Colors.dark.white} />
+              ) : (
+                <MaterialIcons name="refresh" size={20} color={Colors.dark.white} />
+              )}
+              <Text style={[styles.refreshButtonText, styles.scheduleRefreshButtonText]}>
+                {isRefreshingSchedule
+                  ? t('settings').schedule.refreshing
+                  : t('settings').schedule.refresh}
               </Text>
             </TouchableOpacity>
           </View>
@@ -2420,7 +2221,7 @@ export default function Settings() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <MaterialIcons
-              name='system-update'
+              name="system-update"
               size={24}
               color={Colors.dark.primaryStrong}
               style={styles.sectionIcon}
@@ -2431,15 +2232,13 @@ export default function Settings() {
             <View style={styles.updateDetails}>
               <View style={styles.updateDetailRow}>
                 <MaterialIcons
-                  name='info-outline'
+                  name="info-outline"
                   size={20}
                   color={Colors.dark.neutral500}
                   style={styles.scheduleDetailIcon}
                 />
                 <View style={styles.scheduleDetailTextGroup}>
-                  <Text style={styles.scheduleDetailLabel}>
-                    Current Version
-                  </Text>
+                  <Text style={styles.scheduleDetailLabel}>Current Version</Text>
                   <Text style={styles.scheduleDetailValue}>
                     {updateService.getCurrentVersion()}
                   </Text>
@@ -2448,37 +2247,29 @@ export default function Settings() {
 
               <View style={styles.updateDetailRow}>
                 <MaterialIcons
-                  name='fingerprint'
+                  name="fingerprint"
                   size={20}
                   color={Colors.dark.neutral500}
                   style={styles.scheduleDetailIcon}
                 />
                 <View style={styles.scheduleDetailTextGroup}>
-                  <Text style={styles.scheduleDetailLabel}>
-                    Current OTA Version
-                  </Text>
+                  <Text style={styles.scheduleDetailLabel}>Current OTA Version</Text>
                   <Text style={styles.scheduleDetailValue}>
                     {updateService.getCurrentOtaVersionShort()}
                   </Text>
                 </View>
               </View>
 
-              <View
-                style={[styles.updateDetailRow, styles.scheduleDetailRowLast]}
-              >
+              <View style={[styles.updateDetailRow, styles.scheduleDetailRowLast]}>
                 <MaterialIcons
-                  name='label-outline'
+                  name="label-outline"
                   size={20}
                   color={Colors.dark.neutral500}
                   style={styles.scheduleDetailIcon}
                 />
                 <View style={styles.scheduleDetailTextGroup}>
-                  <Text style={styles.scheduleDetailLabel}>
-                    Release Channel
-                  </Text>
-                  <Text
-                    style={[styles.scheduleDetailValue, styles.channelBadge]}
-                  >
+                  <Text style={styles.scheduleDetailLabel}>Release Channel</Text>
+                  <Text style={[styles.scheduleDetailValue, styles.channelBadge]}>
                     {updateService.getChannelDisplay()}
                   </Text>
                 </View>
@@ -2486,9 +2277,8 @@ export default function Settings() {
             </View>
 
             <Text style={styles.updateNote}>
-              App binaries are distributed through Play Store and manual GitHub
-              release installs. OTA content updates continue to be applied by
-              Expo Updates.
+              App binaries are distributed through Play Store and manual GitHub release installs.
+              OTA content updates continue to be applied by Expo Updates.
             </Text>
           </View>
         </View>
@@ -2497,32 +2287,24 @@ export default function Settings() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <MaterialIcons
-              name='groups'
+              name="groups"
               size={24}
               color={Colors.dark.green}
               style={styles.sectionIcon}
             />
-            <Text style={styles.sectionTitle}>{t("settings").subGroup}</Text>
+            <Text style={styles.sectionTitle}>{t('settings').subGroup}</Text>
           </View>
           <View style={styles.optionsContainer}>
             {SUBGROUPS.map((group) => (
               <TouchableOpacity
                 key={group}
-                style={[
-                  styles.optionButton,
-                  settings.group === group && styles.selectedOption,
-                ]}
+                style={[styles.optionButton, settings.group === group && styles.selectedOption]}
                 onPress={() => handleSubgroupChange(group)}
               >
                 <Text
-                  style={[
-                    styles.optionText,
-                    settings.group === group && styles.selectedOptionText,
-                  ]}
+                  style={[styles.optionText, settings.group === group && styles.selectedOptionText]}
                 >
-                  {group === "Subgroup 1" ?
-                    t("subgroup").group1
-                  : t("subgroup").group2}
+                  {group === 'Subgroup 1' ? t('subgroup').group1 : t('subgroup').group2}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -2534,20 +2316,15 @@ export default function Settings() {
           <View style={styles.sectionHeaderWithAction}>
             <View style={styles.sectionHeaderContent}>
               <MaterialIcons
-                name='event'
+                name="event"
                 size={24}
                 color={Colors.dark.lightPink}
                 style={styles.sectionIcon}
               />
-              <Text style={styles.sectionTitle}>
-                {t("settings").customPeriods.title}
-              </Text>
+              <Text style={styles.sectionTitle}>{t('settings').customPeriods.title}</Text>
             </View>
-            <TouchableOpacity
-              style={styles.addButton}
-              onPress={handleAddPeriod}
-            >
-              <MaterialIcons name='add' size={24} color={Colors.dark.white} />
+            <TouchableOpacity style={styles.addButton} onPress={handleAddPeriod}>
+              <MaterialIcons name="add" size={24} color={Colors.dark.white} />
             </TouchableOpacity>
           </View>
 
@@ -2559,14 +2336,11 @@ export default function Settings() {
                     style={[
                       styles.colorDot,
                       {
-                        backgroundColor:
-                          period.color || Colors.dark.primaryStrong,
+                        backgroundColor: period.color || Colors.dark.primaryStrong,
                       },
                     ]}
                   />
-                  <Text style={styles.periodName}>
-                    {period.name || "Custom Period"}
-                  </Text>
+                  <Text style={styles.periodName}>{period.name || 'Custom Period'}</Text>
                   <CustomToggle
                     value={period.isEnabled}
                     onValueChange={(value) => {
@@ -2582,9 +2356,8 @@ export default function Settings() {
                     {period.starttime} - {period.endtime}
                   </Text>
                   <Text style={styles.periodDays}>
-                    {period.daysOfWeek
-                      ?.map((day) => t("weekdays").long[day])
-                      .join(", ") || "All weekdays"}
+                    {period.daysOfWeek?.map((day) => t('weekdays').long[day]).join(', ') ||
+                      'All weekdays'}
                   </Text>
                 </View>
 
@@ -2593,30 +2366,20 @@ export default function Settings() {
                     style={styles.periodAction}
                     onPress={() => handleEditPeriod(period)}
                   >
-                    <MaterialIcons
-                      name='edit'
-                      size={20}
-                      color={Colors.dark.neutral500}
-                    />
+                    <MaterialIcons name="edit" size={20} color={Colors.dark.neutral500} />
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.periodAction}
                     onPress={() => handleDeletePeriod(period._id)}
                   >
-                    <MaterialIcons
-                      name='delete'
-                      size={20}
-                      color={Colors.dark.lightPink}
-                    />
+                    <MaterialIcons name="delete" size={20} color={Colors.dark.lightPink} />
                   </TouchableOpacity>
                 </View>
               </View>
             ))}
 
             {settings.customPeriods.length === 0 && (
-              <Text style={styles.noPeriods}>
-                {t("settings").customPeriods.noPeriodsYet}
-              </Text>
+              <Text style={styles.noPeriods}>{t('settings').customPeriods.noPeriodsYet}</Text>
             )}
           </View>
         </View>
@@ -2652,18 +2415,13 @@ export default function Settings() {
               <Text
                 style={[
                   styles.languageOptionText,
-                  settings.language === code &&
-                    styles.selectedLanguageOptionText,
+                  settings.language === code && styles.selectedLanguageOptionText,
                 ]}
               >
                 {name}
               </Text>
               {settings.language === code && (
-                <MaterialIcons
-                  name='check'
-                  size={24}
-                  color={Colors.dark.white}
-                />
+                <MaterialIcons name="check" size={24} color={Colors.dark.white} />
               )}
             </TouchableOpacity>
           ))}
@@ -2672,95 +2430,68 @@ export default function Settings() {
 
       <Modal
         visible={showGroupScreen}
-        animationType='slide'
-        presentationStyle='fullScreen'
+        animationType="slide"
+        presentationStyle="fullScreen"
         statusBarTranslucent={true}
         navigationBarTranslucent={true}
         onRequestClose={closeGroupSelectionScreen}
       >
-        <SafeAreaView
-          style={styles.groupScreenContainer}
-          edges={["top", "left", "right"]}
-        >
+        <SafeAreaView style={styles.groupScreenContainer} edges={['top', 'left', 'right']}>
           <View style={styles.groupScreenHeader}>
             <TouchableOpacity
               onPress={closeGroupSelectionScreen}
               style={styles.groupHeaderBackButton}
               hitSlop={8}
             >
-              <MaterialIcons
-                name='arrow-back'
-                size={22}
-                color={Colors.dark.white}
-              />
+              <MaterialIcons name="arrow-back" size={22} color={Colors.dark.white} />
             </TouchableOpacity>
             <View style={styles.groupHeaderTextBlock}>
-              <Text style={styles.groupScreenTitle}>
-                {t("settings").group.select}
-              </Text>
+              <Text style={styles.groupScreenTitle}>{t('settings').group.select}</Text>
               <Text style={styles.groupScreenSubtitle}>
-                {`${displayedGroups.length} ${t("general").found.toLowerCase()}`}
+                {`${displayedGroups.length} ${t('general').found.toLowerCase()}`}
               </Text>
             </View>
           </View>
 
           <View style={styles.groupSearchInputContainer}>
-            <MaterialIcons
-              name='search'
-              size={20}
-              color={Colors.dark.neutral500}
-            />
+            <MaterialIcons name="search" size={20} color={Colors.dark.neutral500} />
             <TextInput
               value={groupSearchQuery}
               onChangeText={setGroupSearchQuery}
-              placeholder={t("settings").group.search}
+              placeholder={t('settings').group.search}
               placeholderTextColor={Colors.dark.neutral500}
               style={styles.groupSearchInput}
               autoCorrect={false}
-              autoCapitalize='characters'
-              returnKeyType='search'
+              autoCapitalize="characters"
+              returnKeyType="search"
             />
             {groupSearchQuery.length > 0 && (
-              <TouchableOpacity
-                onPress={() => setGroupSearchQuery("")}
-                hitSlop={8}
-              >
-                <MaterialIcons
-                  name='close'
-                  size={20}
-                  color={Colors.dark.neutral500}
-                />
+              <TouchableOpacity onPress={() => setGroupSearchQuery('')} hitSlop={8}>
+                <MaterialIcons name="close" size={20} color={Colors.dark.neutral500} />
               </TouchableOpacity>
             )}
           </View>
 
-          {isLoadingGroups ?
+          {isLoadingGroups ? (
             <View style={styles.groupScreenFeedbackContainer}>
-              <ActivityIndicator
-                size='large'
-                color={Colors.dark.primaryStrong}
-              />
-              <Text style={styles.groupScreenFeedbackText}>
-                {t("settings").group.searching}
-              </Text>
+              <ActivityIndicator size="large" color={Colors.dark.primaryStrong} />
+              <Text style={styles.groupScreenFeedbackText}>{t('settings').group.searching}</Text>
             </View>
-          : <FlatList
+          ) : (
+            <FlatList
               data={displayedGroups}
               keyExtractor={(item) => item._id}
-              keyboardShouldPersistTaps='handled'
+              keyboardShouldPersistTaps="handled"
               contentContainerStyle={styles.groupListContent}
               showsVerticalScrollIndicator={false}
               renderItem={({ item }) => {
                 const isSelected = item._id === settings.selectedGroupId;
                 const isInRecentList = prioritizedGroupIds.includes(item._id);
-                const teacherName = item.diriginte?.name || "—";
+                const teacherName = item.diriginte?.name || '—';
 
                 return (
                   <TouchableOpacity
-                    style={[
-                      styles.groupListItem,
-                      isSelected && styles.groupListItemSelected,
-                    ]}
+                    style={[styles.groupListItem, isSelected && styles.groupListItemSelected]}
                     onPress={() => selectGroup(item)}
                     activeOpacity={0.8}
                   >
@@ -2778,7 +2509,7 @@ export default function Settings() {
                         {isInRecentList && !isSelected && (
                           <View style={styles.recentBadge}>
                             <MaterialIcons
-                              name='history'
+                              name="history"
                               size={14}
                               color={Colors.dark.primaryStrong}
                             />
@@ -2787,14 +2518,11 @@ export default function Settings() {
                       </View>
                       <View style={styles.groupListTeacherRow}>
                         <MaterialIcons
-                          name='person-outline'
+                          name="person-outline"
                           size={16}
                           color={Colors.dark.neutral500}
                         />
-                        <Text
-                          style={styles.groupListTeacherText}
-                          numberOfLines={1}
-                        >
+                        <Text style={styles.groupListTeacherText} numberOfLines={1}>
                           {teacherName}
                         </Text>
                       </View>
@@ -2802,7 +2530,7 @@ export default function Settings() {
 
                     {isSelected && (
                       <MaterialIcons
-                        name='check-circle'
+                        name="check-circle"
                         size={20}
                         color={Colors.dark.primaryStrong}
                       />
@@ -2812,21 +2540,17 @@ export default function Settings() {
               }}
               ListEmptyComponent={
                 <View style={styles.groupScreenFeedbackContainer}>
-                  <MaterialIcons
-                    name='search-off'
-                    size={30}
-                    color={Colors.dark.neutral500}
-                  />
+                  <MaterialIcons name="search-off" size={30} color={Colors.dark.neutral500} />
                   <Text style={styles.groupScreenFeedbackText}>
                     {groupLoadError ||
-                      (groupSearchQuery.trim().length > 0 ?
-                        `${t("settings").group.notFound} "${groupSearchQuery.trim()}"`
-                      : t("settings").group.failed)}
+                      (groupSearchQuery.trim().length > 0
+                        ? `${t('settings').group.notFound} "${groupSearchQuery.trim()}"`
+                        : t('settings').group.failed)}
                   </Text>
                 </View>
               }
             />
-          }
+          )}
         </SafeAreaView>
       </Modal>
 
@@ -2834,28 +2558,28 @@ export default function Settings() {
       {showStartPicker && (
         <TimePicker
           value={startTime}
-          onChange={handleTimePickerChange("start")}
-          label={t("settings").customPeriods.time}
+          onChange={handleTimePickerChange('start')}
+          label={t('settings').customPeriods.time}
           onClose={() => setShowStartPicker(false)}
-          onConfirm={handleTimePickerChange("start")}
-          use12HourFormat={settings.language === "en"}
+          onConfirm={handleTimePickerChange('start')}
+          use12HourFormat={settings.language === 'en'}
           translations={{
-            cancel: t("settings").customPeriods.cancel,
-            confirm: t("settings").customPeriods.confirm,
+            cancel: t('settings').customPeriods.cancel,
+            confirm: t('settings').customPeriods.confirm,
           }}
         />
       )}
       {showEndPicker && (
         <TimePicker
           value={endTime}
-          onChange={handleTimePickerChange("end")}
-          label={t("settings").customPeriods.time}
+          onChange={handleTimePickerChange('end')}
+          label={t('settings').customPeriods.time}
           onClose={() => setShowEndPicker(false)}
-          onConfirm={handleTimePickerChange("end")}
-          use12HourFormat={settings.language === "en"}
+          onConfirm={handleTimePickerChange('end')}
+          use12HourFormat={settings.language === 'en'}
           translations={{
-            cancel: t("settings").customPeriods.cancel,
-            confirm: t("settings").customPeriods.confirm,
+            cancel: t('settings').customPeriods.cancel,
+            confirm: t('settings').customPeriods.confirm,
           }}
         />
       )}
@@ -2872,67 +2596,47 @@ export default function Settings() {
         <View style={styles.formContainer}>
           {/* Name Input */}
           <View style={styles.formGroup}>
-            <Text style={styles.formLabel}>
-              {t("settings").customPeriods.name}
-            </Text>
+            <Text style={styles.formLabel}>{t('settings').customPeriods.name}</Text>
             <TextInput
               style={styles.formInput}
               value={periodName}
               onChangeText={setPeriodName}
-              placeholder={t("settings").customPeriods.name}
+              placeholder={t('settings').customPeriods.name}
               placeholderTextColor={MODAL_ITEM_COLORS.textSecondary}
             />
           </View>
 
           {/* Time Selection */}
           <View style={styles.formGroup}>
-            <Text style={styles.formLabel}>
-              {t("settings").customPeriods.time}
-            </Text>
+            <Text style={styles.formLabel}>{t('settings').customPeriods.time}</Text>
             <View style={styles.timeContainer}>
-              <TouchableOpacity
-                style={styles.timeButton}
-                onPress={() => setShowStartPicker(true)}
-              >
-                <Text style={styles.timeButtonText}>
-                  {startTime.toTimeString().slice(0, 5)}
-                </Text>
+              <TouchableOpacity style={styles.timeButton} onPress={() => setShowStartPicker(true)}>
+                <Text style={styles.timeButtonText}>{startTime.toTimeString().slice(0, 5)}</Text>
               </TouchableOpacity>
               <Text style={styles.timeSeparator}>-</Text>
-              <TouchableOpacity
-                style={styles.timeButton}
-                onPress={() => setShowEndPicker(true)}
-              >
-                <Text style={styles.timeButtonText}>
-                  {endTime.toTimeString().slice(0, 5)}
-                </Text>
+              <TouchableOpacity style={styles.timeButton} onPress={() => setShowEndPicker(true)}>
+                <Text style={styles.timeButtonText}>{endTime.toTimeString().slice(0, 5)}</Text>
               </TouchableOpacity>
             </View>
           </View>
 
           {/* Days Selection */}
           <View style={styles.formGroup}>
-            <Text style={styles.formLabel}>
-              {t("settings").customPeriods.days}
-            </Text>
+            <Text style={styles.formLabel}>{t('settings').customPeriods.days}</Text>
             <View style={styles.daysContainer}>
               {[1, 2, 3, 4, 5].map((day) => (
                 <TouchableOpacity
                   key={day}
-                  style={[
-                    styles.dayButton,
-                    selectedDays.includes(day) && styles.selectedDayButton,
-                  ]}
+                  style={[styles.dayButton, selectedDays.includes(day) && styles.selectedDayButton]}
                   onPress={() => toggleDay(day)}
                 >
                   <Text
                     style={[
                       styles.dayButtonText,
-                      selectedDays.includes(day) &&
-                        styles.selectedDayButtonText,
+                      selectedDays.includes(day) && styles.selectedDayButtonText,
                     ]}
                   >
-                    {t("weekdays").short[day]}
+                    {t('weekdays').short[day]}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -2942,21 +2646,14 @@ export default function Settings() {
           {/* Enabled Toggle */}
           <View style={styles.formGroup}>
             <View style={styles.switchContainer}>
-              <Text style={styles.formLabel}>
-                {t("settings").customPeriods.enabled}
-              </Text>
+              <Text style={styles.formLabel}>{t('settings').customPeriods.enabled}</Text>
               <CustomToggle value={isEnabled} onValueChange={setIsEnabled} />
             </View>
           </View>
 
           {/* Save Button */}
-          <TouchableOpacity
-            style={styles.saveButton}
-            onPress={handleSavePeriod}
-          >
-            <Text style={styles.saveButtonText}>
-              {t("settings").customPeriods.save}
-            </Text>
+          <TouchableOpacity style={styles.saveButton} onPress={handleSavePeriod}>
+            <Text style={styles.saveButtonText}>{t('settings').customPeriods.save}</Text>
           </TouchableOpacity>
         </View>
       </BottomModalPortal>
@@ -2971,14 +2668,14 @@ export default function Settings() {
       >
         <View style={styles.confirmDialogContent}>
           <Text style={styles.confirmTitle}>
-            {confirmDialogType === "idnp" ?
-              t("settings").idnp.clearConfirmTitle
-            : t("settings").customPeriods.deleteConfirmTitle}
+            {confirmDialogType === 'idnp'
+              ? t('settings').idnp.clearConfirmTitle
+              : t('settings').customPeriods.deleteConfirmTitle}
           </Text>
           <Text style={styles.confirmMessage}>
-            {confirmDialogType === "idnp" ?
-              t("settings").idnp.clearConfirmMessage
-            : t("settings").customPeriods.deleteConfirmMessage}
+            {confirmDialogType === 'idnp'
+              ? t('settings').idnp.clearConfirmMessage
+              : t('settings').customPeriods.deleteConfirmMessage}
           </Text>
 
           <View style={styles.confirmButtons}>
@@ -2990,24 +2687,22 @@ export default function Settings() {
               }}
             >
               <Text style={styles.cancelButtonText}>
-                {confirmDialogType === "idnp" ?
-                  t("settings").idnp.clearConfirmCancel
-                : t("settings").customPeriods.cancel}
+                {confirmDialogType === 'idnp'
+                  ? t('settings').idnp.clearConfirmCancel
+                  : t('settings').customPeriods.cancel}
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.confirmButton, styles.clearButton]}
               onPress={
-                confirmDialogType === "idnp" ?
-                  handleConfirmClearIdnp
-                : handleConfirmDeletePeriod
+                confirmDialogType === 'idnp' ? handleConfirmClearIdnp : handleConfirmDeletePeriod
               }
             >
               <Text style={styles.clearButtonText}>
-                {confirmDialogType === "idnp" ?
-                  t("settings").idnp.clearConfirmConfirm
-                : t("settings").customPeriods.delete}
+                {confirmDialogType === 'idnp'
+                  ? t('settings').idnp.clearConfirmConfirm
+                  : t('settings').customPeriods.delete}
               </Text>
             </TouchableOpacity>
           </View>
@@ -3020,22 +2715,10 @@ export default function Settings() {
         onClose={() => setShowAccountActionSheet(false)}
         contentContainerStyle={styles.compactSheetContent}
       >
-        <TouchableOpacity
-          style={styles.actionSheetButton}
-          onPress={handleLogout}
-        >
-          <MaterialIcons
-            name='logout'
-            size={24}
-            color={Colors.dark.lightPink}
-          />
-          <Text
-            style={[
-              styles.actionSheetButtonText,
-              { color: Colors.dark.lightPink },
-            ]}
-          >
-            {t("settings").account.actions.logout}
+        <TouchableOpacity style={styles.actionSheetButton} onPress={handleLogout}>
+          <MaterialIcons name="logout" size={24} color={Colors.dark.lightPink} />
+          <Text style={[styles.actionSheetButtonText, { color: Colors.dark.lightPink }]}>
+            {t('settings').account.actions.logout}
           </Text>
         </TouchableOpacity>
 
@@ -3046,18 +2729,9 @@ export default function Settings() {
             setShowDeleteAccountConfirm(true);
           }}
         >
-          <MaterialIcons
-            name='delete-forever'
-            size={24}
-            color={Colors.dark.lightPink}
-          />
-          <Text
-            style={[
-              styles.actionSheetButtonText,
-              { color: Colors.dark.lightPink },
-            ]}
-          >
-            {t("settings").account.actions.delete}
+          <MaterialIcons name="delete-forever" size={24} color={Colors.dark.lightPink} />
+          <Text style={[styles.actionSheetButtonText, { color: Colors.dark.lightPink }]}>
+            {t('settings').account.actions.delete}
           </Text>
         </TouchableOpacity>
       </BottomModalPortal>
@@ -3068,12 +2742,8 @@ export default function Settings() {
         onClose={() => setShowDeleteAccountConfirm(false)}
       >
         <View style={styles.confirmDialogContent}>
-          <Text style={styles.confirmTitle}>
-            {t("settings").account.deleteConfirm.title}
-          </Text>
-          <Text style={styles.confirmMessage}>
-            {t("settings").account.deleteConfirm.message}
-          </Text>
+          <Text style={styles.confirmTitle}>{t('settings').account.deleteConfirm.title}</Text>
+          <Text style={styles.confirmMessage}>{t('settings').account.deleteConfirm.message}</Text>
 
           <View style={styles.confirmButtons}>
             <TouchableOpacity
@@ -3081,7 +2751,7 @@ export default function Settings() {
               onPress={() => setShowDeleteAccountConfirm(false)}
             >
               <Text style={styles.cancelButtonText}>
-                {t("settings").account.deleteConfirm.cancel}
+                {t('settings').account.deleteConfirm.cancel}
               </Text>
             </TouchableOpacity>
 
@@ -3093,7 +2763,7 @@ export default function Settings() {
               }}
             >
               <Text style={styles.deleteButtonText}>
-                {t("settings").account.deleteConfirm.confirm}
+                {t('settings').account.deleteConfirm.confirm}
               </Text>
             </TouchableOpacity>
           </View>
@@ -3105,7 +2775,7 @@ export default function Settings() {
         isVisible={showPasswordModal}
         onClose={() => {
           setShowPasswordModal(false);
-          setPasswordForDeletion("");
+          setPasswordForDeletion('');
           setPasswordError(null);
         }}
       >
@@ -3123,7 +2793,7 @@ export default function Settings() {
           >
             <TextInput
               style={styles.passwordInput}
-              placeholder='Your password'
+              placeholder="Your password"
               placeholderTextColor={MODAL_ITEM_COLORS.textSecondary}
               secureTextEntry
               value={passwordForDeletion}
@@ -3135,16 +2805,14 @@ export default function Settings() {
             />
           </View>
 
-          {passwordError && (
-            <Text style={styles.errorText}>{passwordError}</Text>
-          )}
+          {passwordError && <Text style={styles.errorText}>{passwordError}</Text>}
 
           <View style={styles.confirmButtons}>
             <TouchableOpacity
               style={[styles.confirmButton, styles.cancelButton]}
               onPress={() => {
                 setShowPasswordModal(false);
-                setPasswordForDeletion("");
+                setPasswordForDeletion('');
                 setPasswordError(null);
               }}
               disabled={deletingAccount}
@@ -3157,9 +2825,11 @@ export default function Settings() {
               onPress={handleDeleteAccount}
               disabled={deletingAccount}
             >
-              {deletingAccount ?
-                <ActivityIndicator size='small' color={Colors.dark.white} />
-              : <Text style={styles.deleteButtonText}>Delete</Text>}
+              {deletingAccount ? (
+                <ActivityIndicator size="small" color={Colors.dark.white} />
+              ) : (
+                <Text style={styles.deleteButtonText}>Delete</Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -3172,11 +2842,7 @@ export default function Settings() {
       >
         <View style={styles.confirmDialogContent}>
           <View style={styles.successIconContainer}>
-            <MaterialIcons
-              name='check-circle'
-              size={64}
-              color={MODAL_ITEM_COLORS.successIcon}
-            />
+            <MaterialIcons name="check-circle" size={64} color={MODAL_ITEM_COLORS.successIcon} />
           </View>
 
           <Text style={styles.confirmTitle}>Deletion Request Sent</Text>
@@ -3187,14 +2853,11 @@ export default function Settings() {
           </Text>
 
           <TouchableOpacity style={styles.emailButton} onPress={openEmailApp}>
-            <MaterialIcons name='email' size={20} color={Colors.dark.white} />
+            <MaterialIcons name="email" size={20} color={Colors.dark.white} />
             <Text style={styles.emailButtonText}>Open Email App</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.doneButton}
-            onPress={completeAccountDeletion}
-          >
+          <TouchableOpacity style={styles.doneButton} onPress={completeAccountDeletion}>
             <Text style={styles.doneButtonText}>Done</Text>
           </TouchableOpacity>
         </View>
@@ -3205,13 +2868,13 @@ export default function Settings() {
         <TimePicker
           value={tempNotificationTime}
           onChange={handleNotificationTimeChange}
-          label={t("settings").notifications.selectTime}
+          label={t('settings').notifications.selectTime}
           onClose={handleCloseTimePicker}
           onConfirm={handleConfirmTimePicker}
           use12HourFormat={true}
           translations={{
-            cancel: t("settings").customPeriods.cancel,
-            confirm: t("settings").customPeriods.confirm,
+            cancel: t('settings').customPeriods.cancel,
+            confirm: t('settings').customPeriods.confirm,
           }}
         />
       )}
@@ -3238,8 +2901,8 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   groupScreenHeader: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 16,
     paddingTop: 8,
   },
@@ -3247,8 +2910,8 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: Colors.dark.surfaceSecondary,
     marginRight: 12,
   },
@@ -3258,7 +2921,7 @@ const styles = StyleSheet.create({
   groupScreenTitle: {
     color: Colors.dark.white,
     fontSize: 22,
-    fontWeight: "700",
+    fontWeight: '700',
   },
   groupScreenSubtitle: {
     color: Colors.dark.neutral500,
@@ -3266,12 +2929,12 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   groupSearchInputContainer: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 14,
     paddingHorizontal: 14,
-    paddingVertical: Platform.OS === "ios" ? 12 : 8,
+    paddingVertical: Platform.OS === 'ios' ? 12 : 8,
     borderWidth: 1,
     borderColor: Colors.dark.border,
     marginBottom: 16,
@@ -3295,8 +2958,8 @@ const styles = StyleSheet.create({
     borderColor: Colors.dark.borderMuted,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   groupListItemSelected: {
     borderColor: Colors.dark.primaryStrong,
@@ -3307,13 +2970,13 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   groupListItemTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   groupListItemTitle: {
     color: Colors.dark.white,
     fontSize: 16,
-    fontWeight: "700",
+    fontWeight: '700',
     flex: 1,
   },
   groupListItemTitleSelected: {
@@ -3327,8 +2990,8 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   groupListTeacherRow: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     marginTop: 6,
   },
   groupListTeacherText: {
@@ -3338,14 +3001,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   groupScreenFeedbackContainer: {
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: 52,
     paddingHorizontal: 18,
   },
   groupScreenFeedbackText: {
     color: Colors.dark.neutral500,
-    textAlign: "center",
+    textAlign: 'center',
     marginTop: 12,
     lineHeight: 20,
   },
@@ -3358,12 +3021,12 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 20,
-    fontWeight: "bold",
+    fontWeight: 'bold',
     color: Colors.dark.white,
-    textAlignVertical: "center",
+    textAlignVertical: 'center',
   },
   optionsContainer: {
-    flexDirection: "row",
+    flexDirection: 'row',
     gap: 12,
   },
   optionButton: {
@@ -3371,7 +3034,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.dark.surfaceSecondary,
     padding: 16,
     borderRadius: 12,
-    alignItems: "center",
+    alignItems: 'center',
   },
   selectedOption: {
     backgroundColor: Colors.dark.primaryStrong,
@@ -3379,7 +3042,7 @@ const styles = StyleSheet.create({
   optionText: {
     color: Colors.dark.mutedText,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   selectedOptionText: {
     color: Colors.dark.white,
@@ -3390,41 +3053,41 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   classSelectorContent: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   selectedClassName: {
     color: Colors.dark.white,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   compactSheetContent: {
     paddingTop: 0,
     paddingHorizontal: 12,
-    paddingBottom: Platform.OS === "ios" ? 14 : 8,
+    paddingBottom: Platform.OS === 'ios' ? 14 : 8,
   },
   tallSheetContent: {
-    height: "100%",
+    height: '100%',
     paddingTop: 0,
     paddingHorizontal: 12,
-    paddingBottom: Platform.OS === "ios" ? 24 : 20,
+    paddingBottom: Platform.OS === 'ios' ? 24 : 20,
   },
   sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 12,
-    justifyContent: "flex-start",
+    justifyContent: 'flex-start',
   },
   sectionHeaderWithAction: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 12,
-    justifyContent: "space-between",
+    justifyContent: 'space-between',
   },
   sectionHeaderContent: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     flex: 1,
   },
   sectionIcon: {
@@ -3435,8 +3098,8 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   periodsListContainer: {
     gap: 12,
@@ -3447,8 +3110,8 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   periodItemHeader: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 8,
   },
   colorDot: {
@@ -3460,7 +3123,7 @@ const styles = StyleSheet.create({
   periodName: {
     color: Colors.dark.white,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
     flex: 1,
   },
   periodItemContent: {
@@ -3476,8 +3139,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   periodItemActions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
     gap: 16,
   },
   periodAction: {
@@ -3485,7 +3148,7 @@ const styles = StyleSheet.create({
   },
   noPeriods: {
     color: Colors.dark.mutedText,
-    textAlign: "center",
+    textAlign: 'center',
     padding: 20,
   },
   formContainer: {
@@ -3497,7 +3160,7 @@ const styles = StyleSheet.create({
   formLabel: {
     color: MODAL_ITEM_COLORS.textPrimary,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   formInput: {
     backgroundColor: MODAL_ITEM_COLORS.surface,
@@ -3507,14 +3170,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   timeContainer: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
   },
   timeButton: {
-    flexDirection: "row",
+    flexDirection: 'row',
     backgroundColor: MODAL_ITEM_COLORS.surface,
-    alignItems: "center",
+    alignItems: 'center',
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 8,
@@ -3531,7 +3194,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
   },
   daysContainer: {
-    flexDirection: "row",
+    flexDirection: 'row',
     gap: 8,
   },
   dayButton: {
@@ -3539,7 +3202,7 @@ const styles = StyleSheet.create({
     backgroundColor: MODAL_ITEM_COLORS.surface,
     borderRadius: 12,
     padding: 12,
-    alignItems: "center",
+    alignItems: 'center',
   },
   selectedDayButton: {
     backgroundColor: MODAL_ITEM_COLORS.surfaceAccent,
@@ -3547,7 +3210,7 @@ const styles = StyleSheet.create({
   dayButtonText: {
     color: MODAL_ITEM_COLORS.textSecondary,
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   selectedDayButtonText: {
     color: MODAL_ITEM_COLORS.textPrimary,
@@ -3560,26 +3223,26 @@ const styles = StyleSheet.create({
     borderColor: Colors.dark.surfaceSecondary,
   },
   switchContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   saveButton: {
     backgroundColor: MODAL_ITEM_COLORS.surfaceAccent,
     borderRadius: 12,
     padding: 16,
-    alignItems: "center",
+    alignItems: 'center',
     marginTop: 8,
-    marginBottom: Platform.OS === "android" ? 8 : 0,
+    marginBottom: Platform.OS === 'android' ? 8 : 0,
   },
   saveButtonText: {
     color: MODAL_ITEM_COLORS.textPrimary,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   clearIdnpButton: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: Colors.dark.surfaceSecondary,
     padding: 16,
     borderRadius: 12,
@@ -3587,20 +3250,20 @@ const styles = StyleSheet.create({
   clearIdnpText: {
     color: Colors.dark.lightPink,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
     marginLeft: 8,
   },
   confirmOverlay: {
     flex: 1,
     backgroundColor: Colors.dark.overlayBlack70,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   confirmDialog: {
     backgroundColor: Colors.dark.backgroundTertiary,
     borderRadius: 20,
     padding: 20,
-    width: "80%",
+    width: '80%',
     maxWidth: 400,
   },
   confirmDialogContent: {
@@ -3609,7 +3272,7 @@ const styles = StyleSheet.create({
   },
   confirmTitle: {
     fontSize: 20,
-    fontWeight: "bold",
+    fontWeight: 'bold',
     color: MODAL_ITEM_COLORS.textPrimary,
     marginBottom: 12,
   },
@@ -3620,8 +3283,8 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   confirmButtons: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     marginTop: 20,
     gap: 12,
   },
@@ -3629,7 +3292,7 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 12,
     borderRadius: 12,
-    alignItems: "center",
+    alignItems: 'center',
   },
   cancelButton: {
     backgroundColor: MODAL_ITEM_COLORS.surface,
@@ -3640,24 +3303,24 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     color: MODAL_ITEM_COLORS.textPrimary,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   clearButtonText: {
     color: Colors.dark.lightPink,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   timePickerOverlay: {
     flex: 1,
     backgroundColor: Colors.dark.overlayBlack70,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   timePickerContainer: {
     backgroundColor: Colors.dark.backgroundTertiary,
     borderRadius: 20,
     padding: 24,
-    width: "90%",
+    width: '90%',
     maxWidth: 400,
     elevation: 5,
     shadowColor: Colors.dark.black,
@@ -3666,12 +3329,12 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
   },
   timePickerHeader: {
-    alignItems: "center",
+    alignItems: 'center',
     marginBottom: 20,
   },
   timePickerTitle: {
     fontSize: 20,
-    fontWeight: "bold",
+    fontWeight: 'bold',
     color: Colors.dark.white,
     marginBottom: 8,
   },
@@ -3680,43 +3343,43 @@ const styles = StyleSheet.create({
     color: Colors.dark.mutedText,
   },
   timePickerContent: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 24,
     marginTop: 12,
   },
   timePickerColumn: {
     flex: 1,
-    alignItems: "center",
+    alignItems: 'center',
     backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 12,
-    overflow: "hidden",
+    overflow: 'hidden',
     minWidth: 100,
   },
   timePickerItem: {
     height: 56,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   timePickerItemText: {
     fontSize: 38,
     color: Colors.dark.mutedText,
     opacity: 0.15,
-    fontWeight: "400",
+    fontWeight: '400',
   },
   timePickerItemTextSelected: {
     fontSize: 44,
     color: Colors.dark.white,
     opacity: 1,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   timePickerSeparator: {
     fontSize: 52,
     color: Colors.dark.white,
     marginHorizontal: 20,
     opacity: 0.8,
-    fontWeight: "300",
+    fontWeight: '300',
   },
   timePickerPeriodButton: {
     marginLeft: 20,
@@ -3725,16 +3388,16 @@ const styles = StyleSheet.create({
     padding: 12,
     width: 60,
     height: 80,
-    justifyContent: "space-evenly",
+    justifyContent: 'space-evenly',
   },
   timePickerPeriodText: {
     fontSize: 20,
-    fontWeight: "600",
-    textAlign: "center",
+    fontWeight: '600',
+    textAlign: 'center',
   },
   timePickerActions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
     gap: 12,
     marginTop: 20,
   },
@@ -3751,16 +3414,16 @@ const styles = StyleSheet.create({
   },
   timePickerButtonText: {
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
     color: Colors.dark.white,
   },
   timePickerConfirmText: {
     color: Colors.dark.white,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   periodSelector: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     marginTop: 10,
   },
   toggleContainer: {
@@ -3768,18 +3431,18 @@ const styles = StyleSheet.create({
     height: 30,
     borderRadius: 15,
     padding: 2,
-    justifyContent: "center",
+    justifyContent: 'center',
   },
   toggleThumb: {
     width: 26,
     height: 26,
     borderRadius: 13,
     backgroundColor: Colors.dark.white,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   toggleIcon: {
-    position: "absolute",
+    position: 'absolute',
     top: 6,
     left: 6,
   },
@@ -3789,8 +3452,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   languageSelectorContent: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   selectedLanguageIcon: {
     fontSize: 20,
@@ -3799,7 +3462,7 @@ const styles = StyleSheet.create({
   selectedLanguageName: {
     color: Colors.dark.white,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
     flex: 1,
   },
   languagesList: {
@@ -3807,8 +3470,8 @@ const styles = StyleSheet.create({
     paddingTop: 0,
   },
   languageOption: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: MODAL_ITEM_COLORS.surface,
     padding: 16,
     borderRadius: 12,
@@ -3823,7 +3486,7 @@ const styles = StyleSheet.create({
   languageOptionText: {
     color: MODAL_ITEM_COLORS.textSecondary,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
     flex: 1,
   },
   selectedLanguageOptionText: {
@@ -3831,8 +3494,8 @@ const styles = StyleSheet.create({
   },
   // Account section styles
   accountInfo: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: Colors.dark.surfaceSecondary,
     padding: 16,
     borderRadius: 12,
@@ -3842,20 +3505,20 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     backgroundColor: Colors.dark.primaryStrong,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: 12,
   },
   avatarText: {
     color: Colors.dark.white,
     fontSize: 18,
-    fontWeight: "bold",
+    fontWeight: 'bold',
   },
   accountDetails: {
     flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginRight: 4,
   },
   accountDetailsContent: {
@@ -3865,11 +3528,11 @@ const styles = StyleSheet.create({
   accountEmail: {
     color: Colors.dark.white,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   verificationBadge: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     marginTop: 4,
   },
   verificationText: {
@@ -3878,13 +3541,13 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   accountActions: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     marginTop: 16,
   },
   accountAction: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: Colors.dark.backgroundTertiary,
     padding: 12,
     borderRadius: 12,
@@ -3894,24 +3557,24 @@ const styles = StyleSheet.create({
   accountActionText: {
     color: Colors.dark.primaryStrong,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
     marginLeft: 8,
   },
   signInButton: {
     backgroundColor: Colors.dark.primaryStrong,
     padding: 16,
     borderRadius: 12,
-    alignItems: "center",
+    alignItems: 'center',
   },
   signInButtonText: {
     color: Colors.dark.white,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   actionSheetOverlay: {
     flex: 1,
     backgroundColor: Colors.dark.overlayBlack70,
-    justifyContent: "flex-end",
+    justifyContent: 'flex-end',
   },
   actionSheet: {
     backgroundColor: Colors.dark.backgroundTertiary,
@@ -3920,8 +3583,8 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   actionSheetButton: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     padding: 16,
     borderRadius: 12,
     marginBottom: 8,
@@ -3932,7 +3595,7 @@ const styles = StyleSheet.create({
   },
   actionSheetButtonText: {
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
     marginLeft: 12,
   },
   deleteButton: {
@@ -3941,10 +3604,10 @@ const styles = StyleSheet.create({
   deleteButtonText: {
     color: Colors.dark.lightPink,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   passwordInputContainer: {
-    width: "100%",
+    width: '100%',
     backgroundColor: MODAL_ITEM_COLORS.surface,
     borderRadius: 10,
     marginTop: 10,
@@ -3975,19 +3638,19 @@ const styles = StyleSheet.create({
     height: 100,
     borderRadius: 50,
     backgroundColor: MODAL_ITEM_COLORS.successSurface,
-    justifyContent: "center",
-    alignItems: "center",
-    alignSelf: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
+    alignSelf: 'center',
     marginBottom: 16,
   },
 
   emailButton: {
-    flexDirection: "row",
+    flexDirection: 'row',
     backgroundColor: MODAL_ITEM_COLORS.surfaceAccent,
     borderRadius: 12,
     padding: 16,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
     marginTop: 16,
     marginBottom: 8,
     gap: 8,
@@ -3996,22 +3659,22 @@ const styles = StyleSheet.create({
   emailButtonText: {
     color: MODAL_ITEM_COLORS.textPrimary,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
   },
 
   doneButton: {
     backgroundColor: MODAL_ITEM_COLORS.surface,
     borderRadius: 12,
     padding: 16,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
     marginTop: 8,
   },
 
   doneButtonText: {
     color: MODAL_ITEM_COLORS.textSecondary,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   devToolsList: {
     gap: 12,
@@ -4020,34 +3683,34 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.dark.surfaceSecondary,
     padding: 16,
     borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   devToolButtonRow: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
   },
   devToolText: {
     color: Colors.dark.white,
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: '600',
     marginTop: 8,
-    textAlign: "center",
+    textAlign: 'center',
   },
   devToolTextLeft: {
-    textAlign: "left",
+    textAlign: 'left',
     marginTop: 0,
   },
   devToolTextGroup: {
     flex: 1,
-    alignItems: "flex-start",
+    alignItems: 'flex-start',
     gap: 2,
   },
   devToolSubtext: {
     color: Colors.dark.mutedText,
     fontSize: 12,
-    textAlign: "left",
+    textAlign: 'left',
   },
   avatarImage: {
     width: 40,
@@ -4055,19 +3718,19 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   settingItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 12,
   },
   settingLabel: {
     color: Colors.dark.white,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   settingButton: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   settingValue: {
     color: Colors.dark.mutedText,
@@ -4081,8 +3744,8 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   counterContainer: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   counterButton: {
     padding: 4,
@@ -4107,15 +3770,15 @@ const styles = StyleSheet.create({
   scheduleCardTitle: {
     color: Colors.dark.white,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
     marginBottom: 12,
   },
   scheduleDetails: {
     marginBottom: 16,
   },
   scheduleDetailRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     marginBottom: 12,
   },
   scheduleDetailRowLast: {
@@ -4137,21 +3800,21 @@ const styles = StyleSheet.create({
     color: Colors.dark.white,
     fontSize: 14,
     lineHeight: 20,
-    fontWeight: "500",
+    fontWeight: '500',
   },
   scheduleGroupValueContainer: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     flex: 1,
   },
   cardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 12,
   },
   cardTitle: {
     fontSize: 18,
-    fontWeight: "bold",
+    fontWeight: 'bold',
     color: Colors.dark.white,
     marginLeft: 8,
   },
@@ -4171,8 +3834,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   settingLabelWithIcon: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   settingItemIcon: {
     marginRight: 8,
@@ -4185,21 +3848,21 @@ const styles = StyleSheet.create({
   },
   reminderGroupTitle: {
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
     color: Colors.dark.neutral250,
     marginBottom: 12,
   },
   reminderSettingItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 12,
     paddingVertical: 4,
   },
   dayCounter: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-end",
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
   },
   counterValueContainer: {
     borderWidth: 1.5,
@@ -4208,23 +3871,23 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     marginHorizontal: 8,
     minWidth: 45,
-    alignItems: "center",
+    alignItems: 'center',
   },
   counterUnit: {
     color: Colors.dark.mutedText,
     fontSize: 10,
-    fontWeight: "500",
+    fontWeight: '500',
   },
   counterButtonDisabled: {
     opacity: 0.5,
   },
   testNotificationButton: {
-    flexDirection: "row",
+    flexDirection: 'row',
     backgroundColor: Colors.dark.primary,
     borderRadius: 12,
     padding: 16,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
     marginTop: 8,
     marginBottom: 8,
   },
@@ -4234,7 +3897,7 @@ const styles = StyleSheet.create({
   testNotificationText: {
     color: Colors.dark.white,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   elevatedContainer: {
     backgroundColor: Colors.dark.surfaceSecondary,
@@ -4254,19 +3917,19 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   idnpInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 16,
   },
   idnpValue: {
     color: Colors.dark.mutedText,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   syncHeader: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 12,
   },
   syncIconContainer: {
@@ -4274,18 +3937,18 @@ const styles = StyleSheet.create({
     height: 38,
     borderRadius: 19,
     backgroundColor: Colors.dark.primaryStrong,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: 12,
   },
   syncLabel: {
     color: Colors.dark.white,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   syncStatusIndicator: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     marginTop: 12,
     padding: 8,
     backgroundColor: Colors.dark.successIconColor,
@@ -4294,20 +3957,20 @@ const styles = StyleSheet.create({
   syncStatusText: {
     color: Colors.dark.lightGreen,
     fontSize: 14,
-    fontWeight: "500",
+    fontWeight: '500',
   },
   syncContent: {
     flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   loginPromptContainer: {
     marginVertical: 12,
   },
   loginPromptContent: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: Colors.dark.loginPromptBackground,
     padding: 12,
     borderRadius: 8,
@@ -4324,31 +3987,31 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 8,
-    alignItems: "center",
+    alignItems: 'center',
   },
   loginButtonText: {
     color: Colors.dark.white,
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   refreshButton: {
-    flexDirection: "row",
+    flexDirection: 'row',
     backgroundColor: Colors.dark.primaryStrong,
     borderRadius: 10,
     paddingVertical: 10,
     paddingHorizontal: 14,
-    alignItems: "center",
+    alignItems: 'center',
     gap: 6,
   },
   scheduleRefreshButton: {
     marginTop: 4,
-    alignSelf: "stretch",
-    justifyContent: "center",
+    alignSelf: 'stretch',
+    justifyContent: 'center',
   },
   refreshButtonText: {
     color: Colors.dark.white,
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: '600',
     marginLeft: 6,
   },
   scheduleRefreshButtonText: {
@@ -4362,20 +4025,20 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   updateDetailRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     marginBottom: 12,
   },
   channelBadge: {
-    textTransform: "uppercase",
+    textTransform: 'uppercase',
     color: Colors.dark.primary,
-    fontWeight: "700",
+    fontWeight: '700',
     letterSpacing: 0.5,
   },
   updateNote: {
     fontSize: 12,
     color: Colors.dark.neutral600,
-    textAlign: "left",
+    textAlign: 'left',
     marginTop: 12,
     lineHeight: 18,
   },

@@ -1,19 +1,22 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import Constants from "expo-constants";
-import { DeviceEventEmitter } from "react-native";
-import * as crypto from "crypto-js";
-import { fetchCustomApi } from "../utils/customApi";
-import { secureStorageService } from "./secureStorageService";
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as crypto from 'crypto-js';
 
-const GRAVATAR_AVATAR_BASE_URL = "https://www.gravatar.com/avatar";
-const GRAVATAR_PROFILE_BASE_URL = "https://gravatar.com";
+import { DeviceEventEmitter } from 'react-native';
 
-const AUTH_STATE_CHANGE_EVENT = "auth_state_changed";
-const SKIP_LOGIN_KEY = "@planner_skip_login";
-const LOGIN_DISMISSED_KEY = "@login_notification_dismissed";
-const GRAVATAR_CACHE_KEY = "@gravatar_cache";
-const AUTH_VERSION_KEY = "@auth_version";
-const CURRENT_AUTH_VERSION = "3"; // Increment this when auth system changes
+import Constants from 'expo-constants';
+
+import { fetchCustomApi } from '../utils/customApi';
+import { secureStorageService } from './secureStorageService';
+
+const GRAVATAR_AVATAR_BASE_URL = 'https://www.gravatar.com/avatar';
+const GRAVATAR_PROFILE_BASE_URL = 'https://gravatar.com';
+
+const AUTH_STATE_CHANGE_EVENT = 'auth_state_changed';
+const SKIP_LOGIN_KEY = '@planner_skip_login';
+const LOGIN_DISMISSED_KEY = '@login_notification_dismissed';
+const GRAVATAR_CACHE_KEY = '@gravatar_cache';
+const AUTH_VERSION_KEY = '@auth_version';
+const CURRENT_AUTH_VERSION = '3'; // Increment this when auth system changes
 
 // Add timeout constants for network requests
 const REQUEST_TIMEOUT = 8000; // 8 seconds timeout
@@ -66,7 +69,7 @@ const CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 const getGravatarCacheKey = (hash: string) => `${GRAVATAR_CACHE_KEY}:${hash}`;
 
 const getApiKey = (): string | null => {
-  const apiKey = String(Constants.expoConfig?.extra?.apiKey || "").trim();
+  const apiKey = String(Constants.expoConfig?.extra?.apiKey || '').trim();
   return apiKey || null;
 };
 
@@ -77,9 +80,7 @@ export const getGravatarHash = (email: string): string => {
   return crypto.SHA256(normalizedEmail).toString();
 };
 
-export const getGravatarProfile = async (
-  email: string,
-): Promise<GravatarProfile | null> => {
+export const getGravatarProfile = async (email: string): Promise<GravatarProfile | null> => {
   const normalizedEmail = email.toLowerCase().trim();
   if (!normalizedEmail) {
     return null;
@@ -104,34 +105,23 @@ export const getGravatarProfile = async (
     }
 
     let profile: GravatarProfile = fallbackProfile;
-    const profileResponse = await fetch(
-      `${GRAVATAR_PROFILE_BASE_URL}/${hash}.json`,
-    );
+    const profileResponse = await fetch(`${GRAVATAR_PROFILE_BASE_URL}/${hash}.json`);
 
     if (profileResponse.ok) {
-      const profileJson =
-        (await profileResponse.json()) as GravatarJsonProfileResponse;
+      const profileJson = (await profileResponse.json()) as GravatarJsonProfileResponse;
       const entry = profileJson.entry?.[0];
-      const thumbnailPhoto = entry?.photos?.find(
-        (photo) => photo.type === "thumbnail",
-      )?.value;
+      const thumbnailPhoto = entry?.photos?.find((photo) => photo.type === 'thumbnail')?.value;
 
       profile = {
         ...fallbackProfile,
-        display_name:
-          entry?.displayName?.trim() ||
-          entry?.preferredUsername?.trim() ||
-          undefined,
-        avatar_url:
-          entry?.thumbnailUrl || thumbnailPhoto || fallbackProfile.avatar_url,
+        display_name: entry?.displayName?.trim() || entry?.preferredUsername?.trim() || undefined,
+        avatar_url: entry?.thumbnailUrl || thumbnailPhoto || fallbackProfile.avatar_url,
         location: entry?.currentLocation || undefined,
         description: entry?.aboutMe || undefined,
         pronouns: entry?.pronouns || undefined,
       };
     } else if (profileResponse.status !== 404) {
-      console.warn(
-        `Failed to load Gravatar profile metadata (status: ${profileResponse.status})`,
-      );
+      console.warn(`Failed to load Gravatar profile metadata (status: ${profileResponse.status})`);
     }
 
     // Cache the profile
@@ -143,7 +133,7 @@ export const getGravatarProfile = async (
 
     return profile;
   } catch (error) {
-    console.error("Error fetching Gravatar profile:", error);
+    console.error('Error fetching Gravatar profile:', error);
     return fallbackProfile;
   }
 };
@@ -173,7 +163,7 @@ class AuthService {
   private init(): void {
     // Run async initialization in background
     this.checkAuthVersion().catch((error) => {
-      console.error("Error during auth initialization:", error);
+      console.error('Error during auth initialization:', error);
     });
   }
 
@@ -190,7 +180,7 @@ class AuthService {
       }
       return false;
     } catch (error) {
-      console.error("Error checking auth version:", error);
+      console.error('Error checking auth version:', error);
       return false;
     }
   }
@@ -232,18 +222,18 @@ class AuthService {
     useBearerToken: boolean = true,
   ): Promise<any> {
     const headers: HeadersInit = {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
     };
 
     if (useApiKey) {
       const apiKey = getApiKey();
       if (apiKey) {
-        headers["api-key"] = apiKey;
+        headers['api-key'] = apiKey;
       }
     }
 
     if (this.token && useBearerToken) {
-      headers["Authorization"] = `Bearer ${this.token}`;
+      headers['Authorization'] = `Bearer ${this.token}`;
     }
 
     try {
@@ -285,8 +275,8 @@ class AuthService {
       }
 
       // Check if response has content before parsing JSON
-      const contentType = response.headers.get("content-type");
-      if (contentType && contentType.indexOf("application/json") !== -1) {
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.indexOf('application/json') !== -1) {
         return await response.json();
       } else {
         // Return empty object or handle non-JSON response as needed
@@ -294,23 +284,19 @@ class AuthService {
       }
     } catch (error) {
       if (error instanceof Error) {
-        if (error.name === "AbortError") {
-          throw new Error("Request timeout");
+        if (error.name === 'AbortError') {
+          throw new Error('Request timeout');
         }
       }
       throw error;
     }
   }
 
-  async signup(
-    email: string,
-    password: string,
-    confirmPassword: string,
-  ): Promise<AuthResponse> {
+  async signup(email: string, password: string, confirmPassword: string): Promise<AuthResponse> {
     try {
       const response = await this.makeAuthRequest(
-        "/auth/signup",
-        "POST",
+        '/auth/signup',
+        'POST',
         {
           email,
           password,
@@ -329,8 +315,8 @@ class AuthService {
   async login(email: string, password: string): Promise<AuthResponse> {
     try {
       const response = await this.makeAuthRequest(
-        "/auth/login",
-        "POST",
+        '/auth/login',
+        'POST',
         {
           email,
           password,
@@ -377,8 +363,8 @@ class AuthService {
       }
 
       const response = await this.makeAuthRequest(
-        "/auth/login",
-        "POST",
+        '/auth/login',
+        'POST',
         {
           email: this.lastLoginEmail,
           password: this.sessionPassword,
@@ -406,7 +392,7 @@ class AuthService {
 
   async verifyEmail(token: string): Promise<boolean> {
     try {
-      await this.makeAuthRequest(`/auth/verify-email?token=${token}`, "POST");
+      await this.makeAuthRequest(`/auth/verify-email?token=${token}`, 'POST');
       await this.loadUserData();
       return true;
     } catch {
@@ -416,7 +402,7 @@ class AuthService {
 
   async requestPasswordReset(email: string): Promise<void> {
     try {
-      await this.makeAuthRequest("/auth/forgot-password", "POST", {
+      await this.makeAuthRequest('/auth/forgot-password', 'POST', {
         email,
       });
     } catch (error) {
@@ -426,14 +412,10 @@ class AuthService {
 
   async resetPassword(token: string, newPassword: string): Promise<boolean> {
     try {
-      await this.makeAuthRequest(
-        `/auth/reset-password?token=${token}`,
-        "POST",
-        {
-          password: newPassword,
-          confirm_password: newPassword,
-        },
-      );
+      await this.makeAuthRequest(`/auth/reset-password?token=${token}`, 'POST', {
+        password: newPassword,
+        confirm_password: newPassword,
+      });
       return true;
     } catch {
       return false;
@@ -443,10 +425,10 @@ class AuthService {
   async deleteAccount(password: string): Promise<void> {
     try {
       if (!this.userData?.email) {
-        throw new Error("User not authenticated");
+        throw new Error('User not authenticated');
       }
 
-      await this.makeAuthRequest("/auth/delete-account/initiate", "POST", {
+      await this.makeAuthRequest('/auth/delete-account/initiate', 'POST', {
         password,
       });
 
@@ -468,8 +450,8 @@ class AuthService {
       await AsyncStorage.removeItem(LOGIN_DISMISSED_KEY);
 
       // Reset settings sync state keys directly
-      await AsyncStorage.removeItem("@initial_settings_download_done");
-      await AsyncStorage.removeItem("@last_settings_sync");
+      await AsyncStorage.removeItem('@initial_settings_download_done');
+      await AsyncStorage.removeItem('@last_settings_sync');
 
       DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, {
         isAuthenticated: false,
@@ -477,7 +459,7 @@ class AuthService {
         freshLogin: false,
       });
     } catch (error) {
-      console.error("Error during logout:", error);
+      console.error('Error during logout:', error);
     }
   }
 
@@ -487,7 +469,7 @@ class AuthService {
     this.skippedLogin = true;
     this.clearInMemoryCredentials();
     await this.clearPersistedToken();
-    await AsyncStorage.setItem(SKIP_LOGIN_KEY, "true");
+    await AsyncStorage.setItem(SKIP_LOGIN_KEY, 'true');
     DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, {
       isAuthenticated: false,
       skipped: true,
@@ -509,7 +491,7 @@ class AuthService {
     try {
       // First check if user has skipped login
       const hasSkippedLogin = await AsyncStorage.getItem(SKIP_LOGIN_KEY);
-      if (hasSkippedLogin === "true") {
+      if (hasSkippedLogin === 'true') {
         this.skippedLogin = true;
         // Emit auth state with skipped = true
         DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, {
@@ -521,7 +503,7 @@ class AuthService {
         return null;
       }
     } catch (error) {
-      console.error("Error checking skip login status:", error);
+      console.error('Error checking skip login status:', error);
     }
 
     // Then check for auth token
@@ -534,7 +516,7 @@ class AuthService {
         }
         this.token = storedToken;
       } catch (error) {
-        console.error("Error loading stored auth token:", error);
+        console.error('Error loading stored auth token:', error);
         this.isLoading = false;
         return null;
       }
@@ -542,13 +524,7 @@ class AuthService {
 
     // Finally, try to fetch user data with timeout
     try {
-      const userData = await this.makeAuthRequest(
-        "/auth/me",
-        "GET",
-        undefined,
-        true,
-        true,
-      );
+      const userData = await this.makeAuthRequest('/auth/me', 'GET', undefined, true, true);
       this.userData = userData;
       DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, {
         isAuthenticated: true,
@@ -559,7 +535,7 @@ class AuthService {
       return userData;
     } catch (error: any) {
       // Only logout if it's not a timeout error
-      if (error.message !== "Request timeout") {
+      if (error.message !== 'Request timeout') {
         await this.logout();
       }
       this.isLoading = false;
@@ -608,7 +584,7 @@ class AuthService {
    */
   async encryptAndSyncData(key: string, data: string): Promise<void> {
     if (!this.isAuthenticated()) {
-      console.warn("User not authenticated. Cannot sync encrypted data.");
+      console.warn('User not authenticated. Cannot sync encrypted data.');
       // Optionally throw an error or return early
       return;
       // throw new Error('User not authenticated');
@@ -617,22 +593,19 @@ class AuthService {
     try {
       const password = await this.getCredentialsForEncryption();
       if (!password) {
-        console.error("Could not retrieve credentials for encryption.");
-        throw new Error("Credentials not found for encryption.");
+        console.error('Could not retrieve credentials for encryption.');
+        throw new Error('Credentials not found for encryption.');
       }
 
       // Send the plaintext data and password to the server endpoint
       // The server will handle the encryption using the provided password
-      await this.makeAuthRequest("/secure/encrypt-data", "POST", {
+      await this.makeAuthRequest('/secure/encrypt-data', 'POST', {
         data_label: key, // Changed from 'key' to 'data_label' to match settingsService pattern
         plaintext: data,
         password,
       });
     } catch (error) {
-      console.error(
-        `Error sending data for server-side encryption (key: '${key}'):`,
-        error,
-      );
+      console.error(`Error sending data for server-side encryption (key: '${key}'):`, error);
       // Optionally re-throw or handle the error (e.g., show a notification)
       throw error; // Re-throwing to allow the caller to handle it
     }
@@ -644,15 +617,12 @@ class AuthService {
    */
   async deleteEncryptedData(key: string): Promise<void> {
     if (!this.isAuthenticated()) {
-      console.warn("User not authenticated. Cannot delete encrypted data.");
+      console.warn('User not authenticated. Cannot delete encrypted data.');
       return;
     }
 
     try {
-      await this.makeAuthRequest(
-        `/secure/delete-encrypted-data/${key}`,
-        "DELETE",
-      );
+      await this.makeAuthRequest(`/secure/delete-encrypted-data/${key}`, 'DELETE');
     } catch (error) {
       console.error(`Error deleting encrypted data (key: '${key}'):`, error);
       throw error;

@@ -1,27 +1,31 @@
-import { Ionicons } from "@react-native-vector-icons/ionicons";
-import React, { memo, useEffect, useState } from "react";
-import {
-  View,
-  Text,
-  Platform,
-  StyleSheet,
-  ScrollView,
-  Dimensions,
-  TextInput,
-  ActivityIndicator,
-  TouchableOpacity,
-} from "react-native";
-import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
-import * as Haptics from "expo-haptics";
+import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
+import { Ionicons } from '@react-native-vector-icons/ionicons';
 import Animated, {
   FadeIn,
-  SlideInDown,
   Layout,
-  withTiming,
-  withSequence,
+  SlideInDown,
   useSharedValue,
-} from "react-native-reanimated";
-import { Colors } from "@/constants/Colors";
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
+
+import React, { memo, useEffect, useState } from 'react';
+
+import {
+  ActivityIndicator,
+  Dimensions,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+
+import * as Haptics from 'expo-haptics';
+
+import { Colors } from '@/constants/Colors';
 
 export type SegmentItem = {
   id: string;
@@ -55,7 +59,7 @@ export type Tab = {
   hasOwnSearchBar?: boolean;
 };
 
-export type SearchBarPosition = "top" | "above-content" | "within-tabs";
+export type SearchBarPosition = 'top' | 'above-content' | 'within-tabs';
 
 export type ModernDropdownProps = {
   title: string;
@@ -92,7 +96,7 @@ export type ModernDropdownProps = {
   maxHeight?: number;
   maxOptions?: number;
   disableScroll?: boolean;
-  animationType?: "fade" | "slide" | "none";
+  animationType?: 'fade' | 'slide' | 'none';
   enableDynamicSizing?: boolean;
 
   // Additional content
@@ -118,8 +122,7 @@ const MODAL_DROPDOWN_COLORS = {
   accentSoft: Colors.dark.overlayPrimary12,
 } as const;
 
-const AnimatedTouchableOpacity =
-  Animated.createAnimatedComponent(TouchableOpacity);
+const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
 
 const ModernDropdown = memo((props: ModernDropdownProps) => {
   const {
@@ -132,38 +135,34 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
     selectedTabId,
     onTabChange,
     showSearch = false,
-    searchPlaceholder = "Search",
-    searchBarPosition = "top",
+    searchPlaceholder = 'Search',
+    searchBarPosition = 'top',
     searchPerTab = false,
     onSearch,
     isLoading = false,
-    loadingText = "Loading...",
-    emptyResultsMessage = "No results found",
+    loadingText = 'Loading...',
+    emptyResultsMessage = 'No results found',
     maxHeight,
     disableScroll = false,
-    animationType = "fade",
+    animationType = 'fade',
     footerComponent,
     enableDynamicSizing = true,
   } = props;
 
   // Local state
-  const [searchText, setSearchText] = useState("");
-  const [filteredItems, setFilteredItems] = useState<SegmentItem[]>(
-    items || [],
-  );
-  const [filteredCategories, setFilteredCategories] = useState<Category[]>(
-    categories || [],
-  );
+  const [searchText, setSearchText] = useState('');
+  const [filteredItems, setFilteredItems] = useState<SegmentItem[]>(items || []);
+  const [filteredCategories, setFilteredCategories] = useState<Category[]>(categories || []);
   const [filteredTabs, setFilteredTabs] = useState<Tab[]>(tabs || []);
   const [activeTabId, setActiveTabId] = useState<string>(
-    selectedTabId || (tabs && tabs.length > 0 ? tabs[0].id : ""),
+    selectedTabId || (tabs && tabs.length > 0 ? tabs[0].id : ''),
   );
   const [, setItemPress] = useState<string | null>(null);
 
   // Animation values
   const buttonScale = useSharedValue(1);
 
-  const screenHeight = Dimensions.get("window").height;
+  const screenHeight = Dimensions.get('window').height;
 
   // Filter items based on search text
   useEffect(() => {
@@ -254,7 +253,7 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
   // Reset search when modal opens or closes
   useEffect(() => {
     if (!isVisible) {
-      setSearchText("");
+      setSearchText('');
     }
   }, [isVisible]);
 
@@ -265,19 +264,13 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
         return currentTab.items.length;
       }
       if (currentTab?.categories) {
-        return currentTab.categories.reduce(
-          (total, category) => total + category.data.length,
-          0,
-        );
+        return currentTab.categories.reduce((total, category) => total + category.data.length, 0);
       }
       return 0;
     }
 
     if (categories && categories.length > 0) {
-      return filteredCategories.reduce(
-        (total, category) => total + category.data.length,
-        0,
-      );
+      return filteredCategories.reduce((total, category) => total + category.data.length, 0);
     }
 
     return filteredItems.length;
@@ -290,24 +283,21 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
     const maxSheetHeight = screenHeight * 0.88;
     const minSheetHeight = 240;
     const rowCount = estimateVisibleRows();
-    const currentTab =
-      tabs?.length ?
-        filteredTabs.find((tab) => tab.id === activeTabId)
+    const currentTab = tabs?.length
+      ? filteredTabs.find((tab) => tab.id === activeTabId)
       : undefined;
     const hasCustomTabContent = Boolean(currentTab?.renderCustomContent);
     const baseRowsToShow = Math.min(Math.max(rowCount, 1), 7);
     const rowsToShow =
-      hasCustomTabContent && rowCount === 0 ?
-        Math.max(baseRowsToShow, 3)
-      : baseRowsToShow;
+      hasCustomTabContent && rowCount === 0 ? Math.max(baseRowsToShow, 3) : baseRowsToShow;
 
     let chromeHeight = 24;
-    if (showSearch && searchBarPosition === "top" && !searchPerTab) {
+    if (showSearch && searchBarPosition === 'top' && !searchPerTab) {
       chromeHeight += 56;
     }
     if (tabs && tabs.length > 0) {
       chromeHeight += 56;
-      if (showSearch && searchBarPosition === "within-tabs") {
+      if (showSearch && searchBarPosition === 'within-tabs') {
         chromeHeight += 56;
       }
     }
@@ -316,10 +306,7 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
     }
 
     const estimatedContentHeight = chromeHeight + rowsToShow * 56;
-    return Math.max(
-      minSheetHeight,
-      Math.min(maxSheetHeight, estimatedContentHeight),
-    );
+    return Math.max(minSheetHeight, Math.min(maxSheetHeight, estimatedContentHeight));
   };
 
   // Handle item selection
@@ -358,11 +345,7 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
   };
 
   // Render a single item
-  const renderItem = (
-    item: SegmentItem,
-    index: number,
-    categoryId?: string,
-  ) => {
+  const renderItem = (item: SegmentItem, index: number, categoryId?: string) => {
     const isSelected = item.isSelected || item.id === selectedItemId;
 
     return (
@@ -392,7 +375,7 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
                   item.icon ? styles.itemTextWithIcon : undefined,
                 ]}
                 numberOfLines={1}
-                ellipsizeMode='tail'
+                ellipsizeMode="tail"
               >
                 {item.label}
               </Text>
@@ -408,7 +391,7 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
                   ]}
                 >
                   <Text style={styles.badgeText}>
-                    {item.badge || (item.isCustomPeriod ? "Period" : "Custom")}
+                    {item.badge || (item.isCustomPeriod ? 'Period' : 'Custom')}
                   </Text>
                 </View>
               )}
@@ -418,11 +401,7 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
           <View style={styles.itemRightContent}>
             {item.rightComponent}
             {isSelected && (
-              <Ionicons
-                name='checkmark-circle'
-                size={22}
-                color={MODAL_DROPDOWN_COLORS.accent}
-              />
+              <Ionicons name="checkmark-circle" size={22} color={MODAL_DROPDOWN_COLORS.accent} />
             )}
           </View>
         </View>
@@ -433,10 +412,7 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
   // Render category with items
   const renderCategory = (category: Category, categoryIndex: number) => {
     return (
-      <Animated.View
-        key={`category-${category.id}`}
-        layout={Layout.springify()}
-      >
+      <Animated.View key={`category-${category.id}`} layout={Layout.springify()}>
         <Animated.View
           style={styles.categoryContainer}
           entering={FadeIn.delay(categoryIndex * 50).duration(200)}
@@ -447,7 +423,7 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
           </View>
 
           {/* Category Items */}
-          {category.data.length > 0 ?
+          {category.data.length > 0 ? (
             <View>
               {category.data.map((item, itemIndex) => (
                 <React.Fragment key={`category-item-${item.id}`}>
@@ -456,12 +432,11 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
                 </React.Fragment>
               ))}
             </View>
-          : <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>
-                {category.emptyMessage || emptyResultsMessage}
-              </Text>
+          ) : (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>{category.emptyMessage || emptyResultsMessage}</Text>
             </View>
-          }
+          )}
         </Animated.View>
       </Animated.View>
     );
@@ -485,10 +460,7 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
             {filteredTabs.map((tab, index) => (
               <TouchableOpacity
                 key={`tab-${tab.id}`}
-                style={[
-                  styles.tabButton,
-                  activeTabId === tab.id && styles.tabButtonActive,
-                ]}
+                style={[styles.tabButton, activeTabId === tab.id && styles.tabButtonActive]}
                 onPress={() => handleTabChange(tab.id)}
                 activeOpacity={0.7}
               >
@@ -519,23 +491,21 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
           {currentTab?.renderCustomContent && currentTab.renderCustomContent()}
 
           {/* Items if present */}
-          {currentTab?.items && currentTab.items.length > 0 ?
+          {currentTab?.items && currentTab.items.length > 0 ? (
             currentTab.items.map((item, index) => (
               <React.Fragment key={`tab-item-${item.id}`}>
                 {index > 0 && <View style={styles.separator} />}
                 {renderItem(item, index)}
               </React.Fragment>
             ))
-          : currentTab?.items && currentTab.items.length === 0 ?
+          ) : currentTab?.items && currentTab.items.length === 0 ? (
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>
-                {currentTab.emptyMessage || emptyResultsMessage}
-              </Text>
+              <Text style={styles.emptyText}>{currentTab.emptyMessage || emptyResultsMessage}</Text>
             </View>
-          : null}
+          ) : null}
 
           {/* Categories if present */}
-          {currentTab?.categories && currentTab.categories.length > 0 ?
+          {currentTab?.categories && currentTab.categories.length > 0 ? (
             <View style={styles.categoriesWrapper}>
               {currentTab.categories.map((category, index) => (
                 <React.Fragment key={`tab-category-${category.id}`}>
@@ -544,13 +514,11 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
                 </React.Fragment>
               ))}
             </View>
-          : currentTab?.categories && currentTab.categories.length === 0 ?
+          ) : currentTab?.categories && currentTab.categories.length === 0 ? (
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>
-                {currentTab.emptyMessage || emptyResultsMessage}
-              </Text>
+              <Text style={styles.emptyText}>{currentTab.emptyMessage || emptyResultsMessage}</Text>
             </View>
-          : null}
+          ) : null}
         </Animated.View>
       </>
     );
@@ -561,7 +529,7 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
     <View style={styles.searchContainer}>
       <View style={styles.searchInputContainer}>
         <Ionicons
-          name='search'
+          name="search"
           size={16}
           color={MODAL_DROPDOWN_COLORS.textSecondary}
           style={styles.searchIcon}
@@ -572,14 +540,11 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
           placeholderTextColor={MODAL_DROPDOWN_COLORS.textSecondary}
           value={searchText}
           onChangeText={setSearchText}
-          returnKeyType='search'
-          clearButtonMode='while-editing'
+          returnKeyType="search"
+          clearButtonMode="while-editing"
         />
         {searchText.length > 0 && (
-          <TouchableOpacity
-            style={styles.clearButton}
-            onPress={() => setSearchText("")}
-          >
+          <TouchableOpacity style={styles.clearButton} onPress={() => setSearchText('')}>
             <Text style={styles.clearButtonText}>Clear</Text>
           </TouchableOpacity>
         )}
@@ -590,7 +555,7 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
   // Render loading state
   const renderLoading = () => (
     <View style={styles.loadingContainer}>
-      <ActivityIndicator size='small' color={MODAL_DROPDOWN_COLORS.accent} />
+      <ActivityIndicator size="small" color={MODAL_DROPDOWN_COLORS.accent} />
       <Text style={styles.loadingText}>{loadingText}</Text>
     </View>
   );
@@ -661,10 +626,7 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
 
     const tabItemsCount = currentTab.items?.length ?? 0;
     const tabCategoryItemsCount =
-      currentTab.categories?.reduce(
-        (total, category) => total + category.data.length,
-        0,
-      ) ?? 0;
+      currentTab.categories?.reduce((total, category) => total + category.data.length, 0) ?? 0;
 
     return tabItemsCount > 5 || tabCategoryItemsCount > 5;
   };
@@ -681,9 +643,11 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
   // Calculate modal style
   const dropdownStyle = {
     ...styles.dropdownContainer,
-    ...(enableDynamicSizing ? { maxHeight: dropdownMaxHeight }
-    : needsScrollView ? { height: dropdownMaxHeight }
-    : { maxHeight: dropdownMaxHeight }),
+    ...(enableDynamicSizing
+      ? { maxHeight: dropdownMaxHeight }
+      : needsScrollView
+        ? { height: dropdownMaxHeight }
+        : { maxHeight: dropdownMaxHeight }),
   };
 
   if (!isVisible) {
@@ -693,20 +657,13 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
   return (
     <Animated.View
       style={[dropdownStyle, { marginBottom: 0 }]}
-      entering={
-        animationType === "slide" ?
-          SlideInDown.springify()
-        : FadeIn.duration(200)
-      }
+      entering={animationType === 'slide' ? SlideInDown.springify() : FadeIn.duration(200)}
     >
       {/* Search bar at top position - only show if not using per-tab search */}
-      {showSearch &&
-        searchBarPosition === "top" &&
-        !searchPerTab &&
-        renderSearchBar()}
+      {showSearch && searchBarPosition === 'top' && !searchPerTab && renderSearchBar()}
 
       {/* Tabs with search bar inside */}
-      {showSearch && searchBarPosition === "within-tabs" && tabs && (
+      {showSearch && searchBarPosition === 'within-tabs' && tabs && (
         <View style={styles.tabsWithSearchContainer}>
           {renderSearchBar()}
           {renderTabs()}
@@ -714,67 +671,60 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
       )}
 
       {/* Main content */}
-      {needsScrollView ?
+      {needsScrollView ? (
         <BottomSheetScrollView
           showsVerticalScrollIndicator={true}
           bounces={false}
           style={styles.scrollContainer}
           contentContainerStyle={styles.scrollContentContainer}
-          keyboardShouldPersistTaps='handled'
+          keyboardShouldPersistTaps="handled"
         >
           {/* Search bar above content */}
-          {showSearch &&
-            searchBarPosition === "above-content" &&
-            renderSearchBar()}
+          {showSearch && searchBarPosition === 'above-content' && renderSearchBar()}
 
           {/* Main content */}
           {renderContent()}
 
           {/* Footer */}
-          {footerComponent && (
-            <View style={styles.footerContainer}>{footerComponent}</View>
-          )}
+          {footerComponent && <View style={styles.footerContainer}>{footerComponent}</View>}
         </BottomSheetScrollView>
-      : <View style={styles.contentContainer}>
+      ) : (
+        <View style={styles.contentContainer}>
           {/* Search bar above content */}
-          {showSearch &&
-            searchBarPosition === "above-content" &&
-            renderSearchBar()}
+          {showSearch && searchBarPosition === 'above-content' && renderSearchBar()}
 
           {/* Main content */}
           {renderContent()}
 
           {/* Footer */}
-          {footerComponent && (
-            <View style={styles.footerContainer}>{footerComponent}</View>
-          )}
+          {footerComponent && <View style={styles.footerContainer}>{footerComponent}</View>}
         </View>
-      }
+      )}
     </Animated.View>
   );
 });
-ModernDropdown.displayName = "ModernDropdown";
+ModernDropdown.displayName = 'ModernDropdown';
 
 const styles = StyleSheet.create({
   dropdownContainer: {
     backgroundColor: MODAL_DROPDOWN_COLORS.sheet,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    overflow: "hidden",
+    overflow: 'hidden',
     shadowColor: Colors.dark.shadow,
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 9999,
     zIndex: 10000,
-    paddingBottom: Platform.OS === "ios" ? 34 : 16,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 16,
     marginBottom: 0,
   },
   scrollContainer: {
     flexGrow: 0,
   },
   scrollContentContainer: {
-    paddingBottom: Platform.OS === "ios" ? 34 : 24,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 24,
   },
   contentContainer: {
     paddingBottom: 16,
@@ -788,8 +738,8 @@ const styles = StyleSheet.create({
     borderBottomColor: MODAL_DROPDOWN_COLORS.border,
   },
   searchInputContainer: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: MODAL_DROPDOWN_COLORS.surface,
     borderRadius: 10,
     paddingHorizontal: 12,
@@ -811,7 +761,7 @@ const styles = StyleSheet.create({
   clearButtonText: {
     color: MODAL_DROPDOWN_COLORS.textSecondary,
     fontSize: 12,
-    fontWeight: "600",
+    fontWeight: '600',
   },
 
   // Tabs styles
@@ -821,10 +771,10 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   tabsScrollContent: {
-    flexDirection: "row",
+    flexDirection: 'row',
     paddingHorizontal: 8,
     flexGrow: 1,
-    justifyContent: "space-between",
+    justifyContent: 'space-between',
   },
   tabButton: {
     paddingVertical: 12,
@@ -832,8 +782,8 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
     borderRadius: 8,
     flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
     minWidth: 80,
   },
   tabButtonActive: {
@@ -841,12 +791,12 @@ const styles = StyleSheet.create({
   },
   tabButtonText: {
     fontSize: 15,
-    fontWeight: "500",
+    fontWeight: '500',
     color: MODAL_DROPDOWN_COLORS.textSecondary,
   },
   tabButtonTextActive: {
     color: MODAL_DROPDOWN_COLORS.textPrimary,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   tabContent: {
     flexGrow: 0,
@@ -865,7 +815,7 @@ const styles = StyleSheet.create({
     marginVertical: 4,
     backgroundColor: MODAL_DROPDOWN_COLORS.surface,
     borderRadius: 8,
-    overflow: "hidden",
+    overflow: 'hidden',
     borderWidth: 1,
     borderColor: MODAL_DROPDOWN_COLORS.border,
   },
@@ -878,9 +828,9 @@ const styles = StyleSheet.create({
   },
   categoryTitle: {
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: '600',
     color: MODAL_DROPDOWN_COLORS.textSecondary,
-    textTransform: "uppercase",
+    textTransform: 'uppercase',
   },
   categorySeparator: {
     height: 8,
@@ -896,18 +846,18 @@ const styles = StyleSheet.create({
     backgroundColor: MODAL_DROPDOWN_COLORS.accentSoft,
   },
   itemContent: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   itemLeftContent: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     flex: 1,
   },
   itemTextContainer: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     flex: 1,
   },
   itemText: {
@@ -917,14 +867,14 @@ const styles = StyleSheet.create({
   },
   itemTextSelected: {
     color: MODAL_DROPDOWN_COLORS.accent,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   itemTextWithIcon: {
     marginLeft: 12,
   },
   itemRightContent: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
   },
 
   // Badge styles
@@ -938,7 +888,7 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 12,
     color: MODAL_DROPDOWN_COLORS.textPrimary,
-    fontWeight: "500",
+    fontWeight: '500',
   },
 
   // Separator
@@ -951,24 +901,24 @@ const styles = StyleSheet.create({
   // Loading and empty states
   loadingContainer: {
     padding: 24,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   loadingText: {
     marginTop: 8,
     fontSize: 16,
     color: MODAL_DROPDOWN_COLORS.textSecondary,
-    textAlign: "center",
+    textAlign: 'center',
   },
   emptyContainer: {
     padding: 24,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   emptyText: {
     fontSize: 16,
     color: MODAL_DROPDOWN_COLORS.textSecondary,
-    textAlign: "center",
+    textAlign: 'center',
   },
 
   // Footer

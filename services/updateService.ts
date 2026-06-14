@@ -1,9 +1,10 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as Application from "expo-application";
-import Constants from "expo-constants";
-import * as Updates from "expo-updates";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const OTA_PENDING_UPDATE_KEY = "@ota_pending_update";
+import * as Application from 'expo-application';
+import Constants from 'expo-constants';
+import * as Updates from 'expo-updates';
+
+const OTA_PENDING_UPDATE_KEY = '@ota_pending_update';
 
 interface PendingOtaUpdateData {
   updateId: string | null;
@@ -11,7 +12,7 @@ interface PendingOtaUpdateData {
 }
 
 class UpdateService {
-  private currentChannel: "beta" | "production" | "development";
+  private currentChannel: 'beta' | 'production' | 'development';
   private currentVersion: string;
   private configuredVariant: string;
   private isExpoGo: boolean;
@@ -19,16 +20,14 @@ class UpdateService {
   /**
    * Infer release track from semantic prerelease tags (e.g. 1.5.0-beta.1).
    */
-  private inferTrackFromVersion(
-    version: string | null | undefined,
-  ): "beta" | null {
+  private inferTrackFromVersion(version: string | null | undefined): 'beta' | null {
     if (!version) {
       return null;
     }
 
     const normalized = version.trim().toLowerCase();
     if (/[-.](beta|alpha|rc|preview|pre)\b/.test(normalized)) {
-      return "beta";
+      return 'beta';
     }
 
     return null;
@@ -37,7 +36,7 @@ class UpdateService {
   /**
    * Resolve the intended release track while running in development channel.
    */
-  private getDevelopmentTrack(): "beta" | "production" | "development" {
+  private getDevelopmentTrack(): 'beta' | 'production' | 'development' {
     const versionTrack = this.inferTrackFromVersion(this.currentVersion);
     if (versionTrack) {
       return versionTrack;
@@ -48,7 +47,7 @@ class UpdateService {
       return variantTrack;
     }
 
-    return "development";
+    return 'development';
   }
 
   /**
@@ -56,36 +55,32 @@ class UpdateService {
    */
   private normalizeChannel(
     value: string | null | undefined,
-  ): "beta" | "production" | "development" | null {
+  ): 'beta' | 'production' | 'development' | null {
     if (!value) {
       return null;
     }
 
     const normalized = value.trim().toLowerCase();
 
-    if (
-      normalized === "beta" ||
-      normalized.includes("beta") ||
-      normalized.includes("preview")
-    ) {
-      return "beta";
+    if (normalized === 'beta' || normalized.includes('beta') || normalized.includes('preview')) {
+      return 'beta';
     }
 
     if (
-      normalized === "production" ||
-      normalized === "prod" ||
-      normalized.includes("production") ||
-      normalized.includes("release")
+      normalized === 'production' ||
+      normalized === 'prod' ||
+      normalized.includes('production') ||
+      normalized.includes('release')
     ) {
-      return "production";
+      return 'production';
     }
 
     if (
-      normalized === "development" ||
-      normalized === "dev" ||
-      normalized.includes("development")
+      normalized === 'development' ||
+      normalized === 'dev' ||
+      normalized.includes('development')
     ) {
-      return "development";
+      return 'development';
     }
 
     return null;
@@ -93,11 +88,10 @@ class UpdateService {
 
   constructor() {
     // Check if we're running in Expo Go (not a standalone build)
-    this.isExpoGo = Constants.executionEnvironment === "storeClient";
+    this.isExpoGo = Constants.executionEnvironment === 'storeClient';
 
     // Get variant from app.config.js (expo.extra.environment)
-    this.configuredVariant =
-      Constants.expoConfig?.extra?.environment || "production";
+    this.configuredVariant = Constants.expoConfig?.extra?.environment || 'production';
 
     // Resolve release channel from multiple runtime sources.
     const channelFromUpdates = this.normalizeChannel(Updates.channel);
@@ -105,17 +99,16 @@ class UpdateService {
 
     // If running in Expo Go, always use development channel
     if (this.isExpoGo) {
-      this.currentChannel = "development";
-      this.currentVersion = Constants.expoConfig?.version || "1.0.0";
+      this.currentChannel = 'development';
+      this.currentVersion = Constants.expoConfig?.version || '1.0.0';
       return;
     }
 
     // For standalone builds, trust expo-updates channel first, then app variant.
-    this.currentChannel =
-      channelFromUpdates || channelFromConfig || "development";
+    this.currentChannel = channelFromUpdates || channelFromConfig || 'development';
 
     // Get current app version from native build
-    this.currentVersion = Application.nativeApplicationVersion || "1.0.0";
+    this.currentVersion = Application.nativeApplicationVersion || '1.0.0';
   }
 
   /**
@@ -131,16 +124,16 @@ class UpdateService {
   getCurrentOtaVersionShort(): string {
     const manifestLike = Updates.manifest as any;
     const updateGroupId = manifestLike?.metadata?.updateGroup;
-    if (typeof updateGroupId === "string" && updateGroupId.length >= 8) {
+    if (typeof updateGroupId === 'string' && updateGroupId.length >= 8) {
       return updateGroupId.slice(0, 8);
     }
 
     const updateId = Updates.updateId;
-    if (typeof updateId === "string" && updateId.length >= 8) {
+    if (typeof updateId === 'string' && updateId.length >= 8) {
       return updateId.slice(0, 8);
     }
 
-    return "N/A";
+    return 'N/A';
   }
 
   /**
@@ -160,12 +153,9 @@ class UpdateService {
         fetchedAt: new Date().toISOString(),
       };
 
-      await AsyncStorage.setItem(
-        OTA_PENDING_UPDATE_KEY,
-        JSON.stringify(payload),
-      );
+      await AsyncStorage.setItem(OTA_PENDING_UPDATE_KEY, JSON.stringify(payload));
     } catch (error) {
-      console.error("Error saving pending OTA update:", error);
+      console.error('Error saving pending OTA update:', error);
     }
   }
 
@@ -189,7 +179,7 @@ class UpdateService {
         fetchedAt: parsed.fetchedAt,
       };
     } catch (error) {
-      console.error("Error reading pending OTA update:", error);
+      console.error('Error reading pending OTA update:', error);
       return null;
     }
   }
@@ -201,7 +191,7 @@ class UpdateService {
     try {
       await AsyncStorage.removeItem(OTA_PENDING_UPDATE_KEY);
     } catch (error) {
-      console.error("Error clearing pending OTA update:", error);
+      console.error('Error clearing pending OTA update:', error);
     }
   }
 
@@ -224,7 +214,7 @@ class UpdateService {
       await this.markOtaPending(fetchResult.manifest?.id ?? null);
       return true;
     } catch (error) {
-      console.error("Error preparing OTA update:", error);
+      console.error('Error preparing OTA update:', error);
       return false;
     }
   }
@@ -249,7 +239,7 @@ class UpdateService {
       await Updates.reloadAsync();
       return true;
     } catch (error) {
-      console.error("Error applying staged OTA update:", error);
+      console.error('Error applying staged OTA update:', error);
       await this.markOtaPending(pending.updateId);
       return false;
     }
@@ -268,7 +258,7 @@ class UpdateService {
   getChannelDisplay(): string {
     if (this.isExpoGo) {
       const developmentTrack = this.getDevelopmentTrack();
-      if (developmentTrack !== "development") {
+      if (developmentTrack !== 'development') {
         return `development (${developmentTrack})`;
       }
     }

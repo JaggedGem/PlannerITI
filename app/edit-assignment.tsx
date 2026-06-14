@@ -1,45 +1,50 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Alert,
-  ActivityIndicator,
-  Animated as RNAnimated,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { router, useLocalSearchParams } from "expo-router";
-import { Ionicons } from "@react-native-vector-icons/ionicons";
+import { Ionicons } from '@react-native-vector-icons/ionicons';
+import { isSameDay } from 'date-fns';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  withSpring,
-  withSequence,
   FadeIn,
   Layout,
   runOnJS,
-} from "react-native-reanimated";
-import * as Haptics from "expo-haptics";
-import { isSameDay } from "date-fns";
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+
 import {
-  updateAssignment,
+  ActivityIndicator,
+  Alert,
+  Animated as RNAnimated,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+
+import * as Haptics from 'expo-haptics';
+import { router, useLocalSearchParams } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+
+import { BottomModalPortal } from '@/components/BottomModalPortal';
+import { ModernDropdown, SegmentItem } from '@/components/modernDropdown';
+import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
+import { Colors } from '@/constants/Colors';
+import { useTranslation } from '@/hooks/useTranslation';
+import { runWhenIdle } from '@/utils/runWhenIdle';
+
+import { Subject, scheduleService } from '../services/scheduleService';
+import {
   AssignmentType,
   getAssignments,
   getSubtasksForAssignment,
-} from "../utils/assignmentStorage";
-import { scheduleService, Subject } from "../services/scheduleService";
-import { useTranslation } from "@/hooks/useTranslation";
-import { BottomModalPortal } from "@/components/BottomModalPortal";
-import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
-import { ModernDropdown, SegmentItem } from "@/components/modernDropdown";
-import { useBottomTabOverflow } from "@/components/ui/TabBarBackground";
-import { Colors } from "@/constants/Colors";
-import { StatusBar } from "expo-status-bar";
-import { runWhenIdle } from "@/utils/runWhenIdle";
+  updateAssignment,
+} from '../utils/assignmentStorage';
 
 // Import the components from new-assignment.tsx
 // For a real app, these would be separated into their own files
@@ -56,23 +61,23 @@ interface ExtendedSubject extends Subject {
 // const HIGHLIGHTED_ASSIGNMENTS_KEY = 'highlighted_assignments';
 
 // Add Day names array for the mini calendar - will be replaced with translations inside component
-const DAYS_DEFAULT = ["S", "M", "T", "W", "T", "F", "S"];
+const DAYS_DEFAULT = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
 // Basic structure for quick options, will be populated with translations inside component
 const QUICK_DATE_OPTIONS_DEFAULT = [
-  { label: "Today", days: 0 },
-  { label: "Tomorrow", days: 1 },
-  { label: "Next Week", days: 7 },
-  { label: "In 2 Weeks", days: 14 },
+  { label: 'Today', days: 0 },
+  { label: 'Tomorrow', days: 1 },
+  { label: 'Next Week', days: 7 },
+  { label: 'In 2 Weeks', days: 14 },
 ];
 
 // Add TIME_PRESETS_DEFAULT after QUICK_DATE_OPTIONS_DEFAULT
 const TIME_PRESETS_DEFAULT = [
-  { label: "1st Period", hour: 8, minute: 0 },
-  { label: "2nd Period", hour: 9, minute: 30 },
-  { label: "3rd Period", hour: 11, minute: 20 },
-  { label: "4th Period", hour: 12, minute: 50 },
-  { label: "5th Period", hour: 14, minute: 20 },
+  { label: '1st Period', hour: 8, minute: 0 },
+  { label: '2nd Period', hour: 9, minute: 30 },
+  { label: '3rd Period', hour: 11, minute: 20 },
+  { label: '4th Period', hour: 12, minute: 50 },
+  { label: '5th Period', hour: 14, minute: 20 },
 ];
 
 // Extract QuickOption component outside DatePicker for better stability
@@ -103,8 +108,8 @@ const QuickOption = React.memo(
       const date = new Date();
       date.setDate(date.getDate() + days);
       return date.toLocaleDateString(currentLanguage, {
-        month: "short",
-        day: "numeric",
+        month: 'short',
+        day: 'numeric',
       });
     }, [days, currentLanguage]);
 
@@ -116,26 +121,15 @@ const QuickOption = React.memo(
         layout={Layout.duration(300).springify().mass(0.8)}
       >
         <TouchableOpacity
-          style={[
-            styles.quickDateButton,
-            isSelected && styles.quickDateButtonSelected,
-          ]}
+          style={[styles.quickDateButton, isSelected && styles.quickDateButtonSelected]}
           onPress={() => onSelect(days)}
         >
           <Text
-            style={[
-              styles.quickDateButtonText,
-              isSelected && styles.quickDateButtonTextSelected,
-            ]}
+            style={[styles.quickDateButtonText, isSelected && styles.quickDateButtonTextSelected]}
           >
             {label}
           </Text>
-          <Text
-            style={[
-              styles.quickDateTimeText,
-              isSelected && styles.quickDateTimeTextSelected,
-            ]}
-          >
+          <Text style={[styles.quickDateTimeText, isSelected && styles.quickDateTimeTextSelected]}>
             {dateString}
           </Text>
         </TouchableOpacity>
@@ -143,7 +137,7 @@ const QuickOption = React.memo(
     );
   },
 );
-QuickOption.displayName = "QuickOption";
+QuickOption.displayName = 'QuickOption';
 
 // Add DatePicker component
 const DatePicker = ({
@@ -209,10 +203,7 @@ const DatePicker = ({
       monthTransition.value = selectedDate > calendarMonth ? 1 : -1;
 
       // Then update the month
-      const idleTask = runWhenIdle(
-        () => setCalendarMonth(new Date(selectedDate)),
-        16,
-      );
+      const idleTask = runWhenIdle(() => setCalendarMonth(new Date(selectedDate)), 16);
 
       // Reset transition value after animation
       const timer = setTimeout(() => {
@@ -243,10 +234,10 @@ const DatePicker = ({
           }),
         },
         {
-          translateY: withSpring(
-            monthTransition.value === 0 ? 0 : monthTransition.value * 10,
-            { damping: 15, stiffness: 180 },
-          ),
+          translateY: withSpring(monthTransition.value === 0 ? 0 : monthTransition.value * 10, {
+            damping: 15,
+            stiffness: 180,
+          }),
         },
       ],
       opacity: withSpring(monthTransition.value === 0 ? 1 : 0.7, {
@@ -261,8 +252,8 @@ const DatePicker = ({
     return {
       opacity: calendarOpacity.value,
       transform: [{ scale: calendarScale.value }],
-      height: showCalendar ? "auto" : 0,
-      overflow: "hidden",
+      height: showCalendar ? 'auto' : 0,
+      overflow: 'hidden',
     };
   });
 
@@ -375,9 +366,7 @@ const DatePicker = ({
         newDate.getMonth() !== calendarMonth.getMonth() ||
         newDate.getFullYear() !== calendarMonth.getFullYear()
       ) {
-        setCalendarMonth(
-          new Date(newDate.getFullYear(), newDate.getMonth(), 1),
-        );
+        setCalendarMonth(new Date(newDate.getFullYear(), newDate.getMonth(), 1));
       }
 
       // Copy time from the existing selected date
@@ -398,10 +387,8 @@ const DatePicker = ({
 
   // Get month name based on current language
   const monthName = (() => {
-    const options: Intl.DateTimeFormatOptions = { month: "long" };
-    return new Intl.DateTimeFormat(currentLanguage, options).format(
-      calendarMonth,
-    );
+    const options: Intl.DateTimeFormatOptions = { month: 'long' };
+    return new Intl.DateTimeFormat(currentLanguage, options).format(calendarMonth);
   })();
 
   // Get year
@@ -436,41 +423,25 @@ const DatePicker = ({
         style={styles.dateDisplayButton}
         onPress={() => setShowCalendar(!showCalendar)}
       >
-        <Ionicons
-          name='calendar-outline'
-          size={20}
-          color={Colors.dark.primaryStrong}
-        />
+        <Ionicons name="calendar-outline" size={20} color={Colors.dark.primaryStrong} />
         <Text style={styles.dateDisplayText}>{formatDate(selectedDate)}</Text>
         <Animated.View style={chevronStyle}>
-          <Ionicons name='chevron-down' size={16} color={Colors.dark.gray} />
+          <Ionicons name="chevron-down" size={16} color={Colors.dark.gray} />
         </Animated.View>
       </TouchableOpacity>
 
       <Animated.View style={[styles.calendarContainer, calendarContainerStyle]}>
         <View style={styles.calendarHeader}>
-          <TouchableOpacity
-            style={styles.calendarNavButton}
-            onPress={() => navigateMonth(-1)}
-          >
-            <Ionicons name='chevron-back' size={20} color={Colors.dark.gray} />
+          <TouchableOpacity style={styles.calendarNavButton} onPress={() => navigateMonth(-1)}>
+            <Ionicons name="chevron-back" size={20} color={Colors.dark.gray} />
           </TouchableOpacity>
 
           <Animated.View style={monthAnimStyle}>
-            <Text style={styles.calendarMonthYear}>
-              {`${monthName} ${year}`}
-            </Text>
+            <Text style={styles.calendarMonthYear}>{`${monthName} ${year}`}</Text>
           </Animated.View>
 
-          <TouchableOpacity
-            style={styles.calendarNavButton}
-            onPress={() => navigateMonth(1)}
-          >
-            <Ionicons
-              name='chevron-forward'
-              size={20}
-              color={Colors.dark.gray}
-            />
+          <TouchableOpacity style={styles.calendarNavButton} onPress={() => navigateMonth(1)}>
+            <Ionicons name="chevron-forward" size={20} color={Colors.dark.gray} />
           </TouchableOpacity>
         </View>
 
@@ -482,10 +453,7 @@ const DatePicker = ({
           ))}
         </View>
 
-        <Animated.View
-          style={styles.calendarDaysGrid}
-          entering={FadeIn.duration(200)}
-        >
+        <Animated.View style={styles.calendarDaysGrid} entering={FadeIn.duration(200)}>
           {calendarDays.map((day, index) => {
             const isSelected = checkSameDay(day.date, selectedDate);
             const isToday = day.isToday;
@@ -525,17 +493,13 @@ const DatePicker = ({
             onPress={() => {
               monthTransition.value = new Date() > calendarMonth ? 1 : -1;
               const today = new Date();
-              setCalendarMonth(
-                new Date(today.getFullYear(), today.getMonth(), 1),
-              );
+              setCalendarMonth(new Date(today.getFullYear(), today.getMonth(), 1));
               setTimeout(() => {
                 monthTransition.value = 0;
               }, 300);
             }}
           >
-            <Text style={styles.todayButtonText}>
-              {quickDateOptions[0]?.label || "Today"}
-            </Text>
+            <Text style={styles.todayButtonText}>{quickDateOptions[0]?.label || 'Today'}</Text>
           </TouchableOpacity>
         )}
       </Animated.View>
@@ -555,7 +519,7 @@ const TimePicker = ({
   timePresets?: { label: string; hour: number; minute: number }[];
 }) => {
   const { formatTimeFromDate, currentLanguage } = useTranslation();
-  const shouldUse24HourFormat = currentLanguage !== "en";
+  const shouldUse24HourFormat = currentLanguage !== 'en';
 
   // Animation shared values
   const hourRotation = useSharedValue(0);
@@ -578,13 +542,7 @@ const TimePicker = ({
     } else {
       // In 12-hour format, adjust based on AM/PM
       const isPM = selectedTime.getHours() >= 12;
-      const adjustedHour =
-        isPM ?
-          hour === 12 ?
-            12
-          : hour + 12
-        : hour === 12 ? 0
-        : hour;
+      const adjustedHour = isPM ? (hour === 12 ? 12 : hour + 12) : hour === 12 ? 0 : hour;
       newTime.setHours(adjustedHour);
     }
 
@@ -614,12 +572,13 @@ const TimePicker = ({
     const newTime = new Date(selectedTime);
     const currentHours = newTime.getHours();
     const newHours =
-      currentHours >= 12 ?
-        currentHours === 12 ?
-          0
-        : currentHours - 12
-      : currentHours === 0 ? 12
-      : currentHours + 12;
+      currentHours >= 12
+        ? currentHours === 12
+          ? 0
+          : currentHours - 12
+        : currentHours === 0
+          ? 12
+          : currentHours + 12;
     newTime.setHours(newHours);
     onTimeChange(newTime);
   };
@@ -661,8 +620,8 @@ const TimePicker = ({
           styles.timeDisplay,
           {
             fontSize: 24,
-            fontWeight: "600",
-            textAlign: "center",
+            fontWeight: '600',
+            textAlign: 'center',
             marginBottom: 15,
           },
         ]}
@@ -686,15 +645,9 @@ const TimePicker = ({
               selectedTime.getMinutes() === preset.minute;
 
             return (
-              <Animated.View
-                key={index}
-                entering={FadeIn.delay(index * 50).duration(180)}
-              >
+              <Animated.View key={index} entering={FadeIn.delay(index * 50).duration(180)}>
                 <TouchableOpacity
-                  style={[
-                    styles.timePresetButton,
-                    isSelected && styles.timePresetButtonSelected,
-                  ]}
+                  style={[styles.timePresetButton, isSelected && styles.timePresetButtonSelected]}
                   onPress={() => {
                     animatePresetButton();
                     const newTime = new Date(selectedTime);
@@ -745,13 +698,13 @@ const TimePicker = ({
                 }
               }}
             >
-              <Ionicons name='chevron-up' size={24} color={Colors.dark.white} />
+              <Ionicons name="chevron-up" size={24} color={Colors.dark.white} />
             </TouchableOpacity>
 
             <Animated.Text style={[styles.timeWheelText, hourAnimStyle]}>
-              {shouldUse24HourFormat ?
-                selectedTime.getHours().toString().padStart(2, "0")
-              : selectedTime.getHours() % 12 || 12}
+              {shouldUse24HourFormat
+                ? selectedTime.getHours().toString().padStart(2, '0')
+                : selectedTime.getHours() % 12 || 12}
             </Animated.Text>
 
             <TouchableOpacity
@@ -770,11 +723,7 @@ const TimePicker = ({
                 }
               }}
             >
-              <Ionicons
-                name='chevron-down'
-                size={24}
-                color={Colors.dark.white}
-              />
+              <Ionicons name="chevron-down" size={24} color={Colors.dark.white} />
             </TouchableOpacity>
           </View>
         </View>
@@ -793,13 +742,13 @@ const TimePicker = ({
                 else updateMinute(nextMinute);
               }}
             >
-              <Ionicons name='chevron-up' size={24} color={Colors.dark.white} />
+              <Ionicons name="chevron-up" size={24} color={Colors.dark.white} />
             </TouchableOpacity>
 
             <Animated.Text style={[styles.timeWheelText, minuteAnimStyle]}>
-              {selectedTime.getMinutes() < 10 ?
-                `0${selectedTime.getMinutes()}`
-              : selectedTime.getMinutes()}
+              {selectedTime.getMinutes() < 10
+                ? `0${selectedTime.getMinutes()}`
+                : selectedTime.getMinutes()}
             </Animated.Text>
 
             <TouchableOpacity
@@ -810,11 +759,7 @@ const TimePicker = ({
                 else updateMinute(Math.max(0, currentMinute - 5));
               }}
             >
-              <Ionicons
-                name='chevron-down'
-                size={24}
-                color={Colors.dark.white}
-              />
+              <Ionicons name="chevron-down" size={24} color={Colors.dark.white} />
             </TouchableOpacity>
           </View>
         </View>
@@ -825,7 +770,7 @@ const TimePicker = ({
             <Animated.View style={amPmAnimStyle}>
               <TouchableOpacity style={styles.amPmToggle} onPress={toggleAmPm}>
                 <Text style={styles.amPmToggleText}>
-                  {selectedTime.getHours() >= 12 ? "PM" : "AM"}
+                  {selectedTime.getHours() >= 12 ? 'PM' : 'AM'}
                 </Text>
               </TouchableOpacity>
             </Animated.View>
@@ -841,16 +786,14 @@ const CustomToggle = ({
   value,
   onValueChange,
   disabled = false,
-  size = "medium",
+  size = 'medium',
 }: {
   value: boolean;
   onValueChange: (value: boolean) => void;
   disabled?: boolean;
-  size?: "small" | "medium";
+  size?: 'small' | 'medium';
 }) => {
-  const animatedValue = React.useRef(
-    new RNAnimated.Value(value ? 1 : 0),
-  ).current;
+  const animatedValue = React.useRef(new RNAnimated.Value(value ? 1 : 0)).current;
 
   React.useEffect(() => {
     RNAnimated.timing(animatedValue, {
@@ -860,9 +803,9 @@ const CustomToggle = ({
     }).start();
   }, [value, animatedValue]);
 
-  const trackWidth = size === "small" ? 40 : 50;
-  const trackHeight = size === "small" ? 22 : 28;
-  const thumbSize = size === "small" ? 18 : 24;
+  const trackWidth = size === 'small' ? 40 : 50;
+  const trackHeight = size === 'small' ? 22 : 28;
+  const thumbSize = size === 'small' ? 18 : 24;
   const thumbMargin = (trackHeight - thumbSize) / 2;
 
   const thumbPosition = animatedValue.interpolate({
@@ -872,9 +815,8 @@ const CustomToggle = ({
 
   const trackColor = animatedValue.interpolate({
     inputRange: [0, 1],
-    outputRange:
-      disabled ?
-        [Colors.dark.orphanedCourseBackground, Colors.dark.neutral900]
+    outputRange: disabled
+      ? [Colors.dark.orphanedCourseBackground, Colors.dark.neutral900]
       : [Colors.dark.border, Colors.dark.primaryStrong],
   });
 
@@ -890,10 +832,9 @@ const CustomToggle = ({
           height: trackHeight,
           borderRadius: trackHeight / 2,
           backgroundColor: trackColor,
-          justifyContent: "center",
+          justifyContent: 'center',
           borderWidth: 1,
-          borderColor:
-            value ? Colors.dark.primaryStrong : Colors.dark.toggleOffBorder,
+          borderColor: value ? Colors.dark.primaryStrong : Colors.dark.toggleOffBorder,
         }}
       >
         <RNAnimated.View
@@ -901,10 +842,11 @@ const CustomToggle = ({
             width: thumbSize,
             height: thumbSize,
             borderRadius: thumbSize / 2,
-            backgroundColor:
-              disabled ? Colors.dark.neutral700
-              : value ? Colors.dark.white
-              : Colors.dark.offWhite,
+            backgroundColor: disabled
+              ? Colors.dark.neutral700
+              : value
+                ? Colors.dark.white
+                : Colors.dark.offWhite,
             transform: [{ translateX: thumbPosition }],
             shadowColor: Colors.dark.black,
             shadowOffset: { width: 0, height: 1 },
@@ -930,23 +872,20 @@ export default function EditAssignmentScreen() {
   const [isSaving, setIsSaving] = useState(false);
 
   // State for assignment fields
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
   const [dueDate, setDueDate] = useState(new Date());
   const [isPriority, setIsPriority] = useState(false);
-  const [assignmentType, setAssignmentType] = useState<AssignmentType>(
-    AssignmentType.HOMEWORK,
-  );
-  const [selectedSubject, setSelectedSubject] =
-    useState<ExtendedSubject | null>(null);
-  const [, setCourseCode] = useState("");
-  const [courseName, setCourseName] = useState("");
+  const [assignmentType, setAssignmentType] = useState<AssignmentType>(AssignmentType.HOMEWORK);
+  const [selectedSubject, setSelectedSubject] = useState<ExtendedSubject | null>(null);
+  const [, setCourseCode] = useState('');
+  const [courseName, setCourseName] = useState('');
   const [periodId, setPeriodId] = useState<string | undefined>(undefined);
   const [subjectId, setSubjectId] = useState<string | undefined>(undefined);
-  const [subtasks, setSubtasks] = useState<
-    { id: string; title: string; isCompleted: boolean }[]
-  >([]);
-  const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
+  const [subtasks, setSubtasks] = useState<{ id: string; title: string; isCompleted: boolean }[]>(
+    [],
+  );
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
 
   // Add state to track original assignment data for change detection
   const [originalAssignment, setOriginalAssignment] = useState<{
@@ -963,21 +902,17 @@ export default function EditAssignmentScreen() {
   const titleInputRef = useRef<TextInput>(null);
 
   // Translation hook
-  const {
-    t,
-    currentLanguage,
-    formatDate: formatDateFromHook,
-  } = useTranslation();
+  const { t, currentLanguage, formatDate: formatDateFromHook } = useTranslation();
   const bottomTabOverflow = useBottomTabOverflow();
 
   // Wrapper for formatDate to match DatePicker expectations
   const formatDate = useCallback(
     (date: Date) => {
       return formatDateFromHook(date, {
-        weekday: "short",
-        month: "long",
-        day: "numeric",
-        year: "numeric",
+        weekday: 'short',
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
       });
     },
     [formatDateFromHook],
@@ -995,15 +930,15 @@ export default function EditAssignmentScreen() {
         const assignment = assignments.find((a) => a.id === id);
 
         if (!assignment) {
-          Alert.alert("Error", "Assignment not found.", [
-            { text: "OK", onPress: () => router.back() },
+          Alert.alert('Error', 'Assignment not found.', [
+            { text: 'OK', onPress: () => router.back() },
           ]);
           return;
         }
 
         // Set state from assignment
         setTitle(assignment.title);
-        setDescription(assignment.description || "");
+        setDescription(assignment.description || '');
         setDueDate(new Date(assignment.dueDate));
         setIsPriority(assignment.isPriority);
         setAssignmentType(assignment.assignmentType);
@@ -1019,7 +954,7 @@ export default function EditAssignmentScreen() {
         // Save original data for change detection
         setOriginalAssignment({
           title: assignment.title,
-          description: assignment.description || "",
+          description: assignment.description || '',
           dueDate: assignment.dueDate,
           isPriority: assignment.isPriority,
           assignmentType: assignment.assignmentType,
@@ -1031,20 +966,18 @@ export default function EditAssignmentScreen() {
         if (assignment.subjectId) {
           try {
             const allSubjects = await scheduleService.getSubjects();
-            const subj = allSubjects.find(
-              (s: Subject) => s.id === assignment.subjectId,
-            );
+            const subj = allSubjects.find((s: Subject) => s.id === assignment.subjectId);
             if (subj) {
               setSelectedSubject(subj);
             }
           } catch (error) {
-            console.error("Error loading subject:", error);
+            console.error('Error loading subject:', error);
           }
         }
       } catch (error) {
-        console.error("Error loading assignment:", error);
-        Alert.alert("Error", "Failed to load assignment. Please try again.", [
-          { text: "OK", onPress: () => router.back() },
+        console.error('Error loading assignment:', error);
+        Alert.alert('Error', 'Failed to load assignment. Please try again.', [
+          { text: 'OK', onPress: () => router.back() },
         ]);
       } finally {
         setIsLoading(false);
@@ -1107,9 +1040,7 @@ export default function EditAssignmentScreen() {
   // Handle saving the updated assignment
   const handleUpdate = async () => {
     if (!title.trim()) {
-      Alert.alert("Error", "Please enter a title for the assignment.", [
-        { text: "OK" },
-      ]);
+      Alert.alert('Error', 'Please enter a title for the assignment.', [{ text: 'OK' }]);
       return;
     }
 
@@ -1143,10 +1074,8 @@ export default function EditAssignmentScreen() {
       // Navigate back
       router.back();
     } catch (error) {
-      console.error("Error updating assignment:", error);
-      Alert.alert("Error", "Failed to update assignment. Please try again.", [
-        { text: "OK" },
-      ]);
+      console.error('Error updating assignment:', error);
+      Alert.alert('Error', 'Failed to update assignment. Please try again.', [{ text: 'OK' }]);
     } finally {
       setIsSaving(false);
     }
@@ -1159,7 +1088,7 @@ export default function EditAssignmentScreen() {
 
   // Handle adding a subtask
   const handleAddSubtask = () => {
-    if (newSubtaskTitle.trim() === "") return;
+    if (newSubtaskTitle.trim() === '') return;
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const newSubtask = {
@@ -1169,7 +1098,7 @@ export default function EditAssignmentScreen() {
     };
 
     setSubtasks([...subtasks, newSubtask]);
-    setNewSubtaskTitle("");
+    setNewSubtaskTitle('');
   };
 
   // Handle removing a subtask
@@ -1189,23 +1118,23 @@ export default function EditAssignmentScreen() {
   const getTypeIcon = (): any => {
     switch (assignmentType) {
       case AssignmentType.HOMEWORK:
-        return "book-outline";
+        return 'book-outline';
       case AssignmentType.TEST:
-        return "document-text-outline";
+        return 'document-text-outline';
       case AssignmentType.EXAM:
-        return "school-outline";
+        return 'school-outline';
       case AssignmentType.PROJECT:
-        return "construct-outline";
+        return 'construct-outline';
       case AssignmentType.QUIZ:
-        return "clipboard-outline";
+        return 'clipboard-outline';
       case AssignmentType.LAB:
-        return "flask-outline";
+        return 'flask-outline';
       case AssignmentType.ESSAY:
-        return "create-outline";
+        return 'create-outline';
       case AssignmentType.PRESENTATION:
-        return "easel-outline";
+        return 'easel-outline';
       default:
-        return "ellipsis-horizontal-outline";
+        return 'ellipsis-horizontal-outline';
     }
   };
 
@@ -1213,16 +1142,16 @@ export default function EditAssignmentScreen() {
   if (isLoading) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
-        <StatusBar style='light' />
-        <ActivityIndicator size='large' color={Colors.dark.primaryStrong} />
-        <Text style={styles.loadingText}>{t("assignments").loading}</Text>
+        <StatusBar style="light" />
+        <ActivityIndicator size="large" color={Colors.dark.primaryStrong} />
+        <Text style={styles.loadingText}>{t('assignments').loading}</Text>
       </SafeAreaView>
     );
   }
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar style='light' />
+      <StatusBar style="light" />
 
       {/* Header */}
       <View style={styles.header}>
@@ -1231,18 +1160,13 @@ export default function EditAssignmentScreen() {
           onPress={handleCancel}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Ionicons
-            name='chevron-back'
-            size={28}
-            color={Colors.dark.primaryStrong}
-          />
+          <Ionicons name="chevron-back" size={28} color={Colors.dark.primaryStrong} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t("assignments").editTitle}</Text>
+        <Text style={styles.headerTitle}>{t('assignments').editTitle}</Text>
         <TouchableOpacity
           style={[
             styles.saveButton,
-            (!title.trim() || isSaving || !hasChanges()) &&
-              styles.saveButtonDisabled,
+            (!title.trim() || isSaving || !hasChanges()) && styles.saveButtonDisabled,
           ]}
           onPress={handleUpdate}
           disabled={!title.trim() || isSaving || !hasChanges()}
@@ -1250,13 +1174,10 @@ export default function EditAssignmentScreen() {
           <Text
             style={[
               styles.saveButtonText,
-              (!title.trim() || isSaving || !hasChanges()) &&
-                styles.saveButtonTextDisabled,
+              (!title.trim() || isSaving || !hasChanges()) && styles.saveButtonTextDisabled,
             ]}
           >
-            {isSaving ?
-              t("assignments").updating || "Updating..."
-            : t("assignments").update}
+            {isSaving ? t('assignments').updating || 'Updating...' : t('assignments').update}
           </Text>
         </TouchableOpacity>
       </View>
@@ -1264,11 +1185,8 @@ export default function EditAssignmentScreen() {
       {/* Main Content */}
       <KeyboardAwareScrollView
         style={styles.scrollView}
-        contentContainerStyle={[
-          styles.formContainer,
-          { paddingBottom: 24 + bottomTabOverflow },
-        ]}
-        keyboardShouldPersistTaps='handled'
+        contentContainerStyle={[styles.formContainer, { paddingBottom: 24 + bottomTabOverflow }]}
+        keyboardShouldPersistTaps="handled"
         extraScrollHeight={20}
       >
         {/* Title Input */}
@@ -1276,11 +1194,11 @@ export default function EditAssignmentScreen() {
           <TextInput
             ref={titleInputRef}
             style={styles.titleInput}
-            placeholder={t("assignments").titlePlaceholder}
+            placeholder={t('assignments').titlePlaceholder}
             placeholderTextColor={Colors.dark.neutral500}
             value={title}
             onChangeText={setTitle}
-            autoCapitalize='sentences'
+            autoCapitalize="sentences"
             autoCorrect={true}
             maxLength={100}
           />
@@ -1289,21 +1207,18 @@ export default function EditAssignmentScreen() {
         {/* Description Input */}
         <View style={styles.inputContainer}>
           <Text style={styles.inputLabel}>
-            {t("assignments").description}
-            <Text style={styles.optionalText}>
-              {" "}
-              ({t("assignments").optional})
-            </Text>
+            {t('assignments').description}
+            <Text style={styles.optionalText}> ({t('assignments').optional})</Text>
           </Text>
           <TextInput
             style={styles.descriptionInput}
-            placeholder={t("assignments").descriptionPlaceholder}
+            placeholder={t('assignments').descriptionPlaceholder}
             placeholderTextColor={Colors.dark.neutral500}
             value={description}
             onChangeText={setDescription}
             multiline
             numberOfLines={4}
-            autoCapitalize='sentences'
+            autoCapitalize="sentences"
             autoCorrect={true}
             maxLength={500}
           />
@@ -1311,11 +1226,8 @@ export default function EditAssignmentScreen() {
 
         {/* Assignment Type */}
         <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>{t("assignments").type}</Text>
-          <TouchableOpacity
-            style={styles.typeSelector}
-            onPress={() => setIsTypeModalVisible(true)}
-          >
+          <Text style={styles.inputLabel}>{t('assignments').type}</Text>
+          <TouchableOpacity style={styles.typeSelector} onPress={() => setIsTypeModalVisible(true)}>
             <View style={styles.typeDisplay}>
               <Ionicons
                 name={getTypeIcon()}
@@ -1325,44 +1237,40 @@ export default function EditAssignmentScreen() {
               />
               <Text style={styles.typeText}>
                 {
-                  t("assignments").types[
+                  t('assignments').types[
                     assignmentType.toLowerCase() as
-                      | "homework"
-                      | "test"
-                      | "exam"
-                      | "project"
-                      | "quiz"
-                      | "lab"
-                      | "essay"
-                      | "presentation"
-                      | "other"
+                      | 'homework'
+                      | 'test'
+                      | 'exam'
+                      | 'project'
+                      | 'quiz'
+                      | 'lab'
+                      | 'essay'
+                      | 'presentation'
+                      | 'other'
                   ]
                 }
               </Text>
             </View>
-            <Ionicons
-              name='chevron-down'
-              size={20}
-              color={Colors.dark.neutral500}
-            />
+            <Ionicons name="chevron-down" size={20} color={Colors.dark.neutral500} />
           </TouchableOpacity>
         </View>
 
         {/* Due Date - show DatePicker immediately */}
         <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>{t("assignments").dueDate}</Text>
+          <Text style={styles.inputLabel}>{t('assignments').dueDate}</Text>
           <DatePicker
             selectedDate={dueDate}
             onDateChange={setDueDate}
             formatDate={formatDate}
             currentLanguage={currentLanguage}
-            days={t("weekdays").short}
+            days={t('weekdays').short}
             quickDateOptions={[
-              { label: t("assignments").days.today, days: 0 },
-              { label: t("assignments").days.tomorrow, days: 1 },
-              { label: t("assignments").days.nextWeek, days: 7 },
+              { label: t('assignments').days.today, days: 0 },
+              { label: t('assignments').days.tomorrow, days: 1 },
+              { label: t('assignments').days.nextWeek, days: 7 },
               {
-                label: t("assignments").days.inTwoWeeks,
+                label: t('assignments').days.inTwoWeeks,
                 days: 14,
               },
             ]}
@@ -1371,7 +1279,7 @@ export default function EditAssignmentScreen() {
 
         {/* Due Time - show TimePicker immediately */}
         <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>{t("assignments").dueTime}</Text>
+          <Text style={styles.inputLabel}>{t('assignments').dueTime}</Text>
           <TimePicker
             selectedTime={dueDate}
             onTimeChange={(time) => {
@@ -1381,27 +1289,27 @@ export default function EditAssignmentScreen() {
             }}
             timePresets={[
               {
-                label: t("assignments").periods.first,
+                label: t('assignments').periods.first,
                 hour: 8,
                 minute: 0,
               },
               {
-                label: t("assignments").periods.second,
+                label: t('assignments').periods.second,
                 hour: 9,
                 minute: 30,
               },
               {
-                label: t("assignments").periods.third,
+                label: t('assignments').periods.third,
                 hour: 11,
                 minute: 20,
               },
               {
-                label: t("assignments").periods.fourth,
+                label: t('assignments').periods.fourth,
                 hour: 12,
                 minute: 50,
               },
               {
-                label: t("assignments").periods.fifth,
+                label: t('assignments').periods.fifth,
                 hour: 14,
                 minute: 20,
               },
@@ -1412,18 +1320,14 @@ export default function EditAssignmentScreen() {
         {/* Priority Toggle */}
         <View style={styles.inputContainer}>
           <View style={styles.toggleRow}>
-            <Text style={styles.inputLabel}>
-              {t("assignments").markAsPriority}
-            </Text>
+            <Text style={styles.inputLabel}>{t('assignments').markAsPriority}</Text>
             <CustomToggle value={isPriority} onValueChange={setIsPriority} />
           </View>
         </View>
 
         {/* Subtasks */}
         <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>
-            {t("assignments").subtasks.title}
-          </Text>
+          <Text style={styles.inputLabel}>{t('assignments').subtasks.title}</Text>
 
           {/* Existing Subtasks */}
           {subtasks.map((subtask, index) => (
@@ -1432,24 +1336,16 @@ export default function EditAssignmentScreen() {
                 style={styles.subtaskCheckbox}
                 onPress={() => {
                   const updatedSubtasks = [...subtasks];
-                  updatedSubtasks[index].isCompleted =
-                    !updatedSubtasks[index].isCompleted;
+                  updatedSubtasks[index].isCompleted = !updatedSubtasks[index].isCompleted;
                   setSubtasks(updatedSubtasks);
                 }}
               >
                 {subtask.isCompleted && (
-                  <Ionicons
-                    name='checkmark'
-                    size={16}
-                    color={Colors.dark.primaryStrong}
-                  />
+                  <Ionicons name="checkmark" size={16} color={Colors.dark.primaryStrong} />
                 )}
               </TouchableOpacity>
               <Text
-                style={[
-                  styles.subtaskTitle,
-                  subtask.isCompleted && styles.subtaskTitleCompleted,
-                ]}
+                style={[styles.subtaskTitle, subtask.isCompleted && styles.subtaskTitleCompleted]}
               >
                 {subtask.title}
               </Text>
@@ -1457,11 +1353,7 @@ export default function EditAssignmentScreen() {
                 style={styles.subtaskDeleteButton}
                 onPress={() => handleRemoveSubtask(subtask.id)}
               >
-                <Ionicons
-                  name='close-circle'
-                  size={18}
-                  color={Colors.dark.neutral500}
-                />
+                <Ionicons name="close-circle" size={18} color={Colors.dark.neutral500} />
               </TouchableOpacity>
             </View>
           ))}
@@ -1470,7 +1362,7 @@ export default function EditAssignmentScreen() {
           <View style={styles.addSubtaskContainer}>
             <TextInput
               style={styles.subtaskInput}
-              placeholder={t("assignments").subtasks.placeholder}
+              placeholder={t('assignments').subtasks.placeholder}
               placeholderTextColor={Colors.dark.neutral500}
               value={newSubtaskTitle}
               onChangeText={setNewSubtaskTitle}
@@ -1479,26 +1371,19 @@ export default function EditAssignmentScreen() {
             <TouchableOpacity
               style={[
                 styles.addSubtaskButton,
-                newSubtaskTitle.trim() === "" &&
-                  styles.addSubtaskButtonDisabled,
+                newSubtaskTitle.trim() === '' && styles.addSubtaskButtonDisabled,
               ]}
               onPress={handleAddSubtask}
-              disabled={newSubtaskTitle.trim() === ""}
+              disabled={newSubtaskTitle.trim() === ''}
             >
               <Ionicons
-                name='add'
+                name="add"
                 size={20}
-                color={
-                  newSubtaskTitle.trim() === "" ?
-                    Colors.dark.neutral500
-                  : Colors.dark.white
-                }
+                color={newSubtaskTitle.trim() === '' ? Colors.dark.neutral500 : Colors.dark.white}
               />
             </TouchableOpacity>
           </View>
-          <Text style={styles.subtaskHint}>
-            {t("assignments").subtasks.hint}
-          </Text>
+          <Text style={styles.subtaskHint}>{t('assignments').subtasks.hint}</Text>
         </View>
 
         <View style={{ height: 24 + bottomTabOverflow }} />
@@ -1508,11 +1393,11 @@ export default function EditAssignmentScreen() {
       <BottomModalPortal
         isVisible={isTypeModalVisible}
         onClose={() => setIsTypeModalVisible(false)}
-        snapPoints={["74%", "92%"]}
+        snapPoints={['74%', '92%']}
         contentContainerStyle={styles.dropdownSheetContent}
       >
         <ModernDropdown
-          title={t("assignments").type}
+          title={t('assignments').type}
           isVisible={isTypeModalVisible}
           onClose={() => setIsTypeModalVisible(false)}
           items={Object.values(AssignmentType).map((type) => {
@@ -1520,55 +1405,49 @@ export default function EditAssignmentScreen() {
             const getTypeSpecificIcon = () => {
               switch (type) {
                 case AssignmentType.HOMEWORK:
-                  return "book-outline";
+                  return 'book-outline';
                 case AssignmentType.TEST:
-                  return "document-text-outline";
+                  return 'document-text-outline';
                 case AssignmentType.EXAM:
-                  return "school-outline";
+                  return 'school-outline';
                 case AssignmentType.PROJECT:
-                  return "construct-outline";
+                  return 'construct-outline';
                 case AssignmentType.QUIZ:
-                  return "clipboard-outline";
+                  return 'clipboard-outline';
                 case AssignmentType.LAB:
-                  return "flask-outline";
+                  return 'flask-outline';
                 case AssignmentType.ESSAY:
-                  return "create-outline";
+                  return 'create-outline';
                 case AssignmentType.PRESENTATION:
-                  return "easel-outline";
+                  return 'easel-outline';
                 default:
-                  return "ellipsis-horizontal-outline";
+                  return 'ellipsis-horizontal-outline';
               }
             };
 
             return {
               id: type,
               label:
-                t("assignments").types[
+                t('assignments').types[
                   type.toLowerCase() as
-                    | "homework"
-                    | "test"
-                    | "exam"
-                    | "project"
-                    | "quiz"
-                    | "lab"
-                    | "essay"
-                    | "presentation"
-                    | "other"
+                    | 'homework'
+                    | 'test'
+                    | 'exam'
+                    | 'project'
+                    | 'quiz'
+                    | 'lab'
+                    | 'essay'
+                    | 'presentation'
+                    | 'other'
                 ],
               icon: (
-                <Ionicons
-                  name={getTypeSpecificIcon() as any}
-                  size={24}
-                  color={Colors.dark.white}
-                />
+                <Ionicons name={getTypeSpecificIcon() as any} size={24} color={Colors.dark.white} />
               ),
               isSelected: type === assignmentType,
             };
           })}
           selectedItemId={assignmentType}
-          onSelectItem={(item: SegmentItem) =>
-            handleTypeSelection(item.id as AssignmentType)
-          }
+          onSelectItem={(item: SegmentItem) => handleTypeSelection(item.id as AssignmentType)}
           maxOptions={7}
           disableScroll={true}
           enableDynamicSizing={true}
@@ -1589,8 +1468,8 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: Colors.dark.backgroundApp,
   },
   loadingText: {
@@ -1599,9 +1478,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
@@ -1612,7 +1491,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: "600",
+    fontWeight: '600',
     color: Colors.dark.white,
   },
   saveButton: {
@@ -1621,7 +1500,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.dark.primaryStrong,
     borderRadius: 8,
     minWidth: 80,
-    alignItems: "center",
+    alignItems: 'center',
   },
   saveButtonDisabled: {
     backgroundColor: Colors.dark.disabledBackground,
@@ -1630,7 +1509,7 @@ const styles = StyleSheet.create({
   },
   saveButtonText: {
     color: Colors.dark.white,
-    fontWeight: "600",
+    fontWeight: '600',
     fontSize: 15,
   },
   saveButtonTextDisabled: {
@@ -1648,13 +1527,13 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     fontSize: 15,
-    fontWeight: "600",
+    fontWeight: '600',
     color: Colors.dark.white,
     marginBottom: 8,
   },
   optionalText: {
     color: Colors.dark.mutedText,
-    fontWeight: "400",
+    fontWeight: '400',
   },
   titleInput: {
     backgroundColor: Colors.dark.surfaceSecondary,
@@ -1672,14 +1551,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.dark.white,
     height: 100,
-    textAlignVertical: "top",
+    textAlignVertical: 'top',
     borderWidth: 1,
     borderColor: Colors.dark.border,
   },
   typeSelector: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: Colors.dark.surfaceSecondary,
     padding: 12,
     borderRadius: 8,
@@ -1687,8 +1566,8 @@ const styles = StyleSheet.create({
     borderColor: Colors.dark.border,
   },
   typeDisplay: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   typeIcon: {
     marginRight: 8,
@@ -1696,7 +1575,7 @@ const styles = StyleSheet.create({
   typeText: {
     color: Colors.dark.white,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   datePickerContainer: {
     marginTop: 8,
@@ -1707,13 +1586,13 @@ const styles = StyleSheet.create({
     borderColor: Colors.dark.borderMuted,
   },
   datePickerContent: {
-    flexDirection: "column",
-    width: "100%",
+    flexDirection: 'column',
+    width: '100%',
   },
   dateDisplayButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: Colors.dark.surfaceSecondary,
     padding: 12,
     borderRadius: 8,
@@ -1744,9 +1623,9 @@ const styles = StyleSheet.create({
     borderColor: Colors.dark.borderMuted,
   },
   calendarHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 12,
   },
   calendarNavButton: {
@@ -1756,35 +1635,35 @@ const styles = StyleSheet.create({
   calendarMonthYear: {
     color: Colors.dark.white,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   calendarDaysHeader: {
-    flexDirection: "row",
+    flexDirection: 'row',
     marginBottom: 10,
   },
   calendarDayHeaderText: {
     flex: 1,
-    textAlign: "center",
+    textAlign: 'center',
     color: Colors.dark.mutedText,
     fontSize: 12,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   calendarDaysGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
+    flexDirection: 'row',
+    flexWrap: 'wrap',
   },
   calendarDayCell: {
-    width: "14.28%",
+    width: '14.28%',
     padding: 2,
-    alignItems: "center",
+    alignItems: 'center',
   },
   calendarDayButton: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    position: "relative",
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
   },
   calendarDayButtonSelected: {
     backgroundColor: Colors.dark.primaryStrong,
@@ -1802,14 +1681,14 @@ const styles = StyleSheet.create({
   },
   calendarDayTextToday: {
     color: Colors.dark.primaryStrong,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   calendarDayTextSelected: {
     color: Colors.dark.white,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   todayDot: {
-    position: "absolute",
+    position: 'absolute',
     bottom: 4,
     width: 4,
     height: 4,
@@ -1817,7 +1696,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.dark.primaryStrong,
   },
   todayButton: {
-    alignSelf: "center",
+    alignSelf: 'center',
     marginTop: 12,
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -1829,7 +1708,7 @@ const styles = StyleSheet.create({
   todayButtonText: {
     color: Colors.dark.primaryStrong,
     fontSize: 14,
-    fontWeight: "500",
+    fontWeight: '500',
   },
   timePickerContainer: {
     backgroundColor: Colors.dark.surfaceSecondary,
@@ -1840,7 +1719,7 @@ const styles = StyleSheet.create({
   timeDisplay: {
     color: Colors.dark.white,
     fontSize: 18,
-    fontWeight: "600",
+    fontWeight: '600',
     marginBottom: 12,
   },
   timePresetContainer: {
@@ -1864,7 +1743,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   timePresetButtonTextSelected: {
-    fontWeight: "600",
+    fontWeight: '600',
   },
   timePresetTimeText: {
     color: Colors.dark.neutral500,
@@ -1872,17 +1751,17 @@ const styles = StyleSheet.create({
   },
   timePresetTimeTextSelected: {
     color: Colors.dark.white,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   // Time wheel styles
   timeWheelContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginTop: 16,
   },
   timeWheelGroup: {
-    alignItems: "center",
+    alignItems: 'center',
     marginHorizontal: 8,
   },
   timeWheelLabel: {
@@ -1892,9 +1771,9 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   timeWheel: {
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "space-between",
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: Colors.dark.surfaceRaisedAlt2,
     borderRadius: 12,
     padding: 8,
@@ -1904,19 +1783,19 @@ const styles = StyleSheet.create({
     padding: 8,
     width: 40,
     height: 40,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   timeWheelText: {
     color: Colors.dark.white,
     fontSize: 26,
-    fontWeight: "600",
+    fontWeight: '600',
     marginVertical: 8,
   },
   timeWheelSeparator: {
     color: Colors.dark.white,
     fontSize: 30,
-    fontWeight: "600",
+    fontWeight: '600',
     marginHorizontal: 10,
   },
   amPmToggle: {
@@ -1924,12 +1803,12 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 12,
     width: 80,
-    alignItems: "center",
+    alignItems: 'center',
   },
   amPmToggleText: {
     color: Colors.dark.white,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   datePickerButtonText: {
     color: Colors.dark.white,
@@ -1937,13 +1816,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   toggleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   subtaskItem: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     padding: 12,
     backgroundColor: Colors.dark.surfaceSecondary,
     borderRadius: 8,
@@ -1957,8 +1836,8 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     borderWidth: 1,
     borderColor: Colors.dark.primaryStrong,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
     marginRight: 10,
   },
   subtaskTitle: {
@@ -1967,15 +1846,15 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   subtaskTitleCompleted: {
-    textDecorationLine: "line-through",
+    textDecorationLine: 'line-through',
     color: Colors.dark.neutral500,
   },
   subtaskDeleteButton: {
     padding: 4,
   },
   addSubtaskContainer: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: Colors.dark.surfaceSecondary,
     padding: 8,
     borderRadius: 8,
@@ -1993,8 +1872,8 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 16,
     backgroundColor: Colors.dark.primaryStrong,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   addSubtaskButtonDisabled: {
     backgroundColor: Colors.dark.border,
@@ -2003,7 +1882,7 @@ const styles = StyleSheet.create({
     color: Colors.dark.neutral500,
     fontSize: 12,
     marginTop: 4,
-    fontStyle: "italic",
+    fontStyle: 'italic',
   },
   quickDateButton: {
     paddingHorizontal: 16,
@@ -2027,7 +1906,7 @@ const styles = StyleSheet.create({
   },
   quickDateButtonTextSelected: {
     color: Colors.dark.white,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   quickDateTimeText: {
     color: Colors.dark.neutral500,
@@ -2035,6 +1914,6 @@ const styles = StyleSheet.create({
   },
   quickDateTimeTextSelected: {
     color: Colors.dark.white,
-    fontWeight: "600",
+    fontWeight: '600',
   },
 });

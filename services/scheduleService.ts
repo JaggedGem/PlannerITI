@@ -1,16 +1,20 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Platform, NativeModules } from "react-native";
-import { format } from "date-fns";
-import { fetchCustomApi } from "../utils/customApi";
-import { Colors } from "@/constants/Colors";
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { format } from 'date-fns';
+
+import { NativeModules, Platform } from 'react-native';
+
+import { Colors } from '@/constants/Colors';
 import {
   GraficPeGroup,
   GraficPePeriod,
   GraficPePeriodCode,
   GraficPePeriodType,
   GraficPeTrackType,
-} from "@/types/academicCalendar";
-import { clearNextClassCache } from "@/utils/nextClassCache";
+} from '@/types/academicCalendar';
+import { clearNextClassCache } from '@/utils/nextClassCache';
+
+import { fetchCustomApi } from '../utils/customApi';
+
 // Refactored: remove direct runtime import of settingsService to break cycle.
 // Consumers (settingsService) should call scheduleService.registerSettingsSync({...}) after import.
 
@@ -96,9 +100,9 @@ export interface Group {
   };
 }
 
-export type SubGroupType = "Subgroup 1" | "Subgroup 2";
-export type Language = "en" | "ro" | "ru";
-export type ScheduleView = "day" | "week";
+export type SubGroupType = 'Subgroup 1' | 'Subgroup 2';
+export type Language = 'en' | 'ro' | 'ru';
+export type ScheduleView = 'day' | 'week';
 
 export interface UserSettings {
   group: SubGroupType;
@@ -116,7 +120,7 @@ export interface Subject {
   isCustom?: boolean;
 }
 
-export type SpecialScheduleType = "thesis" | "exam";
+export type SpecialScheduleType = 'thesis' | 'exam';
 
 export interface SpecialScheduleDocument {
   url: string;
@@ -138,7 +142,7 @@ interface BaseSpecialScheduleEvent {
 }
 
 export interface ThesisScheduleEvent extends BaseSpecialScheduleEvent {
-  type: "thesis";
+  type: 'thesis';
   period: number | null;
   startTime: string | null;
   endTime: string | null;
@@ -146,7 +150,7 @@ export interface ThesisScheduleEvent extends BaseSpecialScheduleEvent {
 }
 
 export interface ExamScheduleEvent extends BaseSpecialScheduleEvent {
-  type: "exam";
+  type: 'exam';
   time: string | null;
 }
 
@@ -168,9 +172,7 @@ interface HistoricAvailabilityInfo {
   matches?: HistoricAvailabilityMatch[];
 }
 
-type HistoricAvailabilityPayload =
-  | HistoricAvailabilityMatch[]
-  | HistoricAvailabilityInfo;
+type HistoricAvailabilityPayload = HistoricAvailabilityMatch[] | HistoricAvailabilityInfo;
 
 export interface SpecialScheduleResponse {
   available: boolean;
@@ -184,25 +186,24 @@ export interface SpecialScheduleResponse {
   historicAvailability: HistoricAvailabilityPayload;
 }
 
-const API_BASE_URL = "https://orar-api.ceiti.md/v1";
+const API_BASE_URL = 'https://orar-api.ceiti.md/v1';
 const CEITI_REQUEST_TIMEOUT_MS = 10000;
 const CEITI_REQUEST_MAX_ATTEMPTS = 3;
 const CEITI_RETRY_BASE_DELAY_MS = 500;
 
-const sleep = (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 const isRetryableCeitiStatus = (status: number): boolean =>
   status === 408 || status === 425 || status === 429 || status >= 500;
 
 const isRetryableCeitiError = (error: unknown): boolean => {
   if (!(error instanceof Error)) return false;
-  if (error.name === "AbortError") return true;
+  if (error.name === 'AbortError') return true;
   const message = error.message.toLowerCase();
   return (
-    message.includes("network") ||
-    message.includes("failed to fetch") ||
-    message.includes("connection")
+    message.includes('network') ||
+    message.includes('failed to fetch') ||
+    message.includes('connection')
   );
 };
 
@@ -220,7 +221,7 @@ const fetchCeitiWithTimeout = async (
     if (upstreamSignal.aborted) {
       controller.abort();
     } else {
-      upstreamSignal.addEventListener("abort", abortListener, {
+      upstreamSignal.addEventListener('abort', abortListener, {
         once: true,
       });
     }
@@ -234,15 +235,12 @@ const fetchCeitiWithTimeout = async (
   } finally {
     clearTimeout(timeoutId);
     if (upstreamSignal) {
-      upstreamSignal.removeEventListener("abort", abortListener);
+      upstreamSignal.removeEventListener('abort', abortListener);
     }
   }
 };
 
-const fetchCeitiWithRetry = async (
-  url: string,
-  init: RequestInit = {},
-): Promise<Response> => {
+const fetchCeitiWithRetry = async (url: string, init: RequestInit = {}): Promise<Response> => {
   let lastError: unknown = null;
   let lastResponse: Response | null = null;
 
@@ -255,16 +253,13 @@ const fetchCeitiWithRetry = async (
 
       lastResponse = response;
       const shouldRetry =
-        attempt < CEITI_REQUEST_MAX_ATTEMPTS - 1 &&
-        isRetryableCeitiStatus(response.status);
+        attempt < CEITI_REQUEST_MAX_ATTEMPTS - 1 && isRetryableCeitiStatus(response.status);
       if (!shouldRetry) {
         return response;
       }
     } catch (error) {
       lastError = error;
-      const shouldRetry =
-        attempt < CEITI_REQUEST_MAX_ATTEMPTS - 1 &&
-        isRetryableCeitiError(error);
+      const shouldRetry = attempt < CEITI_REQUEST_MAX_ATTEMPTS - 1 && isRetryableCeitiError(error);
       if (!shouldRetry) {
         throw error;
       }
@@ -280,15 +275,15 @@ const fetchCeitiWithRetry = async (
   if (lastError instanceof Error) {
     throw lastError;
   }
-  throw new Error("CEITI request failed");
+  throw new Error('CEITI request failed');
 };
 
 export const DAYS_MAP = {
-  1: "monday",
-  2: "tuesday",
-  3: "wednesday",
-  4: "thursday",
-  5: "friday",
+  1: 'monday',
+  2: 'tuesday',
+  3: 'wednesday',
+  4: 'thursday',
+  5: 'friday',
 } as const;
 
 export const DAYS_MAP_INVERSE = {
@@ -304,64 +299,60 @@ const REFERENCE_DATE = new Date(2026, 0, 12); // Month 0 = January, day = 12 (DD
 
 // Export the cache keys so they can be accessed from outside
 export const CACHE_KEYS = {
-  SCHEDULE_PREFIX: "schedule_cache_",
-  SETTINGS: "user_settings",
-  LAST_FETCH_PREFIX: "last_schedule_fetch_",
-  SPECIAL_SCHEDULE_PREFIX: "special_schedule_cache_",
-  LAST_SPECIAL_FETCH_PREFIX: "last_special_schedule_fetch_",
-  ACADEMIC_CALENDAR_PREFIX: "academic_calendar_cache_",
-  LAST_ACADEMIC_CALENDAR_FETCH_PREFIX: "last_academic_calendar_fetch_",
-  GROUPS: "groups_cache",
-  RECOVERY_DAYS: "recovery_days_cache",
-  LAST_RECOVERY_SYNC: "last_recovery_days_sync",
-  SUBJECTS: "subjects_cache", // New cache key for subjects
-  ASSIGNMENT_COUNTS: "assignment_counts_cache", // New cache key for assignment counts
+  SCHEDULE_PREFIX: 'schedule_cache_',
+  SETTINGS: 'user_settings',
+  LAST_FETCH_PREFIX: 'last_schedule_fetch_',
+  SPECIAL_SCHEDULE_PREFIX: 'special_schedule_cache_',
+  LAST_SPECIAL_FETCH_PREFIX: 'last_special_schedule_fetch_',
+  ACADEMIC_CALENDAR_PREFIX: 'academic_calendar_cache_',
+  LAST_ACADEMIC_CALENDAR_FETCH_PREFIX: 'last_academic_calendar_fetch_',
+  GROUPS: 'groups_cache',
+  RECOVERY_DAYS: 'recovery_days_cache',
+  LAST_RECOVERY_SYNC: 'last_recovery_days_sync',
+  SUBJECTS: 'subjects_cache', // New cache key for subjects
+  ASSIGNMENT_COUNTS: 'assignment_counts_cache', // New cache key for assignment counts
 };
 
 const CACHE_EXPIRY = 3 * 24 * 60 * 60 * 1000; // 3 days in milliseconds
 const SPECIAL_SCHEDULE_CACHE_EXPIRY = 6 * 60 * 60 * 1000; // 6 hours
 const ACADEMIC_CALENDAR_CACHE_EXPIRY = 12 * 60 * 60 * 1000; // 12 hours
-const DEFAULT_GROUP_NAME = "P-2422";
+const DEFAULT_GROUP_NAME = 'P-2422';
 
 const GRAFIC_PE_PERIOD_TYPES = new Set<GraficPePeriodType>([
-  "teaching",
-  "exam",
-  "vacation",
-  "practice_intro",
-  "practice_instruire",
-  "practice_tehnologica",
-  "practice_specialitate_1",
-  "practice_specialitate_2",
-  "practice_specialitate_3",
-  "practice_productie",
-  "exam_calificare",
-  "dual_employer_training",
-  "inter_semester_break",
-  "summer_break",
+  'teaching',
+  'exam',
+  'vacation',
+  'practice_intro',
+  'practice_instruire',
+  'practice_tehnologica',
+  'practice_specialitate_1',
+  'practice_specialitate_2',
+  'practice_specialitate_3',
+  'practice_productie',
+  'exam_calificare',
+  'dual_employer_training',
+  'inter_semester_break',
+  'summer_break',
 ]);
 
 const GRAFIC_PE_PERIOD_CODES = new Set<Exclude<GraficPePeriodCode, null>>([
-  "EX",
-  "V",
-  "Pis",
-  "Pi",
-  "Pt",
-  "Ps1",
-  "Ps2",
-  "Ps3",
-  "Pp",
-  "EC",
-  "I/A",
+  'EX',
+  'V',
+  'Pis',
+  'Pi',
+  'Pt',
+  'Ps1',
+  'Ps2',
+  'Ps3',
+  'Pp',
+  'EC',
+  'I/A',
 ]);
 
-const GRAFIC_PE_TRACK_TYPES = new Set<GraficPeTrackType>([
-  "regular",
-  "evening",
-  "dual",
-]);
+const GRAFIC_PE_TRACK_TYPES = new Set<GraficPeTrackType>(['regular', 'evening', 'dual']);
 
-const PERIOD_TIMES_CACHE_KEY = "period_times_cache";
-const LAST_PERIOD_SYNC_KEY = "last_period_sync";
+const PERIOD_TIMES_CACHE_KEY = 'period_times_cache';
+const LAST_PERIOD_SYNC_KEY = 'last_period_sync';
 // Removed interval logic: we now refresh on app load & manual refresh.
 const PERIOD_SYNC_INTERVAL = 0; // No interval-based skip; kept for backward compatibility
 
@@ -382,11 +373,7 @@ interface RecoverySource {
 interface DateOverride {
   id: number;
   date: string;
-  mode:
-    | "times_override"
-    | "weekday_replace"
-    | "recover_with_custom"
-    | "recover_day";
+  mode: 'times_override' | 'weekday_replace' | 'recover_with_custom' | 'recover_day';
   reason?: string;
   replaceWeekday?: string | null;
   groupId: string;
@@ -410,7 +397,7 @@ interface WeekScheduleDay {
   weekday?: string;
   isWeekend?: boolean;
   isOverride?: boolean;
-  dayState?: "normal" | "partial" | "empty" | string;
+  dayState?: 'normal' | 'partial' | 'empty' | string;
   schedule?: PeriodTime[];
   baseSchedule?: PeriodTime[];
   removedPeriods?: (number | string)[];
@@ -433,7 +420,7 @@ interface DatePeriodTimesEntry {
   weekday: string;
   isWeekend: boolean;
   isOverride: boolean;
-  dayState?: "normal" | "partial" | "empty" | string;
+  dayState?: 'normal' | 'partial' | 'empty' | string;
   schedule: PeriodTime[];
   baseSchedule: PeriodTime[];
   removedPeriods: (number | string)[];
@@ -450,68 +437,67 @@ const getSystemLanguage = (): Language => {
       Platform.select({
         ios: NativeModules.SettingsManager.settings.AppleLocale,
         android: NativeModules.I18nManager.localeIdentifier,
-        default: navigator?.language || "en",
-      }) || "en";
+        default: navigator?.language || 'en',
+      }) || 'en';
 
     // Convert locale to our supported languages
     const lang = locale.toLowerCase().split(/[-_]/)[0];
-    if (lang === "ru") return "ru";
-    if (lang === "ro" || lang === "mo") return "ro";
-    return "en";
+    if (lang === 'ru') return 'ru';
+    if (lang === 'ro' || lang === 'mo') return 'ro';
+    return 'en';
   } catch {
-    return "en";
+    return 'en';
   }
 };
 
 const WEEKDAY_LABELS = [
-  "sunday",
-  "monday",
-  "tuesday",
-  "wednesday",
-  "thursday",
-  "friday",
-  "saturday",
+  'sunday',
+  'monday',
+  'tuesday',
+  'wednesday',
+  'thursday',
+  'friday',
+  'saturday',
 ] as const;
 
 const LANGUAGE_TOKENS = new Set([
-  "engleza",
-  "romana",
-  "rusa",
-  "franceza",
-  "germana",
-  "italiana",
-  "spaniola",
+  'engleza',
+  'romana',
+  'rusa',
+  'franceza',
+  'germana',
+  'italiana',
+  'spaniola',
 ]);
 
 const SUBJECT_TOKEN_ALIASES: Record<string, string> = {
-  eng: "engleza",
-  englez: "engleza",
-  engl: "engleza",
-  english: "engleza",
-  rom: "romana",
-  roman: "romana",
-  rum: "romana",
-  rus: "rusa",
-  fr: "franceza",
-  franc: "franceza",
-  ger: "germana",
-  germ: "germana",
-  it: "italiana",
-  sp: "spaniola",
-  mat: "matematica",
-  mate: "matematica",
-  bio: "biologia",
-  biologie: "biologia",
-  fiz: "fizica",
-  chim: "chimie",
-  info: "informatica",
-  inf: "informatica",
+  eng: 'engleza',
+  englez: 'engleza',
+  engl: 'engleza',
+  english: 'engleza',
+  rom: 'romana',
+  roman: 'romana',
+  rum: 'romana',
+  rus: 'rusa',
+  fr: 'franceza',
+  franc: 'franceza',
+  ger: 'germana',
+  germ: 'germana',
+  it: 'italiana',
+  sp: 'spaniola',
+  mat: 'matematica',
+  mate: 'matematica',
+  bio: 'biologia',
+  biologie: 'biologia',
+  fiz: 'fizica',
+  chim: 'chimie',
+  info: 'informatica',
+  inf: 'informatica',
 };
 
 const SUBJECT_MATCH_THRESHOLD = 0.8;
 
-const isDateWeekend = (date: Date): boolean =>
-  date.getDay() === 0 || date.getDay() === 6;
+const isDateWeekend = (date: Date): boolean => date.getDay() === 0 || date.getDay() === 6;
 
 const addDays = (date: Date, days: number): Date => {
   const result = new Date(date);
@@ -519,11 +505,10 @@ const addDays = (date: Date, days: number): Date => {
   return result;
 };
 
-const isAbsoluteHttpUrl = (value: string): boolean =>
-  /^https?:\/\//i.test(value);
+const isAbsoluteHttpUrl = (value: string): boolean => /^https?:\/\//i.test(value);
 
 const normalizeHistoricHref = (href: unknown): string | null => {
-  if (typeof href !== "string") return null;
+  if (typeof href !== 'string') return null;
   const trimmed = href.trim();
   if (!trimmed) return null;
 
@@ -538,11 +523,11 @@ const normalizeHistoricHref = (href: unknown): string | null => {
 export const scheduleService = {
   // Default settings
   settings: {
-    group: "Subgroup 2" as SubGroupType,
+    group: 'Subgroup 2' as SubGroupType,
     language: getSystemLanguage(),
-    selectedGroupId: "", // Will be set dynamically after fetching groups
+    selectedGroupId: '', // Will be set dynamically after fetching groups
     selectedGroupName: DEFAULT_GROUP_NAME,
-    scheduleView: "day" as ScheduleView,
+    scheduleView: 'day' as ScheduleView,
     customPeriods: [] as CustomPeriod[],
   },
   // Expose cache keys as a property of the service for external access
@@ -570,7 +555,7 @@ export const scheduleService = {
     this._debug = value;
   },
   log(...args: any[]) {
-    if (this._debug) console.log("[scheduleService]", ...args);
+    if (this._debug) console.log('[scheduleService]', ...args);
   },
   isReady() {
     return this._ready;
@@ -596,7 +581,7 @@ export const scheduleService = {
         // Add timeout to prevent infinite waiting
         const timeout = setTimeout(() => {
           clearInterval(i);
-          rej(new Error("Timeout waiting for schedule service initialization"));
+          rej(new Error('Timeout waiting for schedule service initialization'));
         }, 30000); // 30 second timeout
       });
     }
@@ -643,10 +628,7 @@ export const scheduleService = {
 
   async saveSettings() {
     try {
-      await AsyncStorage.setItem(
-        CACHE_KEYS.SETTINGS,
-        JSON.stringify(this.settings),
-      );
+      await AsyncStorage.setItem(CACHE_KEYS.SETTINGS, JSON.stringify(this.settings));
     } catch {
       // Silent error handling
     }
@@ -663,11 +645,11 @@ export const scheduleService = {
   },
 
   getDateKey(date: Date): string {
-    return format(date, "yyyy-MM-dd");
+    return format(date, 'yyyy-MM-dd');
   },
 
   getCurrentPeriodCacheGroupKey(): string {
-    return this.settings.selectedGroupId || "__all__";
+    return this.settings.selectedGroupId || '__all__';
   },
 
   makeDatePeriodCacheKey(dateKey: string, groupKey?: string): string {
@@ -677,38 +659,27 @@ export const scheduleService = {
 
   getCachedDatePeriodEntry(dateKey: string): DatePeriodTimesEntry | null {
     const groupKey = this.getCurrentPeriodCacheGroupKey();
-    const scoped =
-      this.cachedDatePeriodTimes[
-        this.makeDatePeriodCacheKey(dateKey, groupKey)
-      ];
+    const scoped = this.cachedDatePeriodTimes[this.makeDatePeriodCacheKey(dateKey, groupKey)];
     if (scoped) return scoped;
 
     // Backward compatibility with old date-only cache format and global fallback.
     return (
       this.cachedDatePeriodTimes[dateKey] ||
-      this.cachedDatePeriodTimes[
-        this.makeDatePeriodCacheKey(dateKey, "__all__")
-      ] ||
+      this.cachedDatePeriodTimes[this.makeDatePeriodCacheKey(dateKey, '__all__')] ||
       null
     );
   },
 
-  getScopedDatePeriodEntry(
-    dateKey: string,
-    groupKey?: string,
-  ): DatePeriodTimesEntry | null {
+  getScopedDatePeriodEntry(dateKey: string, groupKey?: string): DatePeriodTimesEntry | null {
     const resolvedGroupKey = groupKey ?? this.getCurrentPeriodCacheGroupKey();
     return (
-      this.cachedDatePeriodTimes[
-        this.makeDatePeriodCacheKey(dateKey, resolvedGroupKey)
-      ] || null
+      this.cachedDatePeriodTimes[this.makeDatePeriodCacheKey(dateKey, resolvedGroupKey)] || null
     );
   },
 
   setCachedDatePeriodEntry(dateKey: string, entry: DatePeriodTimesEntry) {
     const groupKey = this.getCurrentPeriodCacheGroupKey();
-    this.cachedDatePeriodTimes[this.makeDatePeriodCacheKey(dateKey, groupKey)] =
-      entry;
+    this.cachedDatePeriodTimes[this.makeDatePeriodCacheKey(dateKey, groupKey)] = entry;
   },
 
   getDatePeriodEntriesForCurrentGroup(): DatePeriodTimesEntry[] {
@@ -748,40 +719,30 @@ export const scheduleService = {
   hasWeekInDatePeriodCache(anchorDate: Date, weekOffset: number = 0): boolean {
     const groupKey = this.getCurrentPeriodCacheGroupKey();
     const weekDateKeys = this.getWeekDateKeys(anchorDate, weekOffset);
-    return weekDateKeys.every((key) =>
-      Boolean(this.getScopedDatePeriodEntry(key, groupKey)),
-    );
+    return weekDateKeys.every((key) => Boolean(this.getScopedDatePeriodEntry(key, groupKey)));
   },
 
-  normalizeWeekdayKey(weekday?: string): keyof ApiResponse["data"] | undefined {
+  normalizeWeekdayKey(weekday?: string): keyof ApiResponse['data'] | undefined {
     if (!weekday) return undefined;
     const normalized = weekday.toLowerCase();
     if (normalized in DAYS_MAP_INVERSE) {
-      return normalized as keyof ApiResponse["data"];
+      return normalized as keyof ApiResponse['data'];
     }
     return undefined;
   },
 
-  getWeekdayKeyForDate(date: Date): keyof ApiResponse["data"] | undefined {
+  getWeekdayKeyForDate(date: Date): keyof ApiResponse['data'] | undefined {
     const jsDay = date.getDay();
     if (jsDay < 1 || jsDay > 5) return undefined;
-    return DAYS_MAP[
-      jsDay as keyof typeof DAYS_MAP
-    ] as keyof ApiResponse["data"];
+    return DAYS_MAP[jsDay as keyof typeof DAYS_MAP] as keyof ApiResponse['data'];
   },
 
   getWeekdayLabelForDate(date: Date): string {
     return WEEKDAY_LABELS[date.getDay()];
   },
 
-  getRemovedPeriodNumbersForDisplay(
-    entry: DatePeriodTimesEntry | null,
-  ): number[] {
-    if (
-      !entry ||
-      !Array.isArray(entry.removedPeriods) ||
-      entry.removedPeriods.length === 0
-    ) {
+  getRemovedPeriodNumbersForDisplay(entry: DatePeriodTimesEntry | null): number[] {
+    if (!entry || !Array.isArray(entry.removedPeriods) || entry.removedPeriods.length === 0) {
       return [];
     }
 
@@ -817,9 +778,7 @@ export const scheduleService = {
     };
 
     const asZeroBased = numericRemoved;
-    const asOneBased = numericRemoved
-      .map((period) => period - 1)
-      .filter((period) => period >= 0);
+    const asOneBased = numericRemoved.map((period) => period - 1).filter((period) => period >= 0);
     const zeroBasedMatches = matchesActiveSchedule(asZeroBased);
     const oneBasedMatches = matchesActiveSchedule(asOneBased);
 
@@ -830,49 +789,41 @@ export const scheduleService = {
       displayNumbers = numericRemoved;
     } else {
       const treatAsZeroBased = numericRemoved.some((period) => period === 0);
-      displayNumbers =
-        treatAsZeroBased ?
-          numericRemoved.map((period) => period + 1)
+      displayNumbers = treatAsZeroBased
+        ? numericRemoved.map((period) => period + 1)
         : numericRemoved;
     }
 
-    return Array.from(
-      new Set(displayNumbers.filter((period) => period > 0)),
-    ).sort((a, b) => a - b);
+    return Array.from(new Set(displayNumbers.filter((period) => period > 0))).sort((a, b) => a - b);
   },
 
   buildOverrideInfoMessage(entry: DatePeriodTimesEntry | null): string {
-    if (!entry?.isOverride) return "";
+    if (!entry?.isOverride) return '';
 
-    const explicitReason = entry.override?.reason?.trim() || "";
+    const explicitReason = entry.override?.reason?.trim() || '';
     if (explicitReason) {
       return explicitReason;
     }
 
-    const activeCount =
-      Array.isArray(entry.schedule) ? entry.schedule.length : 0;
-    const baseCount =
-      Array.isArray(entry.baseSchedule) ? entry.baseSchedule.length : 0;
+    const activeCount = Array.isArray(entry.schedule) ? entry.schedule.length : 0;
+    const baseCount = Array.isArray(entry.baseSchedule) ? entry.baseSchedule.length : 0;
     const removedDisplay = this.getRemovedPeriodNumbersForDisplay(entry);
     const replacedWeekday =
-      entry.override?.replaceWeekday ||
-      entry.override?.recoverySource?.weekday ||
-      "";
-    const replacedWeekdayLabel =
-      replacedWeekday ?
-        `${replacedWeekday.charAt(0).toUpperCase()}${replacedWeekday.slice(1)}`
-      : "";
+      entry.override?.replaceWeekday || entry.override?.recoverySource?.weekday || '';
+    const replacedWeekdayLabel = replacedWeekday
+      ? `${replacedWeekday.charAt(0).toUpperCase()}${replacedWeekday.slice(1)}`
+      : '';
 
-    if (entry.dayState === "empty" || (baseCount > 0 && activeCount === 0)) {
-      return baseCount > 0 ?
-          `All ${baseCount} periods were removed for this day.`
-        : "No classes are scheduled for this day due to an override.";
+    if (entry.dayState === 'empty' || (baseCount > 0 && activeCount === 0)) {
+      return baseCount > 0
+        ? `All ${baseCount} periods were removed for this day.`
+        : 'No classes are scheduled for this day due to an override.';
     }
 
     const parts: string[] = [];
 
     if (removedDisplay.length > 0) {
-      parts.push(`Removed periods: ${removedDisplay.join(", ")}.`);
+      parts.push(`Removed periods: ${removedDisplay.join(', ')}.`);
     }
 
     if (baseCount > 0 && activeCount !== baseCount) {
@@ -886,10 +837,10 @@ export const scheduleService = {
     }
 
     if (parts.length > 0) {
-      return parts.join(" ");
+      return parts.join(' ');
     }
 
-    return "Temporary schedule override is active for this day.";
+    return 'Temporary schedule override is active for this day.';
   },
 
   resolveWeekSchedulePeriods(day?: WeekScheduleDay | null): PeriodTime[] {
@@ -899,29 +850,24 @@ export const scheduleService = {
       return [...day.schedule].sort((a, b) => a.index - b.index);
     }
 
-    const baseSchedule =
-      Array.isArray(day.baseSchedule) ? [...day.baseSchedule] : [];
+    const baseSchedule = Array.isArray(day.baseSchedule) ? [...day.baseSchedule] : [];
     if (baseSchedule.length === 0) {
       return [];
     }
 
-    if (day.dayState === "empty") {
+    if (day.dayState === 'empty') {
       return [];
     }
 
     if (
-      day.dayState === "partial" ||
+      day.dayState === 'partial' ||
       (Array.isArray(day.removedPeriods) && day.removedPeriods.length > 0)
     ) {
-      const removedPeriods = new Set(
-        (day.removedPeriods || []).map((period) => String(period)),
-      );
+      const removedPeriods = new Set((day.removedPeriods || []).map((period) => String(period)));
       return baseSchedule.filter((period) => {
         const periodIndex = String(period.index);
         const periodNumber = String(period.index + 1);
-        return (
-          !removedPeriods.has(periodIndex) && !removedPeriods.has(periodNumber)
-        );
+        return !removedPeriods.has(periodIndex) && !removedPeriods.has(periodNumber);
       });
     }
 
@@ -934,17 +880,14 @@ export const scheduleService = {
     index: number,
   ): DatePeriodTimesEntry | null {
     const fallbackDate = weekStart ? addDays(weekStart, index) : null;
-    const resolvedDate =
-      day?.date || (fallbackDate ? this.getDateKey(fallbackDate) : "");
+    const resolvedDate = day?.date || (fallbackDate ? this.getDateKey(fallbackDate) : '');
     if (!resolvedDate) return null;
 
     const resolvedDateObject = new Date(`${resolvedDate}T00:00:00`);
-    const resolvedWeekday =
-      day?.weekday || this.getWeekdayLabelForDate(resolvedDateObject);
+    const resolvedWeekday = day?.weekday || this.getWeekdayLabelForDate(resolvedDateObject);
     const resolvedSchedule = this.resolveWeekSchedulePeriods(day);
-    const resolvedOverride =
-      day?.override ?
-        {
+    const resolvedOverride = day?.override
+      ? {
           ...day.override,
           mode: day.override.mode,
           recoverySource: day.override.recoverySource || undefined,
@@ -958,37 +901,30 @@ export const scheduleService = {
       isOverride: Boolean(resolvedOverride) || Boolean(day?.isOverride),
       dayState: day?.dayState,
       schedule: resolvedSchedule,
-      baseSchedule:
-        Array.isArray(day?.baseSchedule) ?
-          [...day.baseSchedule]
+      baseSchedule: Array.isArray(day?.baseSchedule)
+        ? [...day.baseSchedule]
         : [...resolvedSchedule],
-      removedPeriods:
-        Array.isArray(day?.removedPeriods) ? [...day.removedPeriods] : [],
+      removedPeriods: Array.isArray(day?.removedPeriods) ? [...day.removedPeriods] : [],
       removedPeriodCount:
-        typeof day?.removedPeriodCount === "number" ? day.removedPeriodCount
-        : Array.isArray(day?.removedPeriods) ? day.removedPeriods.length
-        : 0,
+        typeof day?.removedPeriodCount === 'number'
+          ? day.removedPeriodCount
+          : Array.isArray(day?.removedPeriods)
+            ? day.removedPeriods.length
+            : 0,
       override: resolvedOverride,
     };
   },
 
   buildRecoveryDaysFromDatePeriodTimes(): RecoveryDay[] {
     return this.getDatePeriodEntriesForCurrentGroup()
-      .filter(
-        (entry) =>
-          entry.isWeekend &&
-          entry.isOverride &&
-          entry.override?.isActive !== false,
-      )
+      .filter((entry) => entry.isWeekend && entry.isOverride && entry.override?.isActive !== false)
       .map((entry) => ({
         date: entry.date,
         replacedDay:
-          entry.override?.replaceWeekday ||
-          entry.override?.recoverySource?.weekday ||
-          "monday",
-        reason: entry.override?.reason || "",
-        groupId: entry.override?.groupId || "",
-        groupName: entry.override?.groupName || "",
+          entry.override?.replaceWeekday || entry.override?.recoverySource?.weekday || 'monday',
+        reason: entry.override?.reason || '',
+        groupId: entry.override?.groupId || '',
+        groupName: entry.override?.groupName || '',
         isActive: entry.override?.isActive ?? true,
       }));
   },
@@ -997,10 +933,10 @@ export const scheduleService = {
     return {
       _id: `fallback_${index}`,
       subjectid: { name: `Period ${index + 1}` },
-      teacherids: { name: "" },
-      classroomids: { name: "" },
-      groupids: { name: "Class", entireclass: "true" },
-      cards: { period: String(index + 1), weeks: "both", days: "" },
+      teacherids: { name: '' },
+      classroomids: { name: '' },
+      groupids: { name: 'Class', entireclass: 'true' },
+      cards: { period: String(index + 1), weeks: 'both', days: '' },
     };
   },
 
@@ -1024,12 +960,8 @@ export const scheduleService = {
       if (!entry || !Array.isArray(entry.schedule)) return;
 
       let targetDay = this.normalizeWeekdayKey(entry.weekday);
-      if (
-        entry.override?.mode === "weekday_replace" &&
-        entry.override.replaceWeekday
-      ) {
-        targetDay =
-          this.normalizeWeekdayKey(entry.override.replaceWeekday) || targetDay;
+      if (entry.override?.mode === 'weekday_replace' && entry.override.replaceWeekday) {
+        targetDay = this.normalizeWeekdayKey(entry.override.replaceWeekday) || targetDay;
       }
 
       if (!targetDay) return;
@@ -1049,9 +981,7 @@ export const scheduleService = {
           };
         }
 
-        response.data[dayKey][periodNum].both.push(
-          this.createFallbackScheduleItem(period.index),
-        );
+        response.data[dayKey][periodNum].both.push(this.createFallbackScheduleItem(period.index));
 
         if (!periodMap.has(period.index)) {
           periodMap.set(period.index, {
@@ -1073,9 +1003,8 @@ export const scheduleService = {
   mergeWeekPeriodTimes(weekResponse: WeekScheduleResponse) {
     if (!weekResponse || !Array.isArray(weekResponse.days)) return;
 
-    const weekStart =
-      weekResponse.week?.startDate ?
-        new Date(`${weekResponse.week.startDate}T00:00:00`)
+    const weekStart = weekResponse.week?.startDate
+      ? new Date(`${weekResponse.week.startDate}T00:00:00`)
       : null;
     const normalizedDays = Array.from({ length: 7 }, (_, index) => {
       const day = weekResponse.days[index];
@@ -1092,39 +1021,31 @@ export const scheduleService = {
   async getCachedSchedule(groupId: string): Promise<ApiResponse | null> {
     try {
       // Get schedule and related metadata from cache at once
-      const [
-        cachedData,
-        cachedPeriodTimes,
-        cachedRecoveryDays,
-        cachedAssignmentCounts,
-      ] = await Promise.all([
-        AsyncStorage.getItem(CACHE_KEYS.SCHEDULE_PREFIX + groupId),
-        AsyncStorage.getItem(PERIOD_TIMES_CACHE_KEY),
-        AsyncStorage.getItem(CACHE_KEYS.RECOVERY_DAYS),
-        AsyncStorage.getItem(CACHE_KEYS.ASSIGNMENT_COUNTS),
-      ]);
+      const [cachedData, cachedPeriodTimes, cachedRecoveryDays, cachedAssignmentCounts] =
+        await Promise.all([
+          AsyncStorage.getItem(CACHE_KEYS.SCHEDULE_PREFIX + groupId),
+          AsyncStorage.getItem(PERIOD_TIMES_CACHE_KEY),
+          AsyncStorage.getItem(CACHE_KEYS.RECOVERY_DAYS),
+          AsyncStorage.getItem(CACHE_KEYS.ASSIGNMENT_COUNTS),
+        ]);
 
       if (cachedData) {
         const data = JSON.parse(cachedData);
 
         // Validate that the cached data has the expected structure
-        if (!data || typeof data !== "object" || !data.data || !data.periods) {
-          this.log("Cached data is corrupted, clearing cache");
+        if (!data || typeof data !== 'object' || !data.data || !data.periods) {
+          this.log('Cached data is corrupted, clearing cache');
           await this.clearScheduleCache(groupId);
           return null;
         }
 
         // Validate that data.data has the expected day properties
-        const hasValidDays = [
-          "monday",
-          "tuesday",
-          "wednesday",
-          "thursday",
-          "friday",
-        ].some((day) => data.data[day] && typeof data.data[day] === "object");
+        const hasValidDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].some(
+          (day) => data.data[day] && typeof data.data[day] === 'object',
+        );
 
         if (!hasValidDays) {
-          this.log("Cached data has no valid days, clearing cache");
+          this.log('Cached data has no valid days, clearing cache');
           await this.clearScheduleCache(groupId);
           return null;
         }
@@ -1169,7 +1090,7 @@ export const scheduleService = {
       return null;
     } catch (error) {
       // Silent error handling
-      this.log("Error reading cache:", error);
+      this.log('Error reading cache:', error);
       return null;
     }
   },
@@ -1177,14 +1098,8 @@ export const scheduleService = {
   async cacheSchedule(groupId: string, data: ApiResponse) {
     try {
       // Cache the schedule data with recovery days already integrated
-      await AsyncStorage.setItem(
-        CACHE_KEYS.SCHEDULE_PREFIX + groupId,
-        JSON.stringify(data),
-      );
-      await AsyncStorage.setItem(
-        CACHE_KEYS.LAST_FETCH_PREFIX + groupId,
-        new Date().toISOString(),
-      );
+      await AsyncStorage.setItem(CACHE_KEYS.SCHEDULE_PREFIX + groupId, JSON.stringify(data));
+      await AsyncStorage.setItem(CACHE_KEYS.LAST_FETCH_PREFIX + groupId, new Date().toISOString());
     } catch {
       // Silent error handling
     }
@@ -1192,9 +1107,7 @@ export const scheduleService = {
 
   async shouldRefetchSchedule(groupId: string): Promise<boolean> {
     try {
-      const lastFetch = await AsyncStorage.getItem(
-        CACHE_KEYS.LAST_FETCH_PREFIX + groupId,
-      );
+      const lastFetch = await AsyncStorage.getItem(CACHE_KEYS.LAST_FETCH_PREFIX + groupId);
       if (!lastFetch) return true;
 
       const lastFetchDate = new Date(lastFetch);
@@ -1230,7 +1143,7 @@ export const scheduleService = {
       // If no cached groups, fetch from API
       const response = await fetchCeitiWithRetry(`${API_BASE_URL}/grupe`);
       if (!response.ok) {
-        throw new Error("Failed to fetch groups");
+        throw new Error('Failed to fetch groups');
       }
 
       const groups: Group[] = await response.json();
@@ -1264,7 +1177,7 @@ export const scheduleService = {
 
       const response = await fetchCeitiWithRetry(`${API_BASE_URL}/grupe`);
       if (!response.ok) {
-        throw new Error("Failed to fetch groups");
+        throw new Error('Failed to fetch groups');
       }
 
       const groups: Group[] = await response.json();
@@ -1273,26 +1186,18 @@ export const scheduleService = {
 
       // If we have a saved group name, realign the ID in case it changed upstream
       if (this.settings.selectedGroupName) {
-        await this.findAndSetDefaultGroup(
-          this.settings.selectedGroupName,
-          groups,
-        );
+        await this.findAndSetDefaultGroup(this.settings.selectedGroupName, groups);
       }
 
       return groups;
     } catch (error) {
-      this.log("Group refresh failed", error);
+      this.log('Group refresh failed', error);
       // Fall back to cached or stored groups
-      return this.cachedGroups.length > 0 ?
-          this.cachedGroups
-        : await this.getGroups();
+      return this.cachedGroups.length > 0 ? this.cachedGroups : await this.getGroups();
     }
   },
 
-  async findAndSetDefaultGroup(
-    targetName: string = DEFAULT_GROUP_NAME,
-    groupsOverride?: Group[],
-  ) {
+  async findAndSetDefaultGroup(targetName: string = DEFAULT_GROUP_NAME, groupsOverride?: Group[]) {
     try {
       const groups = groupsOverride ?? (await this.getGroups());
       const targetGroup = groups.find((group) => group.name === targetName);
@@ -1326,7 +1231,7 @@ export const scheduleService = {
   },
 
   async getClassSchedule(
-    groupId: string = "",
+    groupId: string = '',
     forceRefresh: boolean = false,
   ): Promise<ApiResponse> {
     await this.ready();
@@ -1380,16 +1285,14 @@ export const scheduleService = {
       if (cachedData) {
         return this.transformScheduleData(cachedData);
       }
-      return this.transformScheduleData(
-        this.buildFallbackApiResponseFromDatePeriodTimes(),
-      );
+      return this.transformScheduleData(this.buildFallbackApiResponseFromDatePeriodTimes());
     }
   },
 
   transformScheduleData(data: ApiResponse): ApiResponse {
     // Validate input data
     if (!data || !data.data || !data.periods) {
-      this.log("Invalid data passed to transformScheduleData");
+      this.log('Invalid data passed to transformScheduleData');
       return {
         data: {
           monday: {},
@@ -1416,11 +1319,9 @@ export const scheduleService = {
 
   async fetchAndCacheSchedule(groupId: string): Promise<ApiResponse> {
     try {
-      const response = await fetchCeitiWithRetry(
-        `${API_BASE_URL}/orar?_id=${groupId}&tip=class`,
-      );
+      const response = await fetchCeitiWithRetry(`${API_BASE_URL}/orar?_id=${groupId}&tip=class`);
       if (!response.ok) {
-        throw new Error("Network response was not ok");
+        throw new Error('Network response was not ok');
       }
       const data = await response.json();
 
@@ -1436,10 +1337,7 @@ export const scheduleService = {
       await this.cacheSchedule(groupId, transformedData);
       return transformedData;
     } catch (error) {
-      this.log(
-        "CEITI schedule fetch failed, using custom weekly fallback",
-        error,
-      );
+      this.log('CEITI schedule fetch failed, using custom weekly fallback', error);
       await this.syncPeriodTimes(true);
       const fallbackData = this.buildFallbackApiResponseFromDatePeriodTimes();
       await this.cacheSchedule(groupId, fallbackData);
@@ -1456,11 +1354,11 @@ export const scheduleService = {
         // Process each period in the day
         Object.values(daySchedule).forEach((schedules) => {
           // Process schedules for both, even and odd weeks
-          ["both", "par", "impar"].forEach((weekType) => {
+          ['both', 'par', 'impar'].forEach((weekType) => {
             const items = (schedules as any)[weekType] as ScheduleItem[];
             items.forEach((item) => {
               const subjectName = item.subjectid.name;
-              const subjectId = `subject_${subjectName.replace(/\s+/g, "_").toLowerCase()}`;
+              const subjectId = `subject_${subjectName.replace(/\s+/g, '_').toLowerCase()}`;
 
               if (!subjects.has(subjectId)) {
                 subjects.set(subjectId, {
@@ -1487,12 +1385,9 @@ export const scheduleService = {
 
       // Convert map to array and store
       this.cachedSubjects = Array.from(subjects.values());
-      await AsyncStorage.setItem(
-        CACHE_KEYS.SUBJECTS,
-        JSON.stringify(this.cachedSubjects),
-      );
+      await AsyncStorage.setItem(CACHE_KEYS.SUBJECTS, JSON.stringify(this.cachedSubjects));
     } catch (error) {
-      console.error("Error extracting subjects:", error);
+      console.error('Error extracting subjects:', error);
     }
   },
 
@@ -1513,16 +1408,14 @@ export const scheduleService = {
 
       // If no cached subjects and we have schedule data, extract subjects
       if (this.settings.selectedGroupId) {
-        const scheduleData = await this.getClassSchedule(
-          this.settings.selectedGroupId,
-        );
+        const scheduleData = await this.getClassSchedule(this.settings.selectedGroupId);
         await this.extractAndStoreSubjects(scheduleData);
         return this.cachedSubjects;
       }
 
       return [];
     } catch (error) {
-      console.error("Error getting subjects:", error);
+      console.error('Error getting subjects:', error);
       return [];
     }
   },
@@ -1536,10 +1429,7 @@ export const scheduleService = {
     };
 
     this.cachedSubjects.push(newSubject);
-    await AsyncStorage.setItem(
-      CACHE_KEYS.SUBJECTS,
-      JSON.stringify(this.cachedSubjects),
-    );
+    await AsyncStorage.setItem(CACHE_KEYS.SUBJECTS, JSON.stringify(this.cachedSubjects));
     return newSubject;
   },
 
@@ -1551,10 +1441,7 @@ export const scheduleService = {
         ...this.cachedSubjects[index],
         ...updates,
       };
-      await AsyncStorage.setItem(
-        CACHE_KEYS.SUBJECTS,
-        JSON.stringify(this.cachedSubjects),
-      );
+      await AsyncStorage.setItem(CACHE_KEYS.SUBJECTS, JSON.stringify(this.cachedSubjects));
       return true;
     }
     return false;
@@ -1562,15 +1449,10 @@ export const scheduleService = {
 
   // Delete a custom subject
   async deleteCustomSubject(id: string): Promise<boolean> {
-    const index = this.cachedSubjects.findIndex(
-      (s) => s.id === id && s.isCustom,
-    );
+    const index = this.cachedSubjects.findIndex((s) => s.id === id && s.isCustom);
     if (index !== -1) {
       this.cachedSubjects.splice(index, 1);
-      await AsyncStorage.setItem(
-        CACHE_KEYS.SUBJECTS,
-        JSON.stringify(this.cachedSubjects),
-      );
+      await AsyncStorage.setItem(CACHE_KEYS.SUBJECTS, JSON.stringify(this.cachedSubjects));
       return true;
     }
     return false;
@@ -1578,7 +1460,7 @@ export const scheduleService = {
 
   async hasInternetConnection(): Promise<boolean> {
     try {
-      if (Platform.OS !== "web") {
+      if (Platform.OS !== 'web') {
         const endpoints = [`${API_BASE_URL}/grupe`];
 
         for (const endpoint of endpoints) {
@@ -1587,7 +1469,7 @@ export const scheduleService = {
 
           try {
             const response = await fetch(endpoint, {
-              method: "HEAD",
+              method: 'HEAD',
               signal: controller.signal,
             });
             clearTimeout(timeoutId);
@@ -1596,14 +1478,14 @@ export const scheduleService = {
             }
           } catch (error: unknown) {
             clearTimeout(timeoutId);
-            if (error instanceof Error && error.name === "AbortError") {
+            if (error instanceof Error && error.name === 'AbortError') {
               continue;
             }
           }
         }
         try {
-          const response = await fetchCustomApi("/api/keepalive", {
-            method: "HEAD",
+          const response = await fetchCustomApi('/api/keepalive', {
+            method: 'HEAD',
             timeoutMs: 5000,
           });
           return response.ok;
@@ -1618,8 +1500,8 @@ export const scheduleService = {
   },
 
   normalizeSpecialScheduleGroupName(groupName?: string): string {
-    const rawGroup = String(groupName || "").trim();
-    if (!rawGroup) return "";
+    const rawGroup = String(groupName || '').trim();
+    if (!rawGroup) return '';
 
     // Canonical thesis/exam group format: X-YYZA with optional trailing R.
     // Some sources append extra suffixes (e.g. "P-2422c"), which should be removed.
@@ -1627,27 +1509,26 @@ export const scheduleService = {
     if (!canonicalMatch) return rawGroup;
 
     const canonicalBase = canonicalMatch[1];
-    const keepTrailingR =
-      /r$/i.test(rawGroup) && !canonicalBase.toUpperCase().endsWith("R");
+    const keepTrailingR = /r$/i.test(rawGroup) && !canonicalBase.toUpperCase().endsWith('R');
     return keepTrailingR ? `${canonicalBase}R` : canonicalBase;
   },
 
   normalizeAcademicCalendarRequestGroup(groupName?: string): string {
-    const rawGroup = String(groupName || "").trim();
-    if (!rawGroup) return "";
+    const rawGroup = String(groupName || '').trim();
+    if (!rawGroup) return '';
 
     const match = rawGroup.match(/^([A-Za-z])\s*-\s*(\d{4})([A-Za-z]?)/);
     if (!match) return rawGroup;
 
     const suffix = match[3].toUpperCase();
-    const supportedSuffix = suffix === "D" || suffix === "R" ? suffix : "";
+    const supportedSuffix = suffix === 'D' || suffix === 'R' ? suffix : '';
     return `${match[1].toUpperCase()}-${match[2]}${supportedSuffix}`;
   },
 
   normalizeAcademicCalendarComparisonGroup(groupName?: string): string {
-    return String(groupName || "")
+    return String(groupName || '')
       .toUpperCase()
-      .replace(/[^A-Z0-9]/g, "");
+      .replace(/[^A-Z0-9]/g, '');
   },
 
   getAcademicYearForDate(date: Date): string {
@@ -1656,33 +1537,23 @@ export const scheduleService = {
     return `${startYear}-${startYear + 1}`;
   },
 
-  getAcademicCalendarCacheScope(
-    groupName: string,
-    academicYear: string,
-  ): string {
-    const normalizedGroup =
-      this.normalizeAcademicCalendarComparisonGroup(groupName);
-    return `${normalizedGroup || "__meta__"}_${academicYear}`;
+  getAcademicCalendarCacheScope(groupName: string, academicYear: string): string {
+    const normalizedGroup = this.normalizeAcademicCalendarComparisonGroup(groupName);
+    return `${normalizedGroup || '__meta__'}_${academicYear}`;
   },
 
   getAcademicCalendarCacheKey(groupName: string, academicYear: string): string {
     return `${CACHE_KEYS.ACADEMIC_CALENDAR_PREFIX}${this.getAcademicCalendarCacheScope(groupName, academicYear)}`;
   },
 
-  getAcademicCalendarLastFetchKey(
-    groupName: string,
-    academicYear: string,
-  ): string {
+  getAcademicCalendarLastFetchKey(groupName: string, academicYear: string): string {
     return `${CACHE_KEYS.LAST_ACADEMIC_CALENDAR_FETCH_PREFIX}${this.getAcademicCalendarCacheScope(groupName, academicYear)}`;
   },
 
-  normalizeAcademicCalendarGroup(
-    payload: unknown,
-    requestedGroup: string,
-  ): GraficPeGroup | null {
-    if (!payload || typeof payload !== "object") return null;
+  normalizeAcademicCalendarGroup(payload: unknown, requestedGroup: string): GraficPeGroup | null {
+    if (!payload || typeof payload !== 'object') return null;
     const raw = payload as Record<string, unknown>;
-    const rawGroup = typeof raw.group === "string" ? raw.group : "";
+    const rawGroup = typeof raw.group === 'string' ? raw.group : '';
     if (
       this.normalizeAcademicCalendarComparisonGroup(rawGroup) !==
       this.normalizeAcademicCalendarComparisonGroup(requestedGroup)
@@ -1692,64 +1563,55 @@ export const scheduleService = {
 
     const periods = (Array.isArray(raw.periods) ? raw.periods : [])
       .map((period): GraficPePeriod | null => {
-        if (!period || typeof period !== "object") return null;
+        if (!period || typeof period !== 'object') return null;
         const candidate = period as Record<string, unknown>;
         const type = candidate.type;
         const startDate = candidate.startDate;
         const endDate = candidate.endDate;
 
         if (
-          typeof type !== "string" ||
+          typeof type !== 'string' ||
           !GRAFIC_PE_PERIOD_TYPES.has(type as GraficPePeriodType) ||
-          typeof startDate !== "string" ||
-          typeof endDate !== "string"
+          typeof startDate !== 'string' ||
+          typeof endDate !== 'string'
         ) {
           return null;
         }
 
         const rawCode = candidate.code;
         const code: GraficPePeriodCode =
-          rawCode === null ? null
-          : (
-            typeof rawCode === "string" &&
-            GRAFIC_PE_PERIOD_CODES.has(
-              rawCode as Exclude<GraficPePeriodCode, null>,
-            )
-          ) ?
-            (rawCode as Exclude<GraficPePeriodCode, null>)
-          : null;
+          rawCode === null
+            ? null
+            : typeof rawCode === 'string' &&
+                GRAFIC_PE_PERIOD_CODES.has(rawCode as Exclude<GraficPePeriodCode, null>)
+              ? (rawCode as Exclude<GraficPePeriodCode, null>)
+              : null;
 
         return {
           type: type as GraficPePeriodType,
           code,
           startDate,
           endDate,
-          weekNumbers:
-            Array.isArray(candidate.weekNumbers) ?
-              candidate.weekNumbers.filter(
-                (week): week is number =>
-                  typeof week === "number" && Number.isFinite(week),
+          weekNumbers: Array.isArray(candidate.weekNumbers)
+            ? candidate.weekNumbers.filter(
+                (week): week is number => typeof week === 'number' && Number.isFinite(week),
               )
             : [],
-          confidence:
-            candidate.confidence === "inferred" ? "inferred" : "explicit",
+          confidence: candidate.confidence === 'inferred' ? 'inferred' : 'explicit',
         };
       })
       .filter((period): period is GraficPePeriod => period !== null);
 
     const trackType =
-      (
-        typeof raw.trackType === "string" &&
-        GRAFIC_PE_TRACK_TYPES.has(raw.trackType as GraficPeTrackType)
-      ) ?
-        (raw.trackType as GraficPeTrackType)
-      : "regular";
+      typeof raw.trackType === 'string' &&
+      GRAFIC_PE_TRACK_TYPES.has(raw.trackType as GraficPeTrackType)
+        ? (raw.trackType as GraficPeTrackType)
+        : 'regular';
 
     return {
       group: rawGroup,
       trackType,
-      academicYear:
-        typeof raw.academicYear === "string" ? raw.academicYear : "",
+      academicYear: typeof raw.academicYear === 'string' ? raw.academicYear : '',
       periods,
     };
   },
@@ -1761,12 +1623,8 @@ export const scheduleService = {
   ): Promise<GraficPeGroup | null> {
     try {
       const [cachedRaw, lastFetchRaw] = await Promise.all([
-        AsyncStorage.getItem(
-          this.getAcademicCalendarCacheKey(groupName, academicYear),
-        ),
-        AsyncStorage.getItem(
-          this.getAcademicCalendarLastFetchKey(groupName, academicYear),
-        ),
+        AsyncStorage.getItem(this.getAcademicCalendarCacheKey(groupName, academicYear)),
+        AsyncStorage.getItem(this.getAcademicCalendarLastFetchKey(groupName, academicYear)),
       ]);
       if (!cachedRaw) return null;
 
@@ -1781,12 +1639,9 @@ export const scheduleService = {
         }
       }
 
-      return this.normalizeAcademicCalendarGroup(
-        JSON.parse(cachedRaw),
-        groupName,
-      );
+      return this.normalizeAcademicCalendarGroup(JSON.parse(cachedRaw), groupName);
     } catch (error) {
-      this.log("Failed to read academic calendar cache", error);
+      this.log('Failed to read academic calendar cache', error);
       return null;
     }
   },
@@ -1808,7 +1663,7 @@ export const scheduleService = {
         ),
       ]);
     } catch (error) {
-      this.log("Failed to cache academic calendar", error);
+      this.log('Failed to cache academic calendar', error);
     }
   },
 
@@ -1824,111 +1679,76 @@ export const scheduleService = {
     if (!requestGroup) return null;
 
     const academicYear = this.getAcademicYearForDate(date);
-    const sessionKey = this.getAcademicCalendarCacheScope(
-      requestGroup,
-      academicYear,
-    );
+    const sessionKey = this.getAcademicCalendarCacheScope(requestGroup, academicYear);
 
-    if (
-      !forceRefresh &&
-      this.academicCalendarFetchedThisSession.has(sessionKey)
-    ) {
-      const cached = await this.readAcademicCalendarCache(
-        requestGroup,
-        academicYear,
-        false,
-      );
+    if (!forceRefresh && this.academicCalendarFetchedThisSession.has(sessionKey)) {
+      const cached = await this.readAcademicCalendarCache(requestGroup, academicYear, false);
       if (cached) return cached;
     }
 
     if (!forceRefresh) {
-      const freshCached = await this.readAcademicCalendarCache(
-        requestGroup,
-        academicYear,
-        true,
-      );
+      const freshCached = await this.readAcademicCalendarCache(requestGroup, academicYear, true);
       if (freshCached) return freshCached;
     }
 
     const currentAcademicYear = this.getAcademicYearForDate(new Date());
     const historic = academicYear !== currentAcademicYear;
-    const endpoint =
-      historic ? "/api/schedule/grafic-pe/historic" : "/api/schedule/grafic-pe";
+    const endpoint = historic ? '/api/schedule/grafic-pe/historic' : '/api/schedule/grafic-pe';
     const params = new URLSearchParams({ group: requestGroup });
-    if (historic) params.set("academic_year", academicYear);
+    if (historic) params.set('academic_year', academicYear);
 
     try {
-      const payload = await this.fetchJsonWithHistoricFallback(
-        `${endpoint}?${params.toString()}`,
-      );
+      const payload = await this.fetchJsonWithHistoricFallback(`${endpoint}?${params.toString()}`);
       if (!payload?.available || !Array.isArray(payload?.events)) {
-        throw new Error(payload?.reasonCode || "academic_calendar_unavailable");
+        throw new Error(payload?.reasonCode || 'academic_calendar_unavailable');
       }
 
-      const expectedGroup =
-        this.normalizeAcademicCalendarComparisonGroup(requestGroup);
+      const expectedGroup = this.normalizeAcademicCalendarComparisonGroup(requestGroup);
       const rawGroup = payload.events.find(
         (event: unknown) =>
           event &&
-          typeof event === "object" &&
-          this.normalizeAcademicCalendarComparisonGroup(
-            (event as { group?: string }).group,
-          ) === expectedGroup,
+          typeof event === 'object' &&
+          this.normalizeAcademicCalendarComparisonGroup((event as { group?: string }).group) ===
+            expectedGroup,
       );
-      const normalized = this.normalizeAcademicCalendarGroup(
-        rawGroup,
-        requestGroup,
-      );
+      const normalized = this.normalizeAcademicCalendarGroup(rawGroup, requestGroup);
       if (!normalized) {
-        throw new Error("academic_calendar_group_not_found");
+        throw new Error('academic_calendar_group_not_found');
       }
 
       await this.cacheAcademicCalendar(requestGroup, academicYear, normalized);
       this.academicCalendarFetchedThisSession.add(sessionKey);
       return normalized;
     } catch (error) {
-      this.log("Academic calendar fetch failed", error);
+      this.log('Academic calendar fetch failed', error);
       return this.readAcademicCalendarCache(requestGroup, academicYear, false);
     }
   },
 
   getSpecialScheduleCacheScope(groupName?: string): string {
     const normalizedGroup = this.normalizeSpecialScheduleGroupName(groupName);
-    return normalizedGroup.length > 0 ? normalizedGroup : "__meta__";
+    return normalizedGroup.length > 0 ? normalizedGroup : '__meta__';
   },
 
-  getSpecialScheduleSessionKey(
-    type: SpecialScheduleType,
-    groupName?: string,
-  ): string {
+  getSpecialScheduleSessionKey(type: SpecialScheduleType, groupName?: string): string {
     return `${type}_${this.getSpecialScheduleCacheScope(groupName)}`;
   },
 
-  getSpecialScheduleCacheKey(
-    type: SpecialScheduleType,
-    groupName?: string,
-  ): string {
+  getSpecialScheduleCacheKey(type: SpecialScheduleType, groupName?: string): string {
     return `${CACHE_KEYS.SPECIAL_SCHEDULE_PREFIX}${type}_${this.getSpecialScheduleCacheScope(groupName)}`;
   },
 
-  getSpecialScheduleLastFetchKey(
-    type: SpecialScheduleType,
-    groupName?: string,
-  ): string {
+  getSpecialScheduleLastFetchKey(type: SpecialScheduleType, groupName?: string): string {
     return `${CACHE_KEYS.LAST_SPECIAL_FETCH_PREFIX}${type}_${this.getSpecialScheduleCacheScope(groupName)}`;
   },
 
   async fetchJsonFromPathOrUrl(pathOrUrl: string): Promise<any> {
-    const target =
-      normalizeHistoricHref(pathOrUrl) || String(pathOrUrl || "").trim();
+    const target = normalizeHistoricHref(pathOrUrl) || String(pathOrUrl || '').trim();
     if (!target) {
-      throw new Error("Empty request path");
+      throw new Error('Empty request path');
     }
 
-    const response =
-      isAbsoluteHttpUrl(target) ?
-        await fetch(target)
-      : await fetchCustomApi(target);
+    const response = isAbsoluteHttpUrl(target) ? await fetch(target) : await fetchCustomApi(target);
 
     if (!response.ok) {
       throw new Error(`Failed to fetch resource: ${response.status}`);
@@ -1938,40 +1758,24 @@ export const scheduleService = {
   },
 
   normalizeHistoricAvailability(raw: unknown): HistoricAvailabilityPayload {
-    const normalizeMatch = (
-      match: unknown,
-    ): HistoricAvailabilityMatch | null => {
-      if (!match || typeof match !== "object") return null;
+    const normalizeMatch = (match: unknown): HistoricAvailabilityMatch | null => {
+      if (!match || typeof match !== 'object') return null;
       const candidate = match as Record<string, unknown>;
       const href = normalizeHistoricHref(candidate.href);
       return {
         academicYear:
-          typeof candidate.academicYear === "string" ?
-            candidate.academicYear
-          : undefined,
-        semester:
-          typeof candidate.semester === "string" ?
-            candidate.semester
-          : undefined,
+          typeof candidate.academicYear === 'string' ? candidate.academicYear : undefined,
+        semester: typeof candidate.semester === 'string' ? candidate.semester : undefined,
         studyYear:
-          (
-            typeof candidate.studyYear === "number" ||
-            candidate.studyYear === null
-          ) ?
-            (candidate.studyYear as number | null)
-          : undefined,
-        filename:
-          typeof candidate.filename === "string" ?
-            candidate.filename
-          : undefined,
-        endpoint:
-          typeof candidate.endpoint === "string" ?
-            candidate.endpoint
-          : undefined,
+          typeof candidate.studyYear === 'number' || candidate.studyYear === null
+            ? (candidate.studyYear as number | null)
+            : undefined,
+        filename: typeof candidate.filename === 'string' ? candidate.filename : undefined,
+        endpoint: typeof candidate.endpoint === 'string' ? candidate.endpoint : undefined,
         query:
-          candidate.query && typeof candidate.query === "object" ?
-            (candidate.query as Record<string, unknown>)
-          : undefined,
+          candidate.query && typeof candidate.query === 'object'
+            ? (candidate.query as Record<string, unknown>)
+            : undefined,
         href,
       };
     };
@@ -1979,20 +1783,15 @@ export const scheduleService = {
     if (Array.isArray(raw)) {
       return raw
         .map(normalizeMatch)
-        .filter((match): match is HistoricAvailabilityMatch =>
-          Boolean(match?.href),
-        );
+        .filter((match): match is HistoricAvailabilityMatch => Boolean(match?.href));
     }
 
-    if (raw && typeof raw === "object") {
+    if (raw && typeof raw === 'object') {
       const candidate = raw as Record<string, unknown>;
-      const matches =
-        Array.isArray(candidate.matches) ?
-          candidate.matches
+      const matches = Array.isArray(candidate.matches)
+        ? candidate.matches
             .map(normalizeMatch)
-            .filter((match): match is HistoricAvailabilityMatch =>
-              Boolean(match?.href),
-            )
+            .filter((match): match is HistoricAvailabilityMatch => Boolean(match?.href))
         : [];
 
       return {
@@ -2009,38 +1808,28 @@ export const scheduleService = {
     };
   },
 
-  getHistoricAvailabilityMatches(
-    payload: unknown,
-  ): HistoricAvailabilityMatch[] {
-    if (!payload || typeof payload !== "object") return [];
+  getHistoricAvailabilityMatches(payload: unknown): HistoricAvailabilityMatch[] {
+    if (!payload || typeof payload !== 'object') return [];
     const candidate = payload as { historicAvailability?: unknown };
-    const normalizeMatch = (
-      match: unknown,
-    ): HistoricAvailabilityMatch | null => {
-      if (!match || typeof match !== "object") return null;
+    const normalizeMatch = (match: unknown): HistoricAvailabilityMatch | null => {
+      if (!match || typeof match !== 'object') return null;
       const entry = match as Record<string, unknown>;
       const href = normalizeHistoricHref(entry.href);
       if (!href) return null;
 
       return {
-        academicYear:
-          typeof entry.academicYear === "string" ?
-            entry.academicYear
-          : undefined,
-        semester:
-          typeof entry.semester === "string" ? entry.semester : undefined,
+        academicYear: typeof entry.academicYear === 'string' ? entry.academicYear : undefined,
+        semester: typeof entry.semester === 'string' ? entry.semester : undefined,
         studyYear:
-          typeof entry.studyYear === "number" || entry.studyYear === null ?
-            (entry.studyYear as number | null)
-          : undefined,
-        filename:
-          typeof entry.filename === "string" ? entry.filename : undefined,
-        endpoint:
-          typeof entry.endpoint === "string" ? entry.endpoint : undefined,
+          typeof entry.studyYear === 'number' || entry.studyYear === null
+            ? (entry.studyYear as number | null)
+            : undefined,
+        filename: typeof entry.filename === 'string' ? entry.filename : undefined,
+        endpoint: typeof entry.endpoint === 'string' ? entry.endpoint : undefined,
         query:
-          entry.query && typeof entry.query === "object" ?
-            (entry.query as Record<string, unknown>)
-          : undefined,
+          entry.query && typeof entry.query === 'object'
+            ? (entry.query as Record<string, unknown>)
+            : undefined,
         href,
       };
     };
@@ -2051,19 +1840,12 @@ export const scheduleService = {
         .filter((match): match is HistoricAvailabilityMatch => Boolean(match));
     }
 
-    if (
-      candidate.historicAvailability &&
-      typeof candidate.historicAvailability === "object"
-    ) {
-      const matches = (
-        candidate.historicAvailability as HistoricAvailabilityInfo
-      ).matches;
-      return Array.isArray(matches) ?
-          matches
+    if (candidate.historicAvailability && typeof candidate.historicAvailability === 'object') {
+      const matches = (candidate.historicAvailability as HistoricAvailabilityInfo).matches;
+      return Array.isArray(matches)
+        ? matches
             .map(normalizeMatch)
-            .filter((match): match is HistoricAvailabilityMatch =>
-              Boolean(match),
-            )
+            .filter((match): match is HistoricAvailabilityMatch => Boolean(match))
         : [];
     }
 
@@ -2080,26 +1862,22 @@ export const scheduleService = {
   },
 
   shouldFollowHistoricAvailability(payload: unknown): boolean {
-    if (!payload || typeof payload !== "object") return false;
+    if (!payload || typeof payload !== 'object') return false;
     const candidate = payload as { available?: unknown };
-    return (
-      candidate.available === false &&
-      Boolean(this.getHistoricAvailabilityHref(payload))
-    );
+    return candidate.available === false && Boolean(this.getHistoricAvailabilityHref(payload));
   },
 
   async fetchJsonWithHistoricFallback(
     pathOrUrl: string,
     visited: Set<string> = new Set<string>(),
   ): Promise<any> {
-    const target =
-      normalizeHistoricHref(pathOrUrl) || String(pathOrUrl || "").trim();
+    const target = normalizeHistoricHref(pathOrUrl) || String(pathOrUrl || '').trim();
     if (!target) {
-      throw new Error("Empty request path");
+      throw new Error('Empty request path');
     }
 
     if (visited.has(target)) {
-      throw new Error("Historic availability loop detected");
+      throw new Error('Historic availability loop detected');
     }
     visited.add(target);
 
@@ -2114,7 +1892,7 @@ export const scheduleService = {
       try {
         return await this.fetchJsonWithHistoricFallback(historicHref, visited);
       } catch (error) {
-        this.log("Historic fallback fetch failed", error);
+        this.log('Historic fallback fetch failed', error);
       }
     }
 
@@ -2124,16 +1902,13 @@ export const scheduleService = {
   buildUnavailableSpecialSchedule(
     type: SpecialScheduleType,
     groupName?: string | null,
-    reasonCode: string | null = "unavailable",
+    reasonCode: string | null = 'unavailable',
     reason: string | null = null,
   ): SpecialScheduleResponse {
     return {
       available: false,
       type,
-      group:
-        typeof groupName === "string" && groupName.trim().length > 0 ?
-          groupName.trim()
-        : null,
+      group: typeof groupName === 'string' && groupName.trim().length > 0 ? groupName.trim() : null,
       document: null,
       events: [],
       reasonCode,
@@ -2143,62 +1918,51 @@ export const scheduleService = {
     };
   },
 
-  normalizeSpecialScheduleDocument(
-    document: any,
-  ): SpecialScheduleDocument | null {
-    if (!document || typeof document !== "object") {
+  normalizeSpecialScheduleDocument(document: any): SpecialScheduleDocument | null {
+    if (!document || typeof document !== 'object') {
       return null;
     }
 
-    const examStudyYearRaw = (document as { examStudyYear?: unknown })
-      .examStudyYear;
+    const examStudyYearRaw = (document as { examStudyYear?: unknown }).examStudyYear;
     const parsedExamStudyYear =
-      typeof examStudyYearRaw === "number" ? examStudyYearRaw
-      : (
-        typeof examStudyYearRaw === "string" &&
-        examStudyYearRaw.trim().length > 0
-      ) ?
-        Number(examStudyYearRaw)
-      : null;
+      typeof examStudyYearRaw === 'number'
+        ? examStudyYearRaw
+        : typeof examStudyYearRaw === 'string' && examStudyYearRaw.trim().length > 0
+          ? Number(examStudyYearRaw)
+          : null;
 
     return {
       url:
-        typeof (document as { url?: unknown }).url === "string" ?
-          (document as { url: string }).url
-        : "",
+        typeof (document as { url?: unknown }).url === 'string'
+          ? (document as { url: string }).url
+          : '',
       filename:
-        typeof (document as { filename?: unknown }).filename === "string" ?
-          (document as { filename: string }).filename
-        : "",
+        typeof (document as { filename?: unknown }).filename === 'string'
+          ? (document as { filename: string }).filename
+          : '',
       semester:
-        typeof (document as { semester?: unknown }).semester === "string" ?
-          (document as { semester: string }).semester
-        : null,
+        typeof (document as { semester?: unknown }).semester === 'string'
+          ? (document as { semester: string }).semester
+          : null,
       academicYear:
-        (
-          typeof (document as { academicYear?: unknown }).academicYear ===
-          "string"
-        ) ?
-          (document as { academicYear: string }).academicYear
-        : null,
-      examStudyYear:
-        Number.isFinite(parsedExamStudyYear) ?
-          Number(parsedExamStudyYear)
-        : null,
+        typeof (document as { academicYear?: unknown }).academicYear === 'string'
+          ? (document as { academicYear: string }).academicYear
+          : null,
+      examStudyYear: Number.isFinite(parsedExamStudyYear) ? Number(parsedExamStudyYear) : null,
       source:
-        typeof (document as { source?: unknown }).source === "string" ?
-          (document as { source: string }).source
-        : null,
+        typeof (document as { source?: unknown }).source === 'string'
+          ? (document as { source: string }).source
+          : null,
     };
   },
 
   normalizeSubjectMatchKey(value: string): string {
-    if (!value) return "";
+    if (!value) return '';
     return value
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
       .toLowerCase()
-      .replace(/[\s\-_.\/,:;()\[\]{}]+/g, " ")
+      .replace(/[\s\-_.\/,:;()\[\]{}]+/g, ' ')
       .trim();
   },
 
@@ -2206,12 +1970,12 @@ export const scheduleService = {
     const normalized = this.normalizeSubjectMatchKey(value);
     if (!normalized) return [];
 
-    const rawTokens = normalized.split(" ").filter(Boolean);
+    const rawTokens = normalized.split(' ').filter(Boolean);
     const tokens: string[] = [];
     let hasLanguageToken = false;
 
     rawTokens.forEach((token) => {
-      if (token === "l" || token === "limba") {
+      if (token === 'l' || token === 'limba') {
         return;
       }
 
@@ -2228,7 +1992,7 @@ export const scheduleService = {
     });
 
     if (hasLanguageToken) {
-      tokens.push("limba");
+      tokens.push('limba');
     }
 
     return Array.from(new Set(tokens));
@@ -2270,14 +2034,12 @@ export const scheduleService = {
   },
 
   normalizeScheduleSubgroup(groupName?: string | null): SubGroupType | null {
-    const normalized = String(groupName || "")
+    const normalized = String(groupName || '')
       .trim()
       .toLowerCase();
     if (!normalized) return null;
-    if (normalized.includes("grupa 1") || normalized.includes("subgroup 1"))
-      return "Subgroup 1";
-    if (normalized.includes("grupa 2") || normalized.includes("subgroup 2"))
-      return "Subgroup 2";
+    if (normalized.includes('grupa 1') || normalized.includes('subgroup 1')) return 'Subgroup 1';
+    if (normalized.includes('grupa 2') || normalized.includes('subgroup 2')) return 'Subgroup 2';
     return null;
   },
 
@@ -2292,30 +2054,21 @@ export const scheduleService = {
       return data.data[weekendKey];
     }
 
-    let effectiveDayName: keyof ApiResponse["data"] | undefined;
+    let effectiveDayName: keyof ApiResponse['data'] | undefined;
 
     if (
-      datePeriodTimes?.override?.mode === "weekday_replace" &&
+      datePeriodTimes?.override?.mode === 'weekday_replace' &&
       datePeriodTimes.override.replaceWeekday
     ) {
-      effectiveDayName = this.normalizeWeekdayKey(
-        datePeriodTimes.override.replaceWeekday,
-      );
+      effectiveDayName = this.normalizeWeekdayKey(datePeriodTimes.override.replaceWeekday);
     }
 
-    if (
-      !effectiveDayName &&
-      datePeriodTimes?.override?.recoverySource?.weekday
-    ) {
-      effectiveDayName = this.normalizeWeekdayKey(
-        datePeriodTimes.override.recoverySource.weekday,
-      );
+    if (!effectiveDayName && datePeriodTimes?.override?.recoverySource?.weekday) {
+      effectiveDayName = this.normalizeWeekdayKey(datePeriodTimes.override.recoverySource.weekday);
     }
 
     if (!effectiveDayName && datePeriodTimes?.override?.replaceWeekday) {
-      effectiveDayName = this.normalizeWeekdayKey(
-        datePeriodTimes.override.replaceWeekday,
-      );
+      effectiveDayName = this.normalizeWeekdayKey(datePeriodTimes.override.replaceWeekday);
     }
 
     if (!effectiveDayName && datePeriodTimes?.weekday) {
@@ -2336,7 +2089,7 @@ export const scheduleService = {
     allowedPeriods: Set<number>,
   ): { subgroup1?: number; subgroup2?: number } {
     const normalizedSubject = this.normalizeSubjectMatchKey(subject);
-    const weekKey = this.isEvenWeek(date) ? "par" : "impar";
+    const weekKey = this.isEvenWeek(date) ? 'par' : 'impar';
     const result: { subgroup1?: number; subgroup2?: number } = {};
 
     const orderedPeriods = Object.entries(daySchedule)
@@ -2351,23 +2104,21 @@ export const scheduleService = {
       if (!allowedPeriods.has(period)) return;
 
       const bothItems = Array.isArray(schedules.both) ? schedules.both : [];
-      const weekItems =
-        Array.isArray((schedules as any)[weekKey]) ?
-          (schedules as any)[weekKey]
+      const weekItems = Array.isArray((schedules as any)[weekKey])
+        ? (schedules as any)[weekKey]
         : [];
       const items = [...bothItems, ...weekItems];
 
       items.forEach((item) => {
-        const itemSubject = item?.subjectid?.name || "";
+        const itemSubject = item?.subjectid?.name || '';
         if (!itemSubject) return;
-        if (this.normalizeSubjectMatchKey(itemSubject) !== normalizedSubject)
-          return;
+        if (this.normalizeSubjectMatchKey(itemSubject) !== normalizedSubject) return;
 
         const subgroup = this.normalizeScheduleSubgroup(item?.groupids?.name);
-        if (subgroup === "Subgroup 1" && !result.subgroup1) {
+        if (subgroup === 'Subgroup 1' && !result.subgroup1) {
           result.subgroup1 = period;
         }
-        if (subgroup === "Subgroup 2" && !result.subgroup2) {
+        if (subgroup === 'Subgroup 2' && !result.subgroup2) {
           result.subgroup2 = period;
         }
       });
@@ -2379,30 +2130,26 @@ export const scheduleService = {
 
     // Fallback: fuzzy subject matching for abbreviated or variant names.
     const missingSubgroups = new Set<SubGroupType>();
-    if (!result.subgroup1) missingSubgroups.add("Subgroup 1");
-    if (!result.subgroup2) missingSubgroups.add("Subgroup 2");
+    if (!result.subgroup1) missingSubgroups.add('Subgroup 1');
+    if (!result.subgroup2) missingSubgroups.add('Subgroup 2');
     if (missingSubgroups.size === 0) return result;
 
-    const bestBySubgroup: Record<
-      SubGroupType,
-      { score: number; period: number }
-    > = {
-      "Subgroup 1": { score: 0, period: Number.POSITIVE_INFINITY },
-      "Subgroup 2": { score: 0, period: Number.POSITIVE_INFINITY },
+    const bestBySubgroup: Record<SubGroupType, { score: number; period: number }> = {
+      'Subgroup 1': { score: 0, period: Number.POSITIVE_INFINITY },
+      'Subgroup 2': { score: 0, period: Number.POSITIVE_INFINITY },
     };
 
     orderedPeriods.forEach(({ period, schedules }) => {
       if (!allowedPeriods.has(period)) return;
 
       const bothItems = Array.isArray(schedules.both) ? schedules.both : [];
-      const weekItems =
-        Array.isArray((schedules as any)[weekKey]) ?
-          (schedules as any)[weekKey]
+      const weekItems = Array.isArray((schedules as any)[weekKey])
+        ? (schedules as any)[weekKey]
         : [];
       const items = [...bothItems, ...weekItems];
 
       items.forEach((item) => {
-        const itemSubject = item?.subjectid?.name || "";
+        const itemSubject = item?.subjectid?.name || '';
         if (!itemSubject) return;
 
         const subgroup = this.normalizeScheduleSubgroup(item?.groupids?.name);
@@ -2412,26 +2159,17 @@ export const scheduleService = {
         if (score < SUBJECT_MATCH_THRESHOLD) return;
 
         const best = bestBySubgroup[subgroup];
-        if (
-          score > best.score ||
-          (score === best.score && period < best.period)
-        ) {
+        if (score > best.score || (score === best.score && period < best.period)) {
           bestBySubgroup[subgroup] = { score, period };
         }
       });
     });
 
-    if (
-      !result.subgroup1 &&
-      bestBySubgroup["Subgroup 1"].score >= SUBJECT_MATCH_THRESHOLD
-    ) {
-      result.subgroup1 = bestBySubgroup["Subgroup 1"].period;
+    if (!result.subgroup1 && bestBySubgroup['Subgroup 1'].score >= SUBJECT_MATCH_THRESHOLD) {
+      result.subgroup1 = bestBySubgroup['Subgroup 1'].period;
     }
-    if (
-      !result.subgroup2 &&
-      bestBySubgroup["Subgroup 2"].score >= SUBJECT_MATCH_THRESHOLD
-    ) {
-      result.subgroup2 = bestBySubgroup["Subgroup 2"].period;
+    if (!result.subgroup2 && bestBySubgroup['Subgroup 2'].score >= SUBJECT_MATCH_THRESHOLD) {
+      result.subgroup2 = bestBySubgroup['Subgroup 2'].period;
     }
 
     return result;
@@ -2441,18 +2179,16 @@ export const scheduleService = {
     response: SpecialScheduleResponse,
     groupName?: string,
   ): Promise<SpecialScheduleResponse> {
-    if (response.type !== "thesis") return response;
+    if (response.type !== 'thesis') return response;
 
     const thesisEvents = response.events.filter(
-      (event): event is ThesisScheduleEvent => event.type === "thesis",
+      (event): event is ThesisScheduleEvent => event.type === 'thesis',
     );
     const hasDependent = thesisEvents.some((event) => event.subgroupDependent);
     if (!hasDependent) return response;
 
     const baseEvents = thesisEvents.filter((event) => !event.subgroupDependent);
-    const dependentEvents = thesisEvents.filter(
-      (event) => event.subgroupDependent,
-    );
+    const dependentEvents = thesisEvents.filter((event) => event.subgroupDependent);
 
     let scheduleData: ApiResponse | null = null;
     try {
@@ -2464,16 +2200,14 @@ export const scheduleService = {
       if (normalizedTargetGroup) {
         const groups = await this.getGroups();
         const matchingGroup = groups.find(
-          (group) =>
-            this.normalizeSpecialScheduleGroupName(group.name) ===
-            normalizedTargetGroup,
+          (group) => this.normalizeSpecialScheduleGroupName(group.name) === normalizedTargetGroup,
         );
         if (matchingGroup?._id) {
           resolvedGroupId = matchingGroup._id;
         }
       }
 
-      scheduleData = await this.getClassSchedule(resolvedGroupId || "", false);
+      scheduleData = await this.getClassSchedule(resolvedGroupId || '', false);
     } catch {
       scheduleData = null;
     }
@@ -2493,8 +2227,8 @@ export const scheduleService = {
     const resolvedEvents: ThesisScheduleEvent[] = [...baseEvents];
 
     for (const groupEvents of grouped.values()) {
-      const dateKey = groupEvents[0]?.date || "";
-      const subject = groupEvents[0]?.subject || "";
+      const dateKey = groupEvents[0]?.date || '';
+      const subject = groupEvents[0]?.subject || '';
       if (!dateKey || !subject) continue;
 
       const dateObj = new Date(`${dateKey}T00:00:00`);
@@ -2512,10 +2246,7 @@ export const scheduleService = {
       const availablePeriods = new Set<number>();
       const eventByPeriod = new Map<number, ThesisScheduleEvent>();
       groupEvents.forEach((event) => {
-        const periodNum =
-          typeof event.period === "number" ?
-            event.period
-          : Number(event.period);
+        const periodNum = typeof event.period === 'number' ? event.period : Number(event.period);
         if (!Number.isFinite(periodNum)) return;
         availablePeriods.add(periodNum);
         if (!eventByPeriod.has(periodNum)) {
@@ -2538,13 +2269,13 @@ export const scheduleService = {
       }[] = [];
       if (subgroupPeriods.subgroup1) {
         subgroupAssignments.push({
-          subgroup: "Subgroup 1",
+          subgroup: 'Subgroup 1',
           period: subgroupPeriods.subgroup1,
         });
       }
       if (subgroupPeriods.subgroup2) {
         subgroupAssignments.push({
-          subgroup: "Subgroup 2",
+          subgroup: 'Subgroup 2',
           period: subgroupPeriods.subgroup2,
         });
       }
@@ -2563,8 +2294,8 @@ export const scheduleService = {
       });
 
       const missingSubgroups: SubGroupType[] = [];
-      if (!subgroupPeriods.subgroup1) missingSubgroups.push("Subgroup 1");
-      if (!subgroupPeriods.subgroup2) missingSubgroups.push("Subgroup 2");
+      if (!subgroupPeriods.subgroup1) missingSubgroups.push('Subgroup 1');
+      if (!subgroupPeriods.subgroup2) missingSubgroups.push('Subgroup 2');
 
       const unassignedPeriods = Array.from(eventByPeriod.keys()).filter(
         (period) => !assignedPeriods.has(period),
@@ -2603,81 +2334,68 @@ export const scheduleService = {
     payload: any,
   ): SpecialScheduleResponse {
     const rawGroup =
-      typeof payload?.group === "string" && payload.group.trim().length > 0 ?
-        payload.group.trim()
-      : groupName;
-    const resolvedType: SpecialScheduleType =
-      payload?.type === "exam" ? "exam" : type;
+      typeof payload?.group === 'string' && payload.group.trim().length > 0
+        ? payload.group.trim()
+        : groupName;
+    const resolvedType: SpecialScheduleType = payload?.type === 'exam' ? 'exam' : type;
     const rawEvents = Array.isArray(payload?.events) ? payload.events : [];
 
     const events: SpecialScheduleEvent[] = rawEvents
       .map((event: any): SpecialScheduleEvent | null => {
-        if (!event || typeof event !== "object") return null;
+        if (!event || typeof event !== 'object') return null;
 
         const base = {
-          group: typeof event.group === "string" ? event.group : rawGroup || "",
-          date: typeof event.date === "string" ? event.date : "",
-          subject: typeof event.subject === "string" ? event.subject : "",
-          teacher: typeof event.teacher === "string" ? event.teacher : "",
-          room: typeof event.room === "string" ? event.room : "",
+          group: typeof event.group === 'string' ? event.group : rawGroup || '',
+          date: typeof event.date === 'string' ? event.date : '',
+          subject: typeof event.subject === 'string' ? event.subject : '',
+          teacher: typeof event.teacher === 'string' ? event.teacher : '',
+          room: typeof event.room === 'string' ? event.room : '',
           subgroup:
-            (
-              typeof event.subgroup === "string" &&
-              event.subgroup.trim().length > 0
-            ) ?
-              event.subgroup.trim()
-            : null,
+            typeof event.subgroup === 'string' && event.subgroup.trim().length > 0
+              ? event.subgroup.trim()
+              : null,
         };
 
         if (!base.date || !base.subject) return null;
 
-        if (resolvedType === "exam") {
+        if (resolvedType === 'exam') {
           return {
             ...base,
-            type: "exam",
+            type: 'exam',
             time:
-              typeof event.time === "string" && event.time.trim().length > 0 ?
-                event.time
-              : null,
+              typeof event.time === 'string' && event.time.trim().length > 0 ? event.time : null,
           };
         }
 
         const rawPeriod =
-          typeof event.period === "number" ? event.period
-          : typeof event.period === "string" && event.period.trim().length > 0 ?
-            Number(event.period)
-          : null;
+          typeof event.period === 'number'
+            ? event.period
+            : typeof event.period === 'string' && event.period.trim().length > 0
+              ? Number(event.period)
+              : null;
 
         return {
           ...base,
-          type: "thesis",
+          type: 'thesis',
           period: Number.isFinite(rawPeriod) ? Number(rawPeriod) : null,
           startTime:
-            (
-              typeof event.startTime === "string" &&
-              event.startTime.trim().length > 0
-            ) ?
-              event.startTime
-            : null,
+            typeof event.startTime === 'string' && event.startTime.trim().length > 0
+              ? event.startTime
+              : null,
           endTime:
-            (
-              typeof event.endTime === "string" &&
-              event.endTime.trim().length > 0
-            ) ?
-              event.endTime
-            : null,
+            typeof event.endTime === 'string' && event.endTime.trim().length > 0
+              ? event.endTime
+              : null,
           subgroupDependent: Boolean(event.subgroupDependent),
         };
       })
-      .filter(
-        (event: SpecialScheduleEvent | null): event is SpecialScheduleEvent =>
-          Boolean(event),
+      .filter((event: SpecialScheduleEvent | null): event is SpecialScheduleEvent =>
+        Boolean(event),
       );
 
-    const warnings =
-      Array.isArray(payload?.warnings) ?
-        payload.warnings.filter(
-          (warning: unknown): warning is string => typeof warning === "string",
+    const warnings = Array.isArray(payload?.warnings)
+      ? payload.warnings.filter(
+          (warning: unknown): warning is string => typeof warning === 'string',
         )
       : [];
 
@@ -2687,13 +2405,10 @@ export const scheduleService = {
       group: rawGroup,
       document: this.normalizeSpecialScheduleDocument(payload?.document),
       events,
-      reasonCode:
-        typeof payload?.reasonCode === "string" ? payload.reasonCode : null,
-      reason: typeof payload?.reason === "string" ? payload.reason : null,
+      reasonCode: typeof payload?.reasonCode === 'string' ? payload.reasonCode : null,
+      reason: typeof payload?.reason === 'string' ? payload.reason : null,
       warnings,
-      historicAvailability: this.normalizeHistoricAvailability(
-        payload?.historicAvailability,
-      ),
+      historicAvailability: this.normalizeHistoricAvailability(payload?.historicAvailability),
     };
   },
 
@@ -2723,13 +2438,9 @@ export const scheduleService = {
       }
 
       const parsed = JSON.parse(cachedRaw);
-      return this.normalizeSpecialScheduleResponse(
-        type,
-        normalizedGroup || null,
-        parsed,
-      );
+      return this.normalizeSpecialScheduleResponse(type, normalizedGroup || null, parsed);
     } catch (error) {
-      this.log("Failed to read special schedule cache", error);
+      this.log('Failed to read special schedule cache', error);
       return null;
     }
   },
@@ -2747,7 +2458,7 @@ export const scheduleService = {
         AsyncStorage.setItem(lastFetchKey, new Date().toISOString()),
       ]);
     } catch (error) {
-      this.log("Failed to cache special schedule", error);
+      this.log('Failed to cache special schedule', error);
     }
   },
 
@@ -2763,33 +2474,19 @@ export const scheduleService = {
     const sessionKey = this.getSpecialScheduleSessionKey(type, normalizedGroup);
 
     if (this.specialScheduleFetchedThisSession.has(sessionKey)) {
-      const cached = await this.readSpecialScheduleCache(
-        type,
-        normalizedGroup,
-        false,
-      );
+      const cached = await this.readSpecialScheduleCache(type, normalizedGroup, false);
       if (cached) {
-        return type === "thesis" ?
-            await this.resolveSubgroupDependentThesisEvents(
-              cached,
-              normalizedGroup,
-            )
+        return type === 'thesis'
+          ? await this.resolveSubgroupDependentThesisEvents(cached, normalizedGroup)
           : cached;
       }
     }
 
     if (!forceRefresh) {
-      const freshCached = await this.readSpecialScheduleCache(
-        type,
-        normalizedGroup,
-        true,
-      );
+      const freshCached = await this.readSpecialScheduleCache(type, normalizedGroup, true);
       if (freshCached) {
-        return type === "thesis" ?
-            await this.resolveSubgroupDependentThesisEvents(
-              freshCached,
-              normalizedGroup,
-            )
+        return type === 'thesis'
+          ? await this.resolveSubgroupDependentThesisEvents(freshCached, normalizedGroup)
           : freshCached;
       }
     }
@@ -2797,15 +2494,13 @@ export const scheduleService = {
     const inFlightRequest = this.specialScheduleInFlight.get(sessionKey);
     if (inFlightRequest) return inFlightRequest;
 
-    const endpoint =
-      type === "exam" ? "/api/schedule/exams" : "/api/schedule/theses";
+    const endpoint = type === 'exam' ? '/api/schedule/exams' : '/api/schedule/theses';
     const params = new URLSearchParams();
     if (normalizedGroup) {
-      params.append("group", normalizedGroup);
+      params.append('group', normalizedGroup);
     }
 
-    const requestPath =
-      params.toString() ? `${endpoint}?${params.toString()}` : endpoint;
+    const requestPath = params.toString() ? `${endpoint}?${params.toString()}` : endpoint;
 
     const request = (async (): Promise<SpecialScheduleResponse> => {
       try {
@@ -2815,38 +2510,25 @@ export const scheduleService = {
           normalizedGroup || null,
           payload,
         );
-        if (type === "thesis") {
-          normalized = await this.resolveSubgroupDependentThesisEvents(
-            normalized,
-            normalizedGroup,
-          );
+        if (type === 'thesis') {
+          normalized = await this.resolveSubgroupDependentThesisEvents(normalized, normalizedGroup);
         }
         await this.cacheSpecialSchedule(type, normalizedGroup, normalized);
         this.specialScheduleFetchedThisSession.add(sessionKey);
         return normalized;
       } catch (error) {
-        const staleCached = await this.readSpecialScheduleCache(
-          type,
-          normalizedGroup,
-          false,
-        );
+        const staleCached = await this.readSpecialScheduleCache(type, normalizedGroup, false);
         if (staleCached) {
-          return type === "thesis" ?
-              await this.resolveSubgroupDependentThesisEvents(
-                staleCached,
-                normalizedGroup,
-              )
+          return type === 'thesis'
+            ? await this.resolveSubgroupDependentThesisEvents(staleCached, normalizedGroup)
             : staleCached;
         }
 
-        const message =
-          error instanceof Error ?
-            error.message
-          : `Unable to fetch ${type} schedule`;
+        const message = error instanceof Error ? error.message : `Unable to fetch ${type} schedule`;
         return this.buildUnavailableSpecialSchedule(
           type,
           normalizedGroup || null,
-          "fetch_failed",
+          'fetch_failed',
           message,
         );
       }
@@ -2870,8 +2552,8 @@ export const scheduleService = {
     exam: SpecialScheduleResponse;
   }> {
     const [thesis, exam] = await Promise.all([
-      this.getSpecialSchedule("thesis", groupName, forceRefresh),
-      this.getSpecialSchedule("exam", groupName, forceRefresh),
+      this.getSpecialSchedule('thesis', groupName, forceRefresh),
+      this.getSpecialSchedule('exam', groupName, forceRefresh),
     ]);
 
     return { thesis, exam };
@@ -2885,24 +2567,17 @@ export const scheduleService = {
     const normalizedGroup = this.normalizeSpecialScheduleGroupName(
       groupName || this.settings.selectedGroupName,
     );
-    const cached = await this.readSpecialScheduleCache(
-      type,
-      normalizedGroup,
-      false,
-    );
+    const cached = await this.readSpecialScheduleCache(type, normalizedGroup, false);
     if (cached) {
-      return type === "thesis" ?
-          await this.resolveSubgroupDependentThesisEvents(
-            cached,
-            normalizedGroup,
-          )
+      return type === 'thesis'
+        ? await this.resolveSubgroupDependentThesisEvents(cached, normalizedGroup)
         : cached;
     }
     return this.buildUnavailableSpecialSchedule(
       type,
       normalizedGroup || null,
-      "cache_miss",
-      "Special schedule is not cached yet",
+      'cache_miss',
+      'Special schedule is not cached yet',
     );
   },
 
@@ -2911,8 +2586,8 @@ export const scheduleService = {
     exam: SpecialScheduleResponse;
   }> {
     const [thesis, exam] = await Promise.all([
-      this.getCachedSpecialSchedule("thesis", groupName),
-      this.getCachedSpecialSchedule("exam", groupName),
+      this.getCachedSpecialSchedule('thesis', groupName),
+      this.getCachedSpecialSchedule('exam', groupName),
     ]);
     return { thesis, exam };
   },
@@ -2931,16 +2606,16 @@ export const scheduleService = {
     if (!resolvedGroup) {
       return {
         thesis: this.buildUnavailableSpecialSchedule(
-          "thesis",
+          'thesis',
           null,
-          "group_missing",
-          "No group selected",
+          'group_missing',
+          'No group selected',
         ),
         exam: this.buildUnavailableSpecialSchedule(
-          "exam",
+          'exam',
           null,
-          "group_missing",
-          "No group selected",
+          'group_missing',
+          'No group selected',
         ),
       };
     }
@@ -2968,10 +2643,7 @@ export const scheduleService = {
     }
   },
 
-  async syncPeriodTimesForDate(
-    date: Date,
-    force: boolean = false,
-  ): Promise<void> {
+  async syncPeriodTimesForDate(date: Date, force: boolean = false): Promise<void> {
     const dateKey = this.getDateKey(date);
 
     if (!force && this.getScopedDatePeriodEntry(dateKey)) {
@@ -3005,41 +2677,29 @@ export const scheduleService = {
       week_offset: String(weekOffset),
     });
     if (this.settings.selectedGroupId) {
-      params.append("group_id", this.settings.selectedGroupId);
+      params.append('group_id', this.settings.selectedGroupId);
     }
 
-    const response = await fetchCustomApi(
-      `/api/schedule/week?${params.toString()}`,
-    );
-    if (!response.ok) throw new Error("Failed to fetch weekly period times");
+    const response = await fetchCustomApi(`/api/schedule/week?${params.toString()}`);
+    if (!response.ok) throw new Error('Failed to fetch weekly period times');
 
     const weekResponse: WeekScheduleResponse = await response.json();
     this.mergeWeekPeriodTimes(weekResponse);
 
     await Promise.all([
-      AsyncStorage.setItem(
-        PERIOD_TIMES_CACHE_KEY,
-        JSON.stringify(this.cachedDatePeriodTimes),
-      ),
-      AsyncStorage.setItem(
-        CACHE_KEYS.RECOVERY_DAYS,
-        JSON.stringify(this.cachedRecoveryDays),
-      ),
+      AsyncStorage.setItem(PERIOD_TIMES_CACHE_KEY, JSON.stringify(this.cachedDatePeriodTimes)),
+      AsyncStorage.setItem(CACHE_KEYS.RECOVERY_DAYS, JSON.stringify(this.cachedRecoveryDays)),
       AsyncStorage.setItem(LAST_PERIOD_SYNC_KEY, new Date().toISOString()),
     ]);
 
-    this.log(
-      "Date-based period times synced for week",
-      this.getDateKey(anchorDate),
-      weekOffset,
-    );
+    this.log('Date-based period times synced for week', this.getDateKey(anchorDate), weekOffset);
   },
 
   async syncPeriodTimes(force: boolean = false): Promise<void> {
     try {
       await this.syncPeriodTimesForWeek(new Date(), 0, force);
     } catch {
-      this.log("Period times sync failed (using CEITI fallback)");
+      this.log('Period times sync failed (using CEITI fallback)');
     }
   },
 
@@ -3062,9 +2722,7 @@ export const scheduleService = {
       }
 
       // Try to get cached recovery days first
-      const cachedRecoveryDays = await AsyncStorage.getItem(
-        CACHE_KEYS.RECOVERY_DAYS,
-      );
+      const cachedRecoveryDays = await AsyncStorage.getItem(CACHE_KEYS.RECOVERY_DAYS);
       if (cachedRecoveryDays) {
         this.cachedRecoveryDays = JSON.parse(cachedRecoveryDays);
         return this.cachedRecoveryDays;
@@ -3084,29 +2742,18 @@ export const scheduleService = {
     try {
       await this.syncPeriodTimes(force);
       this.cachedRecoveryDays = this.buildRecoveryDaysFromDatePeriodTimes();
-      await AsyncStorage.setItem(
-        CACHE_KEYS.RECOVERY_DAYS,
-        JSON.stringify(this.cachedRecoveryDays),
-      );
-      await AsyncStorage.setItem(
-        CACHE_KEYS.LAST_RECOVERY_SYNC,
-        new Date().toISOString(),
-      );
-      this.log("Recovery days synced");
+      await AsyncStorage.setItem(CACHE_KEYS.RECOVERY_DAYS, JSON.stringify(this.cachedRecoveryDays));
+      await AsyncStorage.setItem(CACHE_KEYS.LAST_RECOVERY_SYNC, new Date().toISOString());
+      this.log('Recovery days synced');
       if (this.settings.selectedGroupId) {
-        const cachedData = await this.getCachedSchedule(
-          this.settings.selectedGroupId,
-        );
+        const cachedData = await this.getCachedSchedule(this.settings.selectedGroupId);
         if (cachedData) {
           const transformedData = this.transformScheduleData(cachedData);
-          await this.cacheSchedule(
-            this.settings.selectedGroupId,
-            transformedData,
-          );
+          await this.cacheSchedule(this.settings.selectedGroupId, transformedData);
         }
       }
     } catch {
-      this.log("Recovery days sync failed");
+      this.log('Recovery days sync failed');
     }
   },
 
@@ -3124,7 +2771,7 @@ export const scheduleService = {
       (day) =>
         day.date === dateString &&
         day.isActive &&
-        (day.groupId === "" || day.groupId === this.settings.selectedGroupId),
+        (day.groupId === '' || day.groupId === this.settings.selectedGroupId),
     );
 
     return recoveryDay || null;
@@ -3132,7 +2779,7 @@ export const scheduleService = {
 
   async getScheduleForDay(
     data: ApiResponse,
-    dayName: keyof ApiResponse["data"] | undefined,
+    dayName: keyof ApiResponse['data'] | undefined,
     date?: Date,
   ) {
     if (!dayName && !date) return [];
@@ -3157,19 +2804,17 @@ export const scheduleService = {
     }[] = [];
 
     // Validate input data structure
-    if (!data || !data.data || typeof data.data !== "object") {
-      this.log("Invalid data structure in getScheduleForDay");
+    if (!data || !data.data || typeof data.data !== 'object') {
+      this.log('Invalid data structure in getScheduleForDay');
       return result;
     }
 
     const datePeriodTimes = date ? await this.getDatePeriodTimes(date) : null;
-    const effectiveDateSchedule =
-      Array.isArray(datePeriodTimes?.schedule) ?
-        datePeriodTimes.schedule
+    const effectiveDateSchedule = Array.isArray(datePeriodTimes?.schedule)
+      ? datePeriodTimes.schedule
       : null;
-    const allowedDatePeriods =
-      effectiveDateSchedule ?
-        new Set(effectiveDateSchedule.map((period) => String(period.index + 1)))
+    const allowedDatePeriods = effectiveDateSchedule
+      ? new Set(effectiveDateSchedule.map((period) => String(period.index + 1)))
       : null;
     const replacedDayName =
       datePeriodTimes?.override?.replaceWeekday ||
@@ -3184,17 +2829,15 @@ export const scheduleService = {
       }
 
       result.push({
-        period: "recovery-info",
-        startTime: "00:00",
-        endTime: "00:01",
+        period: 'recovery-info',
+        startTime: '00:00',
+        endTime: '00:01',
         className: `Schedule Override: ${overrideReason}`,
-        teacherName: "",
-        roomNumber: "",
+        teacherName: '',
+        roomNumber: '',
         isCustom: true,
         color: Colors.dark.recoveryColor,
-        isRecoveryDay: Boolean(
-          datePeriodTimes?.isWeekend && datePeriodTimes?.isOverride,
-        ),
+        isRecoveryDay: Boolean(datePeriodTimes?.isWeekend && datePeriodTimes?.isOverride),
         recoveryReason: overrideReason,
         replacedDayName,
         assignmentCount: 0, // Recovery info never has assignments
@@ -3205,41 +2848,30 @@ export const scheduleService = {
 
     let daySchedule: { [key: string]: DaySchedule } | undefined;
 
-    if (
-      typeof dayName === "string" &&
-      dayName.startsWith("weekend_") &&
-      data.data[dayName]
-    ) {
+    if (typeof dayName === 'string' && dayName.startsWith('weekend_') && data.data[dayName]) {
       daySchedule = data.data[dayName];
     }
 
     if (!daySchedule) {
-      let effectiveDayName: keyof ApiResponse["data"] | undefined;
+      let effectiveDayName: keyof ApiResponse['data'] | undefined;
 
       // Primary: resolve by actual date and custom API metadata.
       if (
-        datePeriodTimes?.override?.mode === "weekday_replace" &&
+        datePeriodTimes?.override?.mode === 'weekday_replace' &&
         datePeriodTimes.override.replaceWeekday
       ) {
-        effectiveDayName = this.normalizeWeekdayKey(
-          datePeriodTimes.override.replaceWeekday,
-        );
+        effectiveDayName = this.normalizeWeekdayKey(datePeriodTimes.override.replaceWeekday);
       }
 
       // Recovery weekends often reuse another weekday's classes.
-      if (
-        !effectiveDayName &&
-        datePeriodTimes?.override?.recoverySource?.weekday
-      ) {
+      if (!effectiveDayName && datePeriodTimes?.override?.recoverySource?.weekday) {
         effectiveDayName = this.normalizeWeekdayKey(
           datePeriodTimes.override.recoverySource.weekday,
         );
       }
 
       if (!effectiveDayName && datePeriodTimes?.override?.replaceWeekday) {
-        effectiveDayName = this.normalizeWeekdayKey(
-          datePeriodTimes.override.replaceWeekday,
-        );
+        effectiveDayName = this.normalizeWeekdayKey(datePeriodTimes.override.replaceWeekday);
       }
 
       if (!effectiveDayName && datePeriodTimes?.weekday) {
@@ -3251,11 +2883,7 @@ export const scheduleService = {
       }
 
       // Secondary: explicit caller-provided day key.
-      if (
-        !effectiveDayName &&
-        typeof dayName === "string" &&
-        !dayName.startsWith("weekend_")
-      ) {
+      if (!effectiveDayName && typeof dayName === 'string' && !dayName.startsWith('weekend_')) {
         effectiveDayName = this.normalizeWeekdayKey(dayName);
       }
 
@@ -3265,13 +2893,10 @@ export const scheduleService = {
     }
 
     // Convert the date to a dateKey for assignment filtering
-    const dateKey = date ? format(date, "yyyy-MM-dd") : "";
+    const dateKey = date ? format(date, 'yyyy-MM-dd') : '';
     addOverrideInfoIfNeeded();
 
-    if (
-      (!daySchedule || typeof daySchedule !== "object") &&
-      effectiveDateSchedule?.length
-    ) {
+    if ((!daySchedule || typeof daySchedule !== 'object') && effectiveDateSchedule?.length) {
       effectiveDateSchedule.forEach((period) => {
         addOverrideInfoIfNeeded();
 
@@ -3292,11 +2917,9 @@ export const scheduleService = {
           startTime: period.start,
           endTime: period.end,
           className: `Period ${period.index + 1}`,
-          teacherName: "",
-          roomNumber: "",
-          isRecoveryDay: Boolean(
-            datePeriodTimes?.isWeekend && datePeriodTimes?.isOverride,
-          ),
+          teacherName: '',
+          roomNumber: '',
+          isRecoveryDay: Boolean(datePeriodTimes?.isWeekend && datePeriodTimes?.isOverride),
           recoveryReason: datePeriodTimes?.override?.reason,
           replacedDayName,
           assignmentCount,
@@ -3321,26 +2944,26 @@ export const scheduleService = {
 
         // Fix encoding and ensure we catch all variants of "entire class"
         const entireClassVariants = [
-          "Clasă intreagă",
-          "Clas intreag",
-          "Clasa intreaga",
-          "Clasă întreagă",
-          "Clas întreag",
-          "Întreaga clasă",
-          "Class",
+          'Clasă intreagă',
+          'Clas intreag',
+          'Clasa intreaga',
+          'Clasă întreagă',
+          'Clas întreag',
+          'Întreaga clasă',
+          'Class',
         ];
         const entireClass = entireClassVariants.some(
           (variant) =>
             itemGroup.toLowerCase().includes(variant.toLowerCase()) ||
-            itemGroup.toLowerCase().includes("intreag"),
+            itemGroup.toLowerCase().includes('intreag'),
         );
 
         // Map API group naming to our app's naming convention
         let compareItemGroup = itemGroup;
-        if (itemGroup.includes("Grupa 1") || itemGroup === "Grupa 1") {
-          compareItemGroup = "Subgroup 1";
-        } else if (itemGroup.includes("Grupa 2") || itemGroup === "Grupa 2") {
-          compareItemGroup = "Subgroup 2";
+        if (itemGroup.includes('Grupa 1') || itemGroup === 'Grupa 1') {
+          compareItemGroup = 'Subgroup 1';
+        } else if (itemGroup.includes('Grupa 2') || itemGroup === 'Grupa 2') {
+          compareItemGroup = 'Subgroup 2';
         }
 
         // Only skip if not entireClass AND does not match selected subgroup
@@ -3349,8 +2972,8 @@ export const scheduleService = {
         }
 
         // Use date-resolved period times from custom API first, then fall back to CEITI.
-        let startTime = "";
-        let endTime = "";
+        let startTime = '';
+        let endTime = '';
 
         const periodIndex = parseInt(periodNum, 10) - 1;
         const datePeriod = datePeriodTimes?.schedule.find(
@@ -3407,9 +3030,7 @@ export const scheduleService = {
           roomNumber: item.classroomids.name,
           isEvenWeek,
           group: compareItemGroup,
-          isRecoveryDay: Boolean(
-            datePeriodTimes?.isWeekend && datePeriodTimes?.isOverride,
-          ),
+          isRecoveryDay: Boolean(datePeriodTimes?.isWeekend && datePeriodTimes?.isOverride),
           recoveryReason: datePeriodTimes?.override?.reason,
           replacedDayName,
           assignmentCount,
@@ -3432,15 +3053,13 @@ export const scheduleService = {
         // Check if this custom period is enabled and applies to this day
         if (
           customPeriod.isEnabled &&
-          (!customPeriod.daysOfWeek ||
-            customPeriod.daysOfWeek.includes(mappedDayOfWeek))
+          (!customPeriod.daysOfWeek || customPeriod.daysOfWeek.includes(mappedDayOfWeek))
         ) {
           // Get assignment count for this custom period, filtering by date
           let assignmentCount = 0;
           if (data.assignmentCounts && dateKey) {
             const periodCount = data.assignmentCounts.find(
-              (ac) =>
-                ac.periodId === customPeriod._id && ac.dateKey === dateKey,
+              (ac) => ac.periodId === customPeriod._id && ac.dateKey === dateKey,
             );
 
             if (periodCount) {
@@ -3452,9 +3071,9 @@ export const scheduleService = {
             period: customPeriod._id,
             startTime: customPeriod.starttime,
             endTime: customPeriod.endtime,
-            className: customPeriod.name || "Custom Period",
-            teacherName: "",
-            roomNumber: "",
+            className: customPeriod.name || 'Custom Period',
+            teacherName: '',
+            roomNumber: '',
             isCustom: true,
             color: customPeriod.color || Colors.dark.customPeriodColor,
             assignmentCount,
@@ -3466,11 +3085,11 @@ export const scheduleService = {
     // Sort schedule by time
     const sortedSchedule = result.sort((a, b) => {
       // Put recovery day info at the top
-      if (a.isRecoveryDay && a.period === "recovery-info") return -1;
-      if (b.isRecoveryDay && b.period === "recovery-info") return 1;
+      if (a.isRecoveryDay && a.period === 'recovery-info') return -1;
+      if (b.isRecoveryDay && b.period === 'recovery-info') return 1;
 
-      const timeA = a.startTime.split(":").map(Number);
-      const timeB = b.startTime.split(":").map(Number);
+      const timeA = a.startTime.split(':').map(Number);
+      const timeB = b.startTime.split(':').map(Number);
       return timeA[0] * 60 + timeA[1] - (timeB[0] * 60 + timeB[1]);
     });
 
@@ -3484,14 +3103,12 @@ export const scheduleService = {
 
   isEvenWeek(date: Date): boolean {
     const weekMs = 7 * 24 * 60 * 60 * 1000;
-    const diffWeeks = Math.floor(
-      (date.getTime() - REFERENCE_DATE.getTime()) / weekMs,
-    );
+    const diffWeeks = Math.floor((date.getTime() - REFERENCE_DATE.getTime()) / weekMs);
     return diffWeeks % 2 === 0;
   },
 
   // Custom period management
-  addCustomPeriod(period: Omit<CustomPeriod, "_id">) {
+  addCustomPeriod(period: Omit<CustomPeriod, '_id'>) {
     const newPeriod = {
       ...period,
       _id: Date.now().toString(),
@@ -3503,9 +3120,7 @@ export const scheduleService = {
   },
 
   updateCustomPeriod(periodId: string, updates: Partial<CustomPeriod>) {
-    const index = this.settings.customPeriods.findIndex(
-      (p) => p._id === periodId,
-    );
+    const index = this.settings.customPeriods.findIndex((p) => p._id === periodId);
     if (index !== -1) {
       this.settings.customPeriods[index] = {
         ...this.settings.customPeriods[index],
@@ -3519,9 +3134,7 @@ export const scheduleService = {
   },
 
   deleteCustomPeriod(periodId: string) {
-    this.settings.customPeriods = this.settings.customPeriods.filter(
-      (p) => p._id !== periodId,
-    );
+    this.settings.customPeriods = this.settings.customPeriods.filter((p) => p._id !== periodId);
     this.saveSettings();
     this.notifyListeners();
   },
@@ -3529,11 +3142,11 @@ export const scheduleService = {
   // Reset settings to defaults
   resetSettings() {
     this.settings = {
-      group: "Subgroup 2",
+      group: 'Subgroup 2',
       language: getSystemLanguage(),
-      selectedGroupId: "",
+      selectedGroupId: '',
       selectedGroupName: DEFAULT_GROUP_NAME,
-      scheduleView: "day",
+      scheduleView: 'day',
       customPeriods: [],
     };
 
@@ -3580,16 +3193,11 @@ export const scheduleService = {
       this.cachedAssignmentCounts = counts;
 
       // Store in AsyncStorage
-      await AsyncStorage.setItem(
-        CACHE_KEYS.ASSIGNMENT_COUNTS,
-        JSON.stringify(counts),
-      );
+      await AsyncStorage.setItem(CACHE_KEYS.ASSIGNMENT_COUNTS, JSON.stringify(counts));
 
       // Update the schedule data with new counts
       if (this.settings.selectedGroupId) {
-        const cachedData = await this.getCachedSchedule(
-          this.settings.selectedGroupId,
-        );
+        const cachedData = await this.getCachedSchedule(this.settings.selectedGroupId);
         if (cachedData) {
           cachedData.assignmentCounts = counts;
           await this.cacheSchedule(this.settings.selectedGroupId, cachedData);
@@ -3599,7 +3207,7 @@ export const scheduleService = {
         }
       }
     } catch (error) {
-      console.error("Error updating assignment counts:", error);
+      console.error('Error updating assignment counts:', error);
     }
   },
 
@@ -3607,12 +3215,12 @@ export const scheduleService = {
     if (!data || !data.data) return true;
 
     return !Object.values(data.data).some((daySchedule) => {
-      if (!daySchedule || typeof daySchedule !== "object") return false;
+      if (!daySchedule || typeof daySchedule !== 'object') return false;
 
       return Object.values(daySchedule).some((periodSet: any) => {
-        if (!periodSet || typeof periodSet !== "object") return false;
+        if (!periodSet || typeof periodSet !== 'object') return false;
 
-        return ["both", "par", "impar"].some(
+        return ['both', 'par', 'impar'].some(
           (key) => Array.isArray(periodSet[key]) && periodSet[key].length > 0,
         );
       });
@@ -3648,11 +3256,7 @@ export const scheduleService = {
       try {
         await Promise.all([
           this.syncPeriodTimes(true),
-          this.getAcademicCalendarForDate(
-            new Date(),
-            this.settings.selectedGroupName,
-            true,
-          ),
+          this.getAcademicCalendarForDate(new Date(), this.settings.selectedGroupName, true),
         ]);
         let fresh = await this.fetchAndCacheSchedule(groupId);
         let transformed = this.transformScheduleData(fresh);
@@ -3662,9 +3266,7 @@ export const scheduleService = {
         if (this.isScheduleDataEmpty(transformed) && targetGroupName) {
           try {
             const groups = await this.refreshGroups(true);
-            const matchingGroup = groups.find(
-              (g) => g.name === targetGroupName,
-            );
+            const matchingGroup = groups.find((g) => g.name === targetGroupName);
 
             if (matchingGroup && matchingGroup._id !== groupId) {
               groupId = matchingGroup._id;
@@ -3673,7 +3275,7 @@ export const scheduleService = {
               transformed = this.transformScheduleData(fresh);
             }
           } catch (retryError) {
-            this.log("Retry with refreshed group list failed", retryError);
+            this.log('Retry with refreshed group list failed', retryError);
           }
         }
 
@@ -3691,9 +3293,7 @@ export const scheduleService = {
       // Final fallback
       try {
         if (this.settings.selectedGroupId) {
-          const cached = await this.getCachedSchedule(
-            this.settings.selectedGroupId,
-          );
+          const cached = await this.getCachedSchedule(this.settings.selectedGroupId);
           this.markScheduleRefreshed();
           return cached ? this.transformScheduleData(cached) : null;
         }
@@ -3717,7 +3317,7 @@ export const scheduleService = {
       if (!gid) return;
       await AsyncStorage.removeItem(CACHE_KEYS.SCHEDULE_PREFIX + gid);
       await AsyncStorage.removeItem(CACHE_KEYS.LAST_FETCH_PREFIX + gid);
-      this.log("Cleared schedule cache for group", gid);
+      this.log('Cleared schedule cache for group', gid);
     } catch {}
   },
 
@@ -3726,9 +3326,7 @@ export const scheduleService = {
       await this.ready();
       const gid = groupId || this.settings.selectedGroupId;
       if (!gid) return null;
-      const lastFetch = await AsyncStorage.getItem(
-        CACHE_KEYS.LAST_FETCH_PREFIX + gid,
-      );
+      const lastFetch = await AsyncStorage.getItem(CACHE_KEYS.LAST_FETCH_PREFIX + gid);
       return lastFetch ? new Date(lastFetch) : null;
     } catch {
       return null;
@@ -3739,42 +3337,34 @@ export const scheduleService = {
     this._initializing = true;
     await this.loadSettings();
     // Load caches
-    const [
-      cachedRecoveryDays,
-      cachedPeriodTimes,
-      cachedSubjects,
-      cachedAssignmentCounts,
-    ] = await Promise.all([
-      AsyncStorage.getItem(CACHE_KEYS.RECOVERY_DAYS),
-      AsyncStorage.getItem(PERIOD_TIMES_CACHE_KEY),
-      AsyncStorage.getItem(CACHE_KEYS.SUBJECTS),
-      AsyncStorage.getItem(CACHE_KEYS.ASSIGNMENT_COUNTS),
-    ]);
-    if (cachedRecoveryDays)
-      this.cachedRecoveryDays = JSON.parse(cachedRecoveryDays);
-    if (cachedPeriodTimes)
-      this.cachedDatePeriodTimes = JSON.parse(cachedPeriodTimes);
+    const [cachedRecoveryDays, cachedPeriodTimes, cachedSubjects, cachedAssignmentCounts] =
+      await Promise.all([
+        AsyncStorage.getItem(CACHE_KEYS.RECOVERY_DAYS),
+        AsyncStorage.getItem(PERIOD_TIMES_CACHE_KEY),
+        AsyncStorage.getItem(CACHE_KEYS.SUBJECTS),
+        AsyncStorage.getItem(CACHE_KEYS.ASSIGNMENT_COUNTS),
+      ]);
+    if (cachedRecoveryDays) this.cachedRecoveryDays = JSON.parse(cachedRecoveryDays);
+    if (cachedPeriodTimes) this.cachedDatePeriodTimes = JSON.parse(cachedPeriodTimes);
     if (cachedSubjects) this.cachedSubjects = JSON.parse(cachedSubjects);
-    if (cachedAssignmentCounts)
-      this.cachedAssignmentCounts = JSON.parse(cachedAssignmentCounts);
-    if (!cachedRecoveryDays)
-      this.cachedRecoveryDays = this.buildRecoveryDaysFromDatePeriodTimes();
+    if (cachedAssignmentCounts) this.cachedAssignmentCounts = JSON.parse(cachedAssignmentCounts);
+    if (!cachedRecoveryDays) this.cachedRecoveryDays = this.buildRecoveryDaysFromDatePeriodTimes();
     await this.ensureSelectedGroup();
     // Perform initial sync after selected group is resolved.
     await this.syncPeriodTimes(true);
     this._ready = true;
     this._initializing = false;
-    this.log("Initialization complete");
+    this.log('Initialization complete');
   },
 };
 
 // Monkey patch update methods to trigger external sync only if provided
 [
-  "updateSettings",
-  "addCustomPeriod",
-  "updateCustomPeriod",
-  "deleteCustomPeriod",
-  "resetSettings",
+  'updateSettings',
+  'addCustomPeriod',
+  'updateCustomPeriod',
+  'deleteCustomPeriod',
+  'resetSettings',
 ].forEach((method) => {
   const original = (scheduleService as any)[method];
   if (!original) return;

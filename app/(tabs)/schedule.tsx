@@ -1,80 +1,79 @@
-import { useState, useEffect, useRef } from 'react';
-import { scheduleService } from '@/services/scheduleService';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+
+import { useEffect, useRef, useState } from 'react';
+
+import { StyleSheet, View } from 'react-native';
+
 import DayView from '@/components/schedule/DayView';
 import WeekView from '@/components/schedule/WeekView';
-import Animated, {
-    useSharedValue,
-    useAnimatedStyle,
-    withTiming,
-} from 'react-native-reanimated';
-import { View, StyleSheet } from 'react-native';
+import { scheduleService } from '@/services/scheduleService';
 import { runWhenIdle } from '@/utils/runWhenIdle';
 
 export default function Schedule() {
-    const [settings, setSettings] = useState(scheduleService.getSettings());
+  const [settings, setSettings] = useState(scheduleService.getSettings());
 
-    useEffect(() => {
-        const unsubscribe = scheduleService.subscribe(() => {
-            setSettings(scheduleService.getSettings());
-        });
-        return () => unsubscribe();
-    }, []);
+  useEffect(() => {
+    const unsubscribe = scheduleService.subscribe(() => {
+      setSettings(scheduleService.getSettings());
+    });
+    return () => unsubscribe();
+  }, []);
 
-    // Keep both views mounted to avoid heavy remount cost
-    const activeView = settings.scheduleView; // 'day' | 'week'
-    const dayOpacity = useSharedValue(activeView === 'day' ? 1 : 0);
-    const weekOpacity = useSharedValue(activeView === 'week' ? 1 : 0);
-    const hasPreloadedWeek = useRef(activeView === 'week');
-    const hasPreloadedDay = useRef(activeView === 'day');
+  // Keep both views mounted to avoid heavy remount cost
+  const activeView = settings.scheduleView; // 'day' | 'week'
+  const dayOpacity = useSharedValue(activeView === 'day' ? 1 : 0);
+  const weekOpacity = useSharedValue(activeView === 'week' ? 1 : 0);
+  const hasPreloadedWeek = useRef(activeView === 'week');
+  const hasPreloadedDay = useRef(activeView === 'day');
 
-    // Animate on scheduleView change
-    useEffect(() => {
-        if (activeView === 'day') {
-            // Ensure week view is mounted (it always is) but fade it out
-            weekOpacity.value = withTiming(0, { duration: 160 });
-            dayOpacity.value = withTiming(1, { duration: 160 });
-        } else {
-            dayOpacity.value = withTiming(0, { duration: 160 });
-            weekOpacity.value = withTiming(1, { duration: 160 });
-        }
-    }, [activeView, dayOpacity, weekOpacity]);
+  // Animate on scheduleView change
+  useEffect(() => {
+    if (activeView === 'day') {
+      // Ensure week view is mounted (it always is) but fade it out
+      weekOpacity.value = withTiming(0, { duration: 160 });
+      dayOpacity.value = withTiming(1, { duration: 160 });
+    } else {
+      dayOpacity.value = withTiming(0, { duration: 160 });
+      weekOpacity.value = withTiming(1, { duration: 160 });
+    }
+  }, [activeView, dayOpacity, weekOpacity]);
 
-    // Background preload of the inactive view after interactions finish (first mount only)
-    useEffect(() => {
-        const idleTask = runWhenIdle(() => {
-            if (!hasPreloadedWeek.current) {
-                hasPreloadedWeek.current = true; // WeekView already mounted but mark preloaded
-            }
-            if (!hasPreloadedDay.current) {
-                hasPreloadedDay.current = true; // DayView already mounted but mark preloaded
-            }
-        });
+  // Background preload of the inactive view after interactions finish (first mount only)
+  useEffect(() => {
+    const idleTask = runWhenIdle(() => {
+      if (!hasPreloadedWeek.current) {
+        hasPreloadedWeek.current = true; // WeekView already mounted but mark preloaded
+      }
+      if (!hasPreloadedDay.current) {
+        hasPreloadedDay.current = true; // DayView already mounted but mark preloaded
+      }
+    });
 
-        return () => idleTask.cancel();
-    }, []);
+    return () => idleTask.cancel();
+  }, []);
 
-    const dayStyle = useAnimatedStyle(() => ({
-        opacity: dayOpacity.value,
-        pointerEvents: dayOpacity.value > 0.5 ? 'auto' : 'none',
-    }));
-    const weekStyle = useAnimatedStyle(() => ({
-        opacity: weekOpacity.value,
-        pointerEvents: weekOpacity.value > 0.5 ? 'auto' : 'none',
-    }));
+  const dayStyle = useAnimatedStyle(() => ({
+    opacity: dayOpacity.value,
+    pointerEvents: dayOpacity.value > 0.5 ? 'auto' : 'none',
+  }));
+  const weekStyle = useAnimatedStyle(() => ({
+    opacity: weekOpacity.value,
+    pointerEvents: weekOpacity.value > 0.5 ? 'auto' : 'none',
+  }));
 
-    return (
-        <View style={styles.container}>
-            <Animated.View style={[styles.layer, dayStyle]}>
-                <DayView />
-            </Animated.View>
-            <Animated.View style={[styles.layer, weekStyle]}>
-                <WeekView />
-            </Animated.View>
-        </View>
-    );
+  return (
+    <View style={styles.container}>
+      <Animated.View style={[styles.layer, dayStyle]}>
+        <DayView />
+      </Animated.View>
+      <Animated.View style={[styles.layer, weekStyle]}>
+        <WeekView />
+      </Animated.View>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1 },
-    layer: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
+  container: { flex: 1 },
+  layer: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
 });

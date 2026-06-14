@@ -1,58 +1,56 @@
-import {
-  DarkTheme,
-  DefaultTheme,
-  ThemeProvider,
-} from "expo-router/react-navigation";
-import { useFonts } from "expo-font";
-import { SplashScreen, Stack } from "expo-router";
-import { NavigationBar } from "expo-navigation-bar";
-import { StatusBar } from "expo-status-bar";
-import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
-import { useEffect, useState } from "react";
-import { useColorScheme } from "react-native";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { Colors } from "@/constants/Colors";
-import authService from "../services/authService";
-import LoginNotification from "@/components/LoginNotification";
-import { scheduleService } from "@/services/scheduleService";
-import { updateService } from "@/services/updateService";
-import { AuthProvider } from "@/components/auth/AuthContext";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import {
-  initializeNotifications,
-  scheduleAllNotifications,
-} from "@/utils/notificationUtils";
-import { getAssignments } from "@/utils/assignmentStorage";
-import { gradesDataService } from "@/services/gradesService";
-import { secureStorageService } from "@/services/secureStorageService";
-import * as SystemUI from "expo-system-ui";
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+
+import { useEffect, useState } from 'react';
+
+import { useColorScheme } from 'react-native';
+
+import { useFonts } from 'expo-font';
+import { NavigationBar } from 'expo-navigation-bar';
+import { SplashScreen, Stack } from 'expo-router';
+import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router/react-navigation';
+import { StatusBar } from 'expo-status-bar';
+import * as SystemUI from 'expo-system-ui';
+
+import LoginNotification from '@/components/LoginNotification';
+import { AuthProvider } from '@/components/auth/AuthContext';
+import { Colors } from '@/constants/Colors';
+import { gradesDataService } from '@/services/gradesService';
+import { scheduleService } from '@/services/scheduleService';
+import { secureStorageService } from '@/services/secureStorageService';
+import { updateService } from '@/services/updateService';
+import { getAssignments } from '@/utils/assignmentStorage';
+import { initializeNotifications, scheduleAllNotifications } from '@/utils/notificationUtils';
+
+import authService from '../services/authService';
 
 export {
   // Catch any errors thrown by the Layout component.
   ErrorBoundary,
-} from "expo-router";
+} from 'expo-router';
 
 export const unstable_settings = {
   // Ensure that reloading on /modal/... URLs loads the tab navigator
-  initialRouteName: "(tabs)",
+  initialRouteName: '(tabs)',
 };
 
 // Constants
-const USER_CACHE_KEY = "@planner_user_cache";
-const SKIP_LOGIN_KEY = "@planner_skip_login";
+const USER_CACHE_KEY = '@planner_user_cache';
+const SKIP_LOGIN_KEY = '@planner_skip_login';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
-    SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
+    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   });
   const [startupReady, setStartupReady] = useState(false);
 
   const colorScheme = useColorScheme();
   useEffect(() => {
-    const theme = Colors[colorScheme === "dark" ? "dark" : "light"];
+    const theme = Colors[colorScheme === 'dark' ? 'dark' : 'light'];
     SystemUI.setBackgroundColorAsync(theme.backgroundApp);
   }, [colorScheme]);
 
@@ -90,7 +88,7 @@ export default function RootLayout() {
           const assignments = await getAssignments();
           await scheduleAllNotifications(assignments);
         } catch (error) {
-          console.error("Error setting up notifications:", error);
+          console.error('Error setting up notifications:', error);
         }
       };
 
@@ -165,8 +163,7 @@ export default function RootLayout() {
 
     const runStartupOtaFlow = async () => {
       try {
-        const didTriggerReload =
-          await updateService.applyPreparedOtaUpdateOnLaunch();
+        const didTriggerReload = await updateService.applyPreparedOtaUpdateOnLaunch();
 
         // If reload was triggered, this JS runtime will be replaced immediately.
         if (didTriggerReload) {
@@ -175,10 +172,10 @@ export default function RootLayout() {
 
         // Prepare the next OTA update without blocking app startup.
         updateService.prepareOtaUpdateForNextLaunch().catch((otaError) => {
-          console.error("Error staging OTA update for next launch:", otaError);
+          console.error('Error staging OTA update for next launch:', otaError);
         });
       } catch (otaError) {
-        console.error("Error during OTA startup flow:", otaError);
+        console.error('Error during OTA startup flow:', otaError);
       } finally {
         if (isMounted) {
           setStartupReady(true);
@@ -208,59 +205,56 @@ export default function RootLayout() {
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
-  const isDark = colorScheme === "dark";
-  const theme = Colors[isDark ? "dark" : "light"];
+  const isDark = colorScheme === 'dark';
+  const theme = Colors[isDark ? 'dark' : 'light'];
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <BottomSheetModalProvider>
         <ThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
-          <StatusBar style='light' hidden={false} />
-          <NavigationBar style='light' hidden={false} />
+          <StatusBar style="light" hidden={false} />
+          <NavigationBar style="light" hidden={false} />
           <AuthProvider>
             <Stack
               screenOptions={{
                 headerShown: false,
-                animation: "default",
-                presentation: "containedTransparentModal",
+                animation: 'default',
+                presentation: 'containedTransparentModal',
                 headerTransparent: true,
                 headerTintColor: isDark ? theme.white : theme.black,
                 contentStyle: { backgroundColor: theme.backgroundApp },
               }}
             >
-              <Stack.Screen name='index' options={{ animation: "none" }} />
-              <Stack.Screen name='(tabs)' />
-              <Stack.Screen name='auth' options={{ presentation: "card" }} />
+              <Stack.Screen name="index" options={{ animation: 'none' }} />
+              <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="auth" options={{ presentation: 'card' }} />
+              <Stack.Screen name="signup" options={{ headerShown: false, presentation: 'card' }} />
               <Stack.Screen
-                name='signup'
-                options={{ headerShown: false, presentation: "card" }}
-              />
-              <Stack.Screen
-                name='forgot-password'
+                name="forgot-password"
                 options={{
                   headerShown: false,
                 }}
               />
               <Stack.Screen
-                name='reset-password'
+                name="reset-password"
                 options={{
                   headerShown: false,
                 }}
               />
               <Stack.Screen
-                name='privacy-policy'
+                name="privacy-policy"
                 options={{
                   headerShown: false,
                 }}
               />
               <Stack.Screen
-                name='new-assignment'
+                name="new-assignment"
                 options={{
                   headerShown: false,
                 }}
               />
               <Stack.Screen
-                name='edit-assignment'
+                name="edit-assignment"
                 options={{
                   headerShown: false,
                 }}

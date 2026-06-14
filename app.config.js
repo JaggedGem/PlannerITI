@@ -1,12 +1,10 @@
-import "dotenv/config";
+import 'dotenv/config';
 
 // Read environment variables set in eas.json
 module.exports = () => {
-  const appVariant = process.env.APP_VARIANT || "production";
-  const androidPackage =
-    process.env.ANDROID_PACKAGE || "site.jagged.planneriti";
-  const iosBundleIdentifier =
-    process.env.IOS_BUNDLE_IDENTIFIER || "site.jagged.planneriti";
+  const appVariant = process.env.APP_VARIANT || 'production';
+  const androidPackage = process.env.ANDROID_PACKAGE || 'site.jagged.planneriti';
+  const iosBundleIdentifier = process.env.IOS_BUNDLE_IDENTIFIER || 'site.jagged.planneriti';
 
   // Use the environment variables directly - they already have the variant suffix
   const variantConfig = {
@@ -16,55 +14,57 @@ module.exports = () => {
 
   // Set app name based on variant
   const appName =
-    appVariant === "beta" ? "PlannerITI Beta"
-    : appVariant === "development" ? "PlannerITI Dev"
-    : "PlannerITI";
+    appVariant === 'beta'
+      ? 'PlannerITI Beta'
+      : appVariant === 'development'
+        ? 'PlannerITI Dev'
+        : 'PlannerITI';
 
   return {
     expo: {
       name: appName,
-      slug: "PlannerITI",
-      version: "1.5.0",
-      orientation: "portrait",
-      icon: "assets/images/ios-light.png",
-      scheme: "planneriti",
-      userInterfaceStyle: "automatic",
-      jsEngine: "hermes",
+      slug: 'PlannerITI',
+      version: '1.5.0',
+      orientation: 'portrait',
+      icon: 'assets/images/ios-light.png',
+      scheme: 'planneriti',
+      userInterfaceStyle: 'automatic',
+      jsEngine: 'hermes',
       newArchEnabled: true,
       ios: {
         icon: {
-          light: "assets/images/ios-light.png",
-          dark: "assets/images/ios-dark.png",
-          tinted: "assets/images/ios-tinted.png",
+          light: 'assets/images/ios-light.png',
+          dark: 'assets/images/ios-dark.png',
+          tinted: 'assets/images/ios-tinted.png',
         },
         supportsTablet: true,
         bundleIdentifier: variantConfig.iosBundleIdentifier,
       },
       android: {
         adaptiveIcon: {
-          foregroundImage: "assets/images/adaptive-icon.png",
-          backgroundColor: "#232433",
+          foregroundImage: 'assets/images/adaptive-icon.png',
+          backgroundColor: '#232433',
         },
         package: variantConfig.androidPackage,
       },
       plugins: [
-        "expo-router",
-        "expo-font",
-        "expo-secure-store",
-        "expo-sharing",
-        "expo-status-bar",
-        "expo-navigation-bar",
+        'expo-router',
+        'expo-font',
+        'expo-secure-store',
+        'expo-sharing',
+        'expo-status-bar',
+        'expo-navigation-bar',
         [
-          "expo-splash-screen",
+          'expo-splash-screen',
           {
-            image: "assets/images/ios-dark.png",
+            image: 'assets/images/ios-dark.png',
             imageWidth: 200,
-            resizeMode: "contain",
-            backgroundColor: "#05060f",
+            resizeMode: 'contain',
+            backgroundColor: '#05060f',
           },
         ],
         [
-          "expo-build-properties",
+          'expo-build-properties',
           {
             android: { usePrecompiledHeaders: true },
           },
@@ -78,18 +78,18 @@ module.exports = () => {
           origin: false,
         },
         eas: {
-          projectId: "fe01b043-f283-48db-a683-3c5f23546a96",
+          projectId: 'fe01b043-f283-48db-a683-3c5f23546a96',
         },
         environment: appVariant,
-        apiKey: process.env.API_KEY || "",
-        customApiLocalUrl: process.env.CUSTOM_API_LOCAL_URL || "",
-        customApiLocalHost: process.env.CUSTOM_API_LOCAL_HOST || "",
-        customApiLocalPort: process.env.CUSTOM_API_LOCAL_PORT || "5000",
+        apiKey: process.env.API_KEY || '',
+        customApiLocalUrl: process.env.CUSTOM_API_LOCAL_URL || '',
+        customApiLocalHost: process.env.CUSTOM_API_LOCAL_HOST || '',
+        customApiLocalPort: process.env.CUSTOM_API_LOCAL_PORT || '5000',
       },
-      owner: "planneriti",
-      runtimeVersion: process.env.RUNTIME_VERSION || "1.5.0",
+      owner: 'planneriti',
+      runtimeVersion: process.env.RUNTIME_VERSION || '1.5.0',
       updates: {
-        url: "https://u.expo.dev/fe01b043-f283-48db-a683-3c5f23546a96",
+        url: 'https://u.expo.dev/fe01b043-f283-48db-a683-3c5f23546a96',
       },
     },
   };

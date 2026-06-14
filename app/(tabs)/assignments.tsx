@@ -1,63 +1,66 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@react-native-vector-icons/ionicons';
+import Animated, { FadeInDown, FadeOut } from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
 import React, {
-  useState,
-  useEffect,
-  useMemo,
   memo,
-  useRef,
-  useLayoutEffect,
   useCallback,
-} from "react";
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+
 import {
-  StyleSheet,
-  ScrollView,
-  View,
-  Text,
   ActivityIndicator,
   Platform,
-  TouchableOpacity,
   Pressable,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { Colors } from "../../constants/Colors";
-import { router, useFocusEffect } from "expo-router";
-import DaySection from "../../components/assignments/DaySection";
-import FloatingActionButton from "../../components/assignments/FloatingActionButton";
-import { BottomModalPortal } from "../../components/BottomModalPortal";
-import { Ionicons } from "@react-native-vector-icons/ionicons";
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+
+import * as Haptics from 'expo-haptics';
+import { router, useFocusEffect } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+
+import { useTranslation } from '@/hooks/useTranslation';
+import { runWhenIdle } from '@/utils/runWhenIdle';
+
+import { BottomModalPortal } from '../../components/BottomModalPortal';
+import { AssignmentOptionsContext } from '../../components/assignments/AssignmentOptionsContext';
+import { AssignmentOptionsMenu } from '../../components/assignments/AssignmentOptionsMenu';
+import CourseSection from '../../components/assignments/CourseSection';
+import DaySection from '../../components/assignments/DaySection';
+import FloatingActionButton from '../../components/assignments/FloatingActionButton';
+import { Colors } from '../../constants/Colors';
 import {
-  getAssignments,
-  toggleAssignmentCompletion,
-  deleteAssignment,
   Assignment,
-  groupAssignmentsByDate,
   AssignmentGroup,
-} from "../../utils/assignmentStorage";
-import Animated, { FadeInDown, FadeOut } from "react-native-reanimated";
-import CourseSection from "../../components/assignments/CourseSection";
-import { useTranslation } from "@/hooks/useTranslation";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as Haptics from "expo-haptics";
-import { AssignmentOptionsMenu } from "../../components/assignments/AssignmentOptionsMenu";
-import { AssignmentOptionsContext } from "../../components/assignments/AssignmentOptionsContext";
-import { StatusBar } from "expo-status-bar";
-import { runWhenIdle } from "@/utils/runWhenIdle";
+  deleteAssignment,
+  getAssignments,
+  groupAssignmentsByDate,
+  toggleAssignmentCompletion,
+} from '../../utils/assignmentStorage';
 
 // Add circuit breaker constants
-const CRASH_DETECTION_KEY = "assignment_tab_crash_detection";
+const CRASH_DETECTION_KEY = 'assignment_tab_crash_detection';
 
 const ASSIGNMENTS_MODAL_COLORS = {
-  surface: "#242A33",
-  border: "#343C4A",
-  textPrimary: "#F3F6FF",
-  textSecondary: "#A8B0C2",
-  accent: "#33429E",
-  accentSoft: "rgba(51, 66, 158, 0.32)",
+  surface: '#242A33',
+  border: '#343C4A',
+  textPrimary: '#F3F6FF',
+  textSecondary: '#A8B0C2',
+  accent: '#33429E',
+  accentSoft: 'rgba(51, 66, 158, 0.32)',
 } as const;
 
 // Function to group assignments by course - super-optimized version
-const groupAssignmentsByCourse = (
-  assignments: Assignment[],
-): { [key: string]: Assignment[] } => {
+const groupAssignmentsByCourse = (assignments: Assignment[]): { [key: string]: Assignment[] } => {
   if (!assignments || assignments.length === 0) return {};
 
   const groupedAssignments: { [key: string]: Assignment[] } = {};
@@ -75,9 +78,7 @@ const groupAssignmentsByCourse = (
       const assignment = batch[j];
       // Handle assignments with empty course codes
       const courseKey =
-        assignment.courseCode ||
-        assignment.courseName ||
-        `uncategorized-${assignment.id}`;
+        assignment.courseCode || assignment.courseName || `uncategorized-${assignment.id}`;
 
       if (!groupedAssignments[courseKey]) {
         groupedAssignments[courseKey] = [];
@@ -91,8 +92,7 @@ const groupAssignmentsByCourse = (
   Object.keys(groupedAssignments).forEach((key) => {
     groupedAssignments[key].sort((a, b) => {
       // First compare by due date
-      const dateComparison =
-        new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+      const dateComparison = new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
       if (dateComparison !== 0) return dateComparison;
 
       // If same date, sort by assignment type
@@ -105,24 +105,21 @@ const groupAssignmentsByCourse = (
 
 // Memoized empty state display
 const EmptyState = memo(({ t }: { t: any }) => (
-  <Animated.View
-    style={styles.emptyContainer}
-    entering={FadeInDown.duration(150)}
-  >
-    <Text style={styles.emptyText}>{t("assignments").empty}</Text>
-    <Text style={styles.emptySubtext}>{t("assignments").addNew}</Text>
+  <Animated.View style={styles.emptyContainer} entering={FadeInDown.duration(150)}>
+    <Text style={styles.emptyText}>{t('assignments').empty}</Text>
+    <Text style={styles.emptySubtext}>{t('assignments').addNew}</Text>
   </Animated.View>
 ));
-EmptyState.displayName = "EmptyState";
+EmptyState.displayName = 'EmptyState';
 
 // Memoized loading state display
 const LoadingState = memo(({ t }: { t: any }) => (
   <View style={styles.loadingContainer}>
-    <ActivityIndicator size='large' color={Colors.dark.primary} />
-    <Text style={styles.loadingText}>{t("assignments").loading}</Text>
+    <ActivityIndicator size="large" color={Colors.dark.primary} />
+    <Text style={styles.loadingText}>{t('assignments').loading}</Text>
   </View>
 ));
-LoadingState.displayName = "LoadingState";
+LoadingState.displayName = 'LoadingState';
 
 // Super-optimized CoursesView with on-demand rendering
 const CoursesView = memo(
@@ -220,18 +217,10 @@ const CoursesView = memo(
         const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
         const paddingToBottom = 200;
 
-        if (
-          layoutMeasurement.height + contentOffset.y >=
-          contentSize.height - paddingToBottom
-        ) {
-          if (
-            visibleCourseCount < courseKeys.length &&
-            isComponentMountedRef.current
-          ) {
+        if (layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom) {
+          if (visibleCourseCount < courseKeys.length && isComponentMountedRef.current) {
             // Incrementally add more courses
-            setVisibleCourseCount((prevCount) =>
-              Math.min(prevCount + 3, courseKeys.length),
-            );
+            setVisibleCourseCount((prevCount) => Math.min(prevCount + 3, courseKeys.length));
           }
         }
       },
@@ -265,9 +254,7 @@ const CoursesView = memo(
           >
             <CourseSection
               courseCode={courseCode}
-              courseName={
-                courseGroups[courseCode][0].courseName || "Uncategorized"
-              }
+              courseName={courseGroups[courseCode][0].courseName || 'Uncategorized'}
               assignments={courseGroups[courseCode]}
               onToggleAssignment={onToggle}
               onDeleteAssignment={onDelete}
@@ -277,14 +264,14 @@ const CoursesView = memo(
         ))}
         {visibleCourseCount < courseKeys.length && (
           <View style={styles.loadingMoreContainer}>
-            <ActivityIndicator size='small' color={Colors.dark.primary} />
+            <ActivityIndicator size="small" color={Colors.dark.primary} />
           </View>
         )}
       </ScrollView>
     );
   },
 );
-CoursesView.displayName = "CoursesView";
+CoursesView.displayName = 'CoursesView';
 
 // Memoized date grouped view with optimized entry timing
 const DateGroupedView = memo(
@@ -359,9 +346,7 @@ const DateGroupedView = memo(
           <Animated.View
             key={`${group.date}-${index}`}
             entering={
-              shouldDelayAnimations ? undefined : (
-                FadeInDown.duration(150).delay(index * 20)
-              )
+              shouldDelayAnimations ? undefined : FadeInDown.duration(150).delay(index * 20)
             }
           >
             <DaySection
@@ -377,7 +362,7 @@ const DateGroupedView = memo(
     );
   },
 );
-DateGroupedView.displayName = "DateGroupedView";
+DateGroupedView.displayName = 'DateGroupedView';
 
 // Memoized Archive view with lazy loading
 const ArchivedAssignmentsView = memo(
@@ -427,10 +412,7 @@ const ArchivedAssignmentsView = memo(
         const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
         const paddingToBottom = 200;
 
-        if (
-          layoutMeasurement.height + contentOffset.y >=
-          contentSize.height - paddingToBottom
-        ) {
+        if (layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom) {
           loadMoreItems();
         }
       },
@@ -452,9 +434,7 @@ const ArchivedAssignmentsView = memo(
         onScroll={handleScroll}
         scrollEventThrottle={400}
       >
-        <Text style={styles.archivedHeaderText}>
-          {t("assignments").archive.pastDue}
-        </Text>
+        <Text style={styles.archivedHeaderText}>{t('assignments').archive.pastDue}</Text>
         {itemsToRender.map((assignment, index) => (
           <Animated.View
             key={assignment.id}
@@ -471,9 +451,7 @@ const ArchivedAssignmentsView = memo(
                     assignment.isCompleted && styles.archivedCheckboxCompleted,
                   ]}
                 >
-                  {assignment.isCompleted && (
-                    <Text style={styles.archivedCheckmark}>✓</Text>
-                  )}
+                  {assignment.isCompleted && <Text style={styles.archivedCheckmark}>✓</Text>}
                 </TouchableOpacity>
                 <View style={styles.archivedTextContainer}>
                   <Text
@@ -486,8 +464,7 @@ const ArchivedAssignmentsView = memo(
                     {assignment.title}
                   </Text>
                   <Text style={styles.archivedSubtitle}>
-                    {assignment.courseCode} •{" "}
-                    {formatFullDate(new Date(assignment.dueDate), false)}
+                    {assignment.courseCode} • {formatFullDate(new Date(assignment.dueDate), false)}
                   </Text>
                 </View>
               </View>
@@ -502,38 +479,34 @@ const ArchivedAssignmentsView = memo(
         ))}
         {hasMore && (
           <View style={styles.loadingMoreContainer}>
-            <ActivityIndicator size='small' color={Colors.dark.primary} />
+            <ActivityIndicator size="small" color={Colors.dark.primary} />
           </View>
         )}
       </ScrollView>
     );
   },
 );
-ArchivedAssignmentsView.displayName = "ArchivedAssignmentsView";
+ArchivedAssignmentsView.displayName = 'ArchivedAssignmentsView';
 
 const AssignmentsErrorFallback = ({ errorCount }: { errorCount: number }) => {
   const { t } = useTranslation();
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar style='light' />
+      <StatusBar style="light" />
       <View style={styles.errorContainer}>
-        <Text style={styles.errorTitle}>
-          {t("assignments").errors.somethingWrong}
-        </Text>
-        <Text style={styles.errorMessage}>
-          {t("assignments").errors.recovering}
-        </Text>
+        <Text style={styles.errorTitle}>{t('assignments').errors.somethingWrong}</Text>
+        <Text style={styles.errorMessage}>{t('assignments').errors.recovering}</Text>
         {errorCount > 2 && (
           <Text style={styles.errorHint}>
-            {t("assignments").errors.tip}: Avoid rapid switching between tabs
+            {t('assignments').errors.tip}: Avoid rapid switching between tabs
           </Text>
         )}
       </View>
     </SafeAreaView>
   );
 };
-AssignmentsErrorFallback.displayName = "AssignmentsErrorFallback";
+AssignmentsErrorFallback.displayName = 'AssignmentsErrorFallback';
 
 // Error boundary component
 interface ErrorBoundaryProps {
@@ -545,10 +518,7 @@ interface ErrorBoundaryState {
   errorCount: number;
 }
 
-class AssignmentsErrorBoundary extends React.Component<
-  ErrorBoundaryProps,
-  ErrorBoundaryState
-> {
+class AssignmentsErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   state: ErrorBoundaryState = { hasError: false, errorCount: 0 };
 
   static getDerivedStateFromError(error: unknown): Partial<ErrorBoundaryState> {
@@ -565,8 +535,7 @@ class AssignmentsErrorBoundary extends React.Component<
     // Store error info in AsyncStorage to track crash patterns
     try {
       AsyncStorage.getItem(CRASH_DETECTION_KEY).then((value) => {
-        const crashData =
-          value ? JSON.parse(value) : { count: 0, lastTime: Date.now() };
+        const crashData = value ? JSON.parse(value) : { count: 0, lastTime: Date.now() };
         crashData.count += 1;
         crashData.lastTime = Date.now();
         AsyncStorage.setItem(CRASH_DETECTION_KEY, JSON.stringify(crashData));
@@ -576,10 +545,7 @@ class AssignmentsErrorBoundary extends React.Component<
     }
   }
 
-  componentDidUpdate(
-    prevProps: ErrorBoundaryProps,
-    prevState: ErrorBoundaryState,
-  ): void {
+  componentDidUpdate(prevProps: ErrorBoundaryProps, prevState: ErrorBoundaryState): void {
     // Reset error state after a moment to attempt recovery
     if (this.state.hasError && !prevState.hasError) {
       setTimeout(() => {
@@ -647,11 +613,7 @@ const ModernDropdown = memo(
                 {segment}
               </Text>
               {selectedIndex === index && (
-                <Ionicons
-                  name='checkmark'
-                  size={20}
-                  color={ASSIGNMENTS_MODAL_COLORS.textPrimary}
-                />
+                <Ionicons name="checkmark" size={20} color={ASSIGNMENTS_MODAL_COLORS.textPrimary} />
               )}
             </View>
           </Pressable>
@@ -660,21 +622,15 @@ const ModernDropdown = memo(
     );
   },
 );
-ModernDropdown.displayName = "ModernDropdown";
+ModernDropdown.displayName = 'ModernDropdown';
 
 // Import shared context to avoid circular dependencies
 
 // Options menu provider component
-const AssignmentOptionsProvider = ({
-  children,
-}: {
-  children: React.ReactNode;
-}) => {
+const AssignmentOptionsProvider = ({ children }: { children: React.ReactNode }) => {
   const [menuVisible, setMenuVisible] = useState(false);
-  const [currentAssignmentId, setCurrentAssignmentId] = useState<string>("");
-  const [deleteHandler, setDeleteHandler] = useState<(() => void) | undefined>(
-    undefined,
-  );
+  const [currentAssignmentId, setCurrentAssignmentId] = useState<string>('');
+  const [deleteHandler, setDeleteHandler] = useState<(() => void) | undefined>(undefined);
   const [menuPosition, setMenuPosition] = useState<{
     top: number;
     right: number;
@@ -696,21 +652,19 @@ const AssignmentOptionsProvider = ({
   };
 
   return (
-    <AssignmentOptionsContext.Provider
-      value={{ showOptionsMenu, hideOptionsMenu }}
-    >
+    <AssignmentOptionsContext.Provider value={{ showOptionsMenu, hideOptionsMenu }}>
       <View style={{ flex: 1 }}>
         {children}
         <View
           style={{
-            position: "absolute",
+            position: 'absolute',
             top: 0,
             left: 0,
             right: 0,
             bottom: 0,
             zIndex: 9999,
             elevation: 9999,
-            pointerEvents: menuVisible ? "auto" : "none",
+            pointerEvents: menuVisible ? 'auto' : 'none',
           }}
         >
           <AssignmentOptionsMenu
@@ -733,9 +687,7 @@ const Assignments = () => {
   const [selectedSegmentIndex, setSelectedSegmentIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [, setAllAssignments] = useState<Assignment[]>([]);
-  const [archivedAssignments, setArchivedAssignments] = useState<Assignment[]>(
-    [],
-  );
+  const [archivedAssignments, setArchivedAssignments] = useState<Assignment[]>([]);
   const [isSafeMode] = useState(false);
   const [isDropdownVisible, setIsDropdownVisible] = useState(false);
 
@@ -761,9 +713,9 @@ const Assignments = () => {
   });
 
   const segments = [
-    t("assignments").segments.dueDate,
-    t("assignments").segments.classes,
-    t("assignments").segments.priority,
+    t('assignments').segments.dueDate,
+    t('assignments').segments.classes,
+    t('assignments').segments.priority,
   ];
 
   // Check for navigation data when screen is focused
@@ -773,9 +725,7 @@ const Assignments = () => {
 
       const checkNavigationData = async () => {
         try {
-          const navigationDataJson = await AsyncStorage.getItem(
-            "assignment_navigation_data",
-          );
+          const navigationDataJson = await AsyncStorage.getItem('assignment_navigation_data');
 
           if (navigationDataJson && isMounted) {
             const navigationData = JSON.parse(navigationDataJson);
@@ -796,10 +746,10 @@ const Assignments = () => {
             }
 
             // Clear the navigation data after using it
-            await AsyncStorage.removeItem("assignment_navigation_data");
+            await AsyncStorage.removeItem('assignment_navigation_data');
           }
         } catch (error) {
-          console.error("Error reading navigation data:", error);
+          console.error('Error reading navigation data:', error);
         }
       };
 
@@ -818,16 +768,16 @@ const Assignments = () => {
       try {
         // Check if the app was recently launched (within the last minute)
         const now = Date.now();
-        const lastReset = await AsyncStorage.getItem("last_highlight_reset");
+        const lastReset = await AsyncStorage.getItem('last_highlight_reset');
         const lastResetTime = lastReset ? parseInt(lastReset) : 0;
 
         // Only reset if the app hasn't been active for more than a minute
         if (now - lastResetTime > 60000) {
-          await AsyncStorage.removeItem("highlighted_assignments");
-          await AsyncStorage.setItem("last_highlight_reset", now.toString());
+          await AsyncStorage.removeItem('highlighted_assignments');
+          await AsyncStorage.setItem('last_highlight_reset', now.toString());
         }
       } catch (error) {
-        console.error("Error resetting highlighted assignments:", error);
+        console.error('Error resetting highlighted assignments:', error);
       }
     };
 
@@ -865,11 +815,7 @@ const Assignments = () => {
       const priorityAssignments = current.filter((a) => a.isPriority);
       memoizedDataRef.current = {
         dateGroups: groupAssignmentsByDate(current, t, formatDate),
-        priorityGroups: groupAssignmentsByDate(
-          priorityAssignments,
-          t,
-          formatDate,
-        ),
+        priorityGroups: groupAssignmentsByDate(priorityAssignments, t, formatDate),
         courseGroups: groupAssignmentsByCourse(current),
       };
     } catch {
@@ -912,7 +858,7 @@ const Assignments = () => {
 
   // Handle add assignment
   const handleAddAssignment = useCallback(() => {
-    router.push("/new-assignment");
+    router.push('/new-assignment');
   }, []);
 
   // Handle toggle assignment with optimized state update
@@ -923,9 +869,7 @@ const Assignments = () => {
 
       if (isArchived) {
         setArchivedAssignments((current) => {
-          return current.map((a) =>
-            a.id === id ? { ...a, isCompleted: !a.isCompleted } : a,
-          );
+          return current.map((a) => (a.id === id ? { ...a, isCompleted: !a.isCompleted } : a));
         });
       } else {
         setAllAssignments((current) => {
@@ -937,11 +881,7 @@ const Assignments = () => {
           const priorityAssignments = updated.filter((a) => a.isPriority);
           memoizedDataRef.current = {
             dateGroups: groupAssignmentsByDate(updated, t, formatDate),
-            priorityGroups: groupAssignmentsByDate(
-              priorityAssignments,
-              t,
-              formatDate,
-            ),
+            priorityGroups: groupAssignmentsByDate(priorityAssignments, t, formatDate),
             courseGroups: groupAssignmentsByCourse(updated),
           };
 
@@ -973,11 +913,7 @@ const Assignments = () => {
           const priorityAssignments = updated.filter((a) => a.isPriority);
           memoizedDataRef.current = {
             dateGroups: groupAssignmentsByDate(updated, t, formatDate),
-            priorityGroups: groupAssignmentsByDate(
-              priorityAssignments,
-              t,
-              formatDate,
-            ),
+            priorityGroups: groupAssignmentsByDate(priorityAssignments, t, formatDate),
             courseGroups: groupAssignmentsByCourse(updated),
           };
 
@@ -1032,7 +968,7 @@ const Assignments = () => {
 
   // Replace the toggleArchiveModal function with this:
   const handleArchivePress = useCallback(() => {
-    router.push("/archive");
+    router.push('/archive');
   }, []);
 
   // Custom DateGroupedView that uses memoized data and disables animations after first view
@@ -1091,7 +1027,7 @@ const Assignments = () => {
 
             return (
               <View key={`${group.date}-${index}`} style={{ marginBottom: 8 }}>
-                {disableAnimations ?
+                {disableAnimations ? (
                   <View>
                     <DaySection
                       title={group.title}
@@ -1103,9 +1039,8 @@ const Assignments = () => {
                       assignmentToHighlight={assignmentToExpandRef.current}
                     />
                   </View>
-                : <Animated.View
-                    entering={FadeInDown.duration(150).delay(index * 20)}
-                  >
+                ) : (
+                  <Animated.View entering={FadeInDown.duration(150).delay(index * 20)}>
                     <DaySection
                       title={group.title}
                       date={group.date}
@@ -1116,7 +1051,7 @@ const Assignments = () => {
                       assignmentToHighlight={assignmentToExpandRef.current}
                     />
                   </Animated.View>
-                }
+                )}
               </View>
             );
           })}
@@ -1154,34 +1089,29 @@ const Assignments = () => {
         >
           {courseKeys.map((courseCode, index) => (
             <View key={`course-${courseCode}`} style={{ marginBottom: 8 }}>
-              {disableAnimations ?
+              {disableAnimations ? (
                 <View>
                   <CourseSection
                     courseCode={courseCode}
-                    courseName={
-                      courseGroups[courseCode][0]?.courseName || "Uncategorized"
-                    }
+                    courseName={courseGroups[courseCode][0]?.courseName || 'Uncategorized'}
                     assignments={courseGroups[courseCode]}
                     onToggleAssignment={onToggle}
                     onDeleteAssignment={onDelete}
                     showDueDate={true}
                   />
                 </View>
-              : <Animated.View
-                  entering={FadeInDown.duration(150).delay(index * 20)}
-                >
+              ) : (
+                <Animated.View entering={FadeInDown.duration(150).delay(index * 20)}>
                   <CourseSection
                     courseCode={courseCode}
-                    courseName={
-                      courseGroups[courseCode][0]?.courseName || "Uncategorized"
-                    }
+                    courseName={courseGroups[courseCode][0]?.courseName || 'Uncategorized'}
                     assignments={courseGroups[courseCode]}
                     onToggleAssignment={onToggle}
                     onDeleteAssignment={onDelete}
                     showDueDate={true}
                   />
                 </Animated.View>
-              }
+              )}
             </View>
           ))}
         </ScrollView>
@@ -1237,24 +1167,20 @@ const Assignments = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
-      <StatusBar style='light' />
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <StatusBar style="light" />
 
       <View style={styles.headerContainer}>
         <View style={styles.header}>
           <View style={styles.headerTopRow}>
-            <Text style={styles.headerTitle}>{t("assignments").title}</Text>
+            <Text style={styles.headerTitle}>{t('assignments').title}</Text>
 
             <TouchableOpacity
               style={styles.archiveButton}
               onPress={handleArchivePress}
               activeOpacity={0.7}
             >
-              <Ionicons
-                name='folder-open'
-                size={18}
-                color={Colors.dark.white}
-              />
+              <Ionicons name="folder-open" size={18} color={Colors.dark.white} />
             </TouchableOpacity>
           </View>
 
@@ -1269,17 +1195,12 @@ const Assignments = () => {
             }}
           >
             <View style={styles.dropdownButtonContent}>
-              <Text style={styles.dropdownButtonText}>
-                {segments[selectedSegmentIndex]}
-              </Text>
+              <Text style={styles.dropdownButtonText}>{segments[selectedSegmentIndex]}</Text>
               <Ionicons
-                name='chevron-down'
+                name="chevron-down"
                 size={16}
                 color={Colors.dark.mutedText}
-                style={[
-                  styles.dropdownArrow,
-                  isDropdownVisible && styles.dropdownArrowRotated,
-                ]}
+                style={[styles.dropdownArrow, isDropdownVisible && styles.dropdownArrowRotated]}
               />
             </View>
           </Pressable>
@@ -1293,9 +1214,7 @@ const Assignments = () => {
             styles={styles}
           />
 
-          {isSafeMode && (
-            <Text style={styles.safeModeIndicator}>Stability mode active</Text>
-          )}
+          {isSafeMode && <Text style={styles.safeModeIndicator}>Stability mode active</Text>}
         </View>
       </View>
 
@@ -1328,7 +1247,7 @@ const styles = StyleSheet.create({
   },
   header: {
     padding: 20,
-    paddingTop: Platform.OS === "android" ? 40 : 20,
+    paddingTop: Platform.OS === 'android' ? 40 : 20,
     backgroundColor: Colors.dark.backgroundTertiary,
     borderBottomRightRadius: 32,
     borderBottomLeftRadius: 32,
@@ -1339,14 +1258,14 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   headerTopRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 16,
   },
   headerTitle: {
     fontSize: 28,
-    fontWeight: "700",
+    fontWeight: '700',
     color: Colors.dark.white,
     letterSpacing: 0.5,
   },
@@ -1355,13 +1274,13 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   archiveButtonText: {
     color: Colors.dark.white,
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   archiveButtonIcon: {
     fontSize: 18,
@@ -1374,8 +1293,8 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   loadingText: {
     color: Colors.dark.mutedText,
@@ -1392,11 +1311,11 @@ const styles = StyleSheet.create({
   emptyContainer: {
     flex: 1,
     paddingTop: 60,
-    alignItems: "center",
+    alignItems: 'center',
   },
   emptyText: {
     fontSize: 18,
-    fontWeight: "500",
+    fontWeight: '500',
     marginBottom: 8,
     color: Colors.dark.white,
   },
@@ -1409,12 +1328,12 @@ const styles = StyleSheet.create({
   },
   loadingMoreContainer: {
     padding: 20,
-    alignItems: "center",
+    alignItems: 'center',
   },
   simplifiedContainer: {
     flex: 1,
-    justifyContent: "flex-start",
-    alignItems: "center",
+    justifyContent: 'flex-start',
+    alignItems: 'center',
     backgroundColor: Colors.dark.backgroundTertiary,
     marginHorizontal: 20,
     marginTop: 10,
@@ -1424,11 +1343,11 @@ const styles = StyleSheet.create({
   simplifiedText: {
     color: Colors.dark.white,
     fontSize: 18,
-    fontWeight: "500",
+    fontWeight: '500',
     marginBottom: 20,
   },
   placeholderContent: {
-    width: "80%",
+    width: '80%',
     marginTop: 20,
   },
   placeholderItem: {
@@ -1442,23 +1361,23 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     marginBottom: 20,
-    alignItems: "center",
+    alignItems: 'center',
   },
   safeModeText: {
     fontSize: 18,
-    fontWeight: "600",
+    fontWeight: '600',
     color: Colors.dark.white,
     marginBottom: 8,
   },
   safeModeDescription: {
     fontSize: 14,
     color: Colors.dark.subduedText,
-    textAlign: "center",
+    textAlign: 'center',
   },
   safeModeIndicator: {
     fontSize: 12,
     color: Colors.dark.yellow,
-    textAlign: "center",
+    textAlign: 'center',
     marginTop: 8,
   },
   safeScrollContent: {
@@ -1472,7 +1391,7 @@ const styles = StyleSheet.create({
   },
   simplifiedTitle: {
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
     color: Colors.dark.white,
     marginBottom: 12,
   },
@@ -1484,14 +1403,14 @@ const styles = StyleSheet.create({
   },
   errorContainer: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: Colors.dark.backgroundSecondary,
     padding: 20,
   },
   errorTitle: {
     fontSize: 22,
-    fontWeight: "700",
+    fontWeight: '700',
     color: Colors.dark.white,
     marginBottom: 12,
   },
@@ -1499,17 +1418,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.dark.mutedText,
     marginBottom: 20,
-    textAlign: "center",
+    textAlign: 'center',
   },
   errorHint: {
     fontSize: 14,
     color: Colors.dark.orange,
-    textAlign: "center",
+    textAlign: 'center',
     padding: 16,
     backgroundColor: Colors.dark.overlayOrange10,
     borderRadius: 8,
-    overflow: "hidden",
-    width: "100%",
+    overflow: 'hidden',
+    width: '100%',
   },
   dropdownButton: {
     backgroundColor: Colors.dark.surfaceRaised,
@@ -1522,32 +1441,32 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.dark.border,
   },
   dropdownButtonContent: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   dropdownButtonText: {
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
     color: Colors.dark.white,
   },
   dropdownArrow: {
-    transform: [{ rotate: "0deg" }],
+    transform: [{ rotate: '0deg' }],
   },
   dropdownArrowRotated: {
-    transform: [{ rotate: "180deg" }],
+    transform: [{ rotate: '180deg' }],
   },
   modalOverlay: {
     flex: 1,
     backgroundColor: Colors.dark.overlayBlack50,
-    justifyContent: "flex-end",
+    justifyContent: 'flex-end',
   },
   dropdownContainer: {
     backgroundColor: Colors.dark.card,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingTop: 16,
-    paddingBottom: Platform.OS === "ios" ? 34 : 16,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 16,
     shadowColor: Colors.dark.shadow,
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.25,
@@ -1557,12 +1476,12 @@ const styles = StyleSheet.create({
   dropdownSheetContent: {
     paddingTop: 0,
     paddingHorizontal: 0,
-    paddingBottom: Platform.OS === "ios" ? 18 : 12,
+    paddingBottom: Platform.OS === 'ios' ? 18 : 12,
   },
   dropdownHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 20,
     paddingBottom: 16,
     borderBottomWidth: 1,
@@ -1570,7 +1489,7 @@ const styles = StyleSheet.create({
   },
   dropdownTitle: {
     fontSize: 17,
-    fontWeight: "600",
+    fontWeight: '600',
     color: Colors.dark.mutedText,
   },
   closeButton: {
@@ -1587,9 +1506,9 @@ const styles = StyleSheet.create({
     backgroundColor: ASSIGNMENTS_MODAL_COLORS.accentSoft,
   },
   dropdownItemContent: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   dropdownItemText: {
     fontSize: 17,
@@ -1597,12 +1516,12 @@ const styles = StyleSheet.create({
   },
   dropdownItemTextSelected: {
     color: ASSIGNMENTS_MODAL_COLORS.textPrimary,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   // Archive specific styles
   archivedHeaderText: {
     fontSize: 18,
-    fontWeight: "600",
+    fontWeight: '600',
     color: Colors.dark.mutedText,
     marginBottom: 16,
     marginTop: 8,
@@ -1614,13 +1533,13 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.dark.card,
     borderRadius: 12,
     padding: 14,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   archivedItemLeft: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     flex: 1,
   },
   archivedCheckbox: {
@@ -1630,8 +1549,8 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: Colors.dark.primary,
     marginRight: 12,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   archivedCheckboxCompleted: {
     backgroundColor: Colors.dark.primary,
@@ -1640,19 +1559,19 @@ const styles = StyleSheet.create({
   archivedCheckmark: {
     color: Colors.dark.white,
     fontSize: 14,
-    fontWeight: "bold",
+    fontWeight: 'bold',
   },
   archivedTextContainer: {
     flex: 1,
   },
   archivedTitle: {
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
     color: Colors.dark.white,
     marginBottom: 4,
   },
   archivedTitleCompleted: {
-    textDecorationLine: "line-through",
+    textDecorationLine: 'line-through',
     color: Colors.dark.mutedText,
   },
   archivedSubtitle: {
@@ -1664,16 +1583,16 @@ const styles = StyleSheet.create({
     height: 30,
     borderRadius: 15,
     backgroundColor: Colors.dark.deleteButton,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   archivedDeleteText: {
     fontSize: 20,
     color: Colors.dark.red,
-    fontWeight: "bold",
+    fontWeight: 'bold',
   },
   headerButtons: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
   },
 });
