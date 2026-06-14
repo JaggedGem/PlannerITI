@@ -4,6 +4,7 @@ dist
 android
 ios
 coverage
+.kilo
 
 *.jks
 *.pem
