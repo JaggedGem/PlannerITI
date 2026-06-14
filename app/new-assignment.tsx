@@ -35,7 +35,7 @@ import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 
 import { BottomModalPortal } from '@/components/BottomModalPortal';
-import { ModernDropdown, SegmentItem } from '@/components/modernDropdown';
+import { ModernDropdown, SegmentItem } from '@/components/ModernDropdown';
 import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
 import { Colors } from '@/constants/Colors';
 import { useTranslation } from '@/hooks/useTranslation';
