@@ -259,6 +259,12 @@ function RootLayoutNav() {
                   headerShown: false,
                 }}
               />
+              <Stack.Screen
+                name="widget-preview"
+                options={{
+                  headerShown: false,
+                }}
+              />
             </Stack>
             <LoginNotification />
           </AuthProvider>

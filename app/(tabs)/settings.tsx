@@ -2384,6 +2384,32 @@ export default function Settings() {
           </View>
         </View>
 
+        {/* Widget Preview Section */}
+        {IS_DEV && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <MaterialIcons
+                name="widgets"
+                size={24}
+                color={Colors.dark.primary}
+                style={styles.sectionIcon}
+              />
+              <Text style={styles.sectionTitle}>Widgets</Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.devToolButton}
+              onPress={() => {
+                router.push('/widget-preview' as any);
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              }}
+            >
+              <MaterialIcons name="preview" size={24} color={Colors.dark.primary} />
+              <Text style={styles.devToolText}>Preview Widgets</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Developer Section */}
         {renderDeveloperSection()}
 
