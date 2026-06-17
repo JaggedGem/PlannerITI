@@ -32,7 +32,7 @@ export function AssignmentPressureWidget(props: AssignmentPressureWidgetProps) {
         width: 'match_parent',
         backgroundColor: C.background,
         borderRadius: 20,
-        padding: 14,
+        padding: 16,
         flexDirection: 'column',
       }}
     >
@@ -40,7 +40,7 @@ export function AssignmentPressureWidget(props: AssignmentPressureWidgetProps) {
         style={{
           flexDirection: 'row',
           alignItems: 'center',
-          marginBottom: 8,
+          marginBottom: 12,
         }}
       >
         <FlexWidget
@@ -49,10 +49,10 @@ export function AssignmentPressureWidget(props: AssignmentPressureWidgetProps) {
             height: 20,
             backgroundColor: C.orange,
             borderRadius: 2,
-            marginRight: 8,
+            marginRight: 10,
           }}
         />
-        <FlexWidget style={{ flex: 1 }}>
+        <FlexWidget style={{ flex: 1, marginRight: 8 }}>
           <TextWidget
             text="Assignments"
             style={{
@@ -67,10 +67,10 @@ export function AssignmentPressureWidget(props: AssignmentPressureWidgetProps) {
           style={{
             backgroundColor: C.overlayOrange10,
             borderRadius: 10,
-            paddingLeft: 8,
-            paddingRight: 8,
-            paddingTop: 2,
-            paddingBottom: 2,
+            paddingLeft: 10,
+            paddingRight: 10,
+            paddingTop: 3,
+            paddingBottom: 3,
           }}
         >
           <TextWidget
@@ -79,6 +79,7 @@ export function AssignmentPressureWidget(props: AssignmentPressureWidgetProps) {
               fontSize: 10,
               fontFamily: 'SpaceMono',
               color: C.orange,
+              fontWeight: 'bold',
             }}
           />
         </FlexWidget>
@@ -94,7 +95,7 @@ export function AssignmentPressureWidget(props: AssignmentPressureWidgetProps) {
         >
           <TextWidget
             text={'\u2713'}
-            style={{ fontSize: 32, color: C.green, marginBottom: 4 }}
+            style={{ fontSize: 36, color: C.green, marginBottom: 6 }}
           />
           <TextWidget
             text="All caught up!"
@@ -102,11 +103,12 @@ export function AssignmentPressureWidget(props: AssignmentPressureWidgetProps) {
               fontSize: 14,
               fontFamily: 'SpaceMono',
               color: C.mutedText,
+              textAlign: 'center',
             }}
           />
         </FlexWidget>
       ) : (
-        <FlexWidget style={{ flexDirection: 'column' }}>
+        <FlexWidget style={{ flex: 1, flexDirection: 'column' }}>
           {top3.map((a) => {
             const badgeColor = a.isUrgent
               ? C.red
@@ -127,16 +129,16 @@ export function AssignmentPressureWidget(props: AssignmentPressureWidgetProps) {
                   flexDirection: 'row',
                   alignItems: 'center',
                   backgroundColor: itemBg,
-                  borderRadius: 10,
-                  paddingLeft: 10,
+                  borderRadius: 12,
+                  paddingLeft: 12,
                   paddingRight: 10,
-                  paddingTop: 7,
-                  paddingBottom: 7,
-                  marginBottom: 5,
+                  paddingTop: 9,
+                  paddingBottom: 9,
+                  marginBottom: 8,
                 }}
                 clickAction="OPEN_APP"
               >
-                <FlexWidget style={{ flex: 1, flexDirection: 'column' }}>
+                <FlexWidget style={{ flex: 1, flexDirection: 'column', marginRight: 8 }}>
                   <TextWidget
                     text={a.title}
                     style={{
@@ -152,7 +154,7 @@ export function AssignmentPressureWidget(props: AssignmentPressureWidgetProps) {
                       fontSize: 10,
                       fontFamily: 'SpaceMono',
                       color: C.mutedText,
-                      marginTop: 1,
+                      marginTop: 2,
                     }}
                   />
                 </FlexWidget>
@@ -160,10 +162,10 @@ export function AssignmentPressureWidget(props: AssignmentPressureWidgetProps) {
                   style={{
                     backgroundColor: badgeColor,
                     borderRadius: 8,
-                    paddingLeft: 7,
-                    paddingRight: 7,
-                    paddingTop: 3,
-                    paddingBottom: 3,
+                    paddingLeft: 8,
+                    paddingRight: 8,
+                    paddingTop: 4,
+                    paddingBottom: 4,
                   }}
                 >
                   <TextWidget
@@ -185,7 +187,7 @@ export function AssignmentPressureWidget(props: AssignmentPressureWidgetProps) {
       {assignments.length > 3 && (
         <FlexWidget
           style={{
-            marginTop: 6,
+            marginTop: 4,
             alignItems: 'center',
           }}
         >
@@ -195,6 +197,7 @@ export function AssignmentPressureWidget(props: AssignmentPressureWidgetProps) {
               fontSize: 10,
               fontFamily: 'SpaceMono',
               color: C.mutedText,
+              fontStyle: 'italic',
             }}
           />
         </FlexWidget>

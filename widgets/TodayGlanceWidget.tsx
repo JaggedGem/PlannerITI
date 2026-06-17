@@ -4,6 +4,7 @@ import {
   FlexWidget,
   TextWidget,
 } from 'react-native-android-widget';
+import type { ColorProp } from 'react-native-android-widget';
 
 import { Colors } from '@/constants/Colors';
 
@@ -40,6 +41,40 @@ interface ClassItem {
   isOngoing: boolean;
 }
 
+function WidgetHeader({ accentColor, title, trailing }: { accentColor: ColorProp; title: string; trailing?: React.ReactNode }) {
+  return (
+    <FlexWidget
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 12,
+      }}
+    >
+      <FlexWidget
+        style={{
+          width: 4,
+          height: 20,
+          backgroundColor: accentColor,
+          borderRadius: 2,
+          marginRight: 10,
+        }}
+      />
+      <FlexWidget style={{ flex: 1 }}>
+        <TextWidget
+          text={title}
+          style={{
+            fontSize: 16,
+            fontFamily: 'SpaceMono',
+            color: C.text,
+            fontWeight: 'bold',
+          }}
+        />
+      </FlexWidget>
+      {trailing}
+    </FlexWidget>
+  );
+}
+
 function ClassItemRow(props: { cls: ClassItem; isOngoing: boolean; isNext: boolean }) {
   const { cls, isOngoing, isNext } = props;
   const bg = isOngoing ? C.overlayPrimary10 : TRANSPARENT;
@@ -51,17 +86,17 @@ function ClassItemRow(props: { cls: ClassItem; isOngoing: boolean; isNext: boole
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: bg,
-        borderRadius: 10,
-        paddingLeft: 10,
-        paddingRight: 10,
-        paddingTop: 7,
-        paddingBottom: 7,
-        marginBottom: 6,
+        borderRadius: 12,
+        paddingLeft: 12,
+        paddingRight: 12,
+        paddingTop: 9,
+        paddingBottom: 9,
+        marginBottom: 8,
         borderLeftWidth: 3,
         borderLeftColor: borderColor,
       }}
     >
-      <FlexWidget style={{ width: 40 }}>
+      <FlexWidget style={{ width: 44 }}>
         <TextWidget
           text={cls.startTime}
           style={{
@@ -76,7 +111,7 @@ function ClassItemRow(props: { cls: ClassItem; isOngoing: boolean; isNext: boole
         style={{
           flex: 1,
           flexDirection: 'column',
-          marginLeft: 8,
+          marginLeft: 10,
         }}
       >
         <TextWidget
@@ -94,7 +129,7 @@ function ClassItemRow(props: { cls: ClassItem; isOngoing: boolean; isNext: boole
             fontSize: 10,
             fontFamily: 'SpaceMono',
             color: C.mutedText,
-            marginTop: 1,
+            marginTop: 2,
           }}
         />
       </FlexWidget>
@@ -104,7 +139,7 @@ function ClassItemRow(props: { cls: ClassItem; isOngoing: boolean; isNext: boole
           style={{
             fontSize: 14,
             color: C.green,
-            marginLeft: 4,
+            marginLeft: 6,
           }}
         />
       )}
@@ -125,54 +160,49 @@ export function TodayGlanceWidget(props: TodayGlanceWidgetProps) {
           borderRadius: 20,
           padding: 16,
           flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center',
         }}
       >
-        <FlexWidget
+        <TextWidget
+          text={'\uD83C\uDF1F'}
+          style={{ fontSize: 30, marginBottom: 8 }}
+        />
+        <TextWidget
+          text="No classes today"
           style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            marginBottom: 12,
+            fontSize: 16,
+            fontFamily: 'SpaceMono',
+            color: C.text,
+            fontWeight: 'bold',
+            textAlign: 'center',
           }}
-        >
-          <FlexWidget
-            style={{
-              width: 4,
-              height: 24,
-              backgroundColor: C.primary,
-              borderRadius: 2,
-              marginRight: 10,
-            }}
-          />
-          <TextWidget
-            text="No classes today"
-            style={{
-              fontSize: 18,
-              fontFamily: 'SpaceMono',
-              color: C.text,
-              fontWeight: 'bold',
-            }}
-          />
-        </FlexWidget>
+        />
         {totalPending > 0 && (
           <FlexWidget
             style={{
+              marginTop: 12,
               backgroundColor: C.overlayPrimary10,
               borderRadius: 12,
-              padding: 12,
+              paddingLeft: 14,
+              paddingRight: 14,
+              paddingTop: 8,
+              paddingBottom: 8,
               flexDirection: 'row',
               alignItems: 'center',
             }}
           >
             <TextWidget
               text={'\uD83D\uDCCB'}
-              style={{ fontSize: 18, marginRight: 8 }}
+              style={{ fontSize: 16, marginRight: 8 }}
             />
             <TextWidget
               text={`${totalPending} pending ${totalPending === 1 ? 'task' : 'tasks'}`}
               style={{
-                fontSize: 14,
+                fontSize: 13,
                 fontFamily: 'SpaceMono',
                 color: C.primary,
+                fontWeight: '600',
               }}
             />
           </FlexWidget>
@@ -190,62 +220,40 @@ export function TodayGlanceWidget(props: TodayGlanceWidgetProps) {
         width: 'match_parent',
         backgroundColor: C.background,
         borderRadius: 20,
-        padding: 14,
+        padding: 16,
         flexDirection: 'column',
       }}
     >
-      <FlexWidget
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          marginBottom: 10,
-        }}
-      >
-        <FlexWidget
-          style={{
-            width: 4,
-            height: 20,
-            backgroundColor: C.primary,
-            borderRadius: 2,
-            marginRight: 8,
-          }}
-        />
-        <FlexWidget style={{ flex: 1 }}>
-          <TextWidget
-            text="Today's Schedule"
-            style={{
-              fontSize: 16,
-              fontFamily: 'SpaceMono',
-              color: C.text,
-              fontWeight: 'bold',
-            }}
-          />
-        </FlexWidget>
-        {currentClassIndex >= 0 && (
-          <FlexWidget
-            style={{
-              backgroundColor: C.green,
-              borderRadius: 8,
-              paddingLeft: 8,
-              paddingRight: 8,
-              paddingTop: 3,
-              paddingBottom: 3,
-            }}
-          >
-            <TextWidget
-              text="LIVE"
+      <WidgetHeader
+        accentColor={C.primary}
+        title="Today's Schedule"
+        trailing={
+          currentClassIndex >= 0 ? (
+            <FlexWidget
               style={{
-                fontSize: 10,
-                fontFamily: 'SpaceMono',
-                color: '#000',
-                fontWeight: 'bold',
+                backgroundColor: C.green,
+                borderRadius: 8,
+                paddingLeft: 8,
+                paddingRight: 8,
+                paddingTop: 3,
+                paddingBottom: 3,
               }}
-            />
-          </FlexWidget>
-        )}
-      </FlexWidget>
+            >
+              <TextWidget
+                text="LIVE"
+                style={{
+                  fontSize: 10,
+                  fontFamily: 'SpaceMono',
+                  color: '#000',
+                  fontWeight: 'bold',
+                }}
+              />
+            </FlexWidget>
+          ) : undefined
+        }
+      />
 
-      <FlexWidget style={{ flexDirection: 'column' }}>
+      <FlexWidget style={{ flex: 1, flexDirection: 'column' }}>
         {visibleClasses.map((cls) => {
           const isOngoing = classes.indexOf(cls) === currentClassIndex;
           const isNext = nextClass !== null && cls.subjectName === nextClass.subjectName && cls.startTime === nextClass.startTime;
@@ -265,6 +273,37 @@ export function TodayGlanceWidget(props: TodayGlanceWidgetProps) {
           style={{
             marginTop: 8,
             backgroundColor: C.overlayOrange10,
+            borderRadius: 12,
+            paddingLeft: 12,
+            paddingRight: 12,
+            paddingTop: 8,
+            paddingBottom: 8,
+            flexDirection: 'row',
+            alignItems: 'center',
+          }}
+        >
+          <TextWidget
+            text={'\u23F0'}
+            style={{ fontSize: 14, marginRight: 8 }}
+          />
+          <TextWidget
+            text={`Next: ${nextClass.subjectName} at ${nextClass.startTime} (${nextClass.room})`}
+            style={{
+              fontSize: 11,
+              fontFamily: 'SpaceMono',
+              color: C.orange,
+              fontWeight: '600',
+            }}
+          />
+        </FlexWidget>
+      )}
+
+      {totalPending > 0 && (
+        <FlexWidget
+          clickAction="OPEN_APP"
+          style={{
+            marginTop: 8,
+            backgroundColor: C.overlayPrimary10,
             borderRadius: 10,
             paddingLeft: 10,
             paddingRight: 10,
@@ -275,45 +314,16 @@ export function TodayGlanceWidget(props: TodayGlanceWidgetProps) {
           }}
         >
           <TextWidget
-            text={'\u23F0'}
-            style={{ fontSize: 14, marginRight: 6 }}
-          />
-          <TextWidget
-            text={`Next: ${nextClass.subjectName} at ${nextClass.startTime} (${nextClass.room})`}
-            style={{
-              fontSize: 11,
-              fontFamily: 'SpaceMono',
-              color: C.orange,
-            }}
-          />
-        </FlexWidget>
-      )}
-
-      {totalPending > 0 && (
-        <FlexWidget
-          clickAction="OPEN_APP"
-          style={{
-            marginTop: 6,
-            backgroundColor: C.overlayPrimary10,
-            borderRadius: 8,
-            paddingLeft: 8,
-            paddingRight: 8,
-            paddingTop: 4,
-            paddingBottom: 4,
-            flexDirection: 'row',
-            alignItems: 'center',
-          }}
-        >
-          <TextWidget
             text={'\uD83D\uDCCB'}
-            style={{ fontSize: 12, marginRight: 4 }}
+            style={{ fontSize: 12, marginRight: 6 }}
           />
           <TextWidget
             text={`${totalPending} pending`}
             style={{
-              fontSize: 10,
+              fontSize: 11,
               fontFamily: 'SpaceMono',
               color: C.primary,
+              fontWeight: '600',
             }}
           />
         </FlexWidget>

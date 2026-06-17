@@ -27,7 +27,7 @@ export function NotificationsWidget(props: NotificationsWidgetProps) {
         width: 'match_parent',
         backgroundColor: C.background,
         borderRadius: 20,
-        padding: 14,
+        padding: 16,
         flexDirection: 'column',
       }}
     >
@@ -35,7 +35,7 @@ export function NotificationsWidget(props: NotificationsWidgetProps) {
         style={{
           flexDirection: 'row',
           alignItems: 'center',
-          marginBottom: 8,
+          marginBottom: 12,
         }}
       >
         <FlexWidget
@@ -44,7 +44,7 @@ export function NotificationsWidget(props: NotificationsWidgetProps) {
             height: 20,
             backgroundColor: C.primary,
             borderRadius: 2,
-            marginRight: 8,
+            marginRight: 10,
           }}
         />
         <TextWidget
@@ -67,16 +67,21 @@ export function NotificationsWidget(props: NotificationsWidgetProps) {
           }}
         >
           <TextWidget
+            text={'\u2713'}
+            style={{ fontSize: 36, color: C.green, marginBottom: 6 }}
+          />
+          <TextWidget
             text="No upcoming reminders"
             style={{
               fontSize: 13,
               fontFamily: 'SpaceMono',
               color: C.mutedText,
+              textAlign: 'center',
             }}
           />
         </FlexWidget>
       ) : (
-        <FlexWidget style={{ flexDirection: 'column' }}>
+        <FlexWidget style={{ flex: 1, flexDirection: 'column' }}>
           {display.map((n) => {
             const dotColor = n.daysUntilDue <= 0 ? C.red : (n.daysUntilDue <= 2 ? C.orange : C.green);
             const label = n.daysUntilDue <= 0 ? 'Due!' : `${n.daysUntilDue}d`;
@@ -88,12 +93,12 @@ export function NotificationsWidget(props: NotificationsWidgetProps) {
                   flexDirection: 'row',
                   alignItems: 'center',
                   backgroundColor: C.overlayWhite05,
-                  borderRadius: 10,
-                  paddingLeft: 10,
-                  paddingRight: 10,
-                  paddingTop: 7,
-                  paddingBottom: 7,
-                  marginBottom: 5,
+                  borderRadius: 12,
+                  paddingLeft: 12,
+                  paddingRight: 12,
+                  paddingTop: 9,
+                  paddingBottom: 9,
+                  marginBottom: 8,
                 }}
               >
                 <FlexWidget
@@ -102,10 +107,10 @@ export function NotificationsWidget(props: NotificationsWidgetProps) {
                     height: 8,
                     backgroundColor: dotColor,
                     borderRadius: 4,
-                    marginRight: 8,
+                    marginRight: 10,
                   }}
                 />
-                <FlexWidget style={{ flex: 1, flexDirection: 'column' }}>
+                <FlexWidget style={{ flex: 1, flexDirection: 'column', marginRight: 8 }}>
                   <TextWidget
                     text={n.title}
                     style={{
@@ -121,7 +126,7 @@ export function NotificationsWidget(props: NotificationsWidgetProps) {
                       fontSize: 10,
                       fontFamily: 'SpaceMono',
                       color: C.mutedText,
-                      marginTop: 1,
+                      marginTop: 2,
                     }}
                   />
                 </FlexWidget>

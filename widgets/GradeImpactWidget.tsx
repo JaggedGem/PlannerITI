@@ -34,7 +34,7 @@ export function GradeImpactWidget(props: GradeImpactWidgetProps) {
         width: 'match_parent',
         backgroundColor: C.background,
         borderRadius: 20,
-        padding: 14,
+        padding: 16,
         flexDirection: 'column',
       }}
     >
@@ -42,7 +42,7 @@ export function GradeImpactWidget(props: GradeImpactWidgetProps) {
         style={{
           flexDirection: 'row',
           alignItems: 'center',
-          marginBottom: 10,
+          marginBottom: 12,
         }}
       >
         <FlexWidget
@@ -51,7 +51,7 @@ export function GradeImpactWidget(props: GradeImpactWidgetProps) {
             height: 20,
             backgroundColor: C.purple,
             borderRadius: 2,
-            marginRight: 8,
+            marginRight: 10,
           }}
         />
         <TextWidget
@@ -74,16 +74,21 @@ export function GradeImpactWidget(props: GradeImpactWidgetProps) {
           }}
         >
           <TextWidget
+            text={'\uD83D\uDCC9'}
+            style={{ fontSize: 30, marginBottom: 8 }}
+          />
+          <TextWidget
             text="No grades data yet"
             style={{
               fontSize: 13,
               fontFamily: 'SpaceMono',
               color: C.mutedText,
+              textAlign: 'center',
             }}
           />
         </FlexWidget>
       ) : (
-        <FlexWidget style={{ flexDirection: 'column' }}>
+        <FlexWidget style={{ flex: 1, flexDirection: 'column' }}>
           {displaySubjects.map((s) => {
             const barPct = Math.max(10, Math.round(s.currentAverage * 10));
             const barColor = getBarColor(s.currentAverage);
@@ -98,11 +103,11 @@ export function GradeImpactWidget(props: GradeImpactWidgetProps) {
                 style={{
                   flexDirection: 'column',
                   backgroundColor: bgColor,
-                  borderRadius: 10,
-                  paddingLeft: 10,
-                  paddingRight: 10,
-                  paddingTop: 8,
-                  paddingBottom: 8,
+                  borderRadius: 12,
+                  paddingLeft: 12,
+                  paddingRight: 12,
+                  paddingTop: 10,
+                  paddingBottom: 10,
                   marginBottom: 8,
                 }}
               >
@@ -111,10 +116,10 @@ export function GradeImpactWidget(props: GradeImpactWidgetProps) {
                     flexDirection: 'row',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    marginBottom: 4,
+                    marginBottom: 6,
                   }}
                 >
-                  <FlexWidget style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                  <FlexWidget style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 6 }}>
                     <TextWidget
                       text={s.subjectName}
                       style={{
@@ -164,7 +169,7 @@ export function GradeImpactWidget(props: GradeImpactWidgetProps) {
                     height: 4,
                     backgroundColor: C.overlayWhite10,
                     borderRadius: 2,
-                    marginBottom: 4,
+                    marginBottom: 6,
                     flexDirection: 'row',
                   }}
                 >

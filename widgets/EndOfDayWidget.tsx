@@ -1,6 +1,7 @@
 'use no memo';
 import React from 'react';
 import { FlexWidget, TextWidget } from 'react-native-android-widget';
+import type { ColorProp } from 'react-native-android-widget';
 
 import { Colors } from '@/constants/Colors';
 
@@ -14,6 +15,43 @@ interface EndOfDayWidgetProps {
   message: string;
 }
 
+function StatTile({ value, label, color, bgColor }: { value: string; label: string; color: ColorProp; bgColor: ColorProp }) {
+  return (
+    <FlexWidget
+      style={{
+        flex: 1,
+        flexDirection: 'column',
+        alignItems: 'center',
+        backgroundColor: bgColor,
+        borderRadius: 12,
+        paddingLeft: 8,
+        paddingRight: 8,
+        paddingTop: 10,
+        paddingBottom: 10,
+      }}
+    >
+      <TextWidget
+        text={value}
+        style={{
+          fontSize: 22,
+          fontFamily: 'SpaceMono',
+          color: color,
+          fontWeight: 'bold',
+        }}
+      />
+      <TextWidget
+        text={label}
+        style={{
+          fontSize: 10,
+          fontFamily: 'SpaceMono',
+          color: C.mutedText,
+          marginTop: 2,
+        }}
+      />
+    </FlexWidget>
+  );
+}
+
 export function EndOfDayWidget(props: EndOfDayWidgetProps) {
   const { totalClasses, completedTasks, totalTasks, tomorrowClasses, message } = props;
 
@@ -24,7 +62,7 @@ export function EndOfDayWidget(props: EndOfDayWidgetProps) {
         width: 'match_parent',
         backgroundColor: C.background,
         borderRadius: 20,
-        padding: 14,
+        padding: 16,
         flexDirection: 'column',
         justifyContent: 'center',
       }}
@@ -33,7 +71,7 @@ export function EndOfDayWidget(props: EndOfDayWidgetProps) {
         style={{
           flexDirection: 'row',
           alignItems: 'center',
-          marginBottom: 10,
+          marginBottom: 12,
         }}
       >
         <FlexWidget
@@ -42,7 +80,7 @@ export function EndOfDayWidget(props: EndOfDayWidgetProps) {
             height: 20,
             backgroundColor: C.green,
             borderRadius: 2,
-            marginRight: 8,
+            marginRight: 10,
           }}
         />
         <TextWidget
@@ -59,102 +97,15 @@ export function EndOfDayWidget(props: EndOfDayWidgetProps) {
       <FlexWidget
         style={{
           flexDirection: 'row',
-          justifyContent: 'space-around',
-          marginBottom: 8,
+          justifyContent: 'space-between',
+          marginBottom: 12,
         }}
       >
-        <FlexWidget
-          style={{
-            flexDirection: 'column',
-            alignItems: 'center',
-            backgroundColor: C.overlayPrimary10,
-            borderRadius: 12,
-            paddingLeft: 14,
-            paddingRight: 14,
-            paddingTop: 8,
-            paddingBottom: 8,
-          }}
-        >
-          <TextWidget
-            text={`${totalClasses}`}
-            style={{
-              fontSize: 22,
-              fontFamily: 'SpaceMono',
-              color: C.primary,
-              fontWeight: 'bold',
-            }}
-          />
-          <TextWidget
-            text="Classes"
-            style={{
-              fontSize: 10,
-              fontFamily: 'SpaceMono',
-              color: C.mutedText,
-            }}
-          />
-        </FlexWidget>
-
-        <FlexWidget
-          style={{
-            flexDirection: 'column',
-            alignItems: 'center',
-            backgroundColor: C.overlayOrange10,
-            borderRadius: 12,
-            paddingLeft: 14,
-            paddingRight: 14,
-            paddingTop: 8,
-            paddingBottom: 8,
-          }}
-        >
-          <TextWidget
-            text={`${completedTasks}/${totalTasks}`}
-            style={{
-              fontSize: 22,
-              fontFamily: 'SpaceMono',
-              color: C.orange,
-              fontWeight: 'bold',
-            }}
-          />
-          <TextWidget
-            text="Tasks done"
-            style={{
-              fontSize: 10,
-              fontFamily: 'SpaceMono',
-              color: C.mutedText,
-            }}
-          />
-        </FlexWidget>
-
-        <FlexWidget
-          style={{
-            flexDirection: 'column',
-            alignItems: 'center',
-            backgroundColor: C.overlayPrimary10,
-            borderRadius: 12,
-            paddingLeft: 14,
-            paddingRight: 14,
-            paddingTop: 8,
-            paddingBottom: 8,
-          }}
-        >
-          <TextWidget
-            text={`${tomorrowClasses}`}
-            style={{
-              fontSize: 22,
-              fontFamily: 'SpaceMono',
-              color: C.primary,
-              fontWeight: 'bold',
-            }}
-          />
-          <TextWidget
-            text="Tomorrow"
-            style={{
-              fontSize: 10,
-              fontFamily: 'SpaceMono',
-              color: C.mutedText,
-            }}
-          />
-        </FlexWidget>
+        <StatTile value={`${totalClasses}`} label="Classes" color={C.primary} bgColor={C.overlayPrimary10} />
+        <FlexWidget style={{ width: 8 }} />
+        <StatTile value={`${completedTasks}/${totalTasks}`} label="Tasks done" color={C.orange} bgColor={C.overlayOrange10} />
+        <FlexWidget style={{ width: 8 }} />
+        <StatTile value={`${tomorrowClasses}`} label="Tomorrow" color={C.primary} bgColor={C.overlayPrimary10} />
       </FlexWidget>
 
       <TextWidget

@@ -31,9 +31,10 @@ export function CountdownWidget(props: CountdownWidgetProps) {
         width: 'match_parent',
         backgroundColor: C.background,
         borderRadius: 20,
-        padding: 14,
+        padding: 16,
         flexDirection: 'column',
         justifyContent: 'center',
+        alignItems: 'center',
       }}
     >
       {!hasClassesToday ? (
@@ -41,12 +42,11 @@ export function CountdownWidget(props: CountdownWidgetProps) {
           style={{
             flexDirection: 'column',
             alignItems: 'center',
-            justifyContent: 'center',
           }}
         >
           <TextWidget
-            text="🎉"
-            style={{ fontSize: 28, marginBottom: 4 }}
+            text={'\uD83C\uDF89'}
+            style={{ fontSize: 30, marginBottom: 8 }}
           />
           <TextWidget
             text="No classes today"
@@ -54,6 +54,7 @@ export function CountdownWidget(props: CountdownWidgetProps) {
               fontSize: 14,
               fontFamily: 'SpaceMono',
               color: C.mutedText,
+              textAlign: 'center',
             }}
           />
         </FlexWidget>
@@ -68,11 +69,11 @@ export function CountdownWidget(props: CountdownWidgetProps) {
             style={{
               backgroundColor: C.green,
               borderRadius: 6,
-              paddingLeft: 8,
-              paddingRight: 8,
-              paddingTop: 2,
-              paddingBottom: 2,
-              marginBottom: 6,
+              paddingLeft: 10,
+              paddingRight: 10,
+              paddingTop: 3,
+              paddingBottom: 3,
+              marginBottom: 8,
             }}
           >
             <TextWidget
@@ -96,12 +97,13 @@ export function CountdownWidget(props: CountdownWidgetProps) {
             }}
           />
           <TextWidget
-            text={`${room} · Started at ${startTime}`}
+            text={`${room} \u00B7 Started at ${startTime}`}
             style={{
               fontSize: 11,
               fontFamily: 'SpaceMono',
               color: C.mutedText,
-              marginTop: 2,
+              marginTop: 4,
+              textAlign: 'center',
             }}
           />
         </FlexWidget>
@@ -118,13 +120,13 @@ export function CountdownWidget(props: CountdownWidgetProps) {
               fontSize: 11,
               fontFamily: 'SpaceMono',
               color: C.mutedText,
-              marginBottom: 4,
+              marginBottom: 6,
             }}
           />
           <TextWidget
             text={formatCountdown(minutesUntil)}
             style={{
-              fontSize: 32,
+              fontSize: 34,
               fontFamily: 'SpaceMono',
               color: C.primary,
               fontWeight: 'bold',
@@ -132,12 +134,12 @@ export function CountdownWidget(props: CountdownWidgetProps) {
             }}
           />
           <TextWidget
-            text={`${subjectName} · ${room} · ${startTime}`}
+            text={`${subjectName} \u00B7 ${room} \u00B7 ${startTime}`}
             style={{
               fontSize: 11,
               fontFamily: 'SpaceMono',
               color: C.mutedText,
-              marginTop: 4,
+              marginTop: 6,
               textAlign: 'center',
             }}
           />

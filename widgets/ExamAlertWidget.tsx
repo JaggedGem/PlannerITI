@@ -27,7 +27,7 @@ export function ExamAlertWidget(props: ExamAlertWidgetProps) {
           width: 'match_parent',
           backgroundColor: C.background,
           borderRadius: 20,
-          padding: 14,
+          padding: 16,
           flexDirection: 'column',
           justifyContent: 'center',
           alignItems: 'center',
@@ -35,7 +35,7 @@ export function ExamAlertWidget(props: ExamAlertWidgetProps) {
       >
         <TextWidget
           text={'\uD83D\uDCDA'}
-          style={{ fontSize: 28, marginBottom: 4 }}
+          style={{ fontSize: 30, marginBottom: 8 }}
         />
         <TextWidget
           text="No exams scheduled"
@@ -43,6 +43,7 @@ export function ExamAlertWidget(props: ExamAlertWidgetProps) {
             fontSize: 13,
             fontFamily: 'SpaceMono',
             color: C.mutedText,
+            textAlign: 'center',
           }}
         />
       </FlexWidget>
@@ -51,6 +52,7 @@ export function ExamAlertWidget(props: ExamAlertWidgetProps) {
 
   const nextExam = exams[0];
   const urgent = nextExam.daysLeft <= 7;
+  const accent = urgent ? C.red : C.orange;
 
   return (
     <FlexWidget
@@ -59,7 +61,7 @@ export function ExamAlertWidget(props: ExamAlertWidgetProps) {
         width: 'match_parent',
         backgroundColor: C.background,
         borderRadius: 20,
-        padding: 14,
+        padding: 16,
         flexDirection: 'column',
         justifyContent: 'center',
       }}
@@ -68,16 +70,16 @@ export function ExamAlertWidget(props: ExamAlertWidgetProps) {
         style={{
           flexDirection: 'row',
           alignItems: 'center',
-          marginBottom: 8,
+          marginBottom: 12,
         }}
       >
         <FlexWidget
           style={{
             width: 4,
             height: 20,
-            backgroundColor: urgent ? C.red : C.orange,
+            backgroundColor: accent,
             borderRadius: 2,
-            marginRight: 8,
+            marginRight: 10,
           }}
         />
         <FlexWidget style={{ flex: 1 }}>
@@ -98,8 +100,8 @@ export function ExamAlertWidget(props: ExamAlertWidgetProps) {
               borderRadius: 8,
               paddingLeft: 8,
               paddingRight: 8,
-              paddingTop: 2,
-              paddingBottom: 2,
+              paddingTop: 3,
+              paddingBottom: 3,
             }}
           >
             <TextWidget
@@ -118,15 +120,15 @@ export function ExamAlertWidget(props: ExamAlertWidgetProps) {
       <FlexWidget
         style={{
           alignItems: 'center',
-          marginBottom: 6,
+          marginBottom: 8,
         }}
       >
         <TextWidget
           text={`${nextExam.daysLeft}`}
           style={{
-            fontSize: 36,
+            fontSize: 38,
             fontFamily: 'SpaceMono',
-            color: urgent ? C.red : C.orange,
+            color: accent,
             fontWeight: 'bold',
           }}
         />
@@ -136,6 +138,7 @@ export function ExamAlertWidget(props: ExamAlertWidgetProps) {
             fontSize: 12,
             fontFamily: 'SpaceMono',
             color: C.mutedText,
+            marginTop: 2,
           }}
         />
       </FlexWidget>
@@ -157,7 +160,7 @@ export function ExamAlertWidget(props: ExamAlertWidgetProps) {
           fontFamily: 'SpaceMono',
           color: C.mutedText,
           textAlign: 'center',
-          marginTop: 2,
+          marginTop: 4,
         }}
       />
 
@@ -169,7 +172,8 @@ export function ExamAlertWidget(props: ExamAlertWidgetProps) {
             fontFamily: 'SpaceMono',
             color: C.mutedText,
             textAlign: 'center',
-            marginTop: 4,
+            marginTop: 8,
+            fontStyle: 'italic',
           }}
         />
       )}
