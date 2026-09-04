@@ -11,7 +11,7 @@ import {
 
 const thesisEvent = (overrides: Partial<ThesisScheduleEvent> = {}): ThesisScheduleEvent => ({
   type: 'thesis',
-  group: 'P-2422',
+  group: 'P-2432',
   date: '2026-05-26',
   subject: 'Math',
   teacher: 'Teacher',
@@ -25,7 +25,7 @@ const thesisEvent = (overrides: Partial<ThesisScheduleEvent> = {}): ThesisSchedu
 
 const examEvent = (overrides: Partial<ExamScheduleEvent> = {}): ExamScheduleEvent => ({
   type: 'exam',
-  group: 'P-2422',
+  group: 'P-2432',
   date: '2026-05-26',
   subject: 'Physics',
   teacher: 'Teacher',

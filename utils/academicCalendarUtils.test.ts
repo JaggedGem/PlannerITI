@@ -120,7 +120,7 @@ describe('academicCalendarUtils', () => {
     };
     const firstKey = buildNextClassCacheKey({
       selectedGroupId: 'group-1',
-      selectedGroupName: 'P-2422',
+      selectedGroupName: 'P-2432',
       subgroup: 'Subgroup 2',
       scheduleRefreshVersion: 3,
       fromDate: new Date(2026, 4, 18),
@@ -128,7 +128,7 @@ describe('academicCalendarUtils', () => {
     });
     const secondKey = buildNextClassCacheKey({
       selectedGroupId: 'group-1',
-      selectedGroupName: 'P-2422',
+      selectedGroupName: 'P-2432',
       subgroup: 'Subgroup 2',
       scheduleRefreshVersion: 3,
       fromDate: new Date(2026, 4, 25),

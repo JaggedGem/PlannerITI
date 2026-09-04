@@ -316,7 +316,7 @@ export const CACHE_KEYS = {
 const CACHE_EXPIRY = 3 * 24 * 60 * 60 * 1000; // 3 days in milliseconds
 const SPECIAL_SCHEDULE_CACHE_EXPIRY = 6 * 60 * 60 * 1000; // 6 hours
 const ACADEMIC_CALENDAR_CACHE_EXPIRY = 12 * 60 * 60 * 1000; // 12 hours
-const DEFAULT_GROUP_NAME = 'P-2422';
+const DEFAULT_GROUP_NAME = 'P-2432';
 
 const GRAFIC_PE_PERIOD_TYPES = new Set<GraficPePeriodType>([
   'teaching',
@@ -1504,7 +1504,7 @@ export const scheduleService = {
     if (!rawGroup) return '';
 
     // Canonical thesis/exam group format: X-YYZA with optional trailing R.
-    // Some sources append extra suffixes (e.g. "P-2422c"), which should be removed.
+    // Some sources append extra suffixes (e.g. "P-2432c"), which should be removed.
     const canonicalMatch = rawGroup.match(/^([A-Za-z]-\d{3}[A-Za-z0-9])/);
     if (!canonicalMatch) return rawGroup;
 

@@ -101,7 +101,7 @@ Built with React Native, Expo, and Expo Router, PlannerITI offers an offline-fir
 
 - **Theme Support**: Automatic light/dark mode with custom styling
 - **Schedule Views**: Switch between day and week views
-- **Group Selection**: Choose from all CEITI groups (e.g., P-2422, M-2422, etc.)
+- **Group Selection**: Choose from all CEITI groups (e.g., P-2432, M-2422, etc.)
 - **Custom Period Management**: Create, edit, and delete custom time blocks
   - Set custom names and colors
   - Define specific days of the week
