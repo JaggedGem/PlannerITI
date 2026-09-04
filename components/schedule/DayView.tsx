@@ -1043,6 +1043,35 @@ export default function DayView() {
     return currentTimeInMinutes >= startTimeInMinutes && currentTimeInMinutes < endTimeInMinutes;
   };
 
+  const getUpcomingPeriodLabel = (item: ScheduleItem, index: number): string => {
+    if (selectedDate.toDateString() !== new Date().toDateString()) return '';
+
+    const currentTimeMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
+    const nextUpcomingIndex = visibleTodaySchedule.findIndex((scheduleItem) => {
+      const [hours, minutes] = scheduleItem.startTime.split(':').map(Number);
+      return currentTimeMinutes < hours * 60 + minutes;
+    });
+
+    if (index !== nextUpcomingIndex) return '';
+
+    const [startHours, startMinutes] = item.startTime.split(':').map(Number);
+    const startTimeMinutes = startHours * 60 + startMinutes;
+
+    if (currentTimeMinutes >= startTimeMinutes) return '';
+
+    const now = new Date();
+    const target = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      startHours,
+      startMinutes,
+    );
+    const minutesUntilStart = Math.ceil((target.getTime() - now.getTime()) / (1000 * 60));
+
+    return minutesUntilStart <= 60 ? `${t('schedule').in} ${minutesUntilStart}m` : '';
+  };
+
   // Update displayed periods from precomputed map when date changes.
   useEffect(() => {
     const selectedKey = toDateKey(selectedDate);
@@ -1836,58 +1865,7 @@ export default function DayView() {
                                 showTimeIndicator && styles.activeStatusText,
                               ]}
                             >
-                              {showTimeIndicator
-                                ? 'Now'
-                                : (() => {
-                                    const currentTimeMinutes =
-                                      currentTime.getHours() * 60 + currentTime.getMinutes();
-                                    const [startHours, startMinutes] = item.startTime
-                                      .split(':')
-                                      .map(Number);
-                                    const startTimeMinutes = startHours * 60 + startMinutes;
-
-                                    if (currentTimeMinutes < startTimeMinutes) {
-                                      const previousItem =
-                                        index > 0 ? visibleTodaySchedule[index - 1] : null;
-                                      if (previousItem && isCurrentTimeInSchedule(previousItem)) {
-                                        // Calculate minutes until start and round up (so 59 seconds = 1 minute)
-                                        const now = new Date();
-                                        const target = new Date(
-                                          now.getFullYear(),
-                                          now.getMonth(),
-                                          now.getDate(),
-                                          startHours,
-                                          startMinutes,
-                                        );
-                                        const diffInMs = target.getTime() - now.getTime();
-                                        const minutesUntilStart = Math.ceil(diffInMs / (1000 * 60));
-                                        // Only show if less than 60 minutes
-                                        return minutesUntilStart <= 60
-                                          ? `In ${minutesUntilStart}m`
-                                          : '';
-                                      } else if (
-                                        !previousItem &&
-                                        currentTimeMinutes < startTimeMinutes
-                                      ) {
-                                        // If this is the first class and it hasn't started yet
-                                        const now = new Date();
-                                        const target = new Date(
-                                          now.getFullYear(),
-                                          now.getMonth(),
-                                          now.getDate(),
-                                          startHours,
-                                          startMinutes,
-                                        );
-                                        const diffInMs = target.getTime() - now.getTime();
-                                        const minutesUntilStart = Math.ceil(diffInMs / (1000 * 60));
-                                        // Only show if less than 60 minutes
-                                        return minutesUntilStart <= 60
-                                          ? `${t('schedule').in} ${minutesUntilStart}m`
-                                          : '';
-                                      }
-                                    }
-                                    return '';
-                                  })()}
+                              {showTimeIndicator ? 'Now' : getUpcomingPeriodLabel(item, index)}
                             </Text>
                           </View>
                         </View>
