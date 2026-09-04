@@ -10,7 +10,6 @@ import { Tabs } from 'expo-router';
 
 import { HapticTab } from '@/components/HapticTab';
 import { Colors } from '@/constants/Colors';
-import { useColorScheme } from '@/hooks/useColorScheme';
 import { useTranslation } from '@/hooks/useTranslation';
 
 // Custom tab bar label component with animation
@@ -97,11 +96,10 @@ function AnimatedTabBarIcon({ focused, color, name }: AnimatedTabBarIconProps) {
 }
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
   const { t } = useTranslation();
   const { bottom } = useSafeAreaInsets();
 
-  const theme = Colors[colorScheme ?? 'light'];
+  const theme = Colors.dark;
   const backgroundColor = theme.backgroundApp;
 
   return (
