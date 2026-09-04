@@ -100,7 +100,10 @@ class UpdateService {
     // If running in Expo Go, always use development channel
     if (this.isExpoGo) {
       this.currentChannel = 'development';
-      this.currentVersion = Constants.expoConfig?.version || '1.0.0';
+      this.currentVersion =
+        Constants.expoConfig?.extra?.releaseVersion ||
+        Application.nativeApplicationVersion ||
+        '1.5.0';
       return;
     }
 
@@ -108,7 +111,10 @@ class UpdateService {
     this.currentChannel = channelFromUpdates || channelFromConfig || 'development';
 
     // Get current app version from native build
-    this.currentVersion = Application.nativeApplicationVersion || '1.0.0';
+    this.currentVersion =
+      Constants.expoConfig?.extra?.releaseVersion ||
+      Application.nativeApplicationVersion ||
+      '1.5.0';
   }
 
   /**

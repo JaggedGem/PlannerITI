@@ -85,6 +85,7 @@ module.exports = () => {
         customApiLocalUrl: process.env.CUSTOM_API_LOCAL_URL || '',
         customApiLocalHost: process.env.CUSTOM_API_LOCAL_HOST || '',
         customApiLocalPort: process.env.CUSTOM_API_LOCAL_PORT || '5000',
+        releaseVersion: process.env.RELEASE_VERSION || '1.5.0',
       },
       owner: 'planneriti',
       runtimeVersion: process.env.RUNTIME_VERSION || '1.5.0',
