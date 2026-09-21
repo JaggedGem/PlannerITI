@@ -2,13 +2,13 @@
 
 <div align="center">
   <img src="./assets/images/adaptive-icon.png" alt="PlannerITI Logo" width="128" height="128"/>
-  
-  **A comprehensive student planner for CEITI students**
-  
-  [![React Native](https://img.shields.io/badge/React%20Native-0.85.3-blue.svg)](https://reactnative.dev/)
-  [![Expo](https://img.shields.io/badge/Expo-56.0.4-000020.svg)](https://expo.dev/)
-  [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.3-blue.svg)](https://www.typescriptlang.org/)
-  [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
+**A comprehensive student planner for CEITI students**
+
+[![React Native](https://img.shields.io/badge/React%20Native-0.85.3-blue.svg)](https://reactnative.dev/)
+[![Expo](https://img.shields.io/badge/Expo-56.0.4-000020.svg)](https://expo.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6.0.3-blue.svg)](https://www.typescriptlang.org/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 </div>
 
 ## 📖 Overview
@@ -431,6 +431,6 @@ For issues, questions, or suggestions:
 
 <div align="center">
   Made with ❤️ for CEITI students
-  
-  **Star ⭐ this repository if you find it helpful!**
+
+**Star ⭐ this repository if you find it helpful!**
 </div>

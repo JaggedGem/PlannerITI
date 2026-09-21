@@ -115,7 +115,12 @@ export default function ArchiveView({
     <SafeAreaView style={styles.container}>
       <StatusBar style="light" />
       <View style={styles.header}>
-        <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
+        <TouchableOpacity
+          style={styles.closeButton}
+          onPress={handleClose}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+        >
           <Ionicons name="arrow-back" size={24} color={Colors.dark.white} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t('assignments').archive.title}</Text>
@@ -150,43 +155,47 @@ export default function ArchiveView({
                     entering={FadeInDown.duration(150)}
                     style={styles.assignmentCard}
                   >
-                    <TouchableOpacity
-                      style={styles.assignmentContent}
-                      onPress={() => onToggleAssignment(assignment.id)}
-                    >
-                      <View
-                        style={[
-                          styles.checkbox,
-                          assignment.isCompleted && styles.checkboxCompleted,
-                        ]}
+                    <View style={styles.assignmentContent}>
+                      <TouchableOpacity
+                        style={styles.assignmentMain}
+                        onPress={() => onToggleAssignment(assignment.id)}
                       >
-                        {assignment.isCompleted && (
-                          <Ionicons name="checkmark" size={16} color={Colors.dark.white} />
-                        )}
-                      </View>
-
-                      <View style={styles.assignmentInfo}>
-                        <Text
+                        <View
                           style={[
-                            styles.assignmentTitle,
-                            assignment.isCompleted && styles.assignmentTitleCompleted,
+                            styles.checkbox,
+                            assignment.isCompleted && styles.checkboxCompleted,
                           ]}
                         >
-                          {assignment.title}
-                        </Text>
-                        <Text style={styles.assignmentSubtitle}>
-                          {assignment.courseName || t('assignments').common.uncategorized} •{' '}
-                          {formatFullDate(new Date(assignment.dueDate), false)}
-                        </Text>
-                      </View>
+                          {assignment.isCompleted && (
+                            <Ionicons name="checkmark" size={16} color={Colors.dark.white} />
+                          )}
+                        </View>
+
+                        <View style={styles.assignmentInfo}>
+                          <Text
+                            style={[
+                              styles.assignmentTitle,
+                              assignment.isCompleted && styles.assignmentTitleCompleted,
+                            ]}
+                          >
+                            {assignment.title}
+                          </Text>
+                          <Text style={styles.assignmentSubtitle}>
+                            {assignment.courseName || t('assignments').common.uncategorized} •{' '}
+                            {formatFullDate(new Date(assignment.dueDate), false)}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
 
                       <TouchableOpacity
                         style={styles.deleteButton}
                         onPress={() => onDeleteAssignment(assignment.id)}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('settings').account.actions.delete}
                       >
                         <Ionicons name="trash-outline" size={20} color={Colors.dark.red} />
                       </TouchableOpacity>
-                    </TouchableOpacity>
+                    </View>
                   </Animated.View>
                 ))}
               </View>
@@ -277,6 +286,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
+  },
+  assignmentMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   checkbox: {
     width: 24,

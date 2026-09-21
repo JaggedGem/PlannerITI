@@ -205,6 +205,7 @@ export default function AssignmentItem({
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [isLoadingSubtasks, setIsLoadingSubtasks] = useState(false);
+  const subtasksLoadedRef = useRef(false);
   const [, setHighlight] = useState(isHighlighted);
 
   // Add state for description expansion
@@ -232,9 +233,14 @@ export default function AssignmentItem({
     }
   }, [assignment.id]);
 
-  // Load subtasks when assignment changes or when expanded
+  // Load subtasks only when the row is opened for the first time.
   useEffect(() => {
+    if (!expanded || subtasksLoadedRef.current) {
+      return;
+    }
+
     const idleTask = runWhenIdle(() => {
+      subtasksLoadedRef.current = true;
       void loadSubtasks();
     }, 16);
 

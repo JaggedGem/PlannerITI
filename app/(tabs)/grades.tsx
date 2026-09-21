@@ -72,8 +72,7 @@ type ViewMode = 'grades' | 'exams';
 type NewGradeHighlight = { gradeIndices: number[]; newExam?: boolean };
 type NewGradeHighlightsMap = Record<string, NewGradeHighlight>;
 type OfficialAssessmentEvent =
-  | (ExamScheduleEvent & { type: 'exam' })
-  | (ThesisScheduleEvent & { type: 'thesis' });
+  (ExamScheduleEvent & { type: 'exam' }) | (ThesisScheduleEvent & { type: 'thesis' });
 
 interface OfficialScheduleState {
   thesis: SpecialScheduleResponse | null;
@@ -983,9 +982,8 @@ const ExamsView = ({
     );
 
     return [...examEvents, ...thesisEvents]
-      .map(
-        (event): OfficialAssessmentEvent =>
-          event.type === 'exam' ? { ...event, type: 'exam' } : { ...event, type: 'thesis' },
+      .map((event): OfficialAssessmentEvent =>
+        event.type === 'exam' ? { ...event, type: 'exam' } : { ...event, type: 'thesis' },
       )
       .sort((left, right) => {
         if (left.date !== right.date) return left.date.localeCompare(right.date);

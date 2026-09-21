@@ -17,18 +17,7 @@ export type GraficPePeriodType =
   | 'summer_break';
 
 export type GraficPePeriodCode =
-  | 'EX'
-  | 'V'
-  | 'Pis'
-  | 'Pi'
-  | 'Pt'
-  | 'Ps1'
-  | 'Ps2'
-  | 'Ps3'
-  | 'Pp'
-  | 'EC'
-  | 'I/A'
-  | null;
+  'EX' | 'V' | 'Pis' | 'Pi' | 'Pt' | 'Ps1' | 'Ps2' | 'Ps3' | 'Pp' | 'EC' | 'I/A' | null;
 
 export interface GraficPePeriod {
   type: GraficPePeriodType;

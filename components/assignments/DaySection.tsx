@@ -187,7 +187,10 @@ export default function DaySection({
     <Animated.View style={styles.container} layout={Layout.springify().mass(0.5)}>
       <AnimatedPressable
         onPress={toggleCollapse}
-        style={({ pressed }) => [styles.headerContainer, pressed && styles.headerPressed]}
+        style={({ pressed }: { pressed: boolean }) => [
+          styles.headerContainer,
+          pressed && styles.headerPressed,
+        ]}
       >
         <LinearGradient
           colors={colors}

@@ -28,7 +28,10 @@ const canUseSecureStore = async (): Promise<boolean> => {
   }
 };
 
-const getWithMigration = async (key: string): Promise<string | null> => {
+const getWithMigration = async (
+  key: string,
+  allowInsecureFallback = true,
+): Promise<string | null> => {
   const secureStoreKey = toSecureStoreKey(key);
   const secureStoreAvailable = await canUseSecureStore();
 
@@ -41,6 +44,10 @@ const getWithMigration = async (key: string): Promise<string | null> => {
     } catch {
       // Fall back to legacy AsyncStorage path.
     }
+  }
+
+  if (!allowInsecureFallback) {
+    return null;
   }
 
   const legacyValue = await AsyncStorage.getItem(key);
@@ -69,7 +76,7 @@ const setSecureValue = async (key: string, value: string): Promise<void> => {
     return;
   }
 
-  await AsyncStorage.setItem(key, value);
+  throw new Error(`Secure storage is unavailable for ${key}`);
 };
 
 const deleteSecureValue = async (key: string): Promise<void> => {
@@ -86,7 +93,7 @@ const deleteSecureValue = async (key: string): Promise<void> => {
 export const secureStorageService = {
   AUTH_TOKEN_STORAGE_KEY,
   IDNP_STORAGE_KEY,
-  getAuthToken: async (): Promise<string | null> => getWithMigration(AUTH_TOKEN_STORAGE_KEY),
+  getAuthToken: async (): Promise<string | null> => getWithMigration(AUTH_TOKEN_STORAGE_KEY, false),
   setAuthToken: async (token: string): Promise<void> =>
     setSecureValue(AUTH_TOKEN_STORAGE_KEY, token),
   clearAuthToken: async (): Promise<void> => deleteSecureValue(AUTH_TOKEN_STORAGE_KEY),

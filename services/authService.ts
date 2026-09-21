@@ -251,7 +251,7 @@ class AuthService {
           const success = await this.attemptRelogin();
           if (success) {
             // Retry the original request with new token
-            return this.makeAuthRequest(endpoint, method, body, false);
+            return this.makeAuthRequest(endpoint, method, body, false, useApiKey, useBearerToken);
           }
         }
 
@@ -374,9 +374,11 @@ class AuthService {
         false, // Don't include bearer token for relogin
       ); // Don't retry on this login attempt
 
-      if (response.access_token) {
-        this.token = response.access_token;
-        await this.setPersistedToken(response.access_token);
+      const accessToken = response.access_token || response.token;
+
+      if (accessToken) {
+        this.token = accessToken;
+        await this.setPersistedToken(accessToken);
         await this.loadUserData();
         this.isReloginInProgress = false;
         return true;
@@ -392,7 +394,7 @@ class AuthService {
 
   async verifyEmail(token: string): Promise<boolean> {
     try {
-      await this.makeAuthRequest(`/auth/verify-email?token=${token}`, 'POST');
+      await this.makeAuthRequest(`/auth/verify-email?token=${encodeURIComponent(token)}`, 'POST');
       await this.loadUserData();
       return true;
     } catch {
@@ -412,10 +414,14 @@ class AuthService {
 
   async resetPassword(token: string, newPassword: string): Promise<boolean> {
     try {
-      await this.makeAuthRequest(`/auth/reset-password?token=${token}`, 'POST', {
-        password: newPassword,
-        confirm_password: newPassword,
-      });
+      await this.makeAuthRequest(
+        `/auth/reset-password?token=${encodeURIComponent(token)}`,
+        'POST',
+        {
+          password: newPassword,
+          confirm_password: newPassword,
+        },
+      );
       return true;
     } catch {
       return false;
