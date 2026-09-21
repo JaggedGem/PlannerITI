@@ -10,6 +10,12 @@ module.exports = defineConfig([
   {
     files: ['**/*.{js,jsx,ts,tsx}'],
     rules: {
+      eqeqeq: ['error', 'always', { null: 'ignore' }],
+      'no-duplicate-imports': 'error',
+      'no-unreachable': 'error',
+      'no-var': 'error',
+      'prefer-const': 'error',
+      '@typescript-eslint/no-explicit-any': 'warn',
       'react-hooks/immutability': 'off',
       'react-hooks/refs': 'off',
       'react-hooks/purity': 'error',

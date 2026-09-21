@@ -5,10 +5,11 @@
 
 **A comprehensive student planner for CEITI students**
 
-[![React Native](https://img.shields.io/badge/React%20Native-0.85.3-blue.svg)](https://reactnative.dev/)
-[![Expo](https://img.shields.io/badge/Expo-56.0.4-000020.svg)](https://expo.dev/)
+[![React Native](https://img.shields.io/badge/React%20Native-0.86.3-blue.svg)](https://reactnative.dev/)
+[![Expo](https://img.shields.io/badge/Expo-57.0.24-000020.svg)](https://expo.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.3-blue.svg)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
 </div>
 
 ## 📖 Overview
@@ -287,36 +288,36 @@ Build profiles are defined in `eas.json`:
 
 ### Core
 
-- **React Native** 0.81.4 - Mobile framework
-- **Expo** ~54.0.12 - Development platform
-- **TypeScript** 5.9.2 - Type safety
-- **React** 19.1.0 - UI library
+- **React Native** 0.86.3 - Mobile framework
+- **Expo** ~57.0.24 - Development platform
+- **TypeScript** 6.0.3 - Type safety
+- **React** 19.2.3 - UI library
 
 ### Navigation & Routing
 
-- **Expo Router** ~6.0.10 - File-based routing
+- **Expo Router** ~57.0.22 - File-based routing
 - **React Navigation** 7.x - Navigation library
 
 ### Data & Storage
 
 - **AsyncStorage** 2.2.0 - Local data persistence
-- **Expo SecureStore** ~15.0.7 - Secure credential storage
-- **Expo Updates** ~29.0.12 - OTA updates
+- **Expo SecureStore** ~57.0.4 - Secure credential storage
+- **Expo Updates** ~57.0.23 - OTA updates
 
 ### UI & Animation
 
-- **React Native Reanimated** ~4.1.1 - Smooth animations
-- **React Native Gesture Handler** ~2.28.0 - Touch gestures
-- **Expo Blur** ~15.0.7 - Blur effects
-- **Expo Linear Gradient** ~15.0.7 - Gradient backgrounds
-- **Expo Haptics** ~15.0.7 - Haptic feedback
+- **React Native Reanimated** 4.5.1 - Smooth animations
+- **React Native Gesture Handler** ~2.32.0 - Touch gestures
+- **Expo Blur** ~57.0.3 - Blur effects
+- **Expo Linear Gradient** ~57.0.2 - Gradient backgrounds
+- **Expo Haptics** ~57.0.3 - Haptic feedback
 
 ### Utilities
 
-- **date-fns** 4.1.0 - Date manipulation
-- **crypto-js** 4.2.0 - Encryption
-- **Expo Notifications** ~0.32.12 - Push notifications
-- **Expo Linking** ~8.0.8 - Deep linking
+- **date-fns** 4.4.0 - Date manipulation
+- **Expo Crypto** ~57.0.3 - Digest utilities
+- **Expo Notifications** ~57.0.20 - Push notifications
+- **Expo Linking** ~57.0.10 - Deep linking
 
 ## 📡 API Integration
 
@@ -351,8 +352,8 @@ Build profiles are defined in `eas.json`:
 
 ## 🔒 Security & Privacy
 
-- **Secure Storage**: Passwords and sensitive data stored using Expo SecureStore
-- **Encryption**: Client-side encryption for IDNP data
+- **Secure Storage**: Authentication tokens and sensitive local identifiers use Expo SecureStore
+- **Encryption**: Sensitive account data is encrypted by the backend before synchronization
 - **Token Management**: JWT-based authentication with auto-refresh
 - **Offline First**: Local data storage with minimal network exposure
 - **No Analytics**: No third-party tracking or analytics
@@ -433,4 +434,5 @@ For issues, questions, or suggestions:
   Made with ❤️ for CEITI students
 
 **Star ⭐ this repository if you find it helpful!**
+
 </div>

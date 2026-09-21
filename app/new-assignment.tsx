@@ -1349,7 +1349,7 @@ export default function NewAssignmentScreen() {
         const today = new Date();
 
         // Find the next occurrence of this period
-        let nextDate = new Date();
+        const nextDate = new Date();
         let dayIncrement = 1; // Default to tomorrow
 
         // If period has specific days scheduled

@@ -37,7 +37,6 @@
     "@react-native-vector-icons/fontawesome": "^13.1.4",
     "@react-native-vector-icons/ionicons": "^13.1.4",
     "@react-native-vector-icons/material-icons": "^13.1.4",
-    "crypto-js": "^4.2.0",
     "date-fns": "^4.4.0",
     "dotenv": "^18.0.1",
     "expo": "57.0.24",
@@ -45,6 +44,7 @@
     "expo-blur": "~57.0.3",
     "expo-build-properties": "~57.0.21",
     "expo-constants": "~57.0.19",
+    "expo-crypto": "~57.0.3",
     "expo-dev-client": "~57.0.19",
     "expo-device": "~57.0.2",
     "expo-font": "~57.0.4",
@@ -76,7 +76,6 @@
   "devDependencies": {
     "@babel/core": "^7.29.7",
     "@trivago/prettier-plugin-sort-imports": "^6.0.2",
-    "@types/crypto-js": "^4.2.2",
     "@types/jest": "^29.5.14",
     "@types/react": "~19.2.17",
     "@types/react-test-renderer": "^19.1.0",

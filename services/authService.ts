@@ -1,9 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as crypto from 'crypto-js';
 
 import { DeviceEventEmitter } from 'react-native';
 
 import Constants from 'expo-constants';
+import * as Crypto from 'expo-crypto';
 
 import { fetchCustomApi } from '../utils/customApi';
 import { secureStorageService } from './secureStorageService';
@@ -73,11 +73,11 @@ const getApiKey = (): string | null => {
   return apiKey || null;
 };
 
-export const getGravatarHash = (email: string): string => {
-  // Convert email to lowercase and trim
+export const getGravatarHash = async (email: string): Promise<string> => {
   const normalizedEmail = email.toLowerCase().trim();
-  // Create SHA-256 hash
-  return crypto.SHA256(normalizedEmail).toString();
+  return Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, normalizedEmail, {
+    encoding: Crypto.CryptoEncoding.HEX,
+  });
 };
 
 export const getGravatarProfile = async (email: string): Promise<GravatarProfile | null> => {
@@ -86,7 +86,7 @@ export const getGravatarProfile = async (email: string): Promise<GravatarProfile
     return null;
   }
 
-  const hash = getGravatarHash(normalizedEmail);
+  const hash = await getGravatarHash(normalizedEmail);
   const cacheKey = getGravatarCacheKey(hash);
   const fallbackProfile: GravatarProfile = {
     hash,
