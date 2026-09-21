@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@react-native-vector-icons/material-icons';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 
 import React, { useEffect, useState } from 'react';
 
@@ -99,7 +100,12 @@ export function LoginScreen() {
   return (
     <ThemedView style={styles.container}>
       <StatusBar style="auto" />
-      <View style={styles.innerContainer}>
+      <KeyboardAwareScrollView
+        contentContainerStyle={styles.innerContainer}
+        enableOnAndroid
+        extraScrollHeight={24}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.header}>
           <ThemedText style={styles.title}>{t('auth').login.title}</ThemedText>
           <ThemedText style={styles.subtitle}>{t('auth').optional.message}</ThemedText>
@@ -121,7 +127,10 @@ export function LoginScreen() {
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
+              autoComplete="username"
               keyboardType="email-address"
+              textContentType="username"
+              importantForAutofill="yes"
               editable={!loading}
             />
           </View>
@@ -140,7 +149,10 @@ export function LoginScreen() {
               placeholderTextColor={placeholderColor}
               value={password}
               onChangeText={setPassword}
+              autoComplete="current-password"
               secureTextEntry
+              textContentType="password"
+              importantForAutofill="yes"
               editable={!loading}
             />
           </View>
@@ -170,7 +182,7 @@ export function LoginScreen() {
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </KeyboardAwareScrollView>
 
       {/* Custom Alert Modal */}
       <Modal
@@ -203,7 +215,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   innerContainer: {
-    flex: 1,
+    flexGrow: 1,
     paddingHorizontal: 20,
     paddingTop: Platform.OS === 'ios' ? 60 : 40,
     paddingBottom: 20,

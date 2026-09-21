@@ -100,7 +100,10 @@ export function ResetPasswordScreen() {
               placeholderTextColor={placeholderColor}
               value={newPassword}
               onChangeText={setNewPassword}
+              autoComplete="new-password"
               secureTextEntry
+              textContentType="newPassword"
+              importantForAutofill="yes"
               editable={!loading}
             />
           </View>
@@ -119,7 +122,10 @@ export function ResetPasswordScreen() {
               placeholderTextColor={placeholderColor}
               value={confirmPassword}
               onChangeText={setConfirmPassword}
+              autoComplete="new-password"
               secureTextEntry
+              textContentType="newPassword"
+              importantForAutofill="yes"
               editable={!loading}
             />
           </View>

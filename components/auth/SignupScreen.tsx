@@ -1,4 +1,5 @@
 import { MaterialIcons } from '@react-native-vector-icons/material-icons';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 
 import React, { useState } from 'react';
 
@@ -85,7 +86,12 @@ export function SignupScreen() {
   return (
     <ThemedView style={styles.container}>
       <StatusBar style="auto" />
-      <View style={styles.innerContainer}>
+      <KeyboardAwareScrollView
+        contentContainerStyle={styles.innerContainer}
+        enableOnAndroid
+        extraScrollHeight={24}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.header}>
           <ThemedText style={styles.title}>{t('auth').signup.title}</ThemedText>
           <ThemedText style={styles.subtitle}>{t('auth').optional.message}</ThemedText>
@@ -107,7 +113,10 @@ export function SignupScreen() {
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
+              autoComplete="email"
               keyboardType="email-address"
+              textContentType="emailAddress"
+              importantForAutofill="yes"
               editable={!loading}
             />
           </View>
@@ -126,7 +135,10 @@ export function SignupScreen() {
               placeholderTextColor={placeholderColor}
               value={password}
               onChangeText={setPassword}
+              autoComplete="new-password"
               secureTextEntry
+              textContentType="newPassword"
+              importantForAutofill="yes"
               editable={!loading}
             />
           </View>
@@ -145,7 +157,10 @@ export function SignupScreen() {
               placeholderTextColor={placeholderColor}
               value={confirmPassword}
               onChangeText={setConfirmPassword}
+              autoComplete="new-password"
               secureTextEntry
+              textContentType="newPassword"
+              importantForAutofill="yes"
               editable={!loading}
             />
           </View>
@@ -185,7 +200,7 @@ export function SignupScreen() {
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </KeyboardAwareScrollView>
 
       {/* Custom Alert Modal */}
       <Modal
@@ -218,7 +233,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   innerContainer: {
-    flex: 1,
+    flexGrow: 1,
     paddingHorizontal: 20,
     paddingTop: Platform.OS === 'ios' ? 60 : 40,
     justifyContent: 'center',

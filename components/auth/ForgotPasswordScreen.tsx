@@ -86,7 +86,10 @@ export function ForgotPasswordScreen() {
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
+              autoComplete="email"
               keyboardType="email-address"
+              textContentType="emailAddress"
+              importantForAutofill="yes"
               editable={!loading}
             />
           </View>
