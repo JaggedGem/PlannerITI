@@ -18,7 +18,7 @@ class UpdateService {
   private isExpoGo: boolean;
 
   /**
-   * Infer release track from semantic prerelease tags (e.g. 1.5.0-beta.1).
+   * Infer release track from semantic prerelease tags (e.g. 1.5.2-beta.1).
    */
   private inferTrackFromVersion(version: string | null | undefined): 'beta' | null {
     if (!version) {
@@ -103,7 +103,7 @@ class UpdateService {
       this.currentVersion =
         Constants.expoConfig?.extra?.releaseVersion ||
         Application.nativeApplicationVersion ||
-        '1.5.0';
+        '1.5.2';
       return;
     }
 
@@ -114,7 +114,7 @@ class UpdateService {
     this.currentVersion =
       Constants.expoConfig?.extra?.releaseVersion ||
       Application.nativeApplicationVersion ||
-      '1.5.0';
+      '1.5.2';
   }
 
   /**

@@ -24,7 +24,7 @@ module.exports = () => {
     expo: {
       name: appName,
       slug: 'PlannerITI',
-      version: '1.5.0',
+      version: '1.5.2',
       orientation: 'portrait',
       icon: 'assets/images/ios-light.png',
       scheme: 'planneriti',
@@ -85,10 +85,10 @@ module.exports = () => {
         customApiLocalUrl: process.env.CUSTOM_API_LOCAL_URL || '',
         customApiLocalHost: process.env.CUSTOM_API_LOCAL_HOST || '',
         customApiLocalPort: process.env.CUSTOM_API_LOCAL_PORT || '5000',
-        releaseVersion: process.env.RELEASE_VERSION || '1.5.0',
+        releaseVersion: process.env.RELEASE_VERSION || '1.5.2',
       },
       owner: 'planneriti',
-      runtimeVersion: process.env.RUNTIME_VERSION || '1.5.0',
+      runtimeVersion: process.env.RUNTIME_VERSION || '1.5.2',
       updates: {
         url: 'https://u.expo.dev/fe01b043-f283-48db-a683-3c5f23546a96',
       },
