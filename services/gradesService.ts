@@ -11,6 +11,8 @@ import { secureStorageService } from './secureStorageService';
 
 const LOGIN_URL = 'https://api.ceiti.md/date/login';
 const REQUEST_TIMEOUT = 15000;
+export const PLACEHOLDER_IDNP = '0000000000000';
+const PLACEHOLDER_RESPONSE = '<planneriti-placeholder-grades />';
 
 /**
  * Sends a login request with the student's IDNP to the CEITI API
@@ -18,6 +20,10 @@ const REQUEST_TIMEOUT = 15000;
  * @returns Promise with the login response
  */
 export const loginWithIdnp = async (idnp: string, signal?: AbortSignal): Promise<any> => {
+  if (idnp === PLACEHOLDER_IDNP) {
+    return PLACEHOLDER_RESPONSE;
+  }
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
   const abortListener = () => controller.abort();
@@ -62,6 +68,10 @@ export const loginWithIdnp = async (idnp: string, signal?: AbortSignal): Promise
  * @returns Promise with the student's grade information
  */
 export const fetchStudentInfo = async (idnp: string, signal?: AbortSignal): Promise<string> => {
+  if (idnp === PLACEHOLDER_IDNP) {
+    return PLACEHOLDER_RESPONSE;
+  }
+
   try {
     // POST request returns the HTML directly
     return await loginWithIdnp(idnp, signal);
@@ -327,6 +337,61 @@ const createMockData = (): StudentGrades => {
     ],
     annualGrades: [],
     currentSemester: 1,
+  };
+};
+
+const createPlaceholderData = (): StudentGrades => {
+  const randomGrade = (): string => String(Math.floor(Math.random() * 6) + 5);
+  const createSubject = (name: string, gradeCount: number): GradeSubject => {
+    const grades = Array.from({ length: gradeCount }, randomGrade);
+    const average = calculateAverage(grades);
+
+    return {
+      name,
+      grades,
+      average,
+      displayedAverage: average?.toFixed(2),
+    };
+  };
+
+  return {
+    studentInfo: {
+      name: 'Demo',
+      firstName: 'Student',
+      patronymic: '',
+      studyYear: 'II',
+      yearNumber: 2,
+      group: 'DEMO-01',
+      specialization: 'Software Development',
+      status: 'Demo account',
+    },
+    currentGrades: [
+      {
+        semester: 3,
+        subjects: [
+          createSubject('Mathematics', 4),
+          createSubject('Programming', 5),
+          createSubject('English', 3),
+          createSubject('Database Systems', 4),
+        ],
+        absences: {
+          total: 2,
+          sick: 1,
+          excused: 1,
+          unexcused: 0,
+        },
+      },
+    ],
+    exams: [
+      {
+        name: 'Programming Final',
+        type: 'Examen',
+        grade: randomGrade(),
+        semester: 3,
+      },
+    ],
+    annualGrades: [],
+    currentSemester: 3,
   };
 };
 
@@ -796,6 +861,10 @@ export const parseStudentGradesData = (html: string): StudentGrades => {
   try {
     if (!html || html.trim() === '') {
       throw new Error('Empty HTML content');
+    }
+
+    if (html.trim() === PLACEHOLDER_RESPONSE) {
+      return createPlaceholderData();
     }
 
     const studentInfo = parseStudentInfo(html);
