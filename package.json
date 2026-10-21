@@ -16,8 +16,8 @@
     "build:dev:ios": "eas build --profile development --platform ios",
     "build:dev:local": "eas build --profile development --platform android --local",
     "build:dev:local:ios": "eas build --profile development --platform ios --local",
-    "update": "eas update --channel production --platform android",
-    "update:ios": "eas update --channel production --platform ios",
+    "update": "eas update --channel production --environment production --platform android",
+    "update:ios": "eas update --channel production --environment production --platform ios",
     "build:apks": "node scripts/build-apks.js",
     "format": "prettier . --write",
     "format:check": "prettier . --check"

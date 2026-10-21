@@ -74,6 +74,24 @@ Production checks are enabled for its installed package. Beta checks require `BE
 
 A new native build is required to deliver this feature. An OTA alone cannot add Nitro/the update module. The guarded import handles an older binary without crashing.
 
+## Building and publishing releases
+
+No separate Google Play app ID or API key is configured in the app. Play Core reads the installed package and version code, and Google Play determines signing, ownership, track, and rollout eligibility. Play Store submission credentials, if used by EAS Submit, are separate from update detection.
+
+For production:
+
+1. Run `pnpm build` to build an Android AAB with the production profile. EAS increments the Android version code because the profile has `autoIncrement: true` and remote version management.
+2. Upload the AAB to Google Play Console, validate it through Internal Testing, and roll it out to the intended track. Building alone does not publish to Play. EAS Submit can automate upload after its Google service-account/Play setup is configured; Console release review/rollout still applies.
+3. The first binary containing this feature must be installed through Google Play's normal update/install process. An older binary cannot acquire the new native modules via OTA. After that bootstrap release, later eligible higher-version-code releases can be offered in-app.
+4. For subsequent JS/assets-only changes compatible with that binary, use `pnpm run update` (Android) or `pnpm run update:ios`. They publish an OTA using the production channel and `--environment production`, which is required on SDK 55+. A Play upload and version-code increment are not required for compatible OTA-only changes. Use `pnpm run update` explicitly: `pnpm update` is pnpm's dependency-update command.
+5. For native dependencies/configuration changes, create a new runtime boundary, rebuild, and release through the stores again. Keep the runtime unchanged for compatible JS-only updates. Change `expo.version` separately when the user-visible release version should change; Play availability uses the native version code.
+
+Build-profile `env` values in `eas.json` are **not automatically applied by `eas update`**. The production EAS environment should use `APP_VARIANT=production`, `ANDROID_PACKAGE=site.jagged.planneriti`, `IOS_BUNDLE_IDENTIFIER=site.jagged.planneriti`, and `RUNTIME_VERSION=1.6.0-native-updates.1`, matching this build generation. Those are also the config defaults, but stale values in the selected server environment can override them. Make the non-secret variant/runtime values readable for update publishing, and keep application API configuration consistent between build and update environments. With `--environment`, local `.env` files do not supply the update environment.
+
+For beta, use `eas build --profile beta --platform android` and publish OTAs with `eas update --channel beta --environment preview --platform android` only after configuring the preview EAS environment to match the beta profile's package/runtime values. The internally distributed beta build defaults to the preview EAS environment. An EAS environment, EAS channel, and Google Play testing track are separate concepts. A beta Play release additionally needs its own listing and explicit beta Play opt-in, as described above. No beta update script is added that could silently publish using the production config defaults.
+
+See [Expo's EAS environment documentation](https://docs.expo.dev/eas/environment-variables/usage/#using-environment-variables-with-eas-update).
+
 ## Flexible and immediate policy
 
 `NATIVE_UPDATE_POLICY` in `constants/UpdatePolicy.ts` defaults to `flexible`. Set it explicitly to `immediate` only for a designated critical release, distributed in the build or a compatible OTA. No backend endpoint or automatic priority threshold was invented. Both modes remain user initiated and cancellable.
