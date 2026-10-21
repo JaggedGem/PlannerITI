@@ -90,7 +90,8 @@ module.exports = () => {
         releaseVersion: process.env.RELEASE_VERSION || '1.6.0',
       },
       owner: 'planneriti',
-      runtimeVersion: process.env.RUNTIME_VERSION || '1.6.0',
+      // Native dependencies changed: keep these builds isolated from pre-Nitro OTAs.
+      runtimeVersion: process.env.RUNTIME_VERSION || '1.6.0-native-updates.1',
       updates: {
         url: 'https://u.expo.dev/fe01b043-f283-48db-a683-3c5f23546a96',
       },
