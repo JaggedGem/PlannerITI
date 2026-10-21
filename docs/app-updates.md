@@ -58,7 +58,7 @@ The `@ota_pending_update` marker now records update ID, fetch time, Expo runtime
 
 Expo's runtime/selection policy remains authoritative. An AsyncStorage marker cannot make an incompatible cached update launchable. Failed reloads do not recreate a marker that could produce a restart loop.
 
-The displayed app version comes from `expo-application`'s installed version, with the project config version used in Expo Go. The redundant `extra.releaseVersion` override was removed. OTA identifiers still prefer manifest update-group metadata, then the update ID. EAS channel names are used exactly as reported by `expo-updates`; prerelease strings and substring matches no longer guess a channel. Expo Go is displayed as development, optionally annotated with the configured production/beta variant.
+The displayed app version prefers `extra.releaseVersion` from the running build/OTA manifest. `app.config.js` populates this from `RELEASE_VERSION`, falling back to `expo.version` when unset or blank. Older manifests with no valid release label fall back to `expo-application`'s installed version (or the project config version in Expo Go). This display label never changes the native version code, runtime compatibility, channel, or Play update eligibility. OTA identifiers still prefer manifest update-group metadata, then the update ID. EAS channel names are used exactly as reported by `expo-updates`; prerelease strings and substring matches no longer guess a channel. Expo Go is displayed as development, optionally annotated with the configured production/beta variant.
 
 ## Build variants and runtime change
 
@@ -68,7 +68,7 @@ The displayed app version comes from `expo-application`'s installed version, wit
 | Beta        | `site.jagged.planneriti.beta` | `beta`                  | `1.6.0-beta.2`           |
 | Development | `site.jagged.planneriti.dev`  | `development`           | `1.6.0-dev.2`            |
 
-The runtime changes are necessary because this feature adds native dependencies. They separate these binaries and their OTA cache from the pre-Nitro runtimes. The production default in `app.config.js` matches EAS. Existing binaries retain their old runtime and can continue receiving compatible updates separately. Match the target build's `RUNTIME_VERSION` when publishing OTAs; do not publish Nitro-dependent content to the old runtimes. App display version remains 1.6.0, and EAS still increments Android version codes remotely.
+The runtime changes are necessary because this feature adds native dependencies. They separate these binaries and their OTA cache from the pre-Nitro runtimes. The production default in `app.config.js` matches EAS. Existing binaries retain their old runtime and can continue receiving compatible updates separately. Match the target build's `RUNTIME_VERSION` when publishing OTAs; do not publish Nitro-dependent content to the old runtimes. The default app display version is 1.6.0; `RELEASE_VERSION` can advance it through OTA. EAS still increments Android version codes remotely.
 
 Production checks are enabled for its installed package. Beta checks require `BETA_PLAY_UPDATES_ENABLED=true` in the beta build **and update** environment, only after its own package has a valid Play listing/test distribution. The current beta EAS profile remains internally distributed; that alone does not make it Play-eligible. The default is false. Play Core checks the installer and services; sideloaded/unsupported installations receive no recurring update prompt. Development clients, the `.dev` package, Expo Go, web, and iOS do not invoke Nitro update functionality.
 
@@ -84,9 +84,11 @@ For production:
 2. Upload the AAB to Google Play Console, validate it through Internal Testing, and roll it out to the intended track. Building alone does not publish to Play. EAS Submit can automate upload after its Google service-account/Play setup is configured; Console release review/rollout still applies.
 3. The first binary containing this feature must be installed through Google Play's normal update/install process. An older binary cannot acquire the new native modules via OTA. After that bootstrap release, later eligible higher-version-code releases can be offered in-app.
 4. For subsequent JS/assets-only changes compatible with that binary, use `pnpm run update` (Android) or `pnpm run update:ios`. They publish an OTA using the production channel and `--environment production`, which is required on SDK 55+. A Play upload and version-code increment are not required for compatible OTA-only changes. Use `pnpm run update` explicitly: `pnpm update` is pnpm's dependency-update command.
-5. For native dependencies/configuration changes, create a new runtime boundary, rebuild, and release through the stores again. Keep the runtime unchanged for compatible JS-only updates. Change `expo.version` separately when the user-visible release version should change; Play availability uses the native version code.
+5. For native dependencies/configuration changes, create a new runtime boundary, rebuild, and release through the stores again. Keep the runtime unchanged for compatible JS-only updates. Change `expo.version` separately when the installed binary version should change; Play availability uses the native version code.
 
 Build-profile `env` values in `eas.json` are **not automatically applied by `eas update`**. The production EAS environment should use `APP_VARIANT=production`, `ANDROID_PACKAGE=site.jagged.planneriti`, `IOS_BUNDLE_IDENTIFIER=site.jagged.planneriti`, and `RUNTIME_VERSION=1.6.0-native-updates.1`, matching this build generation. Those are also the config defaults, but stale values in the selected server environment can override them. Make the non-secret variant/runtime values readable for update publishing, and keep application API configuration consistent between build and update environments. With `--environment`, local `.env` files do not supply the update environment.
+
+To advance the displayed app version with an OTA, set `RELEASE_VERSION=1.6.1` in the **production EAS environment**, keep `RUNTIME_VERSION=1.6.0-native-updates.1` unchanged for compatible JS/assets changes, then run `pnpm run update` (and `pnpm run update:ios` if publishing for iOS). When that OTA applies, Settings displays 1.6.1 while the installed native version remains 1.6.0. No binary rebuild is needed. Local `.env` works for local Expo configuration, but these OTA scripts use the selected EAS environment rather than local `.env` files. Set the corresponding release label in the preview EAS environment for beta releases. Keep the desired `RELEASE_VERSION` in that environment for later builds/updates so it does not revert to the default.
 
 For beta, use `eas build --profile beta --platform android` and publish OTAs with `eas update --channel beta --environment preview --platform android` only after configuring the preview EAS environment to match the beta profile's package/runtime values. The internally distributed beta build defaults to the preview EAS environment. An EAS environment, EAS channel, and Google Play testing track are separate concepts. A beta Play release additionally needs its own listing and explicit beta Play opt-in, as described above. No beta update script is added that could silently publish using the production config defaults.
 
@@ -109,7 +111,7 @@ Using pnpm **11.1.2**, the project's configured version:
 
 - `pnpm typecheck`: passed.
 - `pnpm lint`: passed with 36 existing `no-explicit-any` warnings in unrelated files; no errors.
-- `pnpm test`: passed (63 tests across five suites).
+- `pnpm test`: passed (70 tests across five suites).
 - Changed-file formatting and `git diff --check`: passed.
 - Frozen-lockfile installation from an empty `node_modules`: passed offline with the existing store.
 - Android/iOS prebuild and autolinking: passed in a disposable copy; no generated native files committed.

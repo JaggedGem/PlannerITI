@@ -304,8 +304,13 @@ export class UpdateService {
     if (this.disruptiveOperation === operation) this.disruptiveOperation = null;
   }
 
-  /** Installed binary version; the Expo Go host version is not the app's version. */
+  /** App-displayed release label, delivered by the current build or OTA manifest. */
   getCurrentVersion(): string {
+    const releaseVersion: unknown = Constants.expoConfig?.extra?.releaseVersion;
+    if (typeof releaseVersion === 'string' && releaseVersion.trim()) {
+      return releaseVersion.trim();
+    }
+    // Older manifests may lack the label; never use the Expo Go host's version.
     return (
       (!this.isExpoGo && Application.nativeApplicationVersion) ||
       Constants.expoConfig?.version ||

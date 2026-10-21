@@ -3,6 +3,7 @@ import 'dotenv/config';
 // Read environment variables set in eas.json
 module.exports = () => {
   const appVariant = process.env.APP_VARIANT || 'production';
+  const appVersion = '1.6.0';
   const androidPackage = process.env.ANDROID_PACKAGE || 'site.jagged.planneriti';
   const iosBundleIdentifier = process.env.IOS_BUNDLE_IDENTIFIER || 'site.jagged.planneriti';
 
@@ -24,7 +25,7 @@ module.exports = () => {
     expo: {
       name: appName,
       slug: 'PlannerITI',
-      version: '1.6.0',
+      version: appVersion,
       orientation: 'portrait',
       icon: 'assets/images/ios-light.png',
       scheme: 'planneriti',
@@ -81,6 +82,8 @@ module.exports = () => {
           projectId: 'fe01b043-f283-48db-a683-3c5f23546a96',
         },
         environment: appVariant,
+        // Displayed release can advance through OTA without changing the native version/runtime.
+        releaseVersion: process.env.RELEASE_VERSION?.trim() || appVersion,
         // Beta has a different package and needs its own Play listing/testing setup.
         betaPlayUpdatesEnabled: process.env.BETA_PLAY_UPDATES_ENABLED === 'true',
         apiKey: process.env.API_KEY || '',

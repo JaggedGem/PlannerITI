@@ -47,6 +47,7 @@ const pending = () =>
 
 beforeEach(() => {
   jest.clearAllMocks();
+  Constants.expoConfig!.extra = { environment: 'production' };
   Object.assign(globalThis, { __DEV__: false });
   storage.getItem.mockResolvedValue(null);
   storage.removeItem.mockResolvedValue();
@@ -64,6 +65,34 @@ test('uses installed version and exact EAS channel instead of guessing from disp
   expect(service.getCurrentChannel()).toBe('custom-release-preview');
   Object.assign(Updates, { channel: 'production' });
 });
+
+test.each(['standalone', 'storeClient'])(
+  'uses the OTA release label in %s without changing native version, runtime, or EAS channel',
+  (environment) => {
+    const previousEnvironment = Constants.executionEnvironment;
+    Object.assign(Constants, { executionEnvironment: environment });
+    try {
+      const service = new UpdateService();
+      Constants.expoConfig!.extra = { environment: 'production', releaseVersion: ' 1.6.1-beta.1 ' };
+      expect(service.getCurrentVersion()).toBe('1.6.1-beta.1');
+      expect(Application.nativeApplicationVersion).toBe('1.6.0');
+      expect(Updates.runtimeVersion).toBe('1.6.0');
+      expect(service.getCurrentChannel()).toBe(
+        environment === 'storeClient' ? 'development' : 'production',
+      );
+    } finally {
+      Object.assign(Constants, { executionEnvironment: previousEnvironment });
+    }
+  },
+);
+
+test.each([undefined, null, '', '   ', 123])(
+  'falls back to the installed version when the OTA release label is invalid: %p',
+  (releaseVersion) => {
+    Constants.expoConfig!.extra = { environment: 'production', releaseVersion };
+    expect(new UpdateService().getCurrentVersion()).toBe('1.6.0');
+  },
+);
 
 test('stages a fetched OTA with runtime and native build identity once per lifetime', async () => {
   updates.checkForUpdateAsync.mockResolvedValue({ isAvailable: true } as Updates.UpdateCheckResult);
