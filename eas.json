@@ -1,6 +1,6 @@
 {
   "cli": {
-    "version": ">= 15.0.12",
+    "version": "25.3.0",
     "appVersionSource": "remote"
   },
   "build": {
@@ -9,14 +9,17 @@
       "distribution": "internal",
       "channel": "development",
       "android": {
-        "buildType": "app-bundle"
+        "buildType": "apk"
       },
       "env": {
         "APP_VARIANT": "development",
         "ANDROID_PACKAGE": "site.jagged.planneriti.dev",
         "IOS_BUNDLE_IDENTIFIER": "site.jagged.planneriti.dev",
         "RUNTIME_VERSION": "1.6.0-dev.2"
-      }
+      },
+      "environment": "development",
+      "node": "24.19.0",
+      "pnpm": "11.1.2"
     },
     "beta": {
       "autoIncrement": true,
@@ -30,7 +33,10 @@
         "ANDROID_PACKAGE": "site.jagged.planneriti.beta",
         "IOS_BUNDLE_IDENTIFIER": "site.jagged.planneriti.beta",
         "RUNTIME_VERSION": "1.6.0-beta.2"
-      }
+      },
+      "environment": "preview",
+      "node": "24.19.0",
+      "pnpm": "11.1.2"
     },
     "production": {
       "autoIncrement": true,
@@ -43,7 +49,10 @@
         "ANDROID_PACKAGE": "site.jagged.planneriti",
         "IOS_BUNDLE_IDENTIFIER": "site.jagged.planneriti",
         "RUNTIME_VERSION": "1.6.0-native-updates.1"
-      }
+      },
+      "environment": "production",
+      "node": "24.19.0",
+      "pnpm": "11.1.2"
     }
   },
   "submit": {
