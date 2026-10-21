@@ -80,7 +80,7 @@ gh variable set RELEASE_VERSION --env production --body '1.6.1'
 
 Where your GitHub plan supports it, configure production environment reviewers and permitted branches. Permit the feature branch if you want to test it. Only dispatch trusted code: the selected revision executes with the build credentials. Secrets are scoped to the validation/build steps; the quality job and dependency-install step receive no Expo/API secrets.
 
-The app embeds `API_KEY` in `expo.extra.apiKey`, so its value is recoverable from the installed app. GitHub secret storage prevents accidental configuration disclosure; it does not turn an embedded client key into a confidential server credential. `GRAVATAR_API_KEY` is not read by this code and is not required. Play update detection needs no additional Play API key.
+The app embeds `API_KEY` in `expo.extra.apiKey`, so its value is recoverable from the installed app. GitHub secret storage prevents accidental configuration disclosure; it does not turn an embedded client key into a confidential server credential. Play update detection needs no additional Play API key.
 
 ### 5. Align EAS variables, runtime versions, and any extra build secrets
 
@@ -93,7 +93,7 @@ The GitHub checkout has **none of your ignored local `.env` files**. Do not comm
 | `IOS_BUNDLE_IDENTIFIER` | `site.jagged.planneriti.dev` | `site.jagged.planneriti` |
 | `RUNTIME_VERSION`       | `1.6.0-dev.2`                | `1.6.0-native-updates.1` |
 
-To change a native runtime, edit the selected profile's committed `RUNTIME_VERSION`. Editing only a local `.env` will not change the profile value. Keep the matching EAS environment runtime aligned for OTA publishing: `eas update` selects an environment but does not read the build profile's `env` block. Keep `RELEASE_VERSION` aligned in the EAS environment when you want the same displayed version in OTA updates.
+To change a native runtime, edit the selected profile's committed `RUNTIME_VERSION`. Editing only a local `.env` will not change the profile value. In Expo's environment settings, also add `RUNTIME_VERSION` with **Plain text** visibility to each matching EAS environment (`development`, `preview` for beta, and `production`), using the same value as its build profile. This supplies the runtime for OTA publishing: `eas update` selects an environment but does not read the build profile's `env` block. Keep `RELEASE_VERSION` aligned in the EAS environment when you want the same displayed version in OTA updates.
 
 **EAS Secret visibility is unavailable to local builds.** For every additional EAS variable marked **Secret** that a native plugin/build hook needs, add a GitHub environment secret and explicitly map it under the workflow's **Compile locally** step `env`. Merely creating a GitHub secret does not export it to the process. `API_KEY` is already mapped. For a secret file, store its encoded contents as a GitHub secret, restore it to a file under `$RUNNER_TEMP` in a dedicated step, pass the file path to the compile step, and delete it in the `always()` cleanup step. Never upload that file or the entire build workspace. This app currently needs no such extra file.
 
