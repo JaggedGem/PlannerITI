@@ -18,22 +18,26 @@ MAX_BYTES = 2 * 1024**3
 RETRYABLE_CODES = {408, 429, 500, 502, 503, 504}
 
 
+class ArtifactError(ValueError):
+    """An artifact failure whose message is safe to print without signed URLs."""
+
+
 def build_details(results, profile, config):
     if profile not in {"development", "production"}:
-        raise ValueError("Unsupported build profile")
+        raise ArtifactError("Unsupported build profile")
     if not isinstance(results, list) or len(results) != 1 or not isinstance(results[0], dict):
-        raise ValueError("Expected exactly one Android build in EAS JSON output")
+        raise ArtifactError("Expected exactly one Android build in EAS JSON output")
     build = results[0]
     if not isinstance(build.get("id"), str):
-        raise ValueError("Missing EAS build ID")
+        raise ArtifactError("Missing EAS build ID")
     build_id = str(uuid.UUID(build["id"]))
     if build.get("platform") != "ANDROID" or build.get("buildProfile") != profile:
-        raise ValueError("EAS returned a different platform or build profile")
+        raise ArtifactError("EAS returned a different platform or build profile")
     if build.get("status") != "FINISHED":
-        raise ValueError("The EAS build did not finish successfully")
+        raise ArtifactError("The EAS build did not finish successfully")
     build_type = config["build"][profile]["android"]["buildType"]
     if build_type not in {"apk", "app-bundle"}:
-        raise ValueError("Unsupported Android artifact type in eas.json")
+        raise ArtifactError("Unsupported Android artifact type in eas.json")
     extension = "apk" if build_type == "apk" else "aab"
     url = (build.get("artifacts") or {}).get("applicationArchiveUrl")
     require_https(url)
@@ -42,10 +46,10 @@ def build_details(results, profile, config):
 
 def require_https(url):
     if not isinstance(url, str):
-        raise ValueError("Missing HTTPS artifact URL")
+        raise ArtifactError("Missing HTTPS artifact URL")
     parsed = urllib.parse.urlparse(url)
     if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
-        raise ValueError("EAS artifact URL must use HTTPS without embedded credentials")
+        raise ArtifactError("EAS artifact URL must use HTTPS without embedded credentials")
 
 
 def verify_archive(path, extension):
@@ -55,7 +59,7 @@ def verify_archive(path, extension):
         "BundleConfig.pb", "base/manifest/AndroidManifest.xml"
     }
     if not expected.issubset(entries):
-        raise ValueError(f"Downloaded archive is not the expected Android {extension.upper()}")
+        raise ArtifactError(f"Downloaded archive is not the expected Android {extension.upper()}")
 
 
 def download(url, destination, extension, opener=urllib.request.urlopen, sleep=time.sleep):
@@ -71,7 +75,7 @@ def download(url, destination, extension, opener=urllib.request.urlopen, sleep=t
                 while chunk := response.read(1024 * 1024):
                     size += len(chunk)
                     if size > MAX_BYTES:
-                        raise ValueError("Artifact exceeds the 2 GiB download limit")
+                        raise ArtifactError("Artifact exceeds the 2 GiB download limit")
                     digest.update(chunk)
                     output.write(chunk)
             verify_archive(partial, extension)
@@ -80,9 +84,9 @@ def download(url, destination, extension, opener=urllib.request.urlopen, sleep=t
         except (urllib.error.URLError, TimeoutError) as error:
             partial.unlink(missing_ok=True)
             if isinstance(error, urllib.error.HTTPError) and error.code not in RETRYABLE_CODES:
-                raise ValueError(f"Artifact download failed with HTTP {error.code}") from None
+                raise ArtifactError(f"Artifact download failed with HTTP {error.code}") from None
             if attempt == 2:
-                raise ValueError("Artifact download failed after three attempts") from None
+                raise ArtifactError("Artifact download failed after three attempts") from None
             sleep(2 ** (attempt + 1))
         except Exception:
             partial.unlink(missing_ok=True)
@@ -93,7 +97,7 @@ def save_artifact(results, profile, config, output_dir, opener=urllib.request.ur
                   sleep=time.sleep, expected_commit=None):
     build, build_id, extension, url = build_details(results, profile, config)
     if expected_commit and build.get("gitCommitHash") != expected_commit:
-        raise ValueError("EAS returned a build from a different Git revision")
+        raise ArtifactError("EAS returned a build from a different Git revision")
     output_dir.mkdir(parents=True, exist_ok=True)
     artifact = output_dir / f"PlannerITI-{profile}-{build_id}.{extension}"
     checksum, size = download(url, artifact, extension, opener, sleep)
@@ -141,6 +145,9 @@ def main():
                 if metadata["easBuildUrl"]:
                     output.write(f"[EAS build and logs]({metadata['easBuildUrl']})\n\n")
                 output.write(f"Artifact: `{metadata['artifact']}`\n\nSHA-256: `{metadata['sha256']}`\n")
+    except ArtifactError as error:
+        print(f"Artifact validation/download failed: {error}", file=sys.stderr)
+        return 1
     except (KeyError, TypeError, ValueError, OSError, zipfile.BadZipFile):
         # Exceptions can contain a signed URL; keep logs free of the raw response/URL.
         print("Artifact validation/download failed. Check EAS status, profile and archive availability.", file=sys.stderr)

@@ -120,6 +120,20 @@ class ArtifactTests(unittest.TestCase):
             save_artifact(result(), "development", self.config, self.output, opener, Mock())
         self.assertEqual(opener.call_count, 1)
 
+    def test_insecure_redirect_is_rejected(self):
+        stream, _ = response("apk")
+        stream.geturl = lambda: "http://example.invalid/build"
+        with self.assertRaises(ValueError):
+            save_artifact(result(), "development", self.config, self.output, Mock(return_value=stream))
+        self.assertEqual(list(self.output.iterdir()), [])
+
+    def test_oversized_download_is_rejected_and_partial_file_removed(self):
+        from unittest.mock import patch
+        stream, _ = response("apk")
+        with patch("download_eas_build.MAX_BYTES", 1), self.assertRaisesRegex(ValueError, "2 GiB"):
+            save_artifact(result(), "development", self.config, self.output, Mock(return_value=stream))
+        self.assertEqual(list(self.output.iterdir()), [])
+
     def test_build_from_another_commit_is_rejected_before_download(self):
         opener = Mock()
         with self.assertRaisesRegex(ValueError, "different Git revision"):
