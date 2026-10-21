@@ -67,6 +67,6 @@ package-lock.json
 CLAUDE.md
 .apkbuilder.json
 
-# Downloaded CI build artifacts
+# Local CI build artifacts
 /artifacts/
 __pycache__/

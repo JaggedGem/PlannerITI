@@ -277,7 +277,7 @@ The app uses `app.config.js` for configuration. Key settings:
 
 See [App updates](docs/app-updates.md) for Google Play update policy, OTA coordination, runtime boundaries, build requirements, and the physical-device test plan.
 
-For manual GitHub builds with downloadable development APKs or production AABs, follow the complete [GitHub → EAS cloud build setup guide](docs/github-eas-builds.md).
+For manual GitHub builds with downloadable development APKs or production AABs, follow the complete [GitHub runner build setup guide](docs/github-eas-builds.md).
 
 - **New Architecture**: Enabled
 

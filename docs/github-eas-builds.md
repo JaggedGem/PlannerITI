@@ -1,141 +1,134 @@
-# Manual Android builds from GitHub Actions
+# Manual Android builds on the GitHub runner
 
-The **Android EAS Build** workflow (`.github/workflows/eas-build.yml`) runs only when manually dispatched. Choose `development` or `production` and a branch/tag. Quality checks run first; a separate job then uploads the selected revision to **EAS cloud Build**, waits for the actual build to finish, downloads that exact build, and publishes it as a GitHub Actions artifact.
+The **Android Runner Build** workflow (`.github/workflows/eas-build.yml`) compiles Android **on the GitHub Actions runner** using `eas build --local`. Select a branch/tag and a development or production profile. Quality checks run first, then Ubuntu runs prebuild, Metro, Gradle, native compilation, and signing. The completed app is uploaded directly from the runner to GitHub Actions artifacts.
 
-This uses Expo's [official CI approach](https://docs.expo.dev/build/building-on-ci/). It does not use `eas build --local`, GitHub's Android SDK, or a GitHub-built signing keystore.
+**No EAS cloud build is submitted.** There is no EAS build queue, cloud build worker, or cloud build credit consumption. The EAS CLI still authenticates with Expo, reads the linked project's configuration/environment, downloads existing managed signing credentials, and uses the existing remote version counter and update channels. Those Expo services still require network access; this is not an offline or Expo-independent build.
 
-## What each selection builds
+References: Expo's [local build documentation](https://docs.expo.dev/build-reference/local-builds/), [CI authentication guide](https://docs.expo.dev/build/building-on-ci/), and [environment-variable documentation](https://docs.expo.dev/eas/environment-variables/usage/).
 
-| Workflow selection | EAS profile/environment       | Package                      | Output | Intended use                                        |
+## Profile selection
+
+| Workflow selection | EAS profile/environment       | Package                      | Output | Use                                                 |
 | ------------------ | ----------------------------- | ---------------------------- | ------ | --------------------------------------------------- |
 | `development`      | `development` / `development` | `site.jagged.planneriti.dev` | `.apk` | Installable Expo development client; use with Metro |
-| `production`       | `production` / `production`   | `site.jagged.planneriti`     | `.aab` | Google Play Internal Testing or production release  |
+| `production`       | `production` / `production`   | `site.jagged.planneriti`     | `.aab` | Upload to Google Play, including Internal Testing   |
 
-Development's previous `app-bundle` setting was changed to `apk`. Beta remains its existing separate profile/package and is not offered by this workflow. Production builds still use EAS remote version management and `autoIncrement`, so each build can consume a new Android version code, including builds later discarded. Building production does not submit or publish to Google Play.
+The profile dropdown also selects the matching **GitHub environment**. Output format comes from `android.buildType` in `eas.json`. Beta retains its separate configuration but is not offered by this workflow. Production builds use the existing `autoIncrement` and remote version counter. A failed, canceled, or discarded build can consume a version code; that is harmless, but rerunning is a new build. Creating an AAB does not publish or submit it to Google Play.
 
-## Versions and checks
+## One-time setup
 
-- Node **24.19.0**: `.node-version` on GitHub and the `node` fields in EAS profiles.
-- pnpm **11.1.2**: `packageManager` in `package.json`, read by the pnpm setup action, and EAS profiles.
-- EAS CLI **25.3.0**: installed by the official Expo action and required in `eas.json`.
-- GitHub runner: **ubuntu-24.04**, including its Python 3.12 runtime for artifact validation.
-- Actions are pinned to reviewed commit SHAs: checkout 6.0.2, setup-node 6.3.0, pnpm setup 5.0.0, Expo action v9, upload-artifact 6.0.0. Update the pinned action SHA and its version comment together.
-- The EAS worker image remains SDK-selected (`auto`), so EAS selects the native toolchain for Expo SDK 58. The workflow does not guess an Android SDK/NDK installation on GitHub.
+### 1. Enable the workflow and GitHub Actions
 
-The reusable `CI` workflow performs frozen-lockfile dependency installation, repository formatting, lint, TypeScript checks, Jest tests, and Python artifact/configuration regression tests. It runs without Expo credentials. The build job repeats the frozen installation on its own clean runner and only exposes `EXPO_TOKEN` to its token-check and EAS-build steps. It never gives that token to project installation or the artifact downloader.
+GitHub requires a `workflow_dispatch` workflow to exist on the repository's **default branch** before manual dispatch is available. These changes are on `feature/google-play-in-app-updates`. Merge the reviewed workflow, reusable `ci.yml`, scripts, and configuration into the default branch when ready. After registration, you can choose this feature branch or another trusted revision in **Run workflow**. `gh workflow run --ref` does not bypass the registration requirement.
 
-The CLI runs with `--platform android --non-interactive --wait --json --freeze-credentials`. It cannot silently prompt for/create missing credentials. A successful queue submission is not considered a successful run: the cloud build must finish successfully, and its artifact must validate and upload.
+In **Settings → Actions → General**, enable Actions. If using an action allowlist, allow `actions/checkout`, `actions/setup-node`, `actions/setup-java`, `actions/upload-artifact`, `pnpm/action-setup`, `android-actions/setup-android`, and `expo/expo-github-action`. All are pinned to commit SHAs. The workflow requires only `contents: read` from GitHub's automatic token; no repository-write permission, OIDC setup, or extra GitHub token is needed.
 
-## One-time setup: complete these steps
+Allow 14 days of artifact retention, or lower `retention-days` in the workflow if your policy requires it. Ensure GitHub Actions minutes and artifact storage are available for the repository. Standard hosted Ubuntu runners are used; a self-hosted runner is not required.
 
-### 1. Make the workflow available on the default branch
+### 2. Prepare existing Expo signing credentials and version counters
 
-GitHub requires a `workflow_dispatch` workflow to exist on the repository's **default branch** before it is available for manual triggering. This implementation is committed to `feature/google-play-in-app-updates`, as requested. Merge the reviewed changes to the default branch before expecting the **Run workflow** button to appear. The workflow calls the reusable `ci.yml`, so include that file and the helper/config changes too.
-
-After registration on the default branch, you can select `feature/google-play-in-app-updates`, or another trusted branch/tag containing these files, when dispatching. GitHub checks out the selected revision in both quality and build jobs. Merely pushing a workflow to a new feature branch may not register it for manual dispatch; `gh workflow run --ref` does not remove this default-branch requirement.
-
-In repository **Settings → Actions → General**, enable GitHub Actions and allow the pinned `actions/*`, `pnpm/action-setup`, and `expo/expo-github-action` actions if your organization uses an allowlist. The workflow needs only `contents: read` for `GITHUB_TOKEN`; no repository-write or OIDC permission is required. Ensure the artifact-retention policy permits 14 days, or lower `retention-days` in the workflow to your allowed limit.
-
-### 2. Finish interactive EAS setup for both packages
-
-On your computer, check out this branch/change, install Node 24.19.0, then run:
+On your computer, install Node **24.19.0**, pnpm **11.1.2**, and EAS CLI **25.3.0**, then authenticate:
 
 ```sh
 npm install --global pnpm@11.1.2 eas-cli@25.3.0
 pnpm install --frozen-lockfile
 eas login
 eas whoami
-pnpm run build:dev
-pnpm run build
+eas credentials --platform android
 ```
 
-These commands start real EAS cloud builds. Run them once for any profile that has not already built successfully, allowing EAS to complete project/credentials/version setup interactively. If both profiles already have valid credentials, you do not need to repeat successful bootstrap builds just for CI.
+In the credentials menu, select each profile (`development`, then `production`) and ensure its Android keystore is configured in EAS. This is credential administration; **you do not need to start a cloud build**. If the credentials already exist, reuse them. For the existing Play listing, preserve the existing production upload keystore and alias; generating an unrelated replacement would prevent Play from accepting the upload. Development's separate package can have its own credentials.
 
-Confirm you are building the existing project **PlannerITI** under Expo account/organization **planneriti**, project ID `fe01b043-f283-48db-a683-3c5f23546a96`. Production and development have different package names and can need separate credential setup. Use the existing production upload keystore for the existing Google Play listing; do not replace that signing identity. EAS-managed remote credentials are the default; this workflow does not upload keystores to GitHub.
+Confirm the linked Expo project is **planneriti/PlannerITI**, ID `fe01b043-f283-48db-a683-3c5f23546a96`. The current profiles use remote credentials by default. The local build downloads those credentials to sign on the GitHub runner; you do not need keystore/password GitHub secrets. Do not change `credentialsSource` to `local` without also implementing a secure `credentials.json`/keystore restoration step.
 
-Confirm the production remote Android version counter is initialized and higher than previously uploaded Play builds. A prior successful interactive production build normally establishes it. If adjustment is needed, use `eas build:version:set --platform android --profile production` interactively. CI's automatic increments cannot fix an incorrectly initialized counter below the Play listing's version history.
+Check the production remote version counter against your Play Console version-code history. If initialization or correction is needed, run interactively:
 
-### 3. Configure the EAS environments
+```sh
+eas build:version:set --platform android --profile production
+```
 
-In the Expo dashboard, open the project and its environment variables. Configure **development** and **production** separately. These are EAS environments, not GitHub environments, EAS channels, or Play testing tracks.
+Set an appropriate current version so the next increment exceeds previously uploaded Play builds. CI uses `--non-interactive --freeze-credentials`: missing credentials must be prepared beforehand; CI will not prompt to create or replace them. No Play service-account key or Apple credentials are needed for this Android build-only workflow.
 
-The build profiles explicitly select the EAS environment. `eas.json` already supplies the following build configuration:
+### 3. Create an Expo token
 
-| Variable                | Development profile          | Production profile       |
+In [Expo account settings → Access tokens](https://docs.expo.dev/accounts/programmatic-access/#personal-access-tokens), create a token for an account with access to the existing project, its managed signing credentials, and remote version management. Copy the token for the GitHub secret in the next step. It is an **Expo token**, not a GitHub or Google Play token.
+
+Keep it out of repository files and Actions variables. Rotate or revoke it in Expo when necessary.
+
+### 4. Create GitHub environments and configure secrets/variables
+
+Open **Settings → Environments** and create **`development`** and **`production`**. In each environment, add:
+
+| Kind     | Name              | Value                                                                                                                                                               |
+| -------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Secret   | `EXPO_TOKEN`      | The Expo access token from step 3.                                                                                                                                  |
+| Secret   | `API_KEY`         | The API key used by the app for that environment. Required: CI fails early if absent.                                                                               |
+| Variable | `RELEASE_VERSION` | Optional displayed version, for example `1.6.1`. If omitted, EAS-readable configuration or the app's `1.6.0` fallback applies. It does not change the native build. |
+
+You can use a repository secret for `EXPO_TOKEN` if both environments use the same Expo identity. A same-named environment secret takes precedence. Keep `API_KEY` environment-specific if development and production use different keys. Organization secrets must explicitly grant this repository access.
+
+Optional CLI setup (secret commands prompt for the value; do not put token/key values in shell history):
+
+```sh
+gh secret set EXPO_TOKEN --env development
+gh secret set EXPO_TOKEN --env production
+gh secret set API_KEY --env development
+gh secret set API_KEY --env production
+gh variable set RELEASE_VERSION --env development --body '1.6.1'
+gh variable set RELEASE_VERSION --env production --body '1.6.1'
+```
+
+Where your GitHub plan supports it, configure production environment reviewers and permitted branches. Permit the feature branch if you want to test it. Only dispatch trusted code: the selected revision executes with the build credentials. Secrets are scoped to the validation/build steps; the quality job and dependency-install step receive no Expo/API secrets.
+
+The app embeds `API_KEY` in `expo.extra.apiKey`, so its value is recoverable from the installed app. GitHub secret storage prevents accidental configuration disclosure; it does not turn an embedded client key into a confidential server credential. `GRAVATAR_API_KEY` is not read by this code and is not required. Play update detection needs no additional Play API key.
+
+### 5. Align EAS variables, runtime versions, and any extra build secrets
+
+The GitHub checkout has **none of your ignored local `.env` files**. Do not commit them. These public profile values already come from the selected revision's `eas.json`:
+
+| Variable                | Development                  | Production               |
 | ----------------------- | ---------------------------- | ------------------------ |
 | `APP_VARIANT`           | `development`                | `production`             |
 | `ANDROID_PACKAGE`       | `site.jagged.planneriti.dev` | `site.jagged.planneriti` |
 | `IOS_BUNDLE_IDENTIFIER` | `site.jagged.planneriti.dev` | `site.jagged.planneriti` |
 | `RUNTIME_VERSION`       | `1.6.0-dev.2`                | `1.6.0-native-updates.1` |
 
-Build-profile `env` values take precedence over local `.env` and duplicate server values. To change a build runtime, edit the selected profile's committed `RUNTIME_VERSION`. Keep the corresponding EAS environment value aligned for OTA publishing, because `eas update` does not read the build profile's `env` block. Use the values from your selected revision if you subsequently advance the runtime.
+To change a native runtime, edit the selected profile's committed `RUNTIME_VERSION`. Editing only a local `.env` will not change the profile value. Keep the matching EAS environment runtime aligned for OTA publishing: `eas update` selects an environment but does not read the build profile's `env` block. Keep `RELEASE_VERSION` aligned in the EAS environment when you want the same displayed version in OTA updates.
 
-Also configure:
+**EAS Secret visibility is unavailable to local builds.** For every additional EAS variable marked **Secret** that a native plugin/build hook needs, add a GitHub environment secret and explicitly map it under the workflow's **Compile locally** step `env`. Merely creating a GitHub secret does not export it to the process. `API_KEY` is already mapped. For a secret file, store its encoded contents as a GitHub secret, restore it to a file under `$RUNNER_TEMP` in a dedicated step, pass the file path to the compile step, and delete it in the `always()` cleanup step. Never upload that file or the entire build workspace. This app currently needs no such extra file.
 
-| Variable             | Setup and visibility                                                                                                                                                                                                                               |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `API_KEY`            | The app's real API key for that environment. Use **Sensitive** when the same variable is needed for config resolution and OTA publishing. It is embedded in `expo.extra.apiKey`, so treat it as a client-readable value, not a backend credential. |
-| `RELEASE_VERSION`    | Desired displayed app version, such as `1.6.1`. **Plain text** or **Sensitive**; it is intentionally visible in the app. Set it in each EAS environment where needed.                                                                              |
-| `CUSTOM_API_LOCAL_*` | Normally leave unset for cloud production builds. Use a deliberate reachable endpoint only when testing against a custom server. A developer computer's LAN address is not reachable by general testers.                                           |
+EAS **Plain text** and **Sensitive** variables can still be fetched by the CLI from the profile's EAS environment. Build-profile `env` takes precedence over duplicate EAS values. For values duplicated between GitHub and EAS (especially `API_KEY` and `RELEASE_VERSION`), **keep the copies identical**: config resolution and the local worker merge environments at different stages, so do not rely on GitHub overriding a same-named EAS value. If an EAS Secret is also needed by OTA publishing, use a suitable readable visibility there; `eas update` cannot read EAS Secret values either.
 
-`GRAVATAR_API_KEY` is not read by the current code and is not required by this workflow. The production Play-update check needs no extra Play API key. `BETA_PLAY_UPDATES_ENABLED` is unrelated to the two offered profiles.
+Leave `CUSTOM_API_LOCAL_*` unset for normal production builds. If you deliberately need them in a CI development build, explicitly map the corresponding GitHub environment variables to the compile step and use an endpoint reachable by your test devices.
 
-Your ignored local `.env` is not included in GitHub's checkout or the EAS upload. Do not commit it. Application variables belong in EAS; you do not need to duplicate them as GitHub secrets for this cloud-build workflow.
+### 6. Trigger the build and download the result
 
-**Secret visibility:** EAS variables marked **Secret** work on the remote EAS build worker, including build-only/file secrets, because this is a normal cloud build. They are not readable on GitHub for EAS CLI's local configuration-resolution phase, and they are unavailable to `eas update`. Therefore do not make package IDs, runtime/profile selectors, or variables needed for OTA config/export Secret. If a value is exclusively used by native build steps on EAS, Secret is appropriate. For example, a secret file can be available to a native EAS build, but its contents/path cannot be assumed to exist on GitHub before upload. A truly confidential server credential must not be embedded in `expo.extra` or client JavaScript.
+1. Open **Actions → Android Runner Build → Run workflow**.
+2. Select the branch/tag and `development` (APK) or `production` (AAB).
+3. Run the workflow and complete any environment approval you configured.
+4. The quality job must pass before compilation starts. Follow native build output in **Compile locally on this GitHub runner**; there is no EAS cloud build dashboard/log URL for this build.
+5. After success, click the artifact download link in the run summary or use the run's **Artifacts** section. The artifact name is `PlannerITI-android-<profile>-<run-id>-<attempt>`.
+6. Extract GitHub's ZIP. It contains `PlannerITI-development.apk` or `PlannerITI-production.aab`, `SHA256SUMS`, and `build-metadata.json` with the profile, source commit, build location, file size, and SHA-256. It contains no credential/config dump. Metadata does not claim native version details that were not read from the compiled binary.
+7. Verify the extracted file with `sha256sum --check SHA256SUMS` on Linux, or `Get-FileHash .\PlannerITI-production.aab -Algorithm SHA256` on PowerShell and compare it with `SHA256SUMS`.
 
-See [EAS environment usage and visibility](https://docs.expo.dev/eas/environment-variables/usage/).
-
-### 4. Create the Expo access token
-
-In Expo account settings, open **Access tokens** ([official token instructions](https://docs.expo.dev/accounts/programmatic-access/#personal-access-tokens)) and create a token for a user/automation account with permission to build the existing `planneriti/PlannerITI` project and use its remote credentials. A robot account is an option if available to your organization. The token is an Expo credential, not a GitHub token or a Google Play service-account key.
-
-Copy it once. Do not put it in `.env.example`, `app.config.js`, `eas.json`, repository variables, or workflow YAML. Revoke/rotate it through Expo when necessary.
-
-### 5. Add GitHub environments and the `EXPO_TOKEN` secret
-
-In the GitHub repository's **Settings → Environments**, create:
-
-- `development`
-- `production`
-
-These GitHub environments control which token/protection rules the build job receives. They do not supply application variables to EAS automatically. Where your GitHub plan supports it, optionally restrict production branches and require a reviewer. If testing the feature branch, ensure the environment's deployment-branch rules permit it; a disallowed branch cannot run the build job.
-
-Add an environment **secret** named **`EXPO_TOKEN`** to each environment, with the Expo token from step 4. You can instead add one repository Actions secret named `EXPO_TOKEN` under **Settings → Secrets and variables → Actions** for both builds; a same-named environment secret takes precedence. If your organization supplies the secret, grant this repository access. The name must be `EXPO_TOKEN`, not an Actions variable.
-
-No Google Play service-account key, Android keystore GitHub secret, Apple credential, or extra GitHub token is required to **build and download** these Android artifacts. Those would be separate concerns for a future store-submission workflow. Only dispatch trusted code: a selected workflow revision with access to a build token is trusted executable code.
-
-### 6. Trigger a build and download it
-
-1. Open **Actions → Android EAS Build → Run workflow**.
-2. Select the branch/tag containing the revision you want to build.
-3. Choose `development` for an APK or `production` for an AAB. These profile choices also select the matching EAS and GitHub environments.
-4. Leave **Clear the EAS build cache** off normally; enable it for deliberate cache troubleshooting. It does not change package/runtime/version settings.
-5. Run the workflow. Quality checks must pass before the build job starts. Complete any GitHub environment approval you configured.
-6. Watch the build step's EAS dashboard link for cloud logs/queue progress. It waits for completion rather than stopping at queue submission.
-7. On success, use the download link in the workflow summary, or the run's **Artifacts** section. The artifact is named `PlannerITI-android-<profile>-<run-id>-<attempt>`.
-8. Unzip the GitHub artifact. It contains the `.apk` or `.aab`, `SHA256SUMS`, and `build-metadata.json` (EAS build ID/link, source commit, runtime/native version, file hash/size). Checksums refer to the extracted app file, not GitHub's outer ZIP. On Linux run `sha256sum --check SHA256SUMS`; on PowerShell use `Get-FileHash .\PlannerITI-...apk -Algorithm SHA256` and compare the result with `SHA256SUMS`.
-
-You can also dispatch with GitHub CLI, after the default-branch registration in step 1:
+Alternatively, after default-branch registration:
 
 ```sh
 gh workflow run eas-build.yml --ref feature/google-play-in-app-updates -f profile=development
 gh workflow run eas-build.yml --ref feature/google-play-in-app-updates -f profile=production
 ```
 
-Install the development APK on a test device and run `pnpm dev` for its Metro server. This is a development client, not a standalone production app; its Google Play update flows are intentionally disabled. The production AAB must go through Play (Internal Testing is fine) to validate real Play updates. The workflow does not submit it or make a release live.
+Install the development APK and run `pnpm dev` for Metro. It is an Expo development client and requires a development server; native Play-update checks are intentionally disabled there. Upload the production AAB to Google Play Internal Testing to test real Play update behavior. An AAB cannot be installed directly as an APK. This workflow does not publish releases or OTA updates.
 
-## Failure behavior, cost, and limitations
+## Runner toolchain and limitations
 
-- **Checks are mandatory:** a failed format/lint/typecheck/test job prevents EAS submission. Existing lint warnings remain nonfatal; errors fail.
-- **Cloud credentials/secrets remain available:** unlike local native builds, the remote EAS worker gets its EAS environment and managed credentials. The CLI/GitHub side still cannot read EAS Secret values, as described above.
-- **There are two resource budgets:** EAS cloud quotas/credits/queue limits apply as usual. GitHub Actions minutes are also consumed while `--wait` runs. This tradeoff is necessary for this single run to return the finished artifact; fire-and-forget submission alone would not do that.
-- **Bounded execution:** the build step waits up to 210 minutes; download up to 15; the build job up to 240. Long EAS queues can exceed this. A canceled/timed-out GitHub run may leave the remote EAS build running; cancel it in Expo's dashboard or retrieve the completed build there. Do not assume canceling GitHub refunded/canceled the EAS build. A rerun submits a new build and can increment the production version code again.
-- **Concurrency:** builds of the same profile are serialized across branches, with no automatic cancellation of the running one. Development and production can run independently. GitHub concurrency normally retains only one pending run per group; another dispatch can replace an older pending run. Manual builds outside this workflow are not serialized by GitHub.
-- **Artifact checks:** only the one completed Android build returned by this invocation is accepted, with matching profile and Git revision. The downloader requires HTTPS, validates APK/AAB ZIP entries, computes SHA-256, retries transient downloads at most three times, rejects corrupt/mismatched files, and limits downloads to 2 GiB. It never sends the Expo token to the artifact host. Signed URLs/raw EAS JSON are not uploaded as artifacts.
-- **Retention:** GitHub artifacts request 14 days of retention. This value must fit your organization/repository policy; lower it if the allowed maximum is shorter. Artifact storage quotas also apply. The EAS copy follows Expo's retention/access rules. An application key embedded in an app remains recoverable from its binary, regardless of EAS/GitHub variable visibility.
-- **Scope:** this workflow builds Android only. It does not publish OTA updates, submit to stores, validate Play eligibility on a physical device, or promise that a successful build passes runtime testing. Existing `pnpm run update`/`update:ios` and iOS build commands remain separate.
+- The runner is **Ubuntu 24.04**, with Node **24.19.0** from `.node-version`, pnpm **11.1.2** from `packageManager`, EAS CLI **25.3.0**, and Temurin **Java 21**. The workflow installs Android command-line tools **23.0 / 16111833**, SDK platform **37.0**, build tools **37.0.0**, NDK **27.1.12297006**, and CMake **3.22.1** for this Expo SDK 58 / React Native 0.88 project. Update these alongside future SDK/native dependency upgrades. The SDK's platform package is named `platforms;android-37.0`.
+- Local builds **ignore EAS software/image version customization**. The workflow, not an EAS worker image or `eas.json` toolchain fields, installs the tools used here. Java/SDK/NDK setup is mandatory. Your Windows computer does not need a local Android toolchain to dispatch this Linux workflow.
+- EAS local build caching is unsupported, so the old **Clear EAS cache** input is removed. GitHub caches pnpm downloads only; native Gradle/EAS working directories are ephemeral and never uploaded/cached with credentials. Native compilation may take longer than a warm cloud build. Unrelated preinstalled hosted-runner SDKs are removed to free disk; native parallelism is bounded to two workers. If future dependencies exceed standard runner resources, change `runs-on` to a larger suitably provisioned runner.
+- **Quality gates:** frozen dependency installation, formatting, lint, TypeScript, Jest, and Python artifact/configuration tests must pass. Existing lint warnings are nonfatal; errors fail. After compilation, the local APK/AAB must exist, match the profile's archive structure, pass ZIP CRC checks, and receive a checksum before upload. These checks do not replace runtime testing or Play validation.
+- The build step is limited to **210 minutes**, and the build job to **240 minutes**. A failed/canceled local build ends on the runner; there is no remote cloud build left running. Temporary native work files, Gradle data, and downloaded signing material are cleaned on success/failure where cleanup can run; the hosted VM is discarded afterward. Native logs remain in the GitHub run. Do not enable verbose environment/config dumps when debugging secrets.
+- Same-profile runs are serialized across branches; an active run is not automatically canceled by another dispatch. Development and production can run independently. GitHub normally retains only one pending run per concurrency group; another dispatch can replace an older pending one. Manual builds elsewhere are outside this serialization.
+- **Costs:** GitHub Actions minutes and artifact storage apply. There is no EAS cloud build charge for `--local`; existing Expo services such as Updates remain governed by their own usage/plan. Artifacts request **14 days** of retention, subject to repository policy. Download releases you need to preserve before expiration; there is no EAS-hosted copy of this locally built artifact.
+- Existing `pnpm build` and `pnpm build:dev` still request cloud builds when run manually on your computer; the workflow invokes the explicit `--local` command itself. `pnpm build:dev:local` already builds locally. No package-script change is necessary for this action to compile on GitHub. iOS and OTA commands remain separate.
 
-## Validation of this implementation
-
-Workflow syntax and expressions were checked with actionlint 1.7.11. Python tests exercise APK/AAB validation, failed/wrong builds, wrong commits, missing/unsafe URLs, corrupt downloads, retries, checksum generation, and the pinned tooling/profile configuration. Existing formatting, lint, TypeScript and Jest checks are run as well. No real EAS build or authenticated GitHub Actions run was launched from the development environment: the Expo token and GitHub environment setup are intentionally left for the repository owner above.
+The workflow was checked with actionlint and the artifact helper with automated tests. A real authenticated build still requires the token, signing, and environment setup above; no native build or GitHub workflow run was launched from the development workspace.
