@@ -67,7 +67,11 @@ module.exports = () => {
         [
           'expo-build-properties',
           {
-            android: { usePrecompiledHeaders: true },
+            android: {
+              usePrecompiledHeaders: true,
+              // rnforge 1.0.2 looks this class up by name from JNI but omits @Keep/consumer rules.
+              extraProguardRules: '-keep class dev.rnforge.inappupdates.HybridInAppUpdates { *; }',
+            },
           },
         ],
       ],
