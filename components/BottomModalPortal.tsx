@@ -56,10 +56,8 @@ export function BottomModalPortal({
       backgroundColor: theme.backgroundApp,
       borderTopLeftRadius: borderRadius,
       borderTopRightRadius: borderRadius,
+      ...(maxHeight != null ? { maxHeight: maxHeight as ViewStyle['maxHeight'] } : {}),
     };
-    if (maxHeight != null) {
-      resolvedStyle.maxHeight = maxHeight as ViewStyle['maxHeight'];
-    }
     return resolvedStyle;
   }, [maxHeight, borderRadius, theme.backgroundApp]);
 

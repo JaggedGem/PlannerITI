@@ -211,7 +211,7 @@ export default function AssignmentItem({
   // Add state for description expansion
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   // Add ref to measure if description is multiline (needs expansion)
-  const descriptionRef = useRef<Text>(null);
+  const descriptionRef = useRef<any>(null);
   const [isDescriptionMultiline, setIsDescriptionMultiline] = useState(false);
 
   // Animated values for interactive feedback
@@ -395,7 +395,7 @@ export default function AssignmentItem({
   };
 
   // Use ref for options button
-  const optionsButtonRef = useRef<View | null>(null);
+  const optionsButtonRef = useRef<any>(null);
 
   // Function to open options menu using context
   const handleOpenOptions = () => {
@@ -403,15 +403,17 @@ export default function AssignmentItem({
 
     if (optionsButtonRef.current) {
       // Measure the position of the options button
-      optionsButtonRef.current.measure((x, y, width, height, pageX, pageY) => {
-        // Position the menu just below the button
-        const position = {
-          top: pageY + 45, // Position just below the button
-          right: 50, // Fixed distance from right edge
-        };
+      optionsButtonRef.current.measure(
+        (x: number, y: number, width: number, height: number, pageX: number, pageY: number) => {
+          // Position the menu just below the button
+          const position = {
+            top: pageY + 45, // Position just below the button
+            right: 50, // Fixed distance from right edge
+          };
 
-        showOptionsMenu(assignment.id, position, onDelete);
-      });
+          showOptionsMenu(assignment.id, position, onDelete);
+        },
+      );
     } else {
       // Fallback position if ref isn't available
       const position = {

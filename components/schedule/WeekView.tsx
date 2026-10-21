@@ -501,7 +501,7 @@ export default function WeekView() {
   });
   const { t, formatDate, formatHour } = useTranslation();
   const currentTime = useTimeUpdate();
-  const verticalScrollRef = useRef<ScrollView>(null);
+  const verticalScrollRef = useRef<any>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [, setSlideDirection] = useState<'left' | 'right' | null>(null);
   const fadeAnim = useSharedValue(1);

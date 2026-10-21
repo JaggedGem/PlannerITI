@@ -1421,7 +1421,7 @@ const GradeCalculatorModal = ({
   const [calculatedGrades, setCalculatedGrades] = useState<number[]>([]);
   const [hasCalculated, setHasCalculated] = useState(false);
   const [isAnnualCalculation, setIsAnnualCalculation] = useState(false);
-  const scrollViewRef = useRef<ScrollView>(null);
+  const scrollViewRef = useRef<any>(null);
 
   // Convert string grades to numbers
   const getNumericGrades = (subject: GradeSubject): number[] => {

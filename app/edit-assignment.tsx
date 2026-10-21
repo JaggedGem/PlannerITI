@@ -899,7 +899,7 @@ export default function EditAssignmentScreen() {
   } | null>(null);
 
   // Refs for inputs
-  const titleInputRef = useRef<TextInput>(null);
+  const titleInputRef = useRef<any>(null);
 
   // Translation hook
   const { t, currentLanguage, formatDate: formatDateFromHook } = useTranslation();

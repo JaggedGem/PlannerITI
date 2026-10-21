@@ -5,7 +5,9 @@ import { Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { PlatformPressable } from 'expo-router/react-navigation';
 
-type HapticTabProps = ComponentProps<typeof PlatformPressable>;
+type HapticTabProps = ComponentProps<typeof PlatformPressable> & {
+  children?: ComponentProps<typeof PlatformPressable>['children'];
+};
 
 const TRANSPARENT_RIPPLE = 'transparent';
 

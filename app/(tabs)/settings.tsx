@@ -198,8 +198,8 @@ const TimePicker = ({
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
   const [localValue, setLocalValue] = useState(value);
   const [period, setPeriod] = useState(value.getHours() >= 12 ? 'PM' : 'AM');
-  const hoursRef = useRef<ScrollView>(null);
-  const minutesRef = useRef<ScrollView>(null);
+  const hoursRef = useRef<any>(null);
+  const minutesRef = useRef<any>(null);
   const itemHeight = 56;
   const visibleItems = 5;
   const [, setIsScrolling] = useState(false);

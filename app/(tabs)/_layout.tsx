@@ -12,6 +12,10 @@ import { HapticTab } from '@/components/HapticTab';
 import { Colors } from '@/constants/Colors';
 import { useTranslation } from '@/hooks/useTranslation';
 
+export const unstable_settings = {
+  anchor: 'schedule',
+};
+
 // Custom tab bar label component with animation
 interface AnimatedTabBarLabelProps {
   focused: boolean;
@@ -102,18 +106,24 @@ export default function TabLayout() {
   const theme = Colors.dark;
   const backgroundColor = theme.backgroundApp;
 
+  type TabBarLabelProps = {
+    focused: boolean;
+    color: ColorValue;
+    position: 'below-icon' | 'beside-icon';
+    children: string;
+  };
+
   return (
     <View style={[styles.container, { backgroundColor }]}>
       {/* Full-screen background that extends under the tab bar */}
       <View style={[styles.fullScreenBackground, { backgroundColor }]} />
 
       <Tabs
-        initialRouteName="schedule"
         screenOptions={{
           tabBarActiveTintColor: theme.tabIconSelected,
           tabBarInactiveTintColor: theme.tabIconDefault,
           headerShown: false,
-          tabBarButton: HapticTab,
+          tabBarButton: (props: Parameters<typeof HapticTab>[0]) => <HapticTab {...props} />,
           tabBarStyle: {
             height: 70 + bottom,
             paddingBottom: Platform.OS === 'ios' ? 20 + bottom : 10 + bottom,
@@ -143,7 +153,7 @@ export default function TabLayout() {
             justifyContent: 'center',
           },
           tabBarLabelPosition: 'below-icon',
-          tabBarLabel: ({ focused, color, children }) => (
+          tabBarLabel: ({ focused, color, children, position }: TabBarLabelProps) => (
             <AnimatedTabBarLabel focused={focused} color={color}>
               {children}
             </AnimatedTabBarLabel>
