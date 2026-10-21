@@ -268,12 +268,17 @@ The app uses `app.config.js` for configuration. Key settings:
 
 - **App Name**: PlannerITI
 - **Slug**: planneriti
-- **Version**: 1.6.0
+- **Version**: 1.6.1
 - **Orientation**: Portrait (locked)
 - **Splash Screen**: Custom splash with icon
 - **Theme**: Automatic light/dark
 - **Permissions**: Notifications
 - **Runtime Version**: Configurable via `RUNTIME_VERSION`
+
+See [App updates](docs/app-updates.md) for Google Play update policy, OTA coordination, runtime boundaries, build requirements, and the physical-device test plan.
+
+For manual GitHub builds with downloadable development APKs or production AABs, follow the complete [GitHub runner build setup guide](docs/github-eas-builds.md).
+
 - **New Architecture**: Enabled
 
 ### EAS Configuration

@@ -14,6 +14,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
 
 import LoginNotification from '@/components/LoginNotification';
+import NativeUpdateBanner from '@/components/NativeUpdateBanner';
 import { AuthProvider } from '@/components/auth/AuthContext';
 import { Colors } from '@/constants/Colors';
 import { gradesDataService } from '@/services/gradesService';
@@ -161,21 +162,13 @@ export default function RootLayout() {
 
     let isMounted = true;
 
-    const runStartupOtaFlow = async () => {
+    const detachUpdates = updateService.attachUpdateLifecycle();
+
+    const runStartupUpdates = async () => {
       try {
-        const didTriggerReload = await updateService.applyPreparedOtaUpdateOnLaunch();
-
-        // If reload was triggered, this JS runtime will be replaced immediately.
-        if (didTriggerReload) {
-          return;
-        }
-
-        // Prepare the next OTA update without blocking app startup.
-        updateService.prepareOtaUpdateForNextLaunch().catch((otaError) => {
-          console.error('Error staging OTA update for next launch:', otaError);
-        });
-      } catch (otaError) {
-        console.error('Error during OTA startup flow:', otaError);
+        await updateService.initializeUpdates();
+      } catch (updateError) {
+        console.error('Error during update startup flow:', updateError);
       } finally {
         if (isMounted) {
           setStartupReady(true);
@@ -183,10 +176,11 @@ export default function RootLayout() {
       }
     };
 
-    runStartupOtaFlow();
+    void runStartupUpdates();
 
     return () => {
       isMounted = false;
+      detachUpdates();
     };
   }, [loaded]);
 
@@ -194,6 +188,13 @@ export default function RootLayout() {
     if (loaded && startupReady) {
       SplashScreen.hideAsync();
     }
+  }, [loaded, startupReady]);
+
+  useEffect(() => {
+    if (!loaded || !startupReady) return;
+    void updateService
+      .enableNativeUpdatePrompts()
+      .catch((updateError) => console.warn('Could not show Play update consent:', updateError));
   }, [loaded, startupReady]);
 
   if (!loaded || !startupReady) {
@@ -261,6 +262,7 @@ function RootLayoutNav() {
               />
             </Stack>
             <LoginNotification />
+            <NativeUpdateBanner />
           </AuthProvider>
         </ThemeProvider>
       </BottomSheetModalProvider>

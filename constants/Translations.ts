@@ -523,6 +523,17 @@ type TranslationType = {
       };
     };
   };
+  nativeUpdate: {
+    recommended: string;
+    ready: string;
+    recovery: string;
+    failed: string;
+    update: string;
+    install: string;
+    openStore: string;
+    retry: string;
+    later: string;
+  };
   loginPromo: {
     body: string;
     stayConnected: string;
@@ -1098,6 +1109,17 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
             'If you have any questions about this policy, please contact us at <link>privacy@p.jagged.me</link>.',
         },
       },
+    },
+    nativeUpdate: {
+      recommended: 'A new app update is available. Updating is highly recommended.',
+      ready: 'Your update is ready. Install and restart when convenient.',
+      recovery: 'Finish your app update in Google Play.',
+      failed: 'The update could not finish. You can try again later.',
+      update: 'Update',
+      install: 'Install and restart',
+      openStore: 'Open Google Play',
+      retry: 'Try again',
+      later: 'Later',
     },
     loginPromo: {
       body: 'Sign in to unlock the full potential of your planner with cross-device sync and premium features.',
@@ -1681,6 +1703,17 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         },
       },
     },
+    nativeUpdate: {
+      recommended: 'Este disponibilă o actualizare. Actualizarea este recomandată.',
+      ready: 'Actualizarea este gata. Instalează și repornește când îți este convenabil.',
+      recovery: 'Finalizează actualizarea aplicației în Google Play.',
+      failed: 'Actualizarea nu s-a finalizat. Poți încerca din nou mai târziu.',
+      update: 'Actualizează',
+      install: 'Instalează și repornește',
+      openStore: 'Deschide Google Play',
+      retry: 'Încearcă din nou',
+      later: 'Mai târziu',
+    },
     loginPromo: {
       body: 'Conectează-te pentru a debloca întregul potențial al planificatorului tău cu sincronizare între dispozitive și funcții premium.',
       stayConnected: 'Rămâi Conectat',
@@ -2259,6 +2292,17 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
             'Если у вас есть вопросы об этой политике, пожалуйста, свяжитесь с нами по адресу <link>privacy@p.jagged.me</link>.',
         },
       },
+    },
+    nativeUpdate: {
+      recommended: 'Доступно обновление приложения. Рекомендуем обновить его.',
+      ready: 'Обновление готово. Установите и перезапустите приложение в удобное время.',
+      recovery: 'Завершите обновление приложения в Google Play.',
+      failed: 'Не удалось завершить обновление. Попробуйте позже.',
+      update: 'Обновить',
+      install: 'Установить и перезапустить',
+      openStore: 'Открыть Google Play',
+      retry: 'Повторить',
+      later: 'Позже',
     },
     loginPromo: {
       body: 'Войдите, чтобы разблокировать весь потенциал вашего планировщика с синхронизацией между устройствами и премиум-функциями.',

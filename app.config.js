@@ -3,6 +3,7 @@ import 'dotenv/config';
 // Read environment variables set in eas.json
 module.exports = () => {
   const appVariant = process.env.APP_VARIANT || 'production';
+  const { version: appVersion } = require('./package.json');
   const androidPackage = process.env.ANDROID_PACKAGE || 'site.jagged.planneriti';
   const iosBundleIdentifier = process.env.IOS_BUNDLE_IDENTIFIER || 'site.jagged.planneriti';
 
@@ -24,7 +25,7 @@ module.exports = () => {
     expo: {
       name: appName,
       slug: 'PlannerITI',
-      version: '1.6.0',
+      version: appVersion,
       orientation: 'portrait',
       icon: 'assets/images/ios-light.png',
       scheme: 'planneriti',
@@ -66,7 +67,11 @@ module.exports = () => {
         [
           'expo-build-properties',
           {
-            android: { usePrecompiledHeaders: true },
+            android: {
+              usePrecompiledHeaders: true,
+              // rnforge 1.0.2 looks this class up by name from JNI but omits @Keep/consumer rules.
+              extraProguardRules: '-keep class dev.rnforge.inappupdates.HybridInAppUpdates { *; }',
+            },
           },
         ],
       ],
@@ -81,15 +86,21 @@ module.exports = () => {
           projectId: 'fe01b043-f283-48db-a683-3c5f23546a96',
         },
         environment: appVariant,
+        // Displayed release can advance through OTA without changing the native version/runtime.
+        releaseVersion: process.env.RELEASE_VERSION?.trim() || appVersion,
+        // Beta has a different package and needs its own Play listing/testing setup.
+        betaPlayUpdatesEnabled: process.env.BETA_PLAY_UPDATES_ENABLED === 'true',
         apiKey: process.env.API_KEY || '',
         customApiLocalUrl: process.env.CUSTOM_API_LOCAL_URL || '',
         customApiLocalHost: process.env.CUSTOM_API_LOCAL_HOST || '',
         customApiLocalPort: process.env.CUSTOM_API_LOCAL_PORT || '5000',
-        releaseVersion: process.env.RELEASE_VERSION || '1.6.0',
       },
       owner: 'planneriti',
-      runtimeVersion: process.env.RUNTIME_VERSION || '1.6.0',
+      // A native release starts a new runtime; compatible OTAs keep its runtime unchanged.
+      runtimeVersion: process.env.RUNTIME_VERSION || appVersion,
       updates: {
+        // The JS coordinator owns checks/downloads; Expo still selects cached updates on cold start.
+        checkAutomatically: 'NEVER',
         url: 'https://u.expo.dev/fe01b043-f283-48db-a683-3c5f23546a96',
       },
     },
