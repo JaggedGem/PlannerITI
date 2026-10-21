@@ -6,218 +6,143 @@ import * as Updates from 'expo-updates';
 
 const OTA_PENDING_UPDATE_KEY = '@ota_pending_update';
 
+type DisruptiveOperation = 'ota-reload' | 'native-flow' | 'native-install';
+
 interface PendingOtaUpdateData {
-  updateId: string | null;
+  updateId: string;
   fetchedAt: string;
+  runtimeVersion: string;
+  applicationId: string;
+  nativeBuildVersion: string;
 }
 
-class UpdateService {
-  private currentChannel: 'beta' | 'production' | 'development';
-  private currentVersion: string;
-  private configuredVariant: string;
-  private isExpoGo: boolean;
+/** One shared gate for operations which can replace or interrupt this JS runtime. */
+export class UpdateService {
+  private disruptiveOperation: DisruptiveOperation | null = null;
+  private otaPreparation: Promise<boolean> | null = null;
+  private otaApplication: Promise<boolean> | null = null;
+  private readonly isExpoGo = Constants.executionEnvironment === 'storeClient';
 
-  /**
-   * Infer release track from semantic prerelease tags (e.g. 1.6.0-beta.1).
-   */
-  private inferTrackFromVersion(version: string | null | undefined): 'beta' | null {
-    if (!version) {
-      return null;
-    }
-
-    const normalized = version.trim().toLowerCase();
-    if (/[-.](beta|alpha|rc|preview|pre)\b/.test(normalized)) {
-      return 'beta';
-    }
-
-    return null;
+  private acquireOperation(operation: DisruptiveOperation): boolean {
+    if (this.disruptiveOperation) return false;
+    this.disruptiveOperation = operation;
+    return true;
   }
 
-  /**
-   * Resolve the intended release track while running in development channel.
-   */
-  private getDevelopmentTrack(): 'beta' | 'production' | 'development' {
-    const versionTrack = this.inferTrackFromVersion(this.currentVersion);
-    if (versionTrack) {
-      return versionTrack;
-    }
-
-    const variantTrack = this.normalizeChannel(this.configuredVariant);
-    if (variantTrack) {
-      return variantTrack;
-    }
-
-    return 'development';
+  private releaseOperation(operation: DisruptiveOperation): void {
+    if (this.disruptiveOperation === operation) this.disruptiveOperation = null;
   }
 
-  /**
-   * Convert arbitrary channel/variant values to known app channels.
-   */
-  private normalizeChannel(
-    value: string | null | undefined,
-  ): 'beta' | 'production' | 'development' | null {
-    if (!value) {
-      return null;
-    }
-
-    const normalized = value.trim().toLowerCase();
-
-    if (normalized === 'beta' || normalized.includes('beta') || normalized.includes('preview')) {
-      return 'beta';
-    }
-
-    if (
-      normalized === 'production' ||
-      normalized === 'prod' ||
-      normalized.includes('production') ||
-      normalized.includes('release')
-    ) {
-      return 'production';
-    }
-
-    if (
-      normalized === 'development' ||
-      normalized === 'dev' ||
-      normalized.includes('development')
-    ) {
-      return 'development';
-    }
-
-    return null;
-  }
-
-  constructor() {
-    // Check if we're running in Expo Go (not a standalone build)
-    this.isExpoGo = Constants.executionEnvironment === 'storeClient';
-
-    // Get variant from app.config.js (expo.extra.environment)
-    this.configuredVariant = Constants.expoConfig?.extra?.environment || 'production';
-
-    // Resolve release channel from multiple runtime sources.
-    const channelFromUpdates = this.normalizeChannel(Updates.channel);
-    const channelFromConfig = this.normalizeChannel(this.configuredVariant);
-
-    // If running in Expo Go, always use development channel
-    if (this.isExpoGo) {
-      this.currentChannel = 'development';
-      this.currentVersion =
-        Constants.expoConfig?.extra?.releaseVersion ||
-        Application.nativeApplicationVersion ||
-        '1.6.0';
-      return;
-    }
-
-    // For standalone builds, trust expo-updates channel first, then app variant.
-    this.currentChannel = channelFromUpdates || channelFromConfig || 'development';
-
-    // Get current app version from native build
-    this.currentVersion =
-      Constants.expoConfig?.extra?.releaseVersion ||
-      Application.nativeApplicationVersion ||
-      '1.6.0';
-  }
-
-  /**
-   * Get current app version
-   */
+  /** Installed binary version; the Expo Go host version is not the app's version. */
   getCurrentVersion(): string {
-    return this.currentVersion;
+    return (
+      (!this.isExpoGo && Application.nativeApplicationVersion) ||
+      Constants.expoConfig?.version ||
+      'N/A'
+    );
   }
 
-  /**
-   * Returns short OTA identifier (first 8 chars), preferring updateGroup from manifest metadata.
-   */
   getCurrentOtaVersionShort(): string {
-    const manifestLike = Updates.manifest as any;
-    const updateGroupId = manifestLike?.metadata?.updateGroup;
-    if (typeof updateGroupId === 'string' && updateGroupId.length >= 8) {
-      return updateGroupId.slice(0, 8);
-    }
-
-    const updateId = Updates.updateId;
-    if (typeof updateId === 'string' && updateId.length >= 8) {
-      return updateId.slice(0, 8);
-    }
-
-    return 'N/A';
+    const manifest = Updates.manifest;
+    const metadata = 'metadata' in manifest ? manifest.metadata : undefined;
+    const updateGroup = metadata && 'updateGroup' in metadata ? metadata.updateGroup : undefined;
+    if (typeof updateGroup === 'string' && updateGroup.length >= 8) return updateGroup.slice(0, 8);
+    return Updates.updateId?.slice(0, 8) || 'N/A';
   }
 
-  /**
-   * Expo OTA is only available in native builds (not Expo Go).
-   */
+  /** EAS channels are build metadata, independent of Play testing tracks. */
+  getCurrentChannel(): string {
+    if (this.isExpoGo) return 'development';
+    const variant: unknown = Constants.expoConfig?.extra?.environment;
+    return Updates.channel || (typeof variant === 'string' ? variant : 'development');
+  }
+
+  getChannelDisplay(): string {
+    const variant: unknown = Constants.expoConfig?.extra?.environment;
+    if (this.isExpoGo && (variant === 'beta' || variant === 'production')) {
+      return `development (${variant})`;
+    }
+    return this.getCurrentChannel();
+  }
+
   private canUseOtaUpdates(): boolean {
     return !this.isExpoGo && !__DEV__ && Updates.isEnabled;
   }
 
-  /**
-   * Persist OTA metadata so we can apply it on next cold launch.
-   */
-  private async markOtaPending(updateId: string | null): Promise<void> {
+  private async markOtaPending(updateId: string): Promise<void> {
+    const { runtimeVersion } = Updates;
+    const { applicationId, nativeBuildVersion } = Application;
+    // Missing build identity cannot safely authorize a later reload.
+    if (!runtimeVersion || !applicationId || !nativeBuildVersion) return;
     try {
       const payload: PendingOtaUpdateData = {
         updateId,
         fetchedAt: new Date().toISOString(),
+        runtimeVersion,
+        applicationId,
+        nativeBuildVersion,
       };
-
       await AsyncStorage.setItem(OTA_PENDING_UPDATE_KEY, JSON.stringify(payload));
     } catch (error) {
       console.error('Error saving pending OTA update:', error);
     }
   }
 
-  /**
-   * Read pending OTA metadata from storage.
-   */
   private async getPendingOta(): Promise<PendingOtaUpdateData | null> {
     try {
       const raw = await AsyncStorage.getItem(OTA_PENDING_UPDATE_KEY);
-      if (!raw) {
-        return null;
+      if (!raw) return null;
+      const parsed: unknown = JSON.parse(raw);
+      if (
+        typeof parsed === 'object' &&
+        parsed !== null &&
+        'updateId' in parsed &&
+        typeof parsed.updateId === 'string' &&
+        'fetchedAt' in parsed &&
+        typeof parsed.fetchedAt === 'string' &&
+        'runtimeVersion' in parsed &&
+        parsed.runtimeVersion === Updates.runtimeVersion &&
+        'applicationId' in parsed &&
+        parsed.applicationId === Application.applicationId &&
+        'nativeBuildVersion' in parsed &&
+        parsed.nativeBuildVersion === Application.nativeBuildVersion &&
+        parsed.updateId !== Updates.updateId
+      ) {
+        return parsed as PendingOtaUpdateData;
       }
-
-      const parsed = JSON.parse(raw) as PendingOtaUpdateData;
-      if (!parsed?.fetchedAt) {
-        return null;
-      }
-
-      return {
-        updateId: parsed.updateId || null,
-        fetchedAt: parsed.fetchedAt,
-      };
+      // Legacy, already applied, or different-binary markers cannot prove cache compatibility.
+      // Expo's selection policy remains authoritative; staging can revalidate on this build.
+      await this.clearPendingOta();
     } catch (error) {
       console.error('Error reading pending OTA update:', error);
-      return null;
+      await this.clearPendingOta();
     }
+    return null;
   }
 
-  /**
-   * Clear pending OTA metadata.
-   */
   private async clearPendingOta(): Promise<void> {
     try {
       await AsyncStorage.removeItem(OTA_PENDING_UPDATE_KEY);
     } catch (error) {
       console.error('Error clearing pending OTA update:', error);
+      throw error;
     }
   }
 
-  /**
-   * Fetch OTA update in background and stage it for next launch.
-   */
-  async prepareOtaUpdateForNextLaunch(): Promise<boolean> {
-    if (!this.canUseOtaUpdates()) {
-      return false;
-    }
+  /** Stage only: Expo also applies compatible downloaded updates itself on cold launch. */
+  prepareOtaUpdateForNextLaunch(): Promise<boolean> {
+    if (!this.canUseOtaUpdates()) return Promise.resolve(false);
+    this.otaPreparation ??= this.prepareOta();
+    return this.otaPreparation;
+  }
 
+  private async prepareOta(): Promise<boolean> {
     try {
-      const updateCheck = await Updates.checkForUpdateAsync();
-      if (!updateCheck.isAvailable) {
-        return false;
-      }
-
-      const fetchResult = await Updates.fetchUpdateAsync();
-      // Mark as pending even when the update was already cached by native code.
-      await this.markOtaPending(fetchResult.manifest?.id ?? null);
+      const check = await Updates.checkForUpdateAsync();
+      if (!check.isAvailable) return false;
+      const result = await Updates.fetchUpdateAsync();
+      if (!result.manifest?.id) return false;
+      await this.markOtaPending(result.manifest.id);
       return true;
     } catch (error) {
       console.error('Error preparing OTA update:', error);
@@ -225,51 +150,31 @@ class UpdateService {
     }
   }
 
-  /**
-   * Apply previously staged OTA update at app startup.
-   * Returns true if a reload was triggered.
-   */
-  async applyPreparedOtaUpdateOnLaunch(): Promise<boolean> {
-    if (!this.canUseOtaUpdates()) {
-      return false;
-    }
+  /** Apply a previously staged OTA once per JS lifetime, only when the gate is free. */
+  applyPreparedOtaUpdateOnLaunch(): Promise<boolean> {
+    if (!this.canUseOtaUpdates()) return Promise.resolve(false);
+    this.otaApplication ??= this.applyOta();
+    return this.otaApplication;
+  }
 
-    const pending = await this.getPendingOta();
-    if (!pending) {
-      return false;
-    }
-
+  private async applyOta(): Promise<boolean> {
+    if (!this.acquireOperation('ota-reload')) return false;
     try {
-      // Clear first to avoid reload loops if reload fails.
+      const pending = await this.getPendingOta();
+      if (!pending) {
+        this.releaseOperation('ota-reload');
+        return false;
+      }
       await this.clearPendingOta();
       await Updates.reloadAsync();
+      // Keep the gate closed: reloadAsync resolves before the runtime is replaced.
       return true;
     } catch (error) {
       console.error('Error applying staged OTA update:', error);
-      await this.markOtaPending(pending.updateId);
+      this.releaseOperation('ota-reload');
+      // Do not recreate a marker that can cause a reload loop on every launch.
       return false;
     }
-  }
-
-  /**
-   * Get current channel.
-   */
-  getCurrentChannel(): string {
-    return this.currentChannel;
-  }
-
-  /**
-   * Get channel display text (shows configured variant when in Expo Go).
-   */
-  getChannelDisplay(): string {
-    if (this.isExpoGo) {
-      const developmentTrack = this.getDevelopmentTrack();
-      if (developmentTrack !== 'development') {
-        return `development (${developmentTrack})`;
-      }
-    }
-
-    return this.currentChannel;
   }
 }
 
