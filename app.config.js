@@ -3,7 +3,7 @@ import 'dotenv/config';
 // Read environment variables set in eas.json
 module.exports = () => {
   const appVariant = process.env.APP_VARIANT || 'production';
-  const appVersion = '1.6.0';
+  const { version: appVersion } = require('./package.json');
   const androidPackage = process.env.ANDROID_PACKAGE || 'site.jagged.planneriti';
   const iosBundleIdentifier = process.env.IOS_BUNDLE_IDENTIFIER || 'site.jagged.planneriti';
 
@@ -96,8 +96,8 @@ module.exports = () => {
         customApiLocalPort: process.env.CUSTOM_API_LOCAL_PORT || '5000',
       },
       owner: 'planneriti',
-      // Native dependencies changed: keep these builds isolated from pre-Nitro OTAs.
-      runtimeVersion: process.env.RUNTIME_VERSION || '1.6.0-native-updates.1',
+      // A native release starts a new runtime; compatible OTAs keep its runtime unchanged.
+      runtimeVersion: process.env.RUNTIME_VERSION || appVersion,
       updates: {
         // The JS coordinator owns checks/downloads; Expo still selects cached updates on cold start.
         checkAutomatically: 'NEVER',

@@ -19,7 +19,7 @@ The profile dropdown also selects the matching **GitHub environment**. Output fo
 
 ### 1. Enable the workflow and GitHub Actions
 
-GitHub requires a `workflow_dispatch` workflow to exist on the repository's **default branch** before manual dispatch is available. These changes are on `feature/google-play-in-app-updates`. Merge the reviewed workflow, reusable `ci.yml`, scripts, and configuration into the default branch when ready. After registration, you can choose this feature branch or another trusted revision in **Run workflow**. `gh workflow run --ref` does not bypass the registration requirement.
+GitHub requires a `workflow_dispatch` workflow to exist on the repository's **default branch** before manual dispatch is available. The release merges the workflow, reusable `ci.yml`, scripts, and configuration into `main`. Choose `main` for the production release, or another trusted revision in **Run workflow**. `gh workflow run --ref` does not bypass the registration requirement.
 
 In **Settings → Actions → General**, enable Actions. If using an action allowlist, allow `actions/checkout`, `actions/setup-node`, `actions/setup-java`, `actions/upload-artifact`, `pnpm/action-setup`, `android-actions/setup-android`, and `expo/expo-github-action`. All are pinned to commit SHAs. The workflow requires only `contents: read` from GitHub's automatic token; no repository-write permission, OIDC setup, or extra GitHub token is needed.
 
@@ -63,7 +63,7 @@ Open **Settings → Environments** and create **`development`** and **`productio
 | -------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Secret   | `EXPO_TOKEN`      | The Expo access token from step 3.                                                                                                                                  |
 | Secret   | `API_KEY`         | The API key used by the app for that environment. Required: CI fails early if absent.                                                                               |
-| Variable | `RELEASE_VERSION` | Optional displayed version, for example `1.6.1`. If omitted, EAS-readable configuration or the app's `1.6.0` fallback applies. It does not change the native build. |
+| Variable | `RELEASE_VERSION` | Optional displayed version, for example `1.6.1`. If omitted, EAS-readable configuration or the app's `1.6.1` fallback applies. It does not change the native build. |
 
 You can use a repository secret for `EXPO_TOKEN` if both environments use the same Expo identity. A same-named environment secret takes precedence. Keep `API_KEY` environment-specific if development and production use different keys. Organization secrets must explicitly grant this repository access.
 
@@ -91,7 +91,7 @@ The GitHub checkout has **none of your ignored local `.env` files**. Do not comm
 | `APP_VARIANT`           | `development`                | `production`             |
 | `ANDROID_PACKAGE`       | `site.jagged.planneriti.dev` | `site.jagged.planneriti` |
 | `IOS_BUNDLE_IDENTIFIER` | `site.jagged.planneriti.dev` | `site.jagged.planneriti` |
-| `RUNTIME_VERSION`       | `1.6.0-dev.2`                | `1.6.0-native-updates.1` |
+| `RUNTIME_VERSION`       | `1.6.1-dev.1`                | `1.6.1`                  |
 
 To change a native runtime, edit the selected profile's committed `RUNTIME_VERSION`. Editing only a local `.env` will not change the profile value. In Expo's environment settings, also add `RUNTIME_VERSION` with **Plain text** visibility to each matching EAS environment (`development`, `preview` for beta, and `production`), using the same value as its build profile. This supplies the runtime for OTA publishing: `eas update` selects an environment but does not read the build profile's `env` block. Keep `RELEASE_VERSION` aligned in the EAS environment when you want the same displayed version in OTA updates.
 
@@ -114,8 +114,8 @@ Leave `CUSTOM_API_LOCAL_*` unset for normal production builds. If you deliberate
 Alternatively, after default-branch registration:
 
 ```sh
-gh workflow run eas-build.yml --ref feature/google-play-in-app-updates -f profile=development
-gh workflow run eas-build.yml --ref feature/google-play-in-app-updates -f profile=production
+gh workflow run eas-build.yml --ref main -f profile=development
+gh workflow run eas-build.yml --ref main -f profile=production
 ```
 
 Install the development APK and run `pnpm dev` for Metro. It is an Expo development client and requires a development server; native Play-update checks are intentionally disabled there. Upload the production AAB to Google Play Internal Testing to test real Play update behavior. An AAB cannot be installed directly as an APK. This workflow does not publish releases or OTA updates.
