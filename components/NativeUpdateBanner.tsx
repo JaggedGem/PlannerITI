@@ -69,18 +69,20 @@ export default function NativeUpdateBanner() {
         >
           <Text style={{ color: theme.subduedText }}>{copy.later}</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          accessibilityRole="button"
-          onPress={handleAction}
-          disabled={state.busy}
-          style={styles.action}
-        >
-          {state.busy ? (
-            <ActivityIndicator color={theme.primaryStrong} />
-          ) : (
-            <Text style={[styles.actionText, { color: theme.accentBlue }]}>{label}</Text>
-          )}
-        </TouchableOpacity>
+        {(state.phase !== 'recovery' || state.storeFallback) && (
+          <TouchableOpacity
+            accessibilityRole="button"
+            onPress={handleAction}
+            disabled={state.busy}
+            style={styles.action}
+          >
+            {state.busy ? (
+              <ActivityIndicator color={theme.primaryStrong} />
+            ) : (
+              <Text style={[styles.actionText, { color: theme.accentBlue }]}>{label}</Text>
+            )}
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );

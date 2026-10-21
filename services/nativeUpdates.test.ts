@@ -478,3 +478,13 @@ test('download failures release the install gate and have no automatic retry loo
   expect(mockNative.startFlexibleUpdate).not.toHaveBeenCalled();
   detach();
 });
+
+test('does not offer an unusable update action when Play allows no flow or store fallback', async () => {
+  mockNative.getUpdateStatus.mockResolvedValue({
+    ...available({ immediate: false, flexible: false }),
+    capabilities: { ...status().capabilities, storePage: false },
+  });
+  const service = new UpdateService();
+  expect((await service.checkForNativeUpdate()).kind).toBe('available');
+  expect(service.getNativeUpdateSnapshot().phase).toBe('idle');
+});

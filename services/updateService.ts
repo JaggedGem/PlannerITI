@@ -162,18 +162,19 @@ export class UpdateService {
           });
         } else if (result.kind !== 'failed') {
           if (!this.snapshot.busy) this.releaseOperation('native-install');
+          const canStart =
+            result.kind === 'available' &&
+            (result.flexibleAllowed || (this.policy === 'immediate' && result.immediateAllowed));
+          const storeFallback =
+            result.kind === 'available' && !canStart && this.native.canOpenStore(result.status);
           const phase =
-            result.kind === 'available'
+            result.kind === 'available' && (canStart || storeFallback)
               ? 'available'
               : result.kind === 'ready'
                 ? 'ready'
                 : result.kind === 'downloading'
                   ? 'downloading'
                   : 'idle';
-          const storeFallback =
-            result.kind === 'available' &&
-            !(result.flexibleAllowed || (this.policy === 'immediate' && result.immediateAllowed)) &&
-            this.native.canOpenStore(result.status);
           this.publish({
             phase,
             storeFallback,
