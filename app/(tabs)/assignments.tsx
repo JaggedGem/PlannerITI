@@ -107,7 +107,6 @@ const groupAssignmentsByCourse = (assignments: Assignment[]): { [key: string]: A
 const EmptyState = memo(({ t }: { t: any }) => (
   <Animated.View style={styles.emptyContainer} entering={FadeInDown.duration(150)}>
     <Text style={styles.emptyText}>{t('assignments').empty}</Text>
-    <Text style={styles.emptySubtext}>{t('assignments').addNew}</Text>
   </Animated.View>
 ));
 EmptyState.displayName = 'EmptyState';
