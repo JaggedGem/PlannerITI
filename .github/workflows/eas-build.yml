@@ -1,5 +1,5 @@
-name: Android EAS Build
-run-name: Android ${{ inputs.profile }} build · ${{ github.ref_name }}
+name: Android Runner Build
+run-name: Android ${{ inputs.profile }} runner build · ${{ github.ref_name }}
 
 on:
   workflow_dispatch:
@@ -12,11 +12,6 @@ on:
         options:
           - development
           - production
-      clear_cache:
-        description: Clear the EAS build cache
-        required: false
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -38,28 +33,34 @@ jobs:
       profile: ${{ inputs.profile }}
 
   build:
-    name: Build and download Android ${{ inputs.profile }}
+    name: Compile Android ${{ inputs.profile }} on runner
     needs: quality
     runs-on: ubuntu-24.04
     timeout-minutes: 240
     environment: ${{ inputs.profile }}
     env:
       BUILD_PROFILE: ${{ inputs.profile }}
-      CLEAR_CACHE: ${{ inputs.clear_cache }}
     steps:
       - name: Checkout selected revision
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
 
-      - name: Check Expo token is configured
+      - name: Check required secrets
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          API_KEY: ${{ secrets.API_KEY }}
         run: |
-          if [ -z "$EXPO_TOKEN" ]; then
-            echo "::error::Configure the EXPO_TOKEN GitHub secret. See docs/github-eas-builds.md."
-            exit 1
-          fi
+          for name in EXPO_TOKEN API_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Configure the $name GitHub secret. See docs/github-eas-builds.md."
+              exit 1
+            fi
+          done
+
+      - name: Prepare artifact destination from eas.json
+        id: destination
+        run: python3 scripts/ci/local_build_artifact.py --profile "$BUILD_PROFILE" --prepare
 
       - name: Set up pnpm from packageManager
         uses: pnpm/action-setup@b307475762933b98ed359c036b0e51f26b63b74b # v5.0.0
@@ -76,6 +77,26 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Make room for native compilation
+        run: |
+          # These unrelated SDKs are preinstalled on the disposable hosted runner.
+          sudo rm -rf -- /usr/share/dotnet /opt/ghc /usr/local/.ghcup
+          df -h "$RUNNER_TEMP"
+
+      - name: Set up Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # Local EAS builds ignore eas.json toolchain/image version settings.
+      - name: Set up Android SDK, NDK and CMake
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
+        with:
+          cmdline-tools-version: '16111833' # Android command-line tools 23.0
+          packages: 'platform-tools platforms;android-37.0 build-tools;37.0.0 ndk;27.1.12297006 cmake;3.22.1'
+          log-accepted-android-sdk-licenses: false
+
       # Install the official CLI without exporting a token to all subsequent steps.
       - name: Set up EAS CLI
         uses: expo/expo-github-action@9da89d3617bb88139671bad31b09c65714c2ee06 # v9
@@ -84,29 +105,26 @@ jobs:
           packager: npm
           patch-watchers: false
 
-      - name: Build on EAS and wait for completion
+      - name: Compile locally on this GitHub runner
         timeout-minutes: 210
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          API_KEY: ${{ secrets.API_KEY }}
+          RELEASE_VERSION: ${{ vars.RELEASE_VERSION }}
+          ARTIFACT_PATH: ${{ steps.destination.outputs.artifact-path }}
+          EAS_LOCAL_BUILD_WORKINGDIR: ${{ runner.temp }}/eas-local-build
+          GRADLE_USER_HOME: ${{ runner.temp }}/gradle
+          # Bound native compilation parallelism on standard GitHub runners.
+          GRADLE_OPTS: -Dorg.gradle.workers.max=2 -Dorg.gradle.parallel=false
+          CMAKE_BUILD_PARALLEL_LEVEL: 2
         run: |
-          case "$BUILD_PROFILE" in
-            development|production) ;;
-            *) echo "::error::Unsupported build profile"; exit 1 ;;
-          esac
-          args=(build --platform android --profile "$BUILD_PROFILE" --non-interactive --wait --json --freeze-credentials)
-          if [ "$CLEAR_CACHE" = "true" ]; then
-            args+=(--clear-cache)
-          fi
-          eas "${args[@]}" > "$RUNNER_TEMP/eas-build.json"
+          # Leave RELEASE_VERSION unset when no GitHub value was configured.
+          if [ -z "$RELEASE_VERSION" ]; then unset RELEASE_VERSION; fi
+          eas build --local --platform android --profile "$BUILD_PROFILE" \
+            --non-interactive --freeze-credentials --output "$ARTIFACT_PATH"
 
-      - name: Download and verify the completed build
-        id: download
-        timeout-minutes: 15
-        run: |
-          python3 scripts/ci/download_eas_build.py \
-            --result-file "$RUNNER_TEMP/eas-build.json" \
-            --profile "$BUILD_PROFILE" \
-            --output-dir artifacts
+      - name: Verify local artifact and write checksums
+        run: python3 scripts/ci/local_build_artifact.py --profile "$BUILD_PROFILE"
 
       - name: Upload Android artifact and checksums
         id: upload
@@ -123,3 +141,8 @@ jobs:
           ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
         run: |
           printf '\n[Download the GitHub artifact](%s) (retained for 14 days).\n' "$ARTIFACT_URL" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove local build working files and signing material
+        if: always()
+        run: |
+          rm -rf -- "$RUNNER_TEMP/eas-local-build" "$RUNNER_TEMP/gradle"
