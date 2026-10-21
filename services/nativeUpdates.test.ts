@@ -528,6 +528,52 @@ test('install-ready events arriving before native consent resolves are preserved
   detach();
 });
 
+test.each([
+  ['flexible', 'failed', 'error'],
+  ['flexible', 'canceled', 'idle'],
+  ['immediate', 'failed', 'error'],
+  ['immediate', 'canceled', 'idle'],
+] as const)(
+  '%s consent cannot overwrite a newer %s install event',
+  async (policy, installStatus, phase) => {
+    mockNative.getUpdateStatus.mockResolvedValue(available());
+    const service = new UpdateService(policy);
+    const detach = service.attachUpdateLifecycle();
+    const start =
+      policy === 'flexible' ? mockNative.startFlexibleUpdate : mockNative.startImmediateUpdate;
+    start.mockImplementationOnce(async () => {
+      mockInstallListener?.({
+        platform: 'android',
+        supported: true,
+        installStatus,
+        reason: 'install-state-changed',
+      });
+      return available();
+    });
+    expect(await service.startNativeUpdate()).toBe(false);
+    expect(service.getNativeUpdateSnapshot()).toMatchObject({ phase, busy: false });
+    detach();
+  },
+);
+
+test('an install failure event wins over the completion method returning cached ready status', async () => {
+  mockNative.getUpdateStatus.mockResolvedValue(ready());
+  const service = new UpdateService();
+  const detach = service.attachUpdateLifecycle();
+  mockNative.completeFlexibleUpdate.mockImplementationOnce(async () => {
+    mockInstallListener?.({
+      platform: 'android',
+      supported: true,
+      installStatus: 'failed',
+      reason: 'install-state-changed',
+    });
+    return ready();
+  });
+  expect(await service.completeNativeUpdate()).toBe(false);
+  expect(service.getNativeUpdateSnapshot()).toMatchObject({ phase: 'error', busy: false });
+  detach();
+});
+
 test('a slow status snapshot cannot overwrite a newer install-ready event', async () => {
   mockNative.getUpdateStatus.mockResolvedValue(availableWithStatus('downloading'));
   const service = new UpdateService();

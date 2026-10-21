@@ -242,7 +242,14 @@ export class UpdateService {
             ? 'flexible'
             : null;
       if (!mode) return false;
+      const revision = this.installEventRevision;
       const status = await this.native.start(mode);
+      // The flow returns cached AppUpdateInfo; newer terminal install events are authoritative.
+      if (
+        revision !== this.installEventRevision &&
+        (this.snapshot.phase === 'error' || this.snapshot.phase === 'idle')
+      )
+        return false;
       if (status.reason === 'user-canceled' || status.installStatus === 'canceled') {
         this.publish({ phase: 'idle', dismissed: true });
         return false;
@@ -280,7 +287,9 @@ export class UpdateService {
       if (result.kind !== 'ready' || AppState.currentState !== 'active') return false;
       // completeFlexibleUpdate may resolve before the process restarts. Keep the gate closed on success.
       this.disruptiveOperation = 'native-install';
+      const revision = this.installEventRevision;
       const status = await this.native.complete();
+      if (revision !== this.installEventRevision && this.snapshot.phase === 'error') return false;
       if (
         !status.supported ||
         status.reason !== 'flexible-update-downloaded' ||
