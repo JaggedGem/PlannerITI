@@ -190,6 +190,13 @@ export default function RootLayout() {
     }
   }, [loaded, startupReady]);
 
+  useEffect(() => {
+    if (!loaded || !startupReady) return;
+    void updateService
+      .enableNativeUpdatePrompts()
+      .catch((updateError) => console.warn('Could not show Play update consent:', updateError));
+  }, [loaded, startupReady]);
+
   if (!loaded || !startupReady) {
     return null;
   }

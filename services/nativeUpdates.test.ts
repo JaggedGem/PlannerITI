@@ -238,19 +238,119 @@ test('hung Play request has a bounded startup and never initiates a late native 
 });
 
 test('flexible is optional and the default, cancellation does not reprompt on foreground', async () => {
+  jest.useFakeTimers();
   mockNative.getUpdateStatus.mockResolvedValue(available());
   mockNative.startFlexibleUpdate.mockResolvedValue({ ...available(), reason: 'user-canceled' });
   const service = new UpdateService();
   const detach = service.attachUpdateLifecycle();
   await service.initializeUpdates();
   expect(mockNative.startFlexibleUpdate).not.toHaveBeenCalled();
-  await service.startNativeUpdate();
+  await service.enableNativeUpdatePrompts();
   expect(mockNative.startFlexibleUpdate).toHaveBeenCalledTimes(1);
   expect(mockNative.startImmediateUpdate).not.toHaveBeenCalled();
+  jest.setSystemTime(Date.now() + 60_001);
   mockAppStateListener?.('background');
   mockAppStateListener?.('active');
+  await jest.advanceTimersByTimeAsync(0);
+  expect(mockNative.startFlexibleUpdate).toHaveBeenCalledTimes(1);
+  expect(mockNative.getUpdateStatus).toHaveBeenCalledTimes(3);
   expect(service.getNativeUpdateSnapshot().dismissed).toBe(true);
   detach();
+});
+
+test('opens Play consent directly once after app readiness, including repeated readiness calls', async () => {
+  mockNative.getUpdateStatus.mockResolvedValue(available());
+  const service = new UpdateService();
+  await service.initializeUpdates();
+  expect(mockNative.startFlexibleUpdate).not.toHaveBeenCalled();
+  await Promise.all([service.enableNativeUpdatePrompts(), service.enableNativeUpdatePrompts()]);
+  expect(mockNative.startFlexibleUpdate).toHaveBeenCalledTimes(1);
+  expect(service.getNativeUpdateSnapshot()).toMatchObject({ phase: 'downloading', busy: false });
+  expect(mockNative.completeFlexibleUpdate).not.toHaveBeenCalled();
+});
+
+test('an update first detected on foreground opens consent only after app readiness', async () => {
+  jest.useFakeTimers();
+  const service = new UpdateService();
+  const detach = service.attachUpdateLifecycle();
+  await service.initializeUpdates();
+  mockNative.getUpdateStatus.mockResolvedValue(available());
+  jest.setSystemTime(Date.now() + 60_001);
+  mockAppStateListener?.('background');
+  mockAppStateListener?.('active');
+  await jest.advanceTimersByTimeAsync(0);
+  expect(mockNative.startFlexibleUpdate).not.toHaveBeenCalled();
+  await service.enableNativeUpdatePrompts();
+  expect(mockNative.startFlexibleUpdate).toHaveBeenCalledTimes(1);
+  detach();
+});
+
+test('detecting an update on foreground opens Play consent when the app is already ready', async () => {
+  jest.useFakeTimers();
+  const service = new UpdateService();
+  const detach = service.attachUpdateLifecycle();
+  await service.initializeUpdates();
+  await service.enableNativeUpdatePrompts();
+  mockNative.getUpdateStatus.mockResolvedValue(available());
+  jest.setSystemTime(Date.now() + 60_001);
+  mockAppStateListener?.('background');
+  mockAppStateListener?.('active');
+  await jest.advanceTimersByTimeAsync(0);
+  expect(mockNative.startFlexibleUpdate).toHaveBeenCalledTimes(1);
+  detach();
+});
+
+test('a failed automatic flow keeps its retry action on foreground without reopening consent', async () => {
+  jest.useFakeTimers();
+  mockNative.getUpdateStatus.mockResolvedValue(available());
+  mockNative.startFlexibleUpdate.mockRejectedValueOnce(new Error('Play flow failed'));
+  const service = new UpdateService();
+  const detach = service.attachUpdateLifecycle();
+  await service.initializeUpdates();
+  expect(await service.enableNativeUpdatePrompts()).toBe(false);
+  expect(service.getNativeUpdateSnapshot()).toMatchObject({ phase: 'error', busy: false });
+  jest.setSystemTime(Date.now() + 60_001);
+  mockAppStateListener?.('background');
+  mockAppStateListener?.('active');
+  await jest.advanceTimersByTimeAsync(0);
+  expect(mockNative.startFlexibleUpdate).toHaveBeenCalledTimes(1);
+  expect(service.getNativeUpdateSnapshot().phase).toBe('error');
+  expect(await service.startNativeUpdate()).toBe(true);
+  expect(mockNative.startFlexibleUpdate).toHaveBeenCalledTimes(2);
+  detach();
+});
+
+test('app readiness in the background defers consent until the next foreground without a throttle delay', async () => {
+  jest.useFakeTimers();
+  mockNative.getUpdateStatus.mockResolvedValue(available());
+  const service = new UpdateService();
+  const detach = service.attachUpdateLifecycle();
+  await service.initializeUpdates();
+  Object.assign(AppState, { currentState: 'background' });
+  mockAppStateListener?.('background');
+  expect(await service.enableNativeUpdatePrompts()).toBe(false);
+  expect(mockNative.startFlexibleUpdate).not.toHaveBeenCalled();
+  Object.assign(AppState, { currentState: 'active' });
+  mockAppStateListener?.('active');
+  await jest.advanceTimersByTimeAsync(0);
+  expect(mockNative.startFlexibleUpdate).toHaveBeenCalledTimes(1);
+  detach();
+});
+
+test.each([
+  ['unavailable', status()],
+  ['unsupported', status({ supported: false, reason: 'unsupported-install-source' })],
+  ['downloaded', ready()],
+  ['downloading', availableWithStatus('downloading')],
+  ['store fallback', available({ immediate: true, flexible: false })],
+] as const)('does not open consent automatically for %s', async (_label, nativeStatus) => {
+  mockNative.getUpdateStatus.mockResolvedValue(nativeStatus);
+  const service = new UpdateService();
+  await service.initializeUpdates();
+  expect(await service.enableNativeUpdatePrompts()).toBe(false);
+  expect(mockNative.startFlexibleUpdate).not.toHaveBeenCalled();
+  expect(mockNative.startImmediateUpdate).not.toHaveBeenCalled();
+  expect(mockNative.openStorePage).not.toHaveBeenCalled();
 });
 
 test.each([
@@ -336,7 +436,7 @@ test('native UI gate prevents concurrent OTA reload and repeated native flows', 
   );
   const service = new UpdateService();
   const starting = service.startNativeUpdate();
-  // Wait for the explicit native UI promise to be pending.
+  // Wait for the native UI promise to be pending.
   while (!mockNative.startFlexibleUpdate.mock.calls.length) await Promise.resolve();
   expect(await service.applyPreparedOtaUpdateOnLaunch()).toBe(false);
   expect(await service.startNativeUpdate()).toBe(false);
@@ -346,6 +446,7 @@ test('native UI gate prevents concurrent OTA reload and repeated native flows', 
 });
 
 test('OTA reload retains the gate even after reloadAsync resolves', async () => {
+  mockNative.getUpdateStatus.mockResolvedValue(available());
   storage.getItem.mockResolvedValue(
     JSON.stringify({
       updateId: 'pending',
@@ -357,7 +458,9 @@ test('OTA reload retains the gate even after reloadAsync resolves', async () => 
   );
   const service = new UpdateService();
   expect(await service.applyPreparedOtaUpdateOnLaunch()).toBe(true);
+  expect(await service.enableNativeUpdatePrompts()).toBe(false);
   expect(await service.startNativeUpdate()).toBe(false);
+  expect(mockNative.startFlexibleUpdate).not.toHaveBeenCalled();
 });
 
 test('listener cleanup is idempotent, late checks and events cannot attach after unmount', async () => {

@@ -44,6 +44,8 @@ export class UpdateService {
   private nativeResult: NativeUpdateResult | null = null;
   private nativeCheck: Promise<NativeUpdateResult> | null = null;
   private startup: Promise<void> | null = null;
+  private nativePromptsEnabled = false;
+  private nativePromptAttempted = false;
   private lastNativeCheck = 0;
   private installEventRevision = 0;
   private lifecycleUsers = 0;
@@ -88,11 +90,13 @@ export class UpdateService {
         if (!foregrounded || this.snapshot.busy || this.disruptiveOperation === 'ota-reload')
           return;
         const recovering = ['downloading', 'ready', 'recovery'].includes(this.snapshot.phase);
-        if (recovering || Date.now() - this.lastNativeCheck > 60_000) {
-          void this.checkForNativeUpdate().catch((error) =>
-            console.warn('Update recovery failed:', error),
-          );
-        }
+        const refresh =
+          recovering || Date.now() - this.lastNativeCheck > 60_000
+            ? this.checkForNativeUpdate()
+            : Promise.resolve();
+        void refresh
+          .then(() => this.promptForNativeUpdate())
+          .catch((error) => console.warn('Update recovery failed:', error));
       });
       this.removeAppStateListener = () => subscription.remove();
       this.ensureInstallListener();
@@ -102,6 +106,7 @@ export class UpdateService {
       if (detached) return;
       detached = true;
       if (--this.lifecycleUsers === 0) {
+        this.nativePromptsEnabled = false;
         this.removeAppStateListener?.();
         this.removeAppStateListener = null;
         this.removeInstallListener?.();
@@ -167,14 +172,13 @@ export class UpdateService {
             (result.flexibleAllowed || (this.policy === 'immediate' && result.immediateAllowed));
           const storeFallback =
             result.kind === 'available' && !canStart && this.native.canOpenStore(result.status);
-          const phase =
-            result.kind === 'available' && (canStart || storeFallback)
-              ? 'available'
-              : result.kind === 'ready'
-                ? 'ready'
-                : result.kind === 'downloading'
-                  ? 'downloading'
-                  : 'idle';
+          let phase: NativeUpdateSnapshot['phase'] = 'idle';
+          if (result.kind === 'available' && (canStart || storeFallback)) {
+            // Passive checks must preserve the retry action after a failed Play flow.
+            phase = canStart && this.snapshot.phase === 'error' ? 'error' : 'available';
+          } else if (result.kind === 'ready' || result.kind === 'downloading') {
+            phase = result.kind;
+          }
           this.publish({
             phase,
             storeFallback,
@@ -204,9 +208,29 @@ export class UpdateService {
     void this.prepareOtaUpdateForNextLaunch();
   }
 
-  /** The user explicitly accepts a recommended update. Never escalate flexible to immediate. */
+  /** Called after the app has rendered, so Play consent never holds the splash screen open. */
+  enableNativeUpdatePrompts(): Promise<boolean> {
+    this.nativePromptsEnabled = true;
+    return this.promptForNativeUpdate();
+  }
+
+  private async promptForNativeUpdate(): Promise<boolean> {
+    if (
+      !this.nativePromptsEnabled ||
+      this.nativePromptAttempted ||
+      this.nativeResult?.kind !== 'available' ||
+      this.snapshot.dismissed ||
+      this.snapshot.phase !== 'available' ||
+      this.snapshot.storeFallback
+    )
+      return false;
+    return this.startNativeUpdate();
+  }
+
+  /** Open Google's cancellable consent UI. Never escalate flexible to immediate. */
   async startNativeUpdate(): Promise<boolean> {
     if (AppState.currentState !== 'active' || !this.acquireOperation('native-flow')) return false;
+    this.nativePromptAttempted = true;
     this.publish({ busy: true });
     try {
       const result = await this.checkForNativeUpdate();

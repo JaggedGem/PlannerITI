@@ -19,6 +19,8 @@ export default function NativeUpdateBanner() {
   const { t } = useTranslation();
   const copy = t('nativeUpdate');
   if (state.dismissed || state.phase === 'idle' || state.phase === 'downloading') return null;
+  // Play owns initial consent; keep the banner for installation, recovery and store fallback.
+  if (state.phase === 'available' && !state.storeFallback) return null;
   const ready = state.phase === 'ready';
   const failed = state.phase === 'error';
   const message = ready
@@ -42,7 +44,11 @@ export default function NativeUpdateBanner() {
       : ready
         ? updateService.completeNativeUpdate()
         : failed
-          ? updateService.checkForNativeUpdate()
+          ? updateService
+              .checkForNativeUpdate()
+              .then((result) =>
+                result.kind === 'available' ? updateService.startNativeUpdate() : false,
+              )
           : updateService.startNativeUpdate();
     void action.catch((error) => console.warn('Update action failed:', error));
   };
