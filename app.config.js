@@ -81,6 +81,8 @@ module.exports = () => {
           projectId: 'fe01b043-f283-48db-a683-3c5f23546a96',
         },
         environment: appVariant,
+        // Beta has a different package and needs its own Play listing/testing setup.
+        betaPlayUpdatesEnabled: process.env.BETA_PLAY_UPDATES_ENABLED === 'true',
         apiKey: process.env.API_KEY || '',
         customApiLocalUrl: process.env.CUSTOM_API_LOCAL_URL || '',
         customApiLocalHost: process.env.CUSTOM_API_LOCAL_HOST || '',
