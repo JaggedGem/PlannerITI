@@ -2275,11 +2275,6 @@ export default function Settings() {
                 </View>
               </View>
             </View>
-
-            <Text style={styles.updateNote}>
-              App binaries are distributed through Play Store and manual GitHub release installs.
-              OTA content updates continue to be applied by Expo Updates.
-            </Text>
           </View>
         </View>
 
@@ -4034,12 +4029,5 @@ const styles = StyleSheet.create({
     color: Colors.dark.primary,
     fontWeight: '700',
     letterSpacing: 0.5,
-  },
-  updateNote: {
-    fontSize: 12,
-    color: Colors.dark.neutral600,
-    textAlign: 'left',
-    marginTop: 12,
-    lineHeight: 18,
   },
 });
