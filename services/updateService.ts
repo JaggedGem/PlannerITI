@@ -37,6 +37,7 @@ interface PendingOtaUpdateData {
 /** One shared gate for operations which can replace or interrupt this JS runtime. */
 export class UpdateService {
   private disruptiveOperation: DisruptiveOperation | null = null;
+  private reloadRequested = false;
   private otaPreparation: Promise<boolean> | null = null;
   private otaApplication: Promise<boolean> | null = null;
   private readonly native = new NativeUpdateClient();
@@ -134,7 +135,7 @@ export class UpdateService {
     } else if (event.installStatus === 'pending' || event.installStatus === 'downloading') {
       this.publish({ phase: 'downloading' });
     } else if (event.installStatus === 'installing') {
-      if (this.disruptiveOperation !== 'ota-reload') this.disruptiveOperation = 'native-install';
+      if (!this.reloadRequested) this.disruptiveOperation = 'native-install';
       this.publish({ busy: true });
     } else if (['failed', 'canceled', 'installed'].includes(event.installStatus)) {
       this.releaseOperation('native-install');
@@ -154,8 +155,7 @@ export class UpdateService {
         // An install event arriving during a check is newer than its status snapshot.
         if (revision !== this.installEventRevision) return result;
         if (result.kind === 'in-progress' || result.kind === 'installing') {
-          if (this.disruptiveOperation !== 'ota-reload')
-            this.disruptiveOperation = 'native-install';
+          if (!this.reloadRequested) this.disruptiveOperation = 'native-install';
           this.publish({
             phase: 'recovery',
             storeFallback: this.native.canOpenStore(result.status),
@@ -295,7 +295,7 @@ export class UpdateService {
   private readonly isExpoGo = Constants.executionEnvironment === 'storeClient';
 
   private acquireOperation(operation: DisruptiveOperation): boolean {
-    if (this.disruptiveOperation) return false;
+    if (this.reloadRequested || this.disruptiveOperation) return false;
     this.disruptiveOperation = operation;
     return true;
   }
@@ -441,12 +441,20 @@ export class UpdateService {
         this.releaseOperation('ota-reload');
         return false;
       }
+      // Install events/status can arrive while storage is being read or cleared.
+      if (this.disruptiveOperation !== 'ota-reload') return false;
       await this.clearPendingOta();
+      if (this.disruptiveOperation !== 'ota-reload') {
+        await AsyncStorage.setItem(OTA_PENDING_UPDATE_KEY, JSON.stringify(pending));
+        return false;
+      }
+      this.reloadRequested = true;
       await Updates.reloadAsync();
       // Keep the gate closed: reloadAsync resolves before the runtime is replaced.
       return true;
     } catch (error) {
       console.error('Error applying staged OTA update:', error);
+      this.reloadRequested = false;
       this.releaseOperation('ota-reload');
       // Do not recreate a marker that can cause a reload loop on every launch.
       return false;

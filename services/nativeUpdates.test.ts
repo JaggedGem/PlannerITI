@@ -120,9 +120,9 @@ beforeEach(() => {
   mockNative.startFlexibleUpdate.mockResolvedValue(available());
   mockNative.startImmediateUpdate.mockResolvedValue(available());
   mockNative.completeFlexibleUpdate.mockResolvedValue(ready());
-  storage.getItem.mockResolvedValue(null);
-  storage.setItem.mockResolvedValue();
-  storage.removeItem.mockResolvedValue();
+  storage.getItem.mockReset().mockResolvedValue(null);
+  storage.setItem.mockReset().mockResolvedValue();
+  storage.removeItem.mockReset().mockResolvedValue();
   updates.checkForUpdateAsync.mockResolvedValue({
     isAvailable: false,
   } as Updates.UpdateCheckResult);
@@ -488,3 +488,37 @@ test('does not offer an unusable update action when Play allows no flow or store
   expect((await service.checkForNativeUpdate()).kind).toBe('available');
   expect(service.getNativeUpdateSnapshot().phase).toBe('idle');
 });
+
+test.each(['read', 'clear'])(
+  'native installation arriving during OTA marker %s defers reload and preserves the marker',
+  async (stage) => {
+    const pending = JSON.stringify({
+      updateId: 'pending',
+      fetchedAt: 'now',
+      runtimeVersion: '1.6.0',
+      applicationId: Application.applicationId,
+      nativeBuildVersion: '42',
+    });
+    const installing = () =>
+      mockInstallListener?.({
+        platform: 'android',
+        supported: true,
+        installStatus: 'installing',
+        reason: 'install-state-changed',
+      });
+    storage.getItem.mockImplementationOnce(async () => {
+      if (stage === 'read') installing();
+      return pending;
+    });
+    storage.removeItem.mockImplementationOnce(async () => {
+      if (stage === 'clear') installing();
+    });
+    const service = new UpdateService();
+    const detach = service.attachUpdateLifecycle();
+    expect(await service.applyPreparedOtaUpdateOnLaunch()).toBe(false);
+    expect(updates.reloadAsync).not.toHaveBeenCalled();
+    if (stage === 'read') expect(storage.removeItem).not.toHaveBeenCalled();
+    else expect(storage.setItem).toHaveBeenCalledWith('@ota_pending_update', pending);
+    detach();
+  },
+);
