@@ -274,6 +274,9 @@ The app uses `app.config.js` for configuration. Key settings:
 - **Theme**: Automatic light/dark
 - **Permissions**: Notifications
 - **Runtime Version**: Configurable via `RUNTIME_VERSION`
+
+See [App updates](docs/app-updates.md) for Google Play update policy, OTA coordination, runtime boundaries, build requirements, and the physical-device test plan.
+
 - **New Architecture**: Enabled
 
 ### EAS Configuration
