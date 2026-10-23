@@ -75,7 +75,7 @@ import {
 
 import { getAnimationDependencies } from '../../utils/animationDependencies';
 import AcademicEmptyState from './AcademicEmptyState';
-import ViewModeMenu from './ViewModeMenu';
+import ScheduleViewButton from './ScheduleViewButton';
 
 // Key for storing whether the tutorial has been shown
 const TUTORIAL_SHOWN_KEY = 'schedule_tutorial_shown';
@@ -291,7 +291,6 @@ export default function DayView() {
   const [error, setError] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState(getInitialSelectedDate);
   const [settings, setSettings] = useState(scheduleService.getSettings());
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [todaySchedule, setTodaySchedule] = useState<ScheduleItem[]>([]);
   const [thesisSchedule, setThesisSchedule] = useState<SpecialScheduleResponse | null>(null);
   const [examSchedule, setExamSchedule] = useState<SpecialScheduleResponse | null>(null);
@@ -304,7 +303,8 @@ export default function DayView() {
   const currentDate = useRef(new Date()).current;
   const isEvenWeek = scheduleService.isEvenWeek(selectedDate);
   const { t, formatDate, formatTime } = useTranslation();
-  const { availableWidth, hasDaySidebar, daySidebarWidth, isCompactHeight } = useResponsiveLayout();
+  const { availableWidth, hasDaySidebar, daySidebarWidth, isCompactHeight, insets } =
+    useResponsiveLayout();
   const recoveryDay = useMemo(() => scheduleService.isRecoveryDay(selectedDate), [selectedDate]);
   const isWeekend = selectedDate.getDay() === 0 || selectedDate.getDay() === 6;
   const selectedAcademicPeriod = useMemo(
@@ -1428,24 +1428,13 @@ export default function DayView() {
                   year: 'numeric',
                 })}
               </Text>
-              <TouchableOpacity style={styles.weekInfo} onPress={() => setIsMenuOpen(true)}>
-                <Text style={styles.weekText}>
-                  {isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
-                </Text>
-              </TouchableOpacity>
+              <ScheduleViewButton isEvenWeek={isEvenWeek} currentView="day" />
             </View>
 
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={Colors.dark.primary} />
               <Text style={styles.loadingText}>{t('schedule').loading}</Text>
             </View>
-            <ViewModeMenu
-              isOpen={isMenuOpen}
-              onClose={() => setIsMenuOpen(false)}
-              isEvenWeek={isEvenWeek}
-              weekText={isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
-              currentView="day"
-            />
           </View>
         </View>
       </SafeAreaView>
@@ -1465,11 +1454,7 @@ export default function DayView() {
                   year: 'numeric',
                 })}
               </Text>
-              <TouchableOpacity style={styles.weekInfo} onPress={() => setIsMenuOpen(true)}>
-                <Text style={styles.weekText}>
-                  {isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
-                </Text>
-              </TouchableOpacity>
+              <ScheduleViewButton isEvenWeek={isEvenWeek} currentView="day" />
             </View>
             <View style={styles.errorContainer}>
               <Text style={styles.errorText}>{error}</Text>
@@ -1496,13 +1481,6 @@ export default function DayView() {
                 </TouchableOpacity>
               ) : null}
             </View>
-            <ViewModeMenu
-              isOpen={isMenuOpen}
-              onClose={() => setIsMenuOpen(false)}
-              isEvenWeek={isEvenWeek}
-              weekText={isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
-              currentView="day"
-            />
           </View>
         </View>
       </SafeAreaView>
@@ -1510,173 +1488,185 @@ export default function DayView() {
   }
 
   return (
-    <SafeAreaView
-      style={[styles.container, hasDaySidebar && adaptiveStyles.daySplit]}
-      edges={['top', 'left', 'right']}
-    >
-      <ScrollView
+    <View style={[styles.container, hasDaySidebar && adaptiveStyles.daySplit]}>
+      <SafeAreaView
+        edges={hasDaySidebar ? ['top', 'left'] : ['top', 'left', 'right']}
         style={[
-          styles.headerContainer,
-          adaptiveStyles.headerScroll,
-          hasDaySidebar && { width: daySidebarWidth },
+          adaptiveStyles.headerSurface,
+          hasDaySidebar && { width: daySidebarWidth + insets.left },
         ]}
-        contentContainerStyle={!hasDaySidebar && contentLayout.page}
-        showsVerticalScrollIndicator={false}
       >
-        <View style={[styles.header, isCompactHeight && adaptiveStyles.compactHeader]}>
-          <View style={[styles.headerTop, hasDaySidebar && adaptiveStyles.sidebarTitle]}>
-            <Text style={[styles.headerTitle, hasDaySidebar && adaptiveStyles.sidebarTitleText]}>
-              {formatDate(selectedDate, {
-                month: 'long',
-                day: 'numeric',
-                year: 'numeric',
-              })}
-            </Text>
-            <TouchableOpacity style={styles.weekInfo} onPress={() => setIsMenuOpen(true)}>
-              <Text style={styles.weekText}>
-                {isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
+        <ScrollView
+          style={[
+            styles.headerContainer,
+            adaptiveStyles.headerScroll,
+            hasDaySidebar && { flexGrow: 1, flexShrink: 1 },
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={[styles.header, isCompactHeight && adaptiveStyles.compactHeader]}>
+            <View style={[styles.headerTop, hasDaySidebar && adaptiveStyles.sidebarTitle]}>
+              <Text style={[styles.headerTitle, hasDaySidebar && adaptiveStyles.sidebarTitleText]}>
+                {formatDate(selectedDate, {
+                  month: 'long',
+                  day: 'numeric',
+                  year: 'numeric',
+                })}
               </Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.dateList}>
-            {/* Left gradient fade */}
-            {!hasDaySidebar && (
-              <LinearGradient
-                colors={[Colors.dark.backgroundTertiary, Colors.dark.overlayDarkTransparent]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.leftGradient}
-                pointerEvents="none"
-              />
-            )}
+              <ScheduleViewButton isEvenWeek={isEvenWeek} currentView="day" />
+            </View>
+            <View style={styles.dateList}>
+              {/* Left gradient fade */}
+              {!hasDaySidebar && (
+                <LinearGradient
+                  colors={[Colors.dark.backgroundTertiary, Colors.dark.overlayDarkTransparent]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.leftGradient}
+                  pointerEvents="none"
+                />
+              )}
 
-            <ScrollView
-              ref={scrollViewRef}
-              horizontal={!hasDaySidebar}
-              scrollEnabled={!hasDaySidebar}
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={[
-                styles.dateListScrollContent,
-                hasDaySidebar && adaptiveStyles.sidebarDates,
-              ]}
-            >
-              {weekDatesWithAssignments.map((date, index) => (
-                <TouchableOpacity
-                  key={index}
-                  onPress={() => handleDatePress(date.date)}
-                  style={[
-                    styles.dateItem,
-                    hasDaySidebar && daySidebarWidth < 300 && adaptiveStyles.sidebarDate,
-                    isCompactHeight && adaptiveStyles.compactDate,
-                    date.date.getDate() === selectedDate.getDate() &&
-                      !date.isRecoveryDay &&
-                      styles.selectedDay,
-                    date.date.getDate() === selectedDate.getDate() &&
+              <ScrollView
+                ref={scrollViewRef}
+                horizontal={!hasDaySidebar}
+                scrollEnabled={!hasDaySidebar}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={[
+                  styles.dateListScrollContent,
+                  hasDaySidebar && adaptiveStyles.sidebarDates,
+                ]}
+              >
+                {weekDatesWithAssignments.map((date, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    onPress={() => handleDatePress(date.date)}
+                    style={[
+                      styles.dateItem,
+                      hasDaySidebar && daySidebarWidth < 300 && adaptiveStyles.sidebarDate,
+                      isCompactHeight && adaptiveStyles.compactDate,
+                      date.date.getDate() === selectedDate.getDate() &&
+                        !date.isRecoveryDay &&
+                        styles.selectedDay,
+                      date.date.getDate() === selectedDate.getDate() &&
+                        date.isRecoveryDay &&
+                        styles.selectedRecoveryDay,
+                      date.isToday &&
+                        date.date.getDate() !== selectedDate.getDate() &&
+                        styles.todayDateItem,
                       date.isRecoveryDay &&
-                      styles.selectedRecoveryDay,
-                    date.isToday &&
-                      date.date.getDate() !== selectedDate.getDate() &&
-                      styles.todayDateItem,
-                    date.isRecoveryDay &&
-                      date.date.getDate() !== selectedDate.getDate() &&
-                      styles.recoveryDayItem,
-                  ]}
-                >
-                  {date.totalAssignments > 0 && (
-                    <View
-                      style={[
-                        index === weekDatesWithAssignments.length - 1
-                          ? styles.lastDateAssignmentBadge
-                          : styles.dateAssignmentBadge,
-                        date.date.getDate() === selectedDate.getDate() &&
-                          styles.selectedDateAssignmentBadge,
-                      ]}
-                    >
-                      <Text
+                        date.date.getDate() !== selectedDate.getDate() &&
+                        styles.recoveryDayItem,
+                      isCompactHeight && { transform: [{ scale: 1 }] },
+                    ]}
+                  >
+                    {date.totalAssignments > 0 && (
+                      <View
                         style={[
-                          styles.dateAssignmentBadgeText,
+                          index === weekDatesWithAssignments.length - 1
+                            ? styles.lastDateAssignmentBadge
+                            : styles.dateAssignmentBadge,
                           date.date.getDate() === selectedDate.getDate() &&
-                            styles.selectedDateAssignmentBadgeText,
+                            styles.selectedDateAssignmentBadge,
                         ]}
                       >
-                        {date.totalAssignments}
-                      </Text>
-                    </View>
-                  )}
-                  <Text
-                    style={[
-                      styles.dateDay,
-                      date.date.getDate() === selectedDate.getDate() &&
-                        !date.isRecoveryDay &&
-                        styles.selectedDayText,
-                      date.date.getDate() === selectedDate.getDate() &&
+                        <Text
+                          style={[
+                            styles.dateAssignmentBadgeText,
+                            date.date.getDate() === selectedDate.getDate() &&
+                              styles.selectedDateAssignmentBadgeText,
+                          ]}
+                        >
+                          {date.totalAssignments}
+                        </Text>
+                      </View>
+                    )}
+                    <Text
+                      style={[
+                        styles.dateDay,
+                        isCompactHeight && adaptiveStyles.compactDateDay,
+                        date.date.getDate() === selectedDate.getDate() &&
+                          !date.isRecoveryDay &&
+                          styles.selectedDayText,
+                        date.date.getDate() === selectedDate.getDate() &&
+                          date.isRecoveryDay &&
+                          styles.selectedRecoveryDayText,
+                        date.isToday &&
+                          date.date.getDate() !== selectedDate.getDate() &&
+                          styles.todayText,
                         date.isRecoveryDay &&
-                        styles.selectedRecoveryDayText,
-                      date.isToday &&
-                        date.date.getDate() !== selectedDate.getDate() &&
-                        styles.todayText,
-                      date.isRecoveryDay &&
-                        date.date.getDate() !== selectedDate.getDate() &&
-                        styles.recoveryDayText,
-                    ]}
-                  >
-                    {date.day}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.dateNumber,
-                      date.date.getDate() === selectedDate.getDate() &&
-                        !date.isRecoveryDay &&
-                        styles.selectedDayText,
-                      date.date.getDate() === selectedDate.getDate() &&
+                          date.date.getDate() !== selectedDate.getDate() &&
+                          styles.recoveryDayText,
+                      ]}
+                    >
+                      {date.day}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.dateNumber,
+                        isCompactHeight && adaptiveStyles.compactDateNumber,
+                        date.date.getDate() === selectedDate.getDate() &&
+                          !date.isRecoveryDay &&
+                          styles.selectedDayText,
+                        date.date.getDate() === selectedDate.getDate() &&
+                          date.isRecoveryDay &&
+                          styles.selectedRecoveryDayText,
+                        date.isToday &&
+                          date.date.getDate() !== selectedDate.getDate() &&
+                          styles.todayText,
                         date.isRecoveryDay &&
-                        styles.selectedRecoveryDayText,
-                      date.isToday &&
-                        date.date.getDate() !== selectedDate.getDate() &&
-                        styles.todayText,
-                      date.isRecoveryDay &&
-                        date.date.getDate() !== selectedDate.getDate() &&
-                        styles.recoveryDayText,
-                    ]}
-                  >
-                    {date.dateNum}
-                  </Text>
-                  {date.isToday && date.date.getDate() !== selectedDate.getDate() && (
-                    <View style={styles.todayDot} />
-                  )}
-                  {date.isRecoveryDay && <View style={styles.recoveryDot} />}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+                          date.date.getDate() !== selectedDate.getDate() &&
+                          styles.recoveryDayText,
+                      ]}
+                    >
+                      {date.dateNum}
+                    </Text>
+                    {date.isToday && date.date.getDate() !== selectedDate.getDate() && (
+                      <View style={styles.todayDot} />
+                    )}
+                    {date.isRecoveryDay && <View style={styles.recoveryDot} />}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
 
-            {/* Right gradient fade */}
-            {!hasDaySidebar && (
-              <LinearGradient
-                colors={[Colors.dark.overlayDarkTransparent, Colors.dark.backgroundTertiary]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.rightGradient}
-                pointerEvents="none"
-              />
-            )}
+              {/* Right gradient fade */}
+              {!hasDaySidebar && (
+                <LinearGradient
+                  colors={[Colors.dark.overlayDarkTransparent, Colors.dark.backgroundTertiary]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.rightGradient}
+                  pointerEvents="none"
+                />
+              )}
 
-            {/* First-time indicator */}
-            {showFirstTimeIndicator && (
-              <Animated.View style={[styles.firstTimeIndicatorContainer, firstTimeAnimStyle]}>
-                <View style={styles.firstTimeIndicator}>
-                  <Text style={styles.firstTimeIndicatorArrow}>‹</Text>
-                  <Text style={styles.firstTimeIndicatorText}>
-                    {t('scheduleDetails').swipeForMore}
-                  </Text>
-                  <Text style={styles.firstTimeIndicatorArrow}>›</Text>
-                </View>
-              </Animated.View>
-            )}
+              {/* First-time indicator */}
+              {showFirstTimeIndicator && (
+                <Animated.View style={[styles.firstTimeIndicatorContainer, firstTimeAnimStyle]}>
+                  <View style={styles.firstTimeIndicator}>
+                    <Text style={styles.firstTimeIndicatorArrow}>‹</Text>
+                    <Text style={styles.firstTimeIndicatorText}>
+                      {t('scheduleDetails').swipeForMore}
+                    </Text>
+                    <Text style={styles.firstTimeIndicatorArrow}>›</Text>
+                  </View>
+                </Animated.View>
+              )}
+            </View>
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </SafeAreaView>
 
-      <View style={styles.contentContainer}>
+      <View
+        style={[
+          styles.contentContainer,
+          {
+            paddingTop: hasDaySidebar ? insets.top : 0,
+            paddingLeft: hasDaySidebar ? 0 : insets.left,
+            paddingRight: insets.right,
+          },
+        ]}
+      >
         <ScrollView
           style={styles.scheduleContainer}
           contentContainerStyle={[adaptiveStyles.scheduleContent, contentLayout.form]}
@@ -2107,15 +2097,7 @@ export default function DayView() {
           </View>
         )}
       </View>
-
-      <ViewModeMenu
-        isOpen={isMenuOpen}
-        onClose={() => setIsMenuOpen(false)}
-        isEvenWeek={isEvenWeek}
-        weekText={isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
-        currentView="day"
-      />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -2357,6 +2339,8 @@ const styles = StyleSheet.create<Styles>({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 12,
+    borderWidth: 2,
+    borderColor: Colors.dark.transparent,
   },
   activeDateItem: {
     backgroundColor: Colors.dark.primaryStrong,
@@ -2387,11 +2371,12 @@ const styles = StyleSheet.create<Styles>({
     color: Colors.dark.primaryStrong,
   },
   todayDot: {
+    position: 'absolute',
+    bottom: 8,
     width: 4,
     height: 4,
     borderRadius: 2,
     backgroundColor: Colors.dark.primaryStrong,
-    marginTop: 4,
   },
   scheduleContainer: {
     flex: 1,
@@ -2670,6 +2655,8 @@ const styles = StyleSheet.create<Styles>({
     marginTop: 4,
   },
   recoveryDot: {
+    position: 'absolute',
+    bottom: 8,
     width: 4,
     height: 4,
     borderRadius: 2,
@@ -3071,11 +3058,19 @@ const styles = StyleSheet.create<Styles>({
 const adaptiveStyles = StyleSheet.create({
   daySplit: { flexDirection: 'row' },
   headerScroll: { flexGrow: 0, flexShrink: 0 },
+  headerSurface: {
+    backgroundColor: Colors.dark.backgroundTertiary,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    flexShrink: 0,
+  },
   compactHeader: { padding: 12 },
   sidebarTitle: { flexWrap: 'wrap', marginBottom: 16 },
   sidebarTitleText: { fontSize: 22, width: '100%' },
   sidebarDates: { flexWrap: 'wrap', justifyContent: 'center', gap: 8, width: '100%' },
   sidebarDate: { width: 56 },
-  compactDate: { height: 64, paddingVertical: 6, borderRadius: 16 },
+  compactDate: { height: 76, paddingVertical: 8, borderRadius: 16 },
+  compactDateDay: { fontSize: 12, lineHeight: 16, marginBottom: 4 },
+  compactDateNumber: { lineHeight: 22, marginBottom: 4 },
   scheduleContent: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24 },
 });

@@ -32,6 +32,7 @@ import { StatusBar } from 'expo-status-bar';
 
 import { AdaptiveColumns } from '@/components/ui/AdaptiveColumns';
 import { contentLayout } from '@/components/ui/ContentLayout';
+import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 import { Translate, useTranslation } from '@/hooks/useTranslation';
 import { runWhenIdle } from '@/utils/runWhenIdle';
@@ -675,7 +676,7 @@ const AssignmentOptionsProvider = ({ children }: { children: React.ReactNode }) 
 
 // Define the main Assignments component - this needs to be before AssignmentsWithErrorBoundary
 const Assignments = () => {
-  const { isCompactHeight } = useResponsiveLayout();
+  const { isCompactHeight, insets } = useResponsiveLayout();
   const { t, formatDate } = useTranslation();
 
   const [selectedSegmentIndex, setSelectedSegmentIndex] = useState(0);
@@ -1171,13 +1172,37 @@ const Assignments = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+    <View style={styles.container}>
       <StatusBar style="light" />
 
-      <View style={[styles.headerContainer, contentLayout.page]}>
+      <ScreenHeader style={styles.headerContainer}>
         <View style={[styles.header, isCompactHeight && { paddingTop: 12, paddingBottom: 12 }]}>
-          <View style={styles.headerTopRow}>
-            <Text style={styles.headerTitle}>{t('assignments').title}</Text>
+          <View style={[styles.headerTopRow, { gap: 12, marginBottom: 0, flexWrap: 'wrap' }]}>
+            <Text style={[styles.headerTitle, { flexGrow: 1, flexShrink: 1 }]}>
+              {t('assignments').title}
+            </Text>
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.dropdownButton,
+                { width: undefined, marginTop: 0, alignSelf: 'center', paddingHorizontal: 12 },
+                pressed && styles.dropdownButtonPressed,
+              ]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setIsDropdownVisible(true);
+              }}
+            >
+              <View style={styles.dropdownButtonContent}>
+                <Text style={styles.dropdownButtonText}>{segments[selectedSegmentIndex]}</Text>
+                <Ionicons
+                  name="chevron-down"
+                  size={16}
+                  color={Colors.dark.mutedText}
+                  style={[styles.dropdownArrow, isDropdownVisible && styles.dropdownArrowRotated]}
+                />
+              </View>
+            </Pressable>
 
             <TouchableOpacity
               style={styles.archiveButton}
@@ -1187,27 +1212,6 @@ const Assignments = () => {
               <Ionicons name="folder-open" size={18} color={Colors.dark.white} />
             </TouchableOpacity>
           </View>
-
-          <Pressable
-            style={({ pressed }) => [
-              styles.dropdownButton,
-              pressed && styles.dropdownButtonPressed,
-            ]}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setIsDropdownVisible(true);
-            }}
-          >
-            <View style={styles.dropdownButtonContent}>
-              <Text style={styles.dropdownButtonText}>{segments[selectedSegmentIndex]}</Text>
-              <Ionicons
-                name="chevron-down"
-                size={16}
-                color={Colors.dark.mutedText}
-                style={[styles.dropdownArrow, isDropdownVisible && styles.dropdownArrowRotated]}
-              />
-            </View>
-          </Pressable>
 
           <ModernDropdown
             isVisible={isDropdownVisible}
@@ -1222,13 +1226,15 @@ const Assignments = () => {
             <Text style={styles.safeModeIndicator}>{t('assignments').errors.stabilityMode}</Text>
           )}
         </View>
-      </View>
+      </ScreenHeader>
 
-      <View style={styles.contentContainer}>
+      <View
+        style={[styles.contentContainer, { paddingLeft: insets.left, paddingRight: insets.right }]}
+      >
         {renderContent()}
         <FloatingActionButton onPress={handleAddAssignment} />
       </View>
-    </SafeAreaView>
+    </View>
   );
 };
 

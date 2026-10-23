@@ -23,6 +23,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { contentLayout } from '@/components/ui/ContentLayout';
+import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { Colors } from '@/constants/Colors';
 import { translations } from '@/constants/Translations';
 import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
@@ -61,7 +62,7 @@ import { filterExamEventsForDate, filterThesisEventsForDate } from '@/utils/spec
 
 import { getAnimationDependencies } from '../../utils/animationDependencies';
 import AcademicEmptyState, { ExamAgendaCard } from './AcademicEmptyState';
-import ViewModeMenu from './ViewModeMenu';
+import ScheduleViewButton from './ScheduleViewButton';
 
 // Get week start (Monday) from current date
 const getWeekStart = (date: Date): Date => {
@@ -536,7 +537,6 @@ export default function WeekView() {
   const { t, formatDate, formatHour } = useTranslation();
   const currentTime = useTimeUpdate();
   const verticalScrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [, setSlideDirection] = useState<'left' | 'right' | null>(null);
   const fadeAnim = useSharedValue(1);
   const slideAnim = useSharedValue(0);
@@ -1203,7 +1203,8 @@ export default function WeekView() {
   const timeSlots = generateTimeSlots(firstHour, lastHour);
 
   // Calculate timetable dimensions
-  const { availableWidth, availableHeight, fontScale, isCompactHeight } = useResponsiveLayout();
+  const { availableWidth, availableHeight, fontScale, isCompactHeight, insets } =
+    useResponsiveLayout();
   const { hourHeight, timeColumnWidth, dayColumnWidth, gridWidth, hasDetailedCards } =
     getWeekLayout(availableWidth, availableHeight, totalDays, fontScale);
   const hasCompactToolbar = isCompactHeight && availableWidth >= 700 * Math.max(1, fontScale);
@@ -1485,16 +1486,15 @@ export default function WeekView() {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <View style={styles.headerContainer}>
+    <View style={styles.container}>
+      <ScreenHeader
+        style={[styles.headerContainer, isCompactHeight && { paddingBottom: 4 }]}
+        contentStyle={{ maxWidth: undefined }}
+      >
         <View style={hasCompactToolbar && adaptiveStyles.weekToolbar}>
           <View style={[styles.header, isCompactHeight && adaptiveStyles.compactWeekHeader]}>
             <Text style={styles.pageTitle}>{t('tabs').schedule}</Text>
-            <TouchableOpacity style={styles.weekInfo} onPress={() => setIsMenuOpen(true)}>
-              <Text style={styles.weekText}>
-                {isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
-              </Text>
-            </TouchableOpacity>
+            <ScheduleViewButton isEvenWeek={isEvenWeek} currentView="week" />
           </View>
 
           {/* Week navigation controls */}
@@ -1555,6 +1555,7 @@ export default function WeekView() {
                 key={day.dayKey}
                 style={[
                   styles.dayColumn,
+                  isCompactHeight && adaptiveStyles.compactDayColumn,
                   { width: dayColumnWidth },
                   day.isToday && styles.todayColumn,
                   dayExamEvents.length > 0 && styles.dayColumnExam,
@@ -1568,8 +1569,12 @@ export default function WeekView() {
                     <Text style={styles.dayAssignmentBadgeText}>{totalAssignments}</Text>
                   </View>
                 )}
-                <Text style={styles.dayName}>{day.dayName}</Text>
-                <Text style={styles.dateText}>{day.dayNumber}</Text>
+                <Text style={[styles.dayName, isCompactHeight && { fontSize: 12 }]}>
+                  {day.dayName}
+                </Text>
+                <Text style={[styles.dateText, isCompactHeight && { marginTop: 0, fontSize: 14 }]}>
+                  {day.dayNumber}
+                </Text>
                 {(dayExamEvents.length > 0 ||
                   dayThesisEvents.length > 0 ||
                   (isSpecialScheduleLoading && index === 0)) && (
@@ -1628,9 +1633,9 @@ export default function WeekView() {
             );
           })}
         </Animated.View>
-      </View>
+      </ScreenHeader>
 
-      <View style={styles.content}>
+      <View style={[styles.content, { paddingLeft: insets.left, paddingRight: insets.right }]}>
         {isWholeWeekEmpty ? (
           <ScrollView
             showsVerticalScrollIndicator={false}
@@ -1814,15 +1819,7 @@ export default function WeekView() {
           </ScrollView>
         )}
       </View>
-
-      <ViewModeMenu
-        isOpen={isMenuOpen}
-        onClose={() => setIsMenuOpen(false)}
-        isEvenWeek={isEvenWeek}
-        weekText={isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
-        currentView="week"
-      />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -2254,7 +2251,14 @@ const styles = StyleSheet.create<Styles>({
 
 const adaptiveStyles = StyleSheet.create({
   weekToolbar: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  compactWeekHeader: { padding: 12, gap: 12 },
+  compactWeekHeader: { padding: 8, gap: 12 },
+  compactDayColumn: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 4,
+    minHeight: 28,
+  },
   compactNavigation: { flex: 1, paddingRight: 8 },
   detailedGradient: { padding: 8 },
   detailedClassName: { fontSize: 13, lineHeight: 17 },

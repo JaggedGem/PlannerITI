@@ -7,19 +7,30 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useEffect, useMemo } from 'react';
 
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 
 import { Colors } from '@/constants/Colors';
+import { MODAL_ORIENTATIONS } from '@/constants/Layout';
 import { useTranslation } from '@/hooks/useTranslation';
 import { ScheduleView, scheduleService } from '@/services/scheduleService';
+import { MenuAnchor, getAnchoredMenuLayout } from '@/utils/anchoredMenu';
 
 interface ViewModeMenuProps {
   isOpen: boolean;
   onClose: () => void;
-  isEvenWeek: boolean;
+  anchor: MenuAnchor | null;
   weekText: string;
   currentView: ScheduleView;
 }
@@ -27,11 +38,14 @@ interface ViewModeMenuProps {
 export default function ViewModeMenu({
   isOpen,
   onClose,
-  isEvenWeek,
+  anchor,
   weekText,
   currentView,
 }: ViewModeMenuProps) {
   const { t } = useTranslation();
+  const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const placement = anchor ? getAnchoredMenuLayout(anchor, width, height, insets) : undefined;
 
   // Shared progress value (0 -> closed, 1 -> open)
   const progress = useSharedValue(isOpen ? 1 : 0);
@@ -135,9 +149,23 @@ export default function ViewModeMenu({
   );
 
   return (
-    <Animated.View style={[styles.overlay, overlayStyle]}>
-      <TouchableOpacity style={styles.backdrop} onPress={onClose} activeOpacity={1}>
-        <Animated.View style={[styles.menuContainer, animatedContainerStyle]}>
+    <Modal
+      visible={isOpen}
+      transparent
+      animationType="none"
+      supportedOrientations={MODAL_ORIENTATIONS}
+      statusBarTranslucent
+      navigationBarTranslucent
+      onRequestClose={onClose}
+    >
+      <Animated.View style={[styles.overlay, overlayStyle]}>
+        <Pressable
+          style={styles.backdrop}
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel={t('common').cancel}
+        />
+        <Animated.View style={[styles.menuContainer, placement, animatedContainerStyle]}>
           <View style={styles.weekPill}>
             <Text style={styles.weekText}>{weekText}</Text>
           </View>
@@ -166,8 +194,8 @@ export default function ViewModeMenu({
             ))}
           </View>
         </Animated.View>
-      </TouchableOpacity>
-    </Animated.View>
+      </Animated.View>
+    </Modal>
   );
 }
 
@@ -181,14 +209,17 @@ const styles = StyleSheet.create({
     zIndex: 1000,
   },
   backdrop: {
-    flex: 1,
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
     backgroundColor: Colors.dark.overlayBlack50,
     justifyContent: 'flex-start',
     alignItems: 'flex-end',
-    paddingTop: 60, // Add top padding to avoid status bar
-    paddingHorizontal: 20,
   },
   menuContainer: {
+    position: 'absolute',
     backgroundColor: Colors.dark.surfaceSecondary, // Updated to match dates container color
     borderRadius: 16,
     padding: 12,
