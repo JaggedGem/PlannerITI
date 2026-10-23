@@ -18,13 +18,14 @@ import {
   TouchableOpacity,
   View,
   ViewStyle,
-  useWindowDimensions,
 } from 'react-native';
 
 import { LinearGradient } from 'expo-linear-gradient';
 
+import { contentLayout } from '@/components/ui/ContentLayout';
 import { Colors } from '@/constants/Colors';
 import { translations } from '@/constants/Translations';
+import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 import { useTimeUpdate } from '@/hooks/useTimeUpdate';
 import { useTranslation } from '@/hooks/useTranslation';
 import {
@@ -53,6 +54,7 @@ import {
   readNextClassCache,
   writeNextClassCache,
 } from '@/utils/nextClassCache';
+import { getWeekLayout } from '@/utils/responsiveLayout';
 import { runWhenIdle } from '@/utils/runWhenIdle';
 import { scheduleNavigation } from '@/utils/scheduleNavigation';
 import { filterExamEventsForDate, filterThesisEventsForDate } from '@/utils/specialScheduleUtils';
@@ -160,16 +162,25 @@ interface TimetableItemProps {
     startTime: string;
     endTime: string;
     className: string;
+    teacherName?: string;
     roomNumber: string;
     assignmentCount?: number;
   };
   top: number;
   height: number;
+  hasDetailedCards: boolean;
   color: string;
   isActive: boolean;
 }
 
-const TimetableItem = ({ item, top, height, color, isActive }: TimetableItemProps) => {
+const TimetableItem = ({
+  item,
+  top,
+  height,
+  color,
+  isActive,
+  hasDetailedCards,
+}: TimetableItemProps) => {
   // Safely handle assignment count
   const assignmentCount = item.assignmentCount || 0;
 
@@ -193,16 +204,27 @@ const TimetableItem = ({ item, top, height, color, isActive }: TimetableItemProp
         } // Less opacity for inactive
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={styles.itemGradient}
+        style={[styles.itemGradient, hasDetailedCards && adaptiveStyles.detailedGradient]}
       >
         <View style={styles.itemHeader}>
-          <Text style={styles.className} numberOfLines={1}>
+          <Text
+            style={[styles.className, hasDetailedCards && adaptiveStyles.detailedClassName]}
+            numberOfLines={hasDetailedCards && height >= 65 ? 3 : 1}
+          >
             {item.className}
           </Text>
         </View>
 
+        {hasDetailedCards && height >= 90 && Boolean(item.teacherName) && (
+          <Text style={adaptiveStyles.teacherName} numberOfLines={1}>
+            {item.teacherName}
+          </Text>
+        )}
         <View style={styles.itemFooter}>
-          <Text style={styles.roomNumber} numberOfLines={1}>
+          <Text
+            style={[styles.roomNumber, hasDetailedCards && adaptiveStyles.detailedRoom]}
+            numberOfLines={1}
+          >
             {item.roomNumber}
           </Text>
 
@@ -1181,10 +1203,10 @@ export default function WeekView() {
   const timeSlots = generateTimeSlots(firstHour, lastHour);
 
   // Calculate timetable dimensions
-  const { width: windowWidth } = useWindowDimensions();
-  const hourHeight = 65; // Slightly more compact
-  const timeColumnWidth = 30; // Even narrower time column
-  const dayColumnWidth = (windowWidth - timeColumnWidth - 8) / Math.min(totalDays, 6); // Limit to 6 columns max for readability
+  const { availableWidth, availableHeight, fontScale, isCompactHeight } = useResponsiveLayout();
+  const { hourHeight, timeColumnWidth, dayColumnWidth, gridWidth, hasDetailedCards } =
+    getWeekLayout(availableWidth, availableHeight, totalDays, fontScale);
+  const hasCompactToolbar = isCompactHeight && availableWidth >= 700 * Math.max(1, fontScale);
   const timetableHeight = (lastHour - firstHour + 1) * hourHeight;
 
   // Get current hour for highlighting
@@ -1465,35 +1487,41 @@ export default function WeekView() {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.headerContainer}>
-        <View style={styles.header}>
-          <Text style={styles.pageTitle}>{t('tabs').schedule}</Text>
-          <TouchableOpacity style={styles.weekInfo} onPress={() => setIsMenuOpen(true)}>
-            <Text style={styles.weekText}>
-              {isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
-            </Text>
-          </TouchableOpacity>
-        </View>
+        <View style={hasCompactToolbar && adaptiveStyles.weekToolbar}>
+          <View style={[styles.header, isCompactHeight && adaptiveStyles.compactWeekHeader]}>
+            <Text style={styles.pageTitle}>{t('tabs').schedule}</Text>
+            <TouchableOpacity style={styles.weekInfo} onPress={() => setIsMenuOpen(true)}>
+              <Text style={styles.weekText}>
+                {isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek}
+              </Text>
+            </TouchableOpacity>
+          </View>
 
-        {/* Week navigation controls */}
-        <View style={styles.navigationControls}>
-          <TouchableOpacity onPress={() => navigateWeek(-1)} style={styles.navButton}>
-            <Text style={styles.navButtonText}>◀ {t('schedule').prevWeek}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={goToCurrentWeek}
-            style={[styles.navButton, weekOffset === 0 && { opacity: 0.5 }]}
+          {/* Week navigation controls */}
+          <View
+            style={[
+              styles.navigationControls,
+              hasCompactToolbar && adaptiveStyles.compactNavigation,
+            ]}
           >
-            <Animated.View entering={FadeIn.duration(150)} exiting={FadeOut.duration(150)}>
-              <Text style={styles.navButtonText}>{weekDisplayText()}</Text>
-            </Animated.View>
-          </TouchableOpacity>
+            <TouchableOpacity onPress={() => navigateWeek(-1)} style={styles.navButton}>
+              <Text style={styles.navButtonText}>◀ {t('schedule').prevWeek}</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity onPress={() => navigateWeek(1)} style={styles.navButton}>
-            <Text style={styles.navButtonText}>{t('schedule').nextWeek} ▶</Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              onPress={goToCurrentWeek}
+              style={[styles.navButton, weekOffset === 0 && { opacity: 0.5 }]}
+            >
+              <Animated.View entering={FadeIn.duration(150)} exiting={FadeOut.duration(150)}>
+                <Text style={styles.navButtonText}>{weekDisplayText()}</Text>
+              </Animated.View>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => navigateWeek(1)} style={styles.navButton}>
+              <Text style={styles.navButtonText}>{t('schedule').nextWeek} ▶</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-
         {/* Days header with animation */}
         <Animated.View style={styles.daysHeader} entering={FadeIn.duration(200)}>
           {/* Empty space for time column alignment */}
@@ -1606,7 +1634,7 @@ export default function WeekView() {
         {isWholeWeekEmpty ? (
           <ScrollView
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.weekEmptyContent}
+            contentContainerStyle={[styles.weekEmptyContent, contentLayout.form]}
           >
             <Animated.View entering={FadeIn.duration(200)}>
               <Animated.View style={containerStyle}>
@@ -1667,7 +1695,7 @@ export default function WeekView() {
                   style={[
                     styles.gridContainer,
                     {
-                      width: windowWidth - timeColumnWidth - 8,
+                      width: gridWidth,
                     },
                   ]}
                 >
@@ -1751,6 +1779,7 @@ export default function WeekView() {
                               height={height}
                               color={color}
                               isActive={isActive}
+                              hasDetailedCards={hasDetailedCards}
                             />
                           );
                         })}
@@ -2083,7 +2112,6 @@ const styles = StyleSheet.create<Styles>({
   dayContent: {
     position: 'absolute',
     top: 0,
-    marginHorizontal: 2,
     borderRadius: 8,
   },
   dayContentExam: {
@@ -2222,4 +2250,14 @@ const styles = StyleSheet.create<Styles>({
     fontWeight: 'bold',
     textAlign: 'center',
   },
+});
+
+const adaptiveStyles = StyleSheet.create({
+  weekToolbar: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  compactWeekHeader: { padding: 12, gap: 12 },
+  compactNavigation: { flex: 1, paddingRight: 8 },
+  detailedGradient: { padding: 8 },
+  detailedClassName: { fontSize: 13, lineHeight: 17 },
+  detailedRoom: { fontSize: 11 },
+  teacherName: { color: Colors.dark.white, fontSize: 11, opacity: 0.9 },
 });

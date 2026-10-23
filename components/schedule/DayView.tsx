@@ -22,14 +22,15 @@ import {
   TouchableOpacity,
   View,
   ViewStyle,
-  useWindowDimensions,
 } from 'react-native';
 
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 
+import { contentLayout } from '@/components/ui/ContentLayout';
 import { Colors } from '@/constants/Colors';
 import { translations } from '@/constants/Translations';
+import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 import { useTimeUpdate } from '@/hooks/useTimeUpdate';
 import { useTranslation } from '@/hooks/useTranslation';
 import {
@@ -303,7 +304,7 @@ export default function DayView() {
   const currentDate = useRef(new Date()).current;
   const isEvenWeek = scheduleService.isEvenWeek(selectedDate);
   const { t, formatDate, formatTime } = useTranslation();
-  const { width: windowWidth } = useWindowDimensions();
+  const { availableWidth, hasDaySidebar, daySidebarWidth, isCompactHeight } = useResponsiveLayout();
   const recoveryDay = useMemo(() => scheduleService.isRecoveryDay(selectedDate), [selectedDate]);
   const isWeekend = selectedDate.getDay() === 0 || selectedDate.getDay() === 6;
   const selectedAcademicPeriod = useMemo(
@@ -610,18 +611,18 @@ export default function DayView() {
   // Add these functions after the main hook declarations, before updateSchedule
   const scrollToDate = useCallback(
     (date: Date) => {
-      if (!scrollViewRef.current) return;
+      if (!scrollViewRef.current || hasDaySidebar) return;
 
       const dateIndex = weekDates.findIndex((d) => d.date.toDateString() === date.toDateString());
 
       if (dateIndex !== -1) {
         scrollViewRef.current.scrollTo({
-          x: dateIndex * ((windowWidth - 40) / 5),
+          x: Math.max(0, dateIndex * 82 - (availableWidth - 40 - 70) / 2),
           animated: true,
         });
       }
     },
-    [weekDates, windowWidth],
+    [weekDates, availableWidth, hasDaySidebar],
   );
 
   const handleDatePress = useCallback(
@@ -1509,11 +1510,22 @@ export default function DayView() {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <View style={styles.headerContainer}>
-        <View style={styles.header}>
-          <View style={styles.headerTop}>
-            <Text style={styles.headerTitle}>
+    <SafeAreaView
+      style={[styles.container, hasDaySidebar && adaptiveStyles.daySplit]}
+      edges={['top', 'left', 'right']}
+    >
+      <ScrollView
+        style={[
+          styles.headerContainer,
+          adaptiveStyles.headerScroll,
+          hasDaySidebar && { width: daySidebarWidth },
+        ]}
+        contentContainerStyle={!hasDaySidebar && contentLayout.page}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={[styles.header, isCompactHeight && adaptiveStyles.compactHeader]}>
+          <View style={[styles.headerTop, hasDaySidebar && adaptiveStyles.sidebarTitle]}>
+            <Text style={[styles.headerTitle, hasDaySidebar && adaptiveStyles.sidebarTitleText]}>
               {formatDate(selectedDate, {
                 month: 'long',
                 day: 'numeric',
@@ -1528,19 +1540,25 @@ export default function DayView() {
           </View>
           <View style={styles.dateList}>
             {/* Left gradient fade */}
-            <LinearGradient
-              colors={[Colors.dark.backgroundTertiary, Colors.dark.overlayDarkTransparent]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.leftGradient}
-              pointerEvents="none"
-            />
+            {!hasDaySidebar && (
+              <LinearGradient
+                colors={[Colors.dark.backgroundTertiary, Colors.dark.overlayDarkTransparent]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.leftGradient}
+                pointerEvents="none"
+              />
+            )}
 
             <ScrollView
               ref={scrollViewRef}
-              horizontal
+              horizontal={!hasDaySidebar}
+              scrollEnabled={!hasDaySidebar}
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.dateListScrollContent}
+              contentContainerStyle={[
+                styles.dateListScrollContent,
+                hasDaySidebar && adaptiveStyles.sidebarDates,
+              ]}
             >
               {weekDatesWithAssignments.map((date, index) => (
                 <TouchableOpacity
@@ -1548,6 +1566,8 @@ export default function DayView() {
                   onPress={() => handleDatePress(date.date)}
                   style={[
                     styles.dateItem,
+                    hasDaySidebar && daySidebarWidth < 300 && adaptiveStyles.sidebarDate,
+                    isCompactHeight && adaptiveStyles.compactDate,
                     date.date.getDate() === selectedDate.getDate() &&
                       !date.isRecoveryDay &&
                       styles.selectedDay,
@@ -1630,13 +1650,15 @@ export default function DayView() {
             </ScrollView>
 
             {/* Right gradient fade */}
-            <LinearGradient
-              colors={[Colors.dark.overlayDarkTransparent, Colors.dark.backgroundTertiary]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.rightGradient}
-              pointerEvents="none"
-            />
+            {!hasDaySidebar && (
+              <LinearGradient
+                colors={[Colors.dark.overlayDarkTransparent, Colors.dark.backgroundTertiary]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.rightGradient}
+                pointerEvents="none"
+              />
+            )}
 
             {/* First-time indicator */}
             {showFirstTimeIndicator && (
@@ -1652,10 +1674,13 @@ export default function DayView() {
             )}
           </View>
         </View>
-      </View>
+      </ScrollView>
 
       <View style={styles.contentContainer}>
-        <ScrollView style={styles.scheduleContainer}>
+        <ScrollView
+          style={styles.scheduleContainer}
+          contentContainerStyle={[adaptiveStyles.scheduleContent, contentLayout.form]}
+        >
           {hasStandaloneAssessments && (
             <View style={styles.assessmentSection}>
               <Text style={styles.assessmentSectionTitle}>{t('schedule').assessments}</Text>
@@ -1848,7 +1873,10 @@ export default function DayView() {
 
                       <View style={styles.classContent}>
                         <View style={styles.classHeaderRow}>
-                          <Text style={styles.className} numberOfLines={1}>
+                          <Text
+                            style={styles.className}
+                            numberOfLines={availableWidth >= 600 ? 2 : 1}
+                          >
                             {item.className}
                           </Text>
 
@@ -2273,6 +2301,7 @@ const styles = StyleSheet.create<Styles>({
   headerTitle: {
     fontSize: 24,
     fontWeight: '700',
+    flexShrink: 1,
     color: Colors.dark.white,
     textAlign: 'center',
     letterSpacing: 0.5,
@@ -2315,7 +2344,8 @@ const styles = StyleSheet.create<Styles>({
   dateListScrollContent: {
     paddingVertical: 5,
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexGrow: 1,
+    justifyContent: 'center',
     paddingHorizontal: 8,
     gap: 12,
   },
@@ -2365,8 +2395,6 @@ const styles = StyleSheet.create<Styles>({
   },
   scheduleContainer: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 16,
     backgroundColor: Colors.dark.backgroundSecondary,
   },
   scheduleItem: {
@@ -3038,4 +3066,16 @@ const styles = StyleSheet.create<Styles>({
     fontSize: 12,
     lineHeight: 17,
   },
+});
+
+const adaptiveStyles = StyleSheet.create({
+  daySplit: { flexDirection: 'row' },
+  headerScroll: { flexGrow: 0, flexShrink: 0 },
+  compactHeader: { padding: 12 },
+  sidebarTitle: { flexWrap: 'wrap', marginBottom: 16 },
+  sidebarTitleText: { fontSize: 22, width: '100%' },
+  sidebarDates: { flexWrap: 'wrap', justifyContent: 'center', gap: 8, width: '100%' },
+  sidebarDate: { width: 56 },
+  compactDate: { height: 64, paddingVertical: 6, borderRadius: 16 },
+  scheduleContent: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24 },
 });
