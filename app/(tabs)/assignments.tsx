@@ -676,7 +676,7 @@ const AssignmentOptionsProvider = ({ children }: { children: React.ReactNode }) 
 
 // Define the main Assignments component - this needs to be before AssignmentsWithErrorBoundary
 const Assignments = () => {
-  const { isCompactHeight, insets } = useResponsiveLayout();
+  const { isCompactHeight, isLandscape, insets } = useResponsiveLayout();
   const { t, formatDate } = useTranslation();
 
   const [selectedSegmentIndex, setSelectedSegmentIndex] = useState(0);
@@ -1177,15 +1177,27 @@ const Assignments = () => {
 
       <ScreenHeader style={styles.headerContainer}>
         <View style={[styles.header, isCompactHeight && { paddingTop: 12, paddingBottom: 12 }]}>
-          <View style={[styles.headerTopRow, { gap: 12, marginBottom: 0, flexWrap: 'wrap' }]}>
-            <Text style={[styles.headerTitle, { flexGrow: 1, flexShrink: 1 }]}>
+          <View
+            style={[
+              styles.headerTopRow,
+              { gap: 12, marginBottom: 0, flexWrap: isLandscape ? 'nowrap' : 'wrap' },
+            ]}
+          >
+            <Text style={[styles.headerTitle, { flexGrow: isLandscape ? 0 : 1, flexShrink: 1 }]}>
               {t('assignments').title}
             </Text>
 
             <Pressable
               style={({ pressed }) => [
                 styles.dropdownButton,
-                { width: undefined, marginTop: 0, alignSelf: 'center', paddingHorizontal: 12 },
+                {
+                  width: isLandscape ? undefined : '100%',
+                  flex: undefined,
+                  marginTop: 0,
+                  alignSelf: isLandscape ? 'center' : 'stretch',
+                  marginLeft: isLandscape ? 'auto' : 0,
+                  paddingHorizontal: 12,
+                },
                 pressed && styles.dropdownButtonPressed,
               ]}
               onPress={() => {
@@ -1199,13 +1211,17 @@ const Assignments = () => {
                   name="chevron-down"
                   size={16}
                   color={Colors.dark.mutedText}
-                  style={[styles.dropdownArrow, isDropdownVisible && styles.dropdownArrowRotated]}
+                  style={[
+                    styles.dropdownArrow,
+                    isDropdownVisible && styles.dropdownArrowRotated,
+                    { marginLeft: 4 },
+                  ]}
                 />
               </View>
             </Pressable>
 
             <TouchableOpacity
-              style={styles.archiveButton}
+              style={[styles.archiveButton, !isLandscape && styles.archiveButtonPortrait]}
               onPress={handleArchivePress}
               activeOpacity={0.7}
             >
@@ -1260,14 +1276,8 @@ const styles = StyleSheet.create({
   header: {
     padding: 20,
     paddingTop: Platform.OS === 'android' ? 40 : 20,
-    backgroundColor: Colors.dark.backgroundTertiary,
     borderBottomRightRadius: 32,
     borderBottomLeftRadius: 32,
-    shadowColor: Colors.dark.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
   },
   headerTopRow: {
     flexDirection: 'row',
@@ -1288,6 +1298,11 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  archiveButtonPortrait: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
   },
   archiveButtonText: {
     color: Colors.dark.white,

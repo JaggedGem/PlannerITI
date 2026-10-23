@@ -20,3 +20,21 @@ it.each([
     expect(layout.top).toBe(y + buttonHeight + 8);
   },
 );
+
+it('aligns the menu left edge with the button when requested', () => {
+  const anchor = { x: 116, y: 32, width: 108, height: 54 };
+  const layout = getAnchoredMenuLayout(
+    anchor,
+    844,
+    390,
+    {
+      top: 0,
+      bottom: 21,
+      left: 44,
+      right: 0,
+    },
+    true,
+  );
+
+  expect(layout.left).toBe(anchor.x);
+});

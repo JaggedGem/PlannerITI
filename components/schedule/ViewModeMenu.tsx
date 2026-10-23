@@ -45,7 +45,9 @@ export default function ViewModeMenu({
   const { t } = useTranslation();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const placement = anchor ? getAnchoredMenuLayout(anchor, width, height, insets) : undefined;
+  const placement = anchor
+    ? getAnchoredMenuLayout(anchor, width, height, insets, width > height)
+    : undefined;
 
   // Shared progress value (0 -> closed, 1 -> open)
   const progress = useSharedValue(isOpen ? 1 : 0);

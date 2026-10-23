@@ -303,8 +303,15 @@ export default function DayView() {
   const currentDate = useRef(new Date()).current;
   const isEvenWeek = scheduleService.isEvenWeek(selectedDate);
   const { t, formatDate, formatTime } = useTranslation();
-  const { availableWidth, hasDaySidebar, daySidebarWidth, isCompactHeight, insets } =
-    useResponsiveLayout();
+  const {
+    availableWidth,
+    availableHeight,
+    hasDaySidebar,
+    daySidebarWidth,
+    isCompactHeight,
+    insets,
+  } = useResponsiveLayout();
+  const isLandscape = availableWidth > availableHeight;
   const recoveryDay = useMemo(() => scheduleService.isRecoveryDay(selectedDate), [selectedDate]);
   const isWeekend = selectedDate.getDay() === 0 || selectedDate.getDay() === 6;
   const selectedAcademicPeriod = useMemo(
@@ -1493,6 +1500,7 @@ export default function DayView() {
         edges={hasDaySidebar ? ['top', 'left'] : ['top', 'left', 'right']}
         style={[
           adaptiveStyles.headerSurface,
+          isLandscape && { borderBottomLeftRadius: 0, borderTopRightRadius: 32 },
           hasDaySidebar && { width: daySidebarWidth + insets.left },
         ]}
       >
@@ -1504,7 +1512,13 @@ export default function DayView() {
           ]}
           showsVerticalScrollIndicator={false}
         >
-          <View style={[styles.header, isCompactHeight && adaptiveStyles.compactHeader]}>
+          <View
+            style={[
+              styles.header,
+              isCompactHeight && adaptiveStyles.compactHeader,
+              isLandscape && { borderBottomLeftRadius: 0 },
+            ]}
+          >
             <View style={[styles.headerTop, hasDaySidebar && adaptiveStyles.sidebarTitle]}>
               <Text style={[styles.headerTitle, hasDaySidebar && adaptiveStyles.sidebarTitleText]}>
                 {formatDate(selectedDate, {
@@ -1566,6 +1580,7 @@ export default function DayView() {
                           index === weekDatesWithAssignments.length - 1
                             ? styles.lastDateAssignmentBadge
                             : styles.dateAssignmentBadge,
+                          isLandscape && adaptiveStyles.landscapeDateAssignmentBadge,
                           date.date.getDate() === selectedDate.getDate() &&
                             styles.selectedDateAssignmentBadge,
                         ]}
@@ -1573,6 +1588,7 @@ export default function DayView() {
                         <Text
                           style={[
                             styles.dateAssignmentBadgeText,
+                            isLandscape && adaptiveStyles.landscapeDateAssignmentBadgeText,
                             date.date.getDate() === selectedDate.getDate() &&
                               styles.selectedDateAssignmentBadgeText,
                           ]}
@@ -2835,10 +2851,10 @@ const styles = StyleSheet.create<Styles>({
     backgroundColor: Colors.dark.red,
     minWidth: 18,
     height: 18,
-    borderRadius: 9,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: 0,
     zIndex: 1,
   },
   selectedDateAssignmentBadge: {
@@ -2859,10 +2875,10 @@ const styles = StyleSheet.create<Styles>({
     backgroundColor: Colors.dark.red,
     minWidth: 18,
     height: 18,
-    borderRadius: 9,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: 0,
     zIndex: 1,
   },
   timeChevronContainer: {
@@ -3069,6 +3085,17 @@ const adaptiveStyles = StyleSheet.create({
   sidebarTitleText: { fontSize: 22, width: '100%' },
   sidebarDates: { flexWrap: 'wrap', justifyContent: 'center', gap: 8, width: '100%' },
   sidebarDate: { width: 56 },
+  landscapeDateAssignmentBadge: {
+    top: undefined,
+    bottom: -4,
+    left: -4,
+    right: undefined,
+    width: 18,
+    minWidth: 0,
+    height: 18,
+    borderRadius: 9,
+  },
+  landscapeDateAssignmentBadgeText: { fontSize: 11 },
   compactDate: { height: 76, paddingVertical: 8, borderRadius: 16 },
   compactDateDay: { fontSize: 12, lineHeight: 16, marginBottom: 4 },
   compactDateNumber: { lineHeight: 22, marginBottom: 4 },

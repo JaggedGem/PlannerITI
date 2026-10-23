@@ -544,6 +544,7 @@ export const scheduleService = {
   cachedDatePeriodTimes: {} as DatePeriodTimesMap,
   cachedSubjects: [] as Subject[],
   cachedAssignmentCounts: [] as PeriodAssignmentCount[],
+  assignmentCountsLoaded: false,
   specialScheduleFetchedThisSession: new Set<string>(),
   specialScheduleInFlight: new Map<string, Promise<SpecialScheduleResponse>>(),
   academicCalendarFetchedThisSession: new Set<string>(),
@@ -2893,6 +2894,11 @@ export const scheduleService = {
 
     // Convert the date to a dateKey for assignment filtering
     const dateKey = date ? format(date, 'yyyy-MM-dd') : '';
+    // Assignment changes update the shared cache before a schedule response is
+    // refetched. Prefer that cache so already-mounted views receive current counts.
+    const assignmentCounts = this.assignmentCountsLoaded
+      ? this.cachedAssignmentCounts
+      : (data.assignmentCounts ?? []);
     addOverrideInfoIfNeeded();
 
     if ((!daySchedule || typeof daySchedule !== 'object') && effectiveDateSchedule?.length) {
@@ -2902,8 +2908,8 @@ export const scheduleService = {
         const periodId = String(period.index + 1);
         let assignmentCount = 0;
 
-        if (data.assignmentCounts && dateKey) {
-          const countByPeriod = data.assignmentCounts.find(
+        if (dateKey) {
+          const countByPeriod = assignmentCounts.find(
             (ac) => ac.periodId === periodId && ac.dateKey === dateKey,
           );
           if (countByPeriod) {
@@ -3003,9 +3009,9 @@ export const scheduleService = {
         const className = item.subjectid.name;
         let assignmentCount = 0;
 
-        if (data.assignmentCounts && dateKey) {
+        if (dateKey) {
           // First try to find by period ID and date
-          const countByPeriod = data.assignmentCounts.find(
+          const countByPeriod = assignmentCounts.find(
             (ac) => ac.periodId === periodId && ac.dateKey === dateKey,
           );
 
@@ -3013,7 +3019,7 @@ export const scheduleService = {
             assignmentCount = countByPeriod.count;
           } else {
             // Then try by course name and date
-            const countByCourse = data.assignmentCounts.find(
+            const countByCourse = assignmentCounts.find(
               (ac) => ac.courseCode === className && ac.dateKey === dateKey,
             );
 
@@ -3059,8 +3065,8 @@ export const scheduleService = {
         ) {
           // Get assignment count for this custom period, filtering by date
           let assignmentCount = 0;
-          if (data.assignmentCounts && dateKey) {
-            const periodCount = data.assignmentCounts.find(
+          if (dateKey) {
+            const periodCount = assignmentCounts.find(
               (ac) => ac.periodId === customPeriod._id && ac.dateKey === dateKey,
             );
 
@@ -3199,6 +3205,7 @@ export const scheduleService = {
     try {
       // Update the cached counts
       this.cachedAssignmentCounts = counts;
+      this.assignmentCountsLoaded = true;
 
       // Store in AsyncStorage
       await AsyncStorage.setItem(CACHE_KEYS.ASSIGNMENT_COUNTS, JSON.stringify(counts));
@@ -3363,7 +3370,10 @@ export const scheduleService = {
     if (cachedRecoveryDays) this.cachedRecoveryDays = JSON.parse(cachedRecoveryDays);
     if (cachedPeriodTimes) this.cachedDatePeriodTimes = JSON.parse(cachedPeriodTimes);
     if (cachedSubjects) this.cachedSubjects = JSON.parse(cachedSubjects);
-    if (cachedAssignmentCounts) this.cachedAssignmentCounts = JSON.parse(cachedAssignmentCounts);
+    if (cachedAssignmentCounts) {
+      this.cachedAssignmentCounts = JSON.parse(cachedAssignmentCounts);
+      this.assignmentCountsLoaded = true;
+    }
     if (!cachedRecoveryDays) this.cachedRecoveryDays = this.buildRecoveryDaysFromDatePeriodTimes();
     await this.ensureSelectedGroup();
     // Perform initial sync after selected group is resolved.

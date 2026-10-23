@@ -1146,7 +1146,7 @@ const ExamsView = ({
                     </View>
                     <View style={styles.examDetails}>
                       <Text style={styles.examSemester}>{formatSemesterLabel(exam.semester)}</Text>
-                      {!exam.isUpcoming ? (
+                      {!exam.isUpcoming && (
                         <Text
                           style={[
                             styles.examGrade,
@@ -1156,8 +1156,6 @@ const ExamsView = ({
                         >
                           {exam.grade}
                         </Text>
-                      ) : (
-                        <Text style={styles.upcomingExamGrade}>{t('grades').subjects.pending}</Text>
                       )}
                     </View>
                     {exam.isUpcoming && (
@@ -2186,7 +2184,6 @@ const GradesScreen = ({
       {/* Header with student info and buttons */}
       <ScreenHeader
         style={{
-          backgroundColor: Colors.dark.backgroundSecondary,
           borderBottomLeftRadius: 0,
           borderBottomRightRadius: 0,
         }}
@@ -2205,12 +2202,29 @@ const GradesScreen = ({
           </Text>
           <Text
             style={[styles.studentDetails, isCompactHeight && { fontSize: 12 }, textOpacity]}
-            numberOfLines={isCompactHeight ? 1 : 2}
+            numberOfLines={1}
           >
-            {studentGrades.studentInfo.group} | {studentGrades.studentInfo.specialization}
+            {studentGrades.studentInfo.group}
+          </Text>
+          <Text
+            style={[
+              styles.studentDetails,
+              styles.studentSpecialization,
+              isCompactHeight && { fontSize: 12 },
+              textOpacity,
+            ]}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {studentGrades.studentInfo.specialization}
           </Text>
         </View>
-        <View style={styles.headerButtons}>
+        <View
+          style={[
+            styles.headerButtons,
+            isCompactHeight ? styles.headerButtonsCompact : styles.headerButtonsRegular,
+          ]}
+        >
           {currentSemesterData?.subjects && currentSemesterData.subjects.length > 0 && (
             <TouchableOpacity
               style={styles.calculatorButton}
@@ -2226,18 +2240,6 @@ const GradesScreen = ({
           )}
           <View style={styles.headerActionColumn}>
             <TouchableOpacity
-              style={styles.refreshButton}
-              onPress={handleRefresh}
-              disabled={refreshing}
-            >
-              <MaterialIcons
-                name="refresh"
-                size={24}
-                color={Colors.dark.white}
-                style={[refreshing && styles.refreshingIcon]}
-              />
-            </TouchableOpacity>
-            <TouchableOpacity
               style={[
                 styles.exportIconButton,
                 (!hasExportableGrades || isExportingPdf) && styles.exportIconButtonDisabled,
@@ -2251,6 +2253,18 @@ const GradesScreen = ({
               ) : (
                 <MaterialIcons name="picture-as-pdf" size={20} color={Colors.dark.white} />
               )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.refreshButton}
+              onPress={handleRefresh}
+              disabled={refreshing}
+            >
+              <MaterialIcons
+                name="refresh"
+                size={24}
+                color={Colors.dark.white}
+                style={[refreshing && styles.refreshingIcon]}
+              />
             </TouchableOpacity>
           </View>
         </View>
@@ -3683,6 +3697,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 4,
   },
+  studentSpecialization: {
+    marginTop: 1,
+  },
   // Absences styles
   absencesContainer: {
     marginTop: 10,
@@ -3762,14 +3779,12 @@ const styles = StyleSheet.create({
   },
   headerContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    position: 'relative',
     paddingHorizontal: 20,
     paddingVertical: 20,
   },
   headerLeft: {
-    flex: 1,
-    marginRight: 16,
+    width: '100%',
   },
   refreshButton: {
     backgroundColor: Colors.dark.primaryStrong,
@@ -3918,9 +3933,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
   },
-  upcomingExamGrade: {
-    color: Colors.dark.lightOrange,
-  },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -4029,9 +4041,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   headerButtons: {
+    position: 'absolute',
+    right: 20,
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
+  },
+  headerButtonsRegular: {
+    top: 20,
+  },
+  headerButtonsCompact: {
+    top: 8,
   },
   headerActionColumn: {
     flexDirection: 'row',

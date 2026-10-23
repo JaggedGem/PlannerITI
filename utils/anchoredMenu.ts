@@ -10,11 +10,15 @@ export function getAnchoredMenuLayout(
   windowWidth: number,
   windowHeight: number,
   insets: { left: number; right: number; top: number; bottom: number },
+  alignLeft = false,
 ) {
   const rightEdge = Math.min(windowWidth - insets.right - 8, anchor.x + anchor.width);
-  const width = Math.min(220, rightEdge - insets.left - 8);
+  const availableWidth = alignLeft
+    ? windowWidth - insets.right - 8 - anchor.x
+    : rightEdge - insets.left - 8;
+  const width = Math.min(220, availableWidth);
   return {
-    left: rightEdge - width,
+    left: alignLeft ? anchor.x : rightEdge - width,
     top: Math.max(
       insets.top + 8,
       Math.min(anchor.y + anchor.height + 8, windowHeight - insets.bottom - 196),

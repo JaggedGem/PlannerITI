@@ -1,3 +1,4 @@
+import { Ionicons } from '@react-native-vector-icons/ionicons';
 import Animated, {
   FadeIn,
   FadeOut,
@@ -48,6 +49,7 @@ import {
   isExamAcademicPeriod,
   toLocalDateKey,
 } from '@/utils/academicCalendarUtils';
+import { getAssignmentsForTimeRange } from '@/utils/assignmentStorage';
 import { formatMessage, formatTranslatedWeekday } from '@/utils/localization';
 import {
   buildNextClassCacheKey,
@@ -463,6 +465,7 @@ type Styles = {
   assignmentBadgeText: TextStyle;
   weekEmptyContent: ViewStyle;
   weekExamOverview: ViewStyle;
+  navButtonContent: ViewStyle;
 };
 
 // Define a type for schedule items
@@ -497,6 +500,7 @@ export default function WeekView() {
   const [scheduleData, setScheduleData] = useState<ApiResponse | null>(null);
   const [weekSchedule, setWeekSchedule] =
     useState<Record<string, ScheduleItem[]>>(EMPTY_WEEK_SCHEDULE);
+  const [weekAssignmentCounts, setWeekAssignmentCounts] = useState<Record<string, number>>({});
   const [thesisSchedule, setThesisSchedule] = useState<SpecialScheduleResponse | null>(null);
   const [examSchedule, setExamSchedule] = useState<SpecialScheduleResponse | null>(null);
   const [academicCalendars, setAcademicCalendars] = useState<GraficPeGroup[]>([]);
@@ -1004,6 +1008,27 @@ export default function WeekView() {
   useEffect(() => {
     let cancelled = false;
 
+    const loadAssignmentCounts = async () => {
+      const counts = await Promise.all(
+        weekDateSignature.split('|').map(async (dateKey) => {
+          const date = new Date(`${dateKey}T00:00:00`);
+          return [dateKey, (await getAssignmentsForTimeRange(date)).length] as const;
+        }),
+      );
+      if (!cancelled) {
+        setWeekAssignmentCounts(Object.fromEntries(counts));
+      }
+    };
+
+    void loadAssignmentCounts();
+    return () => {
+      cancelled = true;
+    };
+  }, [weekDateSignature, weekSchedule]);
+
+  useEffect(() => {
+    let cancelled = false;
+
     const loadAcademicCalendars = async () => {
       const representativeDates = new Map<string, Date>();
       weekDateSignature.split('|').forEach((dateKey) => {
@@ -1205,6 +1230,7 @@ export default function WeekView() {
   // Calculate timetable dimensions
   const { availableWidth, availableHeight, fontScale, isCompactHeight, insets } =
     useResponsiveLayout();
+  const isPortrait = availableHeight >= availableWidth;
   const { hourHeight, timeColumnWidth, dayColumnWidth, gridWidth, hasDetailedCards } =
     getWeekLayout(availableWidth, availableHeight, totalDays, fontScale);
   const hasCompactToolbar = isCompactHeight && availableWidth >= 700 * Math.max(1, fontScale);
@@ -1505,7 +1531,10 @@ export default function WeekView() {
             ]}
           >
             <TouchableOpacity onPress={() => navigateWeek(-1)} style={styles.navButton}>
-              <Text style={styles.navButtonText}>◀ {t('schedule').prevWeek}</Text>
+              <View style={styles.navButtonContent}>
+                <Ionicons name="chevron-back" size={16} color={Colors.dark.primaryStrong} />
+                <Text style={styles.navButtonText}>{t('schedule').prevWeek}</Text>
+              </View>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -1518,7 +1547,10 @@ export default function WeekView() {
             </TouchableOpacity>
 
             <TouchableOpacity onPress={() => navigateWeek(1)} style={styles.navButton}>
-              <Text style={styles.navButtonText}>{t('schedule').nextWeek} ▶</Text>
+              <View style={styles.navButtonContent}>
+                <Text style={styles.navButtonText}>{t('schedule').nextWeek}</Text>
+                <Ionicons name="chevron-forward" size={16} color={Colors.dark.primaryStrong} />
+              </View>
             </TouchableOpacity>
           </View>
         </View>
@@ -1545,10 +1577,9 @@ export default function WeekView() {
             const dayExamEvents = filterExamEventsForDate(examEvents, day.date, settings.group);
 
             // Calculate total assignments for the day
-            const totalAssignments = visibleDayItems.reduce(
-              (total, item) => total + (item.assignmentCount || 0),
-              0,
-            );
+            const totalAssignments =
+              weekAssignmentCounts[toLocalDateKey(day.date)] ??
+              visibleDayItems.reduce((total, item) => total + (item.assignmentCount || 0), 0);
 
             return (
               <Animated.View
@@ -1569,12 +1600,42 @@ export default function WeekView() {
                     <Text style={styles.dayAssignmentBadgeText}>{totalAssignments}</Text>
                   </View>
                 )}
-                <Text style={[styles.dayName, isCompactHeight && { fontSize: 12 }]}>
-                  {day.dayName}
-                </Text>
-                <Text style={[styles.dateText, isCompactHeight && { marginTop: 0, fontSize: 14 }]}>
-                  {day.dayNumber}
-                </Text>
+                {isPortrait ? (
+                  <>
+                    <Text
+                      style={[
+                        styles.dayName,
+                        isCompactHeight && { fontSize: 10 },
+                        isCompactHeight && { alignSelf: 'flex-end' },
+                      ]}
+                    >
+                      {day.dayName}
+                    </Text>
+                    <Text
+                      style={[styles.dateText, isCompactHeight && { marginTop: 0, fontSize: 20 }]}
+                    >
+                      {day.dayNumber}
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Text
+                      style={[styles.dateText, isCompactHeight && { marginTop: 0, fontSize: 20 }]}
+                    >
+                      {day.dayNumber}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.dayName,
+                        isCompactHeight && { fontSize: 10 },
+                        isCompactHeight && { alignSelf: 'flex-end' },
+                      ]}
+                    >
+                      {day.dayName}
+                    </Text>
+                  </>
+                )}
+
                 {(dayExamEvents.length > 0 ||
                   dayThesisEvents.length > 0 ||
                   (isSpecialScheduleLoading && index === 0)) && (
@@ -1875,6 +1936,11 @@ const styles = StyleSheet.create<Styles>({
     padding: 8,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  navButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   navButtonText: {
     color: Colors.dark.primaryStrong,
