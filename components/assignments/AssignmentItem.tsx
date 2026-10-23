@@ -206,9 +206,17 @@ export default function AssignmentItem({
   const [expanded, setExpanded] = useState(isHighlighted);
   const [showAddSubtask, setShowAddSubtask] = useState(false);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
-  const [subtasks, setSubtasks] = useState<Subtask[]>([]);
+  const [loadedSubtasks, setLoadedSubtasks] = useState<{
+    assignmentId: string;
+    sourceSubtasks: Assignment['subtasks'];
+    tasks: Subtask[];
+  } | null>(null);
+  const subtasks =
+    loadedSubtasks?.assignmentId === assignment.id &&
+    loadedSubtasks.sourceSubtasks === assignment.subtasks
+      ? loadedSubtasks.tasks
+      : (assignment.subtasks ?? []);
   const [isLoadingSubtasks, setIsLoadingSubtasks] = useState(false);
-  const subtasksLoadedRef = useRef(false);
   const [, setHighlight] = useState(isHighlighted);
 
   // Add state for description expansion
@@ -228,29 +236,17 @@ export default function AssignmentItem({
     setIsLoadingSubtasks(true);
     try {
       const storedSubtasks = await getSubtasksForAssignment(assignment.id);
-      setSubtasks(storedSubtasks);
+      setLoadedSubtasks({
+        assignmentId: assignment.id,
+        sourceSubtasks: assignment.subtasks,
+        tasks: storedSubtasks,
+      });
     } catch (error) {
       console.error('Error loading subtasks:', error);
     } finally {
       setIsLoadingSubtasks(false);
     }
-  }, [assignment.id]);
-
-  // Load subtasks only when the row is opened for the first time.
-  useEffect(() => {
-    if (!expanded || subtasksLoadedRef.current) {
-      return;
-    }
-
-    const idleTask = runWhenIdle(() => {
-      subtasksLoadedRef.current = true;
-      void loadSubtasks();
-    }, 16);
-
-    return () => {
-      idleTask.cancel();
-    };
-  }, [loadSubtasks, expanded]);
+  }, [assignment]);
 
   // Update check animation when completion status changes
   React.useEffect(() => {
@@ -597,6 +593,9 @@ export default function AssignmentItem({
                   <TouchableOpacity
                     style={styles.expandButton}
                     onPress={toggleExpanded}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('assignments').subtasks.title}
+                    accessibilityState={{ expanded }}
                     hitSlop={{
                       top: 10,
                       right: 10,

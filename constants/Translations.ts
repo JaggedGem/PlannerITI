@@ -1,4 +1,12 @@
+export type RelativeTimeUnit =
+  'second' | 'minute' | 'hour' | 'day' | 'week' | 'month' | 'quarter' | 'year';
+
 type TranslationType = {
+  relativeTime: {
+    future: string;
+    past: string;
+    units: Record<RelativeTimeUnit, { one: string; few: string; many: string; other: string }>;
+  };
   common: {
     error: string;
     alert: string;
@@ -695,6 +703,20 @@ type TranslationType = {
 
 export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
   en: {
+    relativeTime: {
+      future: 'in {{count}} {{unit}}',
+      past: '{{count}} {{unit}} ago',
+      units: {
+        second: { one: 'second', few: 'seconds', many: 'seconds', other: 'seconds' },
+        minute: { one: 'minute', few: 'minutes', many: 'minutes', other: 'minutes' },
+        hour: { one: 'hour', few: 'hours', many: 'hours', other: 'hours' },
+        day: { one: 'day', few: 'days', many: 'days', other: 'days' },
+        week: { one: 'week', few: 'weeks', many: 'weeks', other: 'weeks' },
+        month: { one: 'month', few: 'months', many: 'months', other: 'months' },
+        quarter: { one: 'quarter', few: 'quarters', many: 'quarters', other: 'quarters' },
+        year: { one: 'year', few: 'years', many: 'years', other: 'years' },
+      },
+    },
     common: {
       error: 'Error',
       alert: 'Notice',
@@ -1433,6 +1455,20 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
     },
   },
   ro: {
+    relativeTime: {
+      future: 'peste {{count}} {{unit}}',
+      past: 'acum {{count}} {{unit}}',
+      units: {
+        second: { one: 'secundă', few: 'secunde', many: 'secunde', other: 'de secunde' },
+        minute: { one: 'minut', few: 'minute', many: 'minute', other: 'de minute' },
+        hour: { one: 'oră', few: 'ore', many: 'ore', other: 'de ore' },
+        day: { one: 'zi', few: 'zile', many: 'zile', other: 'de zile' },
+        week: { one: 'săptămână', few: 'săptămâni', many: 'săptămâni', other: 'de săptămâni' },
+        month: { one: 'lună', few: 'luni', many: 'luni', other: 'de luni' },
+        quarter: { one: 'trimestru', few: 'trimestre', many: 'trimestre', other: 'de trimestre' },
+        year: { one: 'an', few: 'ani', many: 'ani', other: 'de ani' },
+      },
+    },
     common: {
       error: 'Eroare',
       alert: 'Informare',
@@ -2180,6 +2216,20 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
     },
   },
   ru: {
+    relativeTime: {
+      future: 'через {{count}} {{unit}}',
+      past: '{{count}} {{unit}} назад',
+      units: {
+        second: { one: 'секунду', few: 'секунды', many: 'секунд', other: 'секунды' },
+        minute: { one: 'минуту', few: 'минуты', many: 'минут', other: 'минуты' },
+        hour: { one: 'час', few: 'часа', many: 'часов', other: 'часа' },
+        day: { one: 'день', few: 'дня', many: 'дней', other: 'дня' },
+        week: { one: 'неделю', few: 'недели', many: 'недель', other: 'недели' },
+        month: { one: 'месяц', few: 'месяца', many: 'месяцев', other: 'месяца' },
+        quarter: { one: 'квартал', few: 'квартала', many: 'кварталов', other: 'квартала' },
+        year: { one: 'год', few: 'года', many: 'лет', other: 'года' },
+      },
+    },
     common: {
       error: 'Ошибка',
       alert: 'Уведомление',
