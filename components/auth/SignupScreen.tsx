@@ -41,17 +41,17 @@ export function SignupScreen() {
 
   const validateForm = () => {
     if (!email || !password || !confirmPassword) {
-      showCustomAlert('Error', t('auth').signup.emptyFields);
+      showCustomAlert(t('common').error, t('auth').signup.emptyFields);
       return false;
     }
 
     if (password !== confirmPassword) {
-      showCustomAlert('Error', t('auth').signup.passwordMismatch);
+      showCustomAlert(t('common').error, t('auth').signup.passwordMismatch);
       return false;
     }
 
     if (!acceptedPrivacy) {
-      showCustomAlert('Error', t('auth').signup.acceptPrivacy);
+      showCustomAlert(t('common').error, t('auth').signup.acceptPrivacy);
       return false;
     }
 
@@ -66,7 +66,7 @@ export function SignupScreen() {
       await authService.signup(email, password, confirmPassword);
       showCustomAlert(t('auth').signup.success, t('auth').verifyEmail.message);
     } catch {
-      showCustomAlert('Error', t('auth').signup.error);
+      showCustomAlert(t('common').error, t('auth').signup.error);
     } finally {
       setLoading(false);
     }
@@ -219,7 +219,7 @@ export function SignupScreen() {
               style={[styles.alertButton, { backgroundColor: actionColor }]}
               onPress={handleAlertConfirm}
             >
-              <ThemedText style={styles.alertButtonText}>OK</ThemedText>
+              <ThemedText style={styles.alertButtonText}>{t('common').ok}</ThemedText>
             </TouchableOpacity>
           </View>
         </View>

@@ -1,4 +1,4 @@
-import { differenceInDays, format, isToday, isTomorrow, isYesterday } from 'date-fns';
+import { differenceInDays, isToday, isTomorrow, isYesterday } from 'date-fns';
 import Animated, { Layout } from 'react-native-reanimated';
 
 import React, { useMemo } from 'react';
@@ -6,7 +6,7 @@ import React, { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '@/constants/Colors';
-import { useTranslation } from '@/hooks/useTranslation';
+import { Translate, useTranslation } from '@/hooks/useTranslation';
 
 import { Assignment } from '../../utils/assignmentStorage';
 import AssignmentItem from './AssignmentItem';
@@ -42,7 +42,11 @@ const getCourseColor = (courseCode: string, isOrphaned: boolean): string => {
 };
 
 // Helper to format due date label
-const formatDueDate = (dueDate: string, t: any): string => {
+const formatDueDate = (
+  dueDate: string,
+  t: Translate,
+  formatDate: (date: Date, options: Intl.DateTimeFormatOptions) => string,
+): string => {
   const date = new Date(dueDate);
   const now = new Date();
 
@@ -57,9 +61,9 @@ const formatDueDate = (dueDate: string, t: any): string => {
   const daysDiff = differenceInDays(date, now);
 
   if (daysDiff > 0 && daysDiff < 7) {
-    return format(date, 'EEEE'); // Day name
+    return t('weekdays').long[date.getDay()];
   } else {
-    return format(date, 'MMM d'); // Month and day
+    return formatDate(date, { day: 'numeric', month: 'short' });
   }
 };
 
@@ -72,7 +76,7 @@ export default function CourseSection({
   showDueDate = false,
   assignmentToHighlight = null,
 }: CourseSectionProps) {
-  const { t } = useTranslation();
+  const { t, formatDate } = useTranslation();
 
   // Determine if the entire course is orphaned (all assignments are orphaned)
   const isCourseOrphaned = useMemo(() => {
@@ -163,7 +167,9 @@ export default function CourseSection({
                 onToggle={() => onToggleAssignment(assignment.id)}
                 onDelete={onDeleteAssignment ? () => onDeleteAssignment(assignment.id) : undefined}
                 showDueDate={showDueDate}
-                dueDateLabel={showDueDate ? formatDueDate(assignment.dueDate, t) : undefined}
+                dueDateLabel={
+                  showDueDate ? formatDueDate(assignment.dueDate, t, formatDate) : undefined
+                }
                 inOrphanedCourse={isCourseOrphaned}
                 isHighlighted={isHighlighted}
               />

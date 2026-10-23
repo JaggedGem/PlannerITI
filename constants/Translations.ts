@@ -1,4 +1,150 @@
 type TranslationType = {
+  common: {
+    error: string;
+    alert: string;
+    success: string;
+    ok: string;
+    cancel: string;
+    confirm: string;
+    delete: string;
+    done: string;
+    back: string;
+    retry: string;
+    search: string;
+    noResults: string;
+    clear: string;
+    hour: string;
+    minute: string;
+    dayPeriod: string;
+    unknown: string;
+    tapToExpand: string;
+    noValue: string;
+    notFoundTitle: string;
+    notFoundMessage: string;
+    goHome: string;
+  };
+  scheduleDetails: {
+    allRemoved: string;
+    emptyOverride: string;
+    removedPeriods: string;
+    showingPeriods: string;
+    customSchedule: string;
+    followsWeekday: string;
+    overrideActive: string;
+
+    special: string;
+    recoveryTitle: string;
+    specialTitle: string;
+    noReason: string;
+    replaces: string;
+    temporaryOverride: string;
+    swipeForMore: string;
+    now: string;
+    noAssignments: string;
+    subgroup: string;
+    examBadge: string;
+    thesisBadge: string;
+    periodNumber: string;
+    customPeriod: string;
+    allWeekdays: string;
+    offline: string;
+    usingCache: string;
+    refreshFailed: string;
+    overrideLabel: string;
+  };
+  assignmentEditor: {
+    titleAndCourseRequired: string;
+    titleRequired: string;
+    saveFailed: string;
+    notFound: string;
+    loadFailed: string;
+    updateFailed: string;
+    goToSettings: string;
+
+    thisDay: string;
+  };
+  accountDeletion: {
+    title: string;
+    message: string;
+    password: string;
+    passwordRequired: string;
+    networkError: string;
+    incorrectPassword: string;
+    genericError: string;
+    requestSent: string;
+    emailMessage: string;
+    openEmail: string;
+  };
+  appInfo: {
+    title: string;
+    currentVersion: string;
+    currentOta: string;
+    releaseChannel: string;
+    production: string;
+    beta: string;
+    development: string;
+  };
+  developer: {
+    title: string;
+    storageCleared: string;
+    clearStorage: string;
+    scheduleReset: string;
+    resetSchedule: string;
+    expoGoUnavailable: string;
+    expoGoNotifications: string;
+    notificationsReset: string;
+    notificationsResetFailed: string;
+    resetNotifications: string;
+    viewStorageFailed: string;
+    viewStorage: string;
+    injected: string;
+    removed: string;
+    gradesAdded: string;
+    gradesRemoved: string;
+    gradeInjectionFailed: string;
+    removeGrades: string;
+    injectGrades: string;
+    tapToRemove: string;
+    tapToAdd: string;
+  };
+  notificationMessages: {
+    defaultChannel: string;
+    assignmentChannel: string;
+    assignmentChannelDescription: string;
+    digestChannel: string;
+    digestChannelDescription: string;
+    dueInHour: string;
+    dueTomorrow: string;
+    dueInDays: string;
+    priority: string;
+    noUpcoming: string;
+    item: string;
+    more: string;
+    dayTitle: string;
+    upcomingTitle: string;
+    summary: string;
+    viewDetails: string;
+    viewAll: string;
+    assignmentCount: {
+      one: string;
+      few: string;
+      many: string;
+      other: string;
+    };
+  };
+  demoGrades: {
+    familyName: string;
+    firstName: string;
+    specialization: string;
+    status: string;
+    mathematics: string;
+    programming: string;
+    english: string;
+    databases: string;
+    mathematicsFinal: string;
+    programmingProject: string;
+    programmingFinal: string;
+  };
   weekdays: {
     short: string[];
     long: string[];
@@ -215,6 +361,7 @@ type TranslationType = {
       other: string;
     };
     days: {
+      yesterday: string;
       today: string;
       tomorrow: string;
       monday: string;
@@ -298,6 +445,8 @@ type TranslationType = {
       archiveConfirmation: string;
     };
     errors: {
+      switchingTip: string;
+      stabilityMode: string;
       recoveringTitle: string;
       recovering: string;
       tip: string;
@@ -318,6 +467,7 @@ type TranslationType = {
     networkError: string;
     networkErrorCache: string;
     categories: {
+      practice: string;
       exam: string;
       test: string;
       homework: string;
@@ -391,6 +541,7 @@ type TranslationType = {
       connecting: string;
     };
     subjects: {
+      pending: string;
       noExams: string;
       upcoming: string;
       noSubjects: string;
@@ -544,6 +695,154 @@ type TranslationType = {
 
 export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
   en: {
+    common: {
+      error: 'Error',
+      alert: 'Notice',
+      success: 'Success',
+      ok: 'OK',
+      cancel: 'Cancel',
+      confirm: 'Confirm',
+      delete: 'Delete',
+      done: 'Done',
+      back: 'Back',
+      retry: 'Try again',
+      search: 'Search',
+      noResults: 'No results found',
+      clear: 'Clear',
+      hour: 'Hour',
+      minute: 'Minute',
+      dayPeriod: 'AM/PM',
+      unknown: 'Unknown',
+      tapToExpand: 'Tap to expand',
+      noValue: 'No value',
+      notFoundTitle: 'Screen not found',
+      notFoundMessage: 'This screen does not exist.',
+      goHome: 'Go to home screen',
+    },
+    scheduleDetails: {
+      allRemoved: 'All periods were removed for this day ({{count}}).',
+      emptyOverride: 'No classes are scheduled for this day due to a schedule change.',
+      removedPeriods: 'Removed periods: {{periods}}.',
+      showingPeriods: 'Showing {{count}} of {{total}} periods.',
+      customSchedule: 'Custom schedule ({{count}} periods).',
+      followsWeekday: 'Follows {{day}} classes.',
+      overrideActive: 'A temporary schedule change is active for this day.',
+
+      special: 'Special',
+      recoveryTitle: 'Make-up day schedule',
+      specialTitle: 'Special schedule',
+      noReason: 'No reason provided',
+      replaces: 'Replaces {{day}}',
+      temporaryOverride: 'Temporary schedule change',
+      swipeForMore: 'Swipe to see more',
+      now: 'Now',
+      noAssignments: 'No assignments for this period',
+      subgroup: 'SG {{number}}',
+      examBadge: 'E',
+      thesisBadge: 'T',
+      periodNumber: 'Period {{number}}',
+      customPeriod: 'Custom period',
+      allWeekdays: 'All weekdays',
+      offline: 'Offline',
+      usingCache: 'Using cached schedule',
+      refreshFailed: 'Failed to refresh schedule',
+      overrideLabel: 'Schedule change: {{reason}}',
+    },
+    assignmentEditor: {
+      titleAndCourseRequired: 'Please enter a title and select a course.',
+      titleRequired: 'Please enter a title for the assignment.',
+      saveFailed: 'Failed to save assignment. Please try again.',
+      notFound: 'Assignment not found.',
+      loadFailed: 'Failed to load assignment. Please try again.',
+      updateFailed: 'Failed to update assignment. Please try again.',
+      goToSettings: 'Go to Settings',
+
+      thisDay: 'this {{day}}',
+    },
+    accountDeletion: {
+      title: 'Confirm account deletion',
+      message: 'Please enter your password to confirm account deletion.',
+      password: 'Your password',
+      passwordRequired: 'Please enter your password.',
+      networkError: 'Network error. Please check your connection.',
+      incorrectPassword: 'Incorrect password. Please try again.',
+      genericError: 'Something went wrong. Please try again.',
+      requestSent: 'Deletion request sent',
+      emailMessage:
+        "We've sent a confirmation email to verify your account deletion request. Please check your inbox and follow the instructions to complete the process.",
+      openEmail: 'Open email app',
+    },
+    appInfo: {
+      title: 'App version and updates',
+      currentVersion: 'Current version',
+      currentOta: 'Current OTA version',
+      releaseChannel: 'Release channel',
+      production: 'Production',
+      beta: 'Beta',
+      development: 'Development',
+    },
+    developer: {
+      title: 'Developer tools',
+      storageCleared: 'AsyncStorage has been cleared',
+      clearStorage: 'Clear AsyncStorage',
+      scheduleReset: 'Schedule settings have been reset',
+      resetSchedule: 'Reset schedule settings',
+      expoGoUnavailable: 'Unavailable in Expo Go',
+      expoGoNotifications:
+        'Notifications are disabled in Expo Go. Use a development build to test notifications.',
+      notificationsReset: 'Notification system reset. This can resolve timing issues.',
+      notificationsResetFailed: 'Failed to reset notification system',
+      resetNotifications: 'Reset notification system',
+      viewStorageFailed: 'Failed to view AsyncStorage contents',
+      viewStorage: 'View AsyncStorage',
+      injected: 'Injected',
+      removed: 'Removed',
+      gradesAdded: 'Added 5 random grades immediately. Tap again to remove.',
+      gradesRemoved: 'Removed injected grades. Tap again to add back.',
+      gradeInjectionFailed: 'Could not toggle grade injection',
+      removeGrades: 'Remove injected grades',
+      injectGrades: 'Inject 5 random grades',
+      tapToRemove: 'Injected now • tap to remove',
+      tapToAdd: 'Tap to add instantly',
+    },
+    notificationMessages: {
+      defaultChannel: 'General notifications',
+      assignmentChannel: 'Assignments',
+      assignmentChannelDescription: 'Assignment due dates and reminders',
+      digestChannel: 'Daily assignment summary',
+      digestChannelDescription: 'Daily summary of upcoming assignments',
+      dueInHour: '“{{title}}” {{course}} is due in 1 hour.',
+      dueTomorrow: '“{{title}}” {{course}} is due tomorrow at {{time}}.',
+      dueInDays: '“{{title}}” {{course}} is due {{time}}.',
+      priority: 'Priority: {{type}}',
+      noUpcoming: 'No assignments due soon.',
+      item: '“{{title}}” {{course}} at {{time}}',
+      more: '+ {{count}} more…',
+      dayTitle: '{{assignments}} • {{day}}',
+      upcomingTitle: '{{assignments}} coming up',
+      summary: 'Assignment summary:',
+      viewDetails: 'Tap to view details.',
+      viewAll: 'Tap to view all.',
+      assignmentCount: {
+        one: '{{count}} assignment',
+        few: '{{count}} assignments',
+        many: '{{count}} assignments',
+        other: '{{count}} assignments',
+      },
+    },
+    demoGrades: {
+      familyName: 'Demo',
+      firstName: 'Student',
+      specialization: 'Software development',
+      status: 'Demo account',
+      mathematics: 'Mathematics',
+      programming: 'Programming',
+      english: 'English',
+      databases: 'Database systems',
+      mathematicsFinal: 'Mathematics final',
+      programmingProject: 'Programming project',
+      programmingFinal: 'Programming final',
+    },
     weekdays: {
       short: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
       long: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
@@ -776,6 +1075,7 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         other: 'Other',
       },
       days: {
+        yesterday: 'Yesterday',
         today: 'Today',
         tomorrow: 'Tomorrow',
         monday: 'Monday',
@@ -859,6 +1159,8 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         archiveConfirmation: 'Are you sure you want to archive all completed assignments?',
       },
       errors: {
+        switchingTip: 'Avoid rapid switching between tabs',
+        stabilityMode: 'Stability mode active',
         recoveringTitle: 'Recovering',
         recovering: 'Recovering',
         tip: 'Tip',
@@ -879,6 +1181,7 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       networkError: 'Unable to retrieve data. Please check your IDNP and try again.',
       networkErrorCache: 'Network error. Using cached data from',
       categories: {
+        practice: 'Practice',
         exam: 'Exams',
         test: 'Test',
         homework: 'Homework',
@@ -954,6 +1257,7 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
           'Connecting to the CEITI server. This might take some time, please be patient...',
       },
       subjects: {
+        pending: 'Pending',
         noExams: 'No exams available',
         upcoming: 'Upcoming',
         noSubjects: 'No subjects available for Semester {{semester}}',
@@ -1129,6 +1433,155 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
     },
   },
   ro: {
+    common: {
+      error: 'Eroare',
+      alert: 'Informare',
+      success: 'Succes',
+      ok: 'OK',
+      cancel: 'Anulează',
+      confirm: 'Confirmă',
+      delete: 'Șterge',
+      done: 'Gata',
+      back: 'Înapoi',
+      retry: 'Încearcă din nou',
+      search: 'Caută',
+      noResults: 'Nu s-au găsit rezultate',
+      clear: 'Șterge',
+      hour: 'Oră',
+      minute: 'Minut',
+      dayPeriod: 'AM/PM',
+      unknown: 'Necunoscut',
+      tapToExpand: 'Atinge pentru a extinde',
+      noValue: 'Fără valoare',
+      notFoundTitle: 'Ecranul nu a fost găsit',
+      notFoundMessage: 'Acest ecran nu există.',
+      goHome: 'Mergi la ecranul principal',
+    },
+    scheduleDetails: {
+      allRemoved: 'Toate lecțiile din această zi au fost eliminate ({{count}}).',
+      emptyOverride: 'Nu sunt lecții în această zi din cauza unei modificări de orar.',
+      removedPeriods: 'Lecții eliminate: {{periods}}.',
+      showingPeriods: 'Se afișează {{count}} din {{total}} lecții.',
+      customSchedule: 'Orar personalizat ({{count}} lecții).',
+      followsWeekday: 'Se urmează orarul de {{day}}.',
+      overrideActive: 'În această zi se aplică o modificare temporară a orarului.',
+
+      special: 'Special',
+      recoveryTitle: 'Orarul zilei de recuperare',
+      specialTitle: 'Orar special',
+      noReason: 'Motiv nespecificat',
+      replaces: 'Înlocuiește ziua de {{day}}',
+      temporaryOverride: 'Modificare temporară a orarului',
+      swipeForMore: 'Glisează pentru a vedea mai mult',
+      now: 'Acum',
+      noAssignments: 'Nu sunt teme pentru această lecție',
+      subgroup: 'SG {{number}}',
+      examBadge: 'E',
+      thesisBadge: 'T',
+      periodNumber: 'Lecția {{number}}',
+      customPeriod: 'Lecție personalizată',
+      allWeekdays: 'Toate zilele lucrătoare',
+      offline: 'Fără conexiune',
+      usingCache: 'Se folosește orarul salvat',
+      refreshFailed: 'Nu s-a putut actualiza orarul',
+      overrideLabel: 'Modificare de orar: {{reason}}',
+    },
+    assignmentEditor: {
+      titleAndCourseRequired: 'Introdu un titlu și selectează o materie.',
+      titleRequired: 'Introdu un titlu pentru temă.',
+      saveFailed: 'Nu s-a putut salva tema. Încearcă din nou.',
+      notFound: 'Tema nu a fost găsită.',
+      loadFailed: 'Nu s-a putut încărca tema. Încearcă din nou.',
+      updateFailed: 'Nu s-a putut actualiza tema. Încearcă din nou.',
+      goToSettings: 'Mergi la setări',
+
+      thisDay: '{{day}}',
+    },
+    accountDeletion: {
+      title: 'Confirmă ștergerea contului',
+      message: 'Introdu parola pentru a confirma ștergerea contului.',
+      password: 'Parola ta',
+      passwordRequired: 'Introdu parola.',
+      networkError: 'Eroare de rețea. Verifică conexiunea.',
+      incorrectPassword: 'Parolă incorectă. Încearcă din nou.',
+      genericError: 'A apărut o eroare. Încearcă din nou.',
+      requestSent: 'Cererea de ștergere a fost trimisă',
+      emailMessage:
+        'Am trimis un email de confirmare pentru cererea de ștergere a contului. Verifică mesajele primite și urmează instrucțiunile pentru a finaliza procesul.',
+      openEmail: 'Deschide aplicația de email',
+    },
+    appInfo: {
+      title: 'Versiunea aplicației și actualizări',
+      currentVersion: 'Versiunea curentă',
+      currentOta: 'Versiunea OTA curentă',
+      releaseChannel: 'Canal de lansare',
+      production: 'Producție',
+      beta: 'Beta',
+      development: 'Dezvoltare',
+    },
+    developer: {
+      title: 'Instrumente pentru dezvoltatori',
+      storageCleared: 'AsyncStorage a fost golit',
+      clearStorage: 'Golește AsyncStorage',
+      scheduleReset: 'Setările orarului au fost resetate',
+      resetSchedule: 'Resetează setările orarului',
+      expoGoUnavailable: 'Indisponibil în Expo Go',
+      expoGoNotifications:
+        'Notificările sunt dezactivate în Expo Go. Folosește un build de dezvoltare pentru a testa notificările.',
+      notificationsReset:
+        'Sistemul de notificări a fost resetat. Acest lucru poate rezolva problemele de sincronizare.',
+      notificationsResetFailed: 'Nu s-a putut reseta sistemul de notificări',
+      resetNotifications: 'Resetează sistemul de notificări',
+      viewStorageFailed: 'Nu s-a putut afișa conținutul AsyncStorage',
+      viewStorage: 'Vezi AsyncStorage',
+      injected: 'Adăugate',
+      removed: 'Eliminate',
+      gradesAdded: 'Au fost adăugate 5 note aleatorii. Atinge din nou pentru a le elimina.',
+      gradesRemoved: 'Notele de test au fost eliminate. Atinge din nou pentru a le adăuga.',
+      gradeInjectionFailed: 'Nu s-a putut modifica adăugarea notelor de test',
+      removeGrades: 'Elimină notele de test',
+      injectGrades: 'Adaugă 5 note aleatorii',
+      tapToRemove: 'Adăugate • atinge pentru a elimina',
+      tapToAdd: 'Atinge pentru a adăuga imediat',
+    },
+    notificationMessages: {
+      defaultChannel: 'Notificări generale',
+      assignmentChannel: 'Teme',
+      assignmentChannelDescription: 'Termene și reamintiri pentru teme',
+      digestChannel: 'Rezumatul zilnic al temelor',
+      digestChannelDescription: 'Rezumat zilnic al temelor viitoare',
+      dueInHour: '„{{title}}” {{course}} are termenul peste o oră.',
+      dueTomorrow: '„{{title}}” {{course}} are termenul mâine la {{time}}.',
+      dueInDays: '„{{title}}” {{course}} are termenul {{time}}.',
+      priority: 'Prioritar: {{type}}',
+      noUpcoming: 'Nu sunt teme cu termen apropiat.',
+      item: '„{{title}}” {{course}} la {{time}}',
+      more: '+ încă {{count}}…',
+      dayTitle: '{{assignments}} • {{day}}',
+      upcomingTitle: '{{assignments}} în curând',
+      summary: 'Rezumatul temelor:',
+      viewDetails: 'Atinge pentru detalii.',
+      viewAll: 'Atinge pentru a vedea toate temele.',
+      assignmentCount: {
+        one: '{{count}} temă',
+        few: '{{count}} teme',
+        many: '{{count}} de teme',
+        other: '{{count}} de teme',
+      },
+    },
+    demoGrades: {
+      familyName: 'Demo',
+      firstName: 'Student',
+      specialization: 'Dezvoltarea aplicațiilor software',
+      status: 'Cont demonstrativ',
+      mathematics: 'Matematică',
+      programming: 'Programare',
+      english: 'Limba engleză',
+      databases: 'Baze de date',
+      mathematicsFinal: 'Examen la matematică',
+      programmingProject: 'Proiect de programare',
+      programmingFinal: 'Examen la programare',
+    },
     weekdays: {
       short: ['Dum', 'Lun', 'Mar', 'Mie', 'Joi', 'Vin', 'Sâm'],
       long: ['Duminică', 'Luni', 'Marți', 'Miercuri', 'Joi', 'Vineri', 'Sâmbătă'],
@@ -1366,6 +1819,7 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         other: 'Altele',
       },
       days: {
+        yesterday: 'Ieri',
         today: 'Astăzi',
         tomorrow: 'Mâine',
         monday: 'Luni',
@@ -1422,7 +1876,7 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         addFirst: 'Adaugă subtask-uri',
         placeholder: 'Introduceți subtask...',
         progress: 'Progresul subtask-ului',
-        loading: 'Loading subtasks...',
+        loading: 'Se încarcă subtaskurile…',
         hint: 'Împărțirea sarcinilor în pași îmbunătățește urmărirea progresului.',
       },
       status: {
@@ -1432,7 +1886,7 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         dueTomorrow: 'Scadent mâine',
         dueToday: 'Scadent astăzi',
         in: 'în',
-        inMinute: 'minute',
+        inMinute: 'minut',
         inMinutes: 'minute',
         inHour: 'oră',
         inHours: 'ore',
@@ -1450,6 +1904,8 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         archiveConfirmation: 'Sunteți sigur că doriți să arhivezi toate temele îndeplinite?',
       },
       errors: {
+        switchingTip: 'Evită schimbarea rapidă a filelor',
+        stabilityMode: 'Modul de stabilitate este activ',
         recoveringTitle: 'Recuperare',
         recovering: 'Recuperare',
         tip: 'Sfat',
@@ -1470,6 +1926,7 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       networkError: 'Nu s-au putut recupera datele. Verificați IDNP-ul și încercați din nou.',
       networkErrorCache: 'Eroare de rețea. Se folosesc date stocate din',
       categories: {
+        practice: 'Practică',
         exam: 'Examene',
         test: 'Test',
         homework: 'Temă',
@@ -1545,6 +2002,7 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
           'Se conectează la serverul CEITI. Acest lucru poate dura ceva timp, vă rugăm să aveți răbdare...',
       },
       subjects: {
+        pending: 'În așteptare',
         noExams: 'Nu există examene disponibile',
         upcoming: 'În curând',
         noSubjects: 'Nu există materii disponibile pentru Semestrul {{semester}}',
@@ -1651,37 +2109,37 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
           title: 'Colectarea Datelor',
           content: [
             'Colectăm date pentru a oferi servicii mai bune utilizatorilor noștri.',
-            'Datele pe care le colectăm includ informații personale precum numele, email address și IDNP (opțional).',
+            'Datele pe care le colectăm includ informații personale precum numele, adresa de email și IDNP-ul (opțional).',
           ],
         },
         idnpSecurity: {
           title: 'Securitatea IDNP',
           content: [
-            'Your IDNP is stored securely on our server with encryption before transit and at rest which makes it impossible to decrypt without your password or intercepted by malicious people.',
-            "You can choose to store your IDNP locally on your device instead of syncing it with the server if you feel that it's not secure and store it only on-device.",
-            'We do not share your IDNP with third parties.',
+            'IDNP-ul tău este stocat în siguranță pe serverul nostru, fiind criptat înainte de transmitere și în timpul stocării, astfel încât să nu poată fi decriptat fără parola ta sau interceptat de persoane rău intenționate.',
+            'Poți alege să stochezi IDNP-ul doar local, pe dispozitiv, în loc să îl sincronizezi cu serverul, dacă preferi această opțiune din motive de securitate.',
+            'Nu transmitem IDNP-ul tău unor terțe părți.',
           ],
         },
         passwordSecurity: {
           title: 'Securitatea Parolei',
           content: [
-            "We use strong encryption to protect your password, encrypting it even before it reaches our server which means that even if we wanted we wouldn't be able to see your password.",
-            'Your password is never stored in plain text and is only used to encrypt your IDNP before it reaches our server.',
-            'Never share your password with anyone.',
+            'Folosim criptare puternică pentru a-ți proteja parola, criptând-o chiar înainte să ajungă pe serverul nostru, astfel încât nici noi să nu o putem vedea.',
+            'Parola ta nu este niciodată stocată în text simplu și este folosită doar pentru a cripta IDNP-ul înainte ca acesta să ajungă pe serverul nostru.',
+            'Nu divulga niciodată parola ta altor persoane.',
           ],
         },
         dataStorage: {
           title: 'Stocarea Datelor',
           content: [
-            'Your data is stored securely either on our server or locally on your device.',
-            'You can opt out from our services at any time.',
+            'Datele tale sunt stocate în siguranță pe serverul nostru sau local, pe dispozitiv.',
+            'Poți renunța oricând la serviciile noastre.',
           ],
         },
         thirdParty: {
           title: 'Servicii Terțe',
           content: [
-            'We do not share your data with third parties.',
-            'We may use third-party services to improve our app.',
+            'Nu transmitem datele tale unor terțe părți.',
+            'Putem folosi servicii terțe pentru a îmbunătăți aplicația.',
           ],
         },
         rights: {
@@ -1722,8 +2180,157 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
     },
   },
   ru: {
+    common: {
+      error: 'Ошибка',
+      alert: 'Уведомление',
+      success: 'Готово',
+      ok: 'ОК',
+      cancel: 'Отмена',
+      confirm: 'Подтвердить',
+      delete: 'Удалить',
+      done: 'Готово',
+      back: 'Назад',
+      retry: 'Повторить',
+      search: 'Поиск',
+      noResults: 'Ничего не найдено',
+      clear: 'Очистить',
+      hour: 'Час',
+      minute: 'Минута',
+      dayPeriod: 'AM/PM',
+      unknown: 'Неизвестно',
+      tapToExpand: 'Нажмите, чтобы развернуть',
+      noValue: 'Нет значения',
+      notFoundTitle: 'Экран не найден',
+      notFoundMessage: 'Этот экран не существует.',
+      goHome: 'На главный экран',
+    },
+    scheduleDetails: {
+      allRemoved: 'Все занятия в этот день отменены ({{count}}).',
+      emptyOverride: 'В этот день занятий нет из-за изменения расписания.',
+      removedPeriods: 'Отменённые занятия: {{periods}}.',
+      showingPeriods: 'Показано занятий: {{count}} из {{total}}.',
+      customSchedule: 'Своё расписание (занятий: {{count}}).',
+      followsWeekday: 'Занятия по расписанию: {{day}}.',
+      overrideActive: 'На этот день действует временное изменение расписания.',
+
+      special: 'Особое',
+      recoveryTitle: 'Расписание отработки',
+      specialTitle: 'Особое расписание',
+      noReason: 'Причина не указана',
+      replaces: 'Вместо: {{day}}',
+      temporaryOverride: 'Временное изменение расписания',
+      swipeForMore: 'Проведите, чтобы увидеть больше',
+      now: 'Сейчас',
+      noAssignments: 'Для этого занятия нет заданий',
+      subgroup: 'ПГ {{number}}',
+      examBadge: 'Э',
+      thesisBadge: 'Т',
+      periodNumber: 'Занятие {{number}}',
+      customPeriod: 'Своё занятие',
+      allWeekdays: 'Все будние дни',
+      offline: 'Нет подключения',
+      usingCache: 'Используется сохранённое расписание',
+      refreshFailed: 'Не удалось обновить расписание',
+      overrideLabel: 'Изменение расписания: {{reason}}',
+    },
+    assignmentEditor: {
+      titleAndCourseRequired: 'Введите название и выберите предмет.',
+      titleRequired: 'Введите название задания.',
+      saveFailed: 'Не удалось сохранить задание. Попробуйте снова.',
+      notFound: 'Задание не найдено.',
+      loadFailed: 'Не удалось загрузить задание. Попробуйте снова.',
+      updateFailed: 'Не удалось обновить задание. Попробуйте снова.',
+      goToSettings: 'Открыть настройки',
+
+      thisDay: '{{day}}',
+    },
+    accountDeletion: {
+      title: 'Подтвердите удаление аккаунта',
+      message: 'Введите пароль, чтобы подтвердить удаление аккаунта.',
+      password: 'Ваш пароль',
+      passwordRequired: 'Введите пароль.',
+      networkError: 'Ошибка сети. Проверьте подключение.',
+      incorrectPassword: 'Неверный пароль. Попробуйте снова.',
+      genericError: 'Произошла ошибка. Попробуйте снова.',
+      requestSent: 'Запрос на удаление отправлен',
+      emailMessage:
+        'Мы отправили письмо для подтверждения удаления аккаунта. Проверьте почту и следуйте инструкциям, чтобы завершить процесс.',
+      openEmail: 'Открыть почту',
+    },
+    appInfo: {
+      title: 'Версия приложения и обновления',
+      currentVersion: 'Текущая версия',
+      currentOta: 'Текущая версия OTA',
+      releaseChannel: 'Канал выпуска',
+      production: 'Основной',
+      beta: 'Бета',
+      development: 'Разработка',
+    },
+    developer: {
+      title: 'Инструменты разработчика',
+      storageCleared: 'AsyncStorage очищено',
+      clearStorage: 'Очистить AsyncStorage',
+      scheduleReset: 'Настройки расписания сброшены',
+      resetSchedule: 'Сбросить настройки расписания',
+      expoGoUnavailable: 'Недоступно в Expo Go',
+      expoGoNotifications:
+        'Уведомления отключены в Expo Go. Используйте сборку для разработки, чтобы проверить уведомления.',
+      notificationsReset:
+        'Система уведомлений сброшена. Это может устранить проблемы со временем отправки.',
+      notificationsResetFailed: 'Не удалось сбросить систему уведомлений',
+      resetNotifications: 'Сбросить систему уведомлений',
+      viewStorageFailed: 'Не удалось просмотреть содержимое AsyncStorage',
+      viewStorage: 'Просмотреть AsyncStorage',
+      injected: 'Добавлено',
+      removed: 'Удалено',
+      gradesAdded: 'Добавлено 5 случайных оценок. Нажмите ещё раз, чтобы удалить.',
+      gradesRemoved: 'Тестовые оценки удалены. Нажмите ещё раз, чтобы добавить.',
+      gradeInjectionFailed: 'Не удалось изменить добавление тестовых оценок',
+      removeGrades: 'Удалить тестовые оценки',
+      injectGrades: 'Добавить 5 случайных оценок',
+      tapToRemove: 'Добавлено • нажмите, чтобы удалить',
+      tapToAdd: 'Нажмите, чтобы добавить',
+    },
+    notificationMessages: {
+      defaultChannel: 'Общие уведомления',
+      assignmentChannel: 'Задания',
+      assignmentChannelDescription: 'Сроки выполнения заданий и напоминания',
+      digestChannel: 'Ежедневная сводка заданий',
+      digestChannelDescription: 'Ежедневная сводка предстоящих заданий',
+      dueInHour: 'Срок задания «{{title}}» {{course}} — через час.',
+      dueTomorrow: 'Срок задания «{{title}}» {{course}} — завтра в {{time}}.',
+      dueInDays: 'Срок задания «{{title}}» {{course}} — {{time}}.',
+      priority: 'Приоритет: {{type}}',
+      noUpcoming: 'Нет заданий с близким сроком.',
+      item: '«{{title}}» {{course}} в {{time}}',
+      more: '+ ещё {{count}}…',
+      dayTitle: '{{assignments}} • {{day}}',
+      upcomingTitle: 'Предстоящие: {{assignments}}',
+      summary: 'Сводка заданий:',
+      viewDetails: 'Нажмите для просмотра подробностей.',
+      viewAll: 'Нажмите, чтобы просмотреть всё.',
+      assignmentCount: {
+        one: '{{count}} задание',
+        few: '{{count}} задания',
+        many: '{{count}} заданий',
+        other: '{{count}} задания',
+      },
+    },
+    demoGrades: {
+      familyName: 'Демо',
+      firstName: 'Студент',
+      specialization: 'Разработка программного обеспечения',
+      status: 'Демоаккаунт',
+      mathematics: 'Математика',
+      programming: 'Программирование',
+      english: 'Английский язык',
+      databases: 'Базы данных',
+      mathematicsFinal: 'Экзамен по математике',
+      programmingProject: 'Проект по программированию',
+      programmingFinal: 'Экзамен по программированию',
+    },
     weekdays: {
-      short: ['Вск', 'Пнд', 'Втр', 'Срд', 'Чтв', 'Птн', 'Сбт'],
+      short: ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'],
       long: ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'],
     },
     months: [
@@ -1751,7 +2358,7 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       account: {
         title: 'Аккаунт',
         signIn: 'Войдите в Ваш Аккаунт',
-        notVerified: 'Email не подтвержден',
+        notVerified: 'Электронная почта не подтверждена',
         refresh: 'Обновить',
         privacy: 'Конфиденциальность',
         terms: 'Условия',
@@ -1800,21 +2407,21 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
           'Не удалось загрузить группы. Проверьте подключение к интернету и попробуйте снова.',
       },
       customPeriods: {
-        title: 'Пользовательские периоды',
-        add: 'Добавить новый период',
-        edit: 'Редактировать период',
+        title: 'Свои занятия',
+        add: 'Добавить занятие',
+        edit: 'Изменить занятие',
         name: 'Название',
         time: 'Время',
         days: 'Дни',
         color: 'Цвет',
         enabled: 'Включено',
-        save: 'Сохранить период',
-        noPeriodsYet: 'Пользовательские периоды еще не добавлены',
+        save: 'Сохранить занятие',
+        noPeriodsYet: 'Свои занятия ещё не добавлены',
         colorPicker: 'Выбрать цвет',
         cancel: 'Отмена',
         confirm: 'Подтвердить',
-        deleteConfirmTitle: 'Удалить период',
-        deleteConfirmMessage: 'Вы уверены, что хотите удалить этот период?',
+        deleteConfirmTitle: 'Удалить занятие',
+        deleteConfirmMessage: 'Вы уверены, что хотите удалить это занятие?',
         delete: 'Удалить',
       },
       notifications: {
@@ -1870,7 +2477,7 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       currentWeek: 'Текущая неделя',
       loading: 'Загрузка расписания...',
       error: 'Не удалось загрузить расписание. Попробуйте позже.',
-      in: 'в',
+      in: 'через',
       dayView: 'По дням',
       weekView: 'По неделям',
       assignments: 'Задания',
@@ -1958,6 +2565,7 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         other: 'Другое',
       },
       days: {
+        yesterday: 'Вчера',
         today: 'Сегодня',
         tomorrow: 'Завтра',
         monday: 'Понедельник',
@@ -2023,7 +2631,7 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         dueIn: 'Срок в',
         dueTomorrow: 'Срок завтра',
         dueToday: 'Срок сегодня',
-        in: 'в',
+        in: 'через',
         inMinute: 'минуту',
         inMinutes: 'минуты',
         inHour: 'час',
@@ -2042,6 +2650,8 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         archiveConfirmation: 'Вы уверены, что хотите архивировать все выполненные задания?',
       },
       errors: {
+        switchingTip: 'Не переключайтесь между вкладками слишком быстро',
+        stabilityMode: 'Режим стабильности включён',
         recoveringTitle: 'Восстановление',
         recovering: 'Восстановление',
         tip: 'Совет',
@@ -2062,6 +2672,7 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       networkError: 'Не удалось получить данные. Проверьте IDNP и попробуйте снова.',
       networkErrorCache: 'Ошибка сети. Используются кэшированные данные от',
       categories: {
+        practice: 'Практика',
         exam: 'Экзамены',
         test: 'Тест',
         homework: 'Домашняя работа',
@@ -2137,12 +2748,13 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
           'Подключение к серверу CEITI. Это может занять некоторое время, пожалуйста, подождите...',
       },
       subjects: {
+        pending: 'Ожидается',
         noExams: 'Нет доступных экзаменов',
         upcoming: 'Предстоящие',
         noSubjects: 'Нет предметов для Семестра {{semester}}',
         finalAverage: 'Итоговая средняя',
         withoutExam: 'Без экзамена/тезы',
-        thesis: 'Теза',
+        thesis: 'Семестровая работа',
         exam: 'Экзамен',
         newBadge: 'Новое',
         officialSchedule: 'Официальное расписание',
@@ -2150,8 +2762,8 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       },
     },
     recovery: {
-      recoveryDay: 'День восстановления',
-      noReason: 'Нет причины для этого дня восстановления',
+      recoveryDay: 'День отработки',
+      noReason: 'Причина отработки не указана',
     },
     update: {
       availableTitle: 'Доступно обновление',
@@ -2172,19 +2784,19 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
     auth: {
       login: {
         title: 'Добро пожаловать',
-        email: 'Email',
+        email: 'Электронная почта',
         password: 'Пароль',
         submit: 'Войти',
         forgotPassword: 'Забыли пароль?',
         noAccount: 'Нет аккаунта?',
         signupLink: 'Зарегистрироваться',
-        error: 'Неверный email или пароль',
+        error: 'Неверная почта или пароль',
         success: 'Успешный вход',
         allFieldsRequired: 'Все поля обязательны',
       },
       signup: {
         title: 'Создать аккаунт',
-        email: 'Email',
+        email: 'Электронная почта',
         password: 'Пароль',
         confirmPassword: 'Подтвердите пароль',
         submit: 'Зарегистрироваться',
@@ -2201,19 +2813,19 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
       },
       forgotPassword: {
         title: 'Сброс пароля',
-        email: 'Email',
+        email: 'Электронная почта',
         submit: 'Отправить ссылку для сброса',
         backToLogin: 'Вернуться к входу',
         success: 'Письмо для сброса пароля отправлено',
         error: 'Не удалось отправить письмо',
-        emailRequired: 'Email обязателен',
+        emailRequired: 'Укажите электронную почту',
       },
       verifyEmail: {
-        title: 'Подтвердите Email',
+        title: 'Подтвердите почту',
         message: 'Пожалуйста, проверьте почту для подтверждения',
         resend: 'Отправить письмо повторно',
-        success: 'Email успешно подтвержден',
-        error: 'Не удалось подтвердить email',
+        success: 'Почта успешно подтверждена',
+        error: 'Не удалось подтвердить почту',
       },
       resetPassword: {
         title: 'Установить новый пароль',

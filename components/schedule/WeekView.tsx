@@ -11,7 +11,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   ActivityIndicator,
-  Dimensions,
   ScrollView,
   StyleSheet,
   Text,
@@ -19,11 +18,13 @@ import {
   TouchableOpacity,
   View,
   ViewStyle,
+  useWindowDimensions,
 } from 'react-native';
 
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { Colors } from '@/constants/Colors';
+import { translations } from '@/constants/Translations';
 import { useTimeUpdate } from '@/hooks/useTimeUpdate';
 import { useTranslation } from '@/hooks/useTranslation';
 import {
@@ -45,6 +46,7 @@ import {
   isExamAcademicPeriod,
   toLocalDateKey,
 } from '@/utils/academicCalendarUtils';
+import { formatMessage, formatTranslatedWeekday } from '@/utils/localization';
 import {
   buildNextClassCacheKey,
   peekNextClassCache,
@@ -55,6 +57,7 @@ import { runWhenIdle } from '@/utils/runWhenIdle';
 import { scheduleNavigation } from '@/utils/scheduleNavigation';
 import { filterExamEventsForDate, filterThesisEventsForDate } from '@/utils/specialScheduleUtils';
 
+import { getAnimationDependencies } from '../../utils/animationDependencies';
 import AcademicEmptyState, { ExamAgendaCard } from './AcademicEmptyState';
 import ViewModeMenu from './ViewModeMenu';
 
@@ -80,7 +83,7 @@ const getWeekStart = (date: Date): Date => {
 };
 
 // Get minimum and maximum hours from all periods
-const getTimeRange = (schedule: Record<string, any[]>): { min: number; max: number } => {
+const getTimeRange = (schedule: Record<string, ScheduleItem[]>): { min: number; max: number } => {
   let min = 24;
   let max = 0;
 
@@ -228,6 +231,7 @@ const RecoveryDayInfo = ({
   align?: 'left' | 'center' | 'right';
   details?: string[];
 }) => {
+  const { t } = useTranslation();
   const [showInfo, setShowInfo] = useState(false);
   const tooltipPositionStyle = {
     left: align === 'left' ? 0 : align === 'right' ? 'auto' : '50%',
@@ -235,28 +239,34 @@ const RecoveryDayInfo = ({
     marginLeft: align === 'center' ? -90 : 0,
   } as const;
 
-  const popupAnimation = useAnimatedStyle(() => {
-    return {
-      opacity: withTiming(showInfo ? 1 : 0, { duration: 120 }),
-      transform: [
-        {
-          translateY: withTiming(showInfo ? 0 : -6, {
-            duration: 120,
-          }),
-        },
-      ],
-    };
-  }, [showInfo]);
+  const popupAnimation = useAnimatedStyle(
+    () => {
+      return {
+        opacity: withTiming(showInfo ? 1 : 0, { duration: 120 }),
+        transform: [
+          {
+            translateY: withTiming(showInfo ? 0 : -6, {
+              duration: 120,
+            }),
+          },
+        ],
+      };
+    },
+    getAnimationDependencies([showInfo]),
+  );
 
-  const buttonAnimation = useAnimatedStyle(() => {
-    return {
-      transform: [
-        {
-          scale: withTiming(showInfo ? 0.98 : 1, { duration: 100 }),
-        },
-      ],
-    };
-  }, [showInfo]);
+  const buttonAnimation = useAnimatedStyle(
+    () => {
+      return {
+        transform: [
+          {
+            scale: withTiming(showInfo ? 0.98 : 1, { duration: 100 }),
+          },
+        ],
+      };
+    },
+    getAnimationDependencies([showInfo]),
+  );
 
   return (
     <>
@@ -299,7 +309,9 @@ const RecoveryDayInfo = ({
               <Text style={styles.closeTooltipText as TextStyle}>✕</Text>
             </TouchableOpacity>
           </View>
-          <Text style={styles.recoveryDayTooltipReason}>{reason || 'No reason provided'}</Text>
+          <Text style={styles.recoveryDayTooltipReason}>
+            {reason || t('scheduleDetails').noReason}
+          </Text>
           {details.map((detail, idx) => (
             <Text key={idx} style={styles.recoveryDayTooltipReason}>
               {detail}
@@ -315,7 +327,7 @@ interface CurrentTimeIndicatorProps {
   hourHeight: number;
   firstHour: number;
   timestamp: number;
-  schedule: Record<string, any[]>;
+  schedule: Record<string, ScheduleItem[]>;
 }
 
 const CurrentTimeIndicator = ({
@@ -501,7 +513,7 @@ export default function WeekView() {
   });
   const { t, formatDate, formatHour } = useTranslation();
   const currentTime = useTimeUpdate();
-  const verticalScrollRef = useRef<any>(null);
+  const verticalScrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [, setSlideDirection] = useState<'left' | 'right' | null>(null);
   const fadeAnim = useSharedValue(1);
@@ -667,7 +679,7 @@ export default function WeekView() {
         void loadCachedSpecialSchedules(scheduleService.getSettings().selectedGroupName);
         setIsLoading(false);
       } catch {
-        setError(t('schedule').error || 'Failed to load schedule');
+        setError(t('schedule').error);
         setIsLoading(false);
       }
     },
@@ -1169,7 +1181,7 @@ export default function WeekView() {
   const timeSlots = generateTimeSlots(firstHour, lastHour);
 
   // Calculate timetable dimensions
-  const windowWidth = Dimensions.get('window').width;
+  const { width: windowWidth } = useWindowDimensions();
   const hourHeight = 65; // Slightly more compact
   const timeColumnWidth = 30; // Even narrower time column
   const dayColumnWidth = (windowWidth - timeColumnWidth - 8) / Math.min(totalDays, 6); // Limit to 6 columns max for readability
@@ -1276,7 +1288,7 @@ export default function WeekView() {
           slideAnim.value = withTiming(0, { duration: 150 });
           fadeAnim.value = withTiming(1, { duration: 150 });
         } catch {
-          setError(t('schedule').error || 'Failed to load schedule');
+          setError(t('schedule').error);
           // Reset animations on error
           slideAnim.value = withTiming(0, { duration: 150 });
           fadeAnim.value = withTiming(1, { duration: 150 });
@@ -1379,7 +1391,7 @@ export default function WeekView() {
           slideAnim.value = withTiming(0, { duration: 150 });
           fadeAnim.value = withTiming(1, { duration: 150 });
         } catch {
-          setError(t('schedule').error || 'Failed to load schedule');
+          setError(t('schedule').error);
           // Reset animations on error
           slideAnim.value = withTiming(0, { duration: 150 });
           fadeAnim.value = withTiming(1, { duration: 150 });
@@ -1536,12 +1548,18 @@ export default function WeekView() {
                   <View style={styles.daySpecialBadges}>
                     {dayExamEvents.length > 0 && (
                       <View style={[styles.daySpecialBadge, styles.daySpecialBadgeExam]}>
-                        <Text style={styles.daySpecialBadgeText}>E {dayExamEvents.length}</Text>
+                        <Text style={styles.daySpecialBadgeText}>
+                          {t('scheduleDetails').examBadge}
+                          {dayExamEvents.length}
+                        </Text>
                       </View>
                     )}
                     {dayThesisEvents.length > 0 && (
                       <View style={[styles.daySpecialBadge, styles.daySpecialBadgeThesis]}>
-                        <Text style={styles.daySpecialBadgeText}>T {dayThesisEvents.length}</Text>
+                        <Text style={styles.daySpecialBadgeText}>
+                          {t('scheduleDetails').thesisBadge}
+                          {dayThesisEvents.length}
+                        </Text>
                       </View>
                     )}
                     {isSpecialScheduleLoading && index === 0 && (
@@ -1554,8 +1572,12 @@ export default function WeekView() {
                 {Boolean(dayReason) && (
                   <View style={styles.recoveryDayInfoHeader}>
                     <RecoveryDayInfo
-                      label="Special"
-                      title={day.recoveryDay ? 'Recovery Day Schedule' : 'Special Schedule'}
+                      label={t('scheduleDetails').special}
+                      title={
+                        day.recoveryDay
+                          ? t('scheduleDetails').recoveryTitle
+                          : t('scheduleDetails').specialTitle
+                      }
                       reason={dayReason}
                       align={
                         index <= 1 ? 'left' : index >= dayDates.length - 2 ? 'right' : 'center'
@@ -1563,8 +1585,13 @@ export default function WeekView() {
                       details={[
                         `${day.dayName} ${day.dayNumber}`,
                         dayReasonItem?.replacedDayName
-                          ? `Replaces ${dayReasonItem.replacedDayName}`
-                          : 'Temporary schedule override',
+                          ? formatMessage(t('scheduleDetails').replaces, {
+                              day: formatTranslatedWeekday(
+                                dayReasonItem.replacedDayName,
+                                translations[scheduleService.getSettings().language],
+                              ),
+                            })
+                          : t('scheduleDetails').temporaryOverride,
                       ]}
                     />
                   </View>

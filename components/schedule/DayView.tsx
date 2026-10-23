@@ -15,7 +15,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   ActivityIndicator,
-  Dimensions,
   ScrollView,
   StyleSheet,
   Text,
@@ -23,12 +22,14 @@ import {
   TouchableOpacity,
   View,
   ViewStyle,
+  useWindowDimensions,
 } from 'react-native';
 
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 
 import { Colors } from '@/constants/Colors';
+import { translations } from '@/constants/Translations';
 import { useTimeUpdate } from '@/hooks/useTimeUpdate';
 import { useTranslation } from '@/hooks/useTranslation';
 import {
@@ -55,6 +56,7 @@ import {
   getAssignmentsForPeriod,
   getAssignmentsForTimeRange,
 } from '@/utils/assignmentStorage';
+import { formatMessage, formatRelativeTime, formatTranslatedWeekday } from '@/utils/localization';
 import {
   buildNextClassCacheKey,
   peekNextClassCache,
@@ -70,6 +72,7 @@ import {
   thesisMatchesScheduleSlot,
 } from '@/utils/specialScheduleUtils';
 
+import { getAnimationDependencies } from '../../utils/animationDependencies';
 import AcademicEmptyState from './AcademicEmptyState';
 import ViewModeMenu from './ViewModeMenu';
 
@@ -171,30 +174,37 @@ interface ScheduleInfoBadgeProps {
 }
 
 const ScheduleInfoBadge = ({ label, title, reason, details = [] }: ScheduleInfoBadgeProps) => {
+  const { t } = useTranslation();
   const [showInfo, setShowInfo] = useState(false);
 
-  const popupAnimation = useAnimatedStyle(() => {
-    return {
-      opacity: withTiming(showInfo ? 1 : 0, { duration: 120 }),
-      transform: [
-        {
-          translateY: withTiming(showInfo ? 0 : -6, {
-            duration: 120,
-          }),
-        },
-      ],
-    };
-  }, [showInfo]);
+  const popupAnimation = useAnimatedStyle(
+    () => {
+      return {
+        opacity: withTiming(showInfo ? 1 : 0, { duration: 120 }),
+        transform: [
+          {
+            translateY: withTiming(showInfo ? 0 : -6, {
+              duration: 120,
+            }),
+          },
+        ],
+      };
+    },
+    getAnimationDependencies([showInfo]),
+  );
 
-  const buttonAnimation = useAnimatedStyle(() => {
-    return {
-      transform: [
-        {
-          scale: withTiming(showInfo ? 0.98 : 1, { duration: 100 }),
-        },
-      ],
-    };
-  }, [showInfo]);
+  const buttonAnimation = useAnimatedStyle(
+    () => {
+      return {
+        transform: [
+          {
+            scale: withTiming(showInfo ? 0.98 : 1, { duration: 100 }),
+          },
+        ],
+      };
+    },
+    getAnimationDependencies([showInfo]),
+  );
 
   return (
     <View style={styles.recoveryDayInfoContainer}>
@@ -236,7 +246,9 @@ const ScheduleInfoBadge = ({ label, title, reason, details = [] }: ScheduleInfoB
               <Text style={styles.closeTooltipText}>✕</Text>
             </TouchableOpacity>
           </View>
-          <Text style={styles.recoveryDayTooltipReason}>{reason || 'No reason provided'}</Text>
+          <Text style={styles.recoveryDayTooltipReason}>
+            {reason || t('scheduleDetails').noReason}
+          </Text>
           {details.map((detail, idx) => (
             <Text key={idx} style={styles.recoveryDayTooltipDetail}>
               {detail}
@@ -291,6 +303,7 @@ export default function DayView() {
   const currentDate = useRef(new Date()).current;
   const isEvenWeek = scheduleService.isEvenWeek(selectedDate);
   const { t, formatDate, formatTime } = useTranslation();
+  const { width: windowWidth } = useWindowDimensions();
   const recoveryDay = useMemo(() => scheduleService.isRecoveryDay(selectedDate), [selectedDate]);
   const isWeekend = selectedDate.getDay() === 0 || selectedDate.getDay() === 6;
   const selectedAcademicPeriod = useMemo(
@@ -414,7 +427,7 @@ export default function DayView() {
   const displayedScheduleMapRef = useRef<Record<string, ScheduleItem[]>>({});
   const selectedDateRef = useRef<Date>(selectedDate);
   const initialLoadAttemptedRef = useRef(false);
-  const scrollViewRef = useRef<any>(null);
+  const scrollViewRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const [showFirstTimeIndicator, setShowFirstTimeIndicator] = useState(false);
   const firstTimeAnimValue = useSharedValue(0);
   const hasShownFirstTimeIndicator = useRef(false);
@@ -603,12 +616,12 @@ export default function DayView() {
 
       if (dateIndex !== -1) {
         scrollViewRef.current.scrollTo({
-          x: dateIndex * ((Dimensions.get('window').width - 40) / 5),
+          x: dateIndex * ((windowWidth - 40) / 5),
           animated: true,
         });
       }
     },
-    [weekDates],
+    [weekDates, windowWidth],
   );
 
   const handleDatePress = useCallback(
@@ -800,7 +813,7 @@ export default function DayView() {
 
         void loadCachedSpecialSchedules(scheduleService.getSettings().selectedGroupName);
       } catch {
-        setError(t('schedule').error || 'Unable to load schedule. Please try again later.');
+        setError(t('schedule').error);
       } finally {
         setIsLoading(false);
       }
@@ -872,7 +885,7 @@ export default function DayView() {
           await fetchSchedule();
         } catch (err) {
           console.error('Failed to load schedule:', err);
-          setError('Unable to load schedule. Please try again later.');
+          setError(t('schedule').error);
           setIsLoading(false);
         }
       };
@@ -885,7 +898,7 @@ export default function DayView() {
     } else {
       run();
     }
-  }, [fetchSchedule]);
+  }, [fetchSchedule, t]);
 
   useEffect(() => {
     const idleTask = runWhenIdle(() => {
@@ -906,76 +919,75 @@ export default function DayView() {
     void restoreDisplaySnapshot();
   }, [settings.selectedGroupId, settings.group, loadDisplaySnapshot, toDateKey]);
 
-  // Initial scroll to today, only once on mount
+  // Keep the selected date visible after rotation and split-screen resizing.
   useEffect(() => {
-    if (scrollViewRef.current) {
-      // Wait for layout to complete
-      setTimeout(() => {
-        scrollViewRef.current?.scrollTo({
-          x: (3 * (Dimensions.get('window').width - 40)) / 5,
-          animated: false,
-        });
-      }, 100);
-    }
-  }, []); // Empty dependency array ensures this only runs once
+    const timer = setTimeout(() => scrollToDate(selectedDateRef.current), 100);
+    return () => clearTimeout(timer);
+  }, [scrollToDate]);
 
   const currentTimestamp = currentTime.getTime();
 
   const TimeIndicator = (props: TimeIndicatorProps) => {
-    const animatedStyle = useAnimatedStyle(() => {
-      'worklet';
-      const date = new Date(props.timestamp);
-      const currentHours = date.getHours();
-      const currentMinutes = date.getMinutes();
-      const currentSeconds = date.getSeconds();
-      const currentTimeInMinutes = currentHours * 60 + currentMinutes + currentSeconds / 60;
+    const animatedStyle = useAnimatedStyle(
+      () => {
+        'worklet';
+        const date = new Date(props.timestamp);
+        const currentHours = date.getHours();
+        const currentMinutes = date.getMinutes();
+        const currentSeconds = date.getSeconds();
+        const currentTimeInMinutes = currentHours * 60 + currentMinutes + currentSeconds / 60;
 
-      const [startHours, startMinutes] = props.startTime.split(':').map(Number);
-      const [endHours, endMinutes] = props.endTime.split(':').map(Number);
+        const [startHours, startMinutes] = props.startTime.split(':').map(Number);
+        const [endHours, endMinutes] = props.endTime.split(':').map(Number);
 
-      const startTimeInMinutes = startHours * 60 + startMinutes;
-      const endTimeInMinutes = endHours * 60 + endMinutes;
-      const timeSlotDuration = endTimeInMinutes - startTimeInMinutes;
+        const startTimeInMinutes = startHours * 60 + startMinutes;
+        const endTimeInMinutes = endHours * 60 + endMinutes;
+        const timeSlotDuration = endTimeInMinutes - startTimeInMinutes;
 
-      if (currentTimeInMinutes < startTimeInMinutes) return { top: withTiming('0%') };
-      if (currentTimeInMinutes > endTimeInMinutes) return { top: withTiming('100%') };
+        if (currentTimeInMinutes < startTimeInMinutes) return { top: withTiming('0%') };
+        if (currentTimeInMinutes > endTimeInMinutes) return { top: withTiming('100%') };
 
-      const progress = (currentTimeInMinutes - startTimeInMinutes) / timeSlotDuration;
-      return {
-        top: withTiming(`${progress * 100}%`, { duration: 1000 }),
-      };
-    }, [props.timestamp]);
+        const progress = (currentTimeInMinutes - startTimeInMinutes) / timeSlotDuration;
+        return {
+          top: withTiming(`${progress * 100}%`, { duration: 1000 }),
+        };
+      },
+      getAnimationDependencies([props.timestamp]),
+    );
 
-    const animatedTimeStyle = useAnimatedStyle(() => {
-      'worklet';
-      const date = new Date(props.timestamp);
-      const currentHours = date.getHours();
-      const currentMinutes = date.getMinutes();
-      const currentSeconds = date.getSeconds();
-      const currentTimeInMinutes = currentHours * 60 + currentMinutes + currentSeconds / 60;
+    const animatedTimeStyle = useAnimatedStyle(
+      () => {
+        'worklet';
+        const date = new Date(props.timestamp);
+        const currentHours = date.getHours();
+        const currentMinutes = date.getMinutes();
+        const currentSeconds = date.getSeconds();
+        const currentTimeInMinutes = currentHours * 60 + currentMinutes + currentSeconds / 60;
 
-      const [startHours, startMinutes] = props.startTime.split(':').map(Number);
-      const [endHours, endMinutes] = props.endTime.split(':').map(Number);
+        const [startHours, startMinutes] = props.startTime.split(':').map(Number);
+        const [endHours, endMinutes] = props.endTime.split(':').map(Number);
 
-      const startTimeInMinutes = startHours * 60 + startMinutes;
-      const endTimeInMinutes = endHours * 60 + endMinutes;
-      const timeSlotDuration = endTimeInMinutes - startTimeInMinutes;
-      const progress = (currentTimeInMinutes - startTimeInMinutes) / timeSlotDuration;
+        const startTimeInMinutes = startHours * 60 + startMinutes;
+        const endTimeInMinutes = endHours * 60 + endMinutes;
+        const timeSlotDuration = endTimeInMinutes - startTimeInMinutes;
+        const progress = (currentTimeInMinutes - startTimeInMinutes) / timeSlotDuration;
 
-      // Improved positioning calculation to avoid overlap
-      // Calculate if the time indicator is in the top half or bottom half
-      const isInTopHalf = progress < 0.5;
+        // Improved positioning calculation to avoid overlap
+        // Calculate if the time indicator is in the top half or bottom half
+        const isInTopHalf = progress < 0.5;
 
-      return {
-        transform: [
-          {
-            translateY: withTiming(isInTopHalf ? 24 : -24, {
-              duration: 300,
-            }),
-          },
-        ],
-      };
-    }, [props.timestamp, props.containerHeight]);
+        return {
+          transform: [
+            {
+              translateY: withTiming(isInTopHalf ? 24 : -24, {
+                duration: 300,
+              }),
+            },
+          ],
+        };
+      },
+      getAnimationDependencies([props.timestamp, props.containerHeight]),
+    );
 
     return (
       <View style={styles.timeIndicatorContainer}>
@@ -1008,21 +1020,6 @@ export default function DayView() {
       </View>
     );
   };
-  // todo: do something with this, maybe show in period details or something? currently unused
-  // const isCurrentTimeSlot = (startTime: string, endTime: string): boolean => {
-  //   const [startHours, startMinutes] = startTime.split(':').map(Number);
-  //   const [endHours, endMinutes] = endTime.split(':').map(Number);
-  //   const currentHours = currentTime.getHours();
-  //   const currentMinutes = currentTime.getMinutes();
-
-  //   const currentTimeInMinutes = currentHours * 60 + currentMinutes;
-  //   const startTimeInMinutes = startHours * 60 + startMinutes;
-  //   const endTimeInMinutes = endHours * 60 + endMinutes;
-
-  //   return currentTimeInMinutes >= startTimeInMinutes &&
-  //     currentTimeInMinutes <= endTimeInMinutes;
-  // };
-
   const isCurrentTimeInSchedule = (item: ScheduleItem): boolean => {
     // First check if selected date is today
     const today = new Date();
@@ -1069,7 +1066,9 @@ export default function DayView() {
     );
     const minutesUntilStart = Math.ceil((target.getTime() - now.getTime()) / (1000 * 60));
 
-    return minutesUntilStart <= 60 ? `${t('schedule').in} ${minutesUntilStart}m` : '';
+    return minutesUntilStart <= 60
+      ? formatRelativeTime(minutesUntilStart, 'minute', scheduleService.getSettings().language)
+      : '';
   };
 
   // Update displayed periods from precomputed map when date changes.
@@ -1246,7 +1245,7 @@ export default function DayView() {
       opacity: firstTimeAnimValue.value,
       transform: [{ scale: 0.9 + firstTimeAnimValue.value * 0.1 }],
     };
-  }, []);
+  }, getAnimationDependencies([]));
 
   // Function to toggle period expansion
   const togglePeriodExpansion = async (
@@ -1491,7 +1490,7 @@ export default function DayView() {
                       fontWeight: '600',
                     }}
                   >
-                    Retry
+                    {t('common').retry}
                   </Text>
                 </TouchableOpacity>
               ) : null}
@@ -1644,7 +1643,9 @@ export default function DayView() {
               <Animated.View style={[styles.firstTimeIndicatorContainer, firstTimeAnimStyle]}>
                 <View style={styles.firstTimeIndicator}>
                   <Text style={styles.firstTimeIndicatorArrow}>‹</Text>
-                  <Text style={styles.firstTimeIndicatorText}>Swipe to see more</Text>
+                  <Text style={styles.firstTimeIndicatorText}>
+                    {t('scheduleDetails').swipeForMore}
+                  </Text>
                   <Text style={styles.firstTimeIndicatorArrow}>›</Text>
                 </View>
               </Animated.View>
@@ -1674,7 +1675,11 @@ export default function DayView() {
                       <Text style={styles.assessmentTypeText}>{t('grades').subjects.exam}</Text>
                     </View>
                     {examEvent.subgroup ? (
-                      <Text style={styles.assessmentSubgroupText}>SG {examEvent.subgroup}</Text>
+                      <Text style={styles.assessmentSubgroupText}>
+                        {formatMessage(t('scheduleDetails').subgroup, {
+                          number: examEvent.subgroup,
+                        })}
+                      </Text>
                     ) : null}
                   </View>
 
@@ -1706,7 +1711,11 @@ export default function DayView() {
                       <Text style={styles.assessmentTypeText}>{t('grades').subjects.thesis}</Text>
                     </View>
                     {thesisEvent.subgroup ? (
-                      <Text style={styles.assessmentSubgroupText}>SG {thesisEvent.subgroup}</Text>
+                      <Text style={styles.assessmentSubgroupText}>
+                        {formatMessage(t('scheduleDetails').subgroup, {
+                          number: thesisEvent.subgroup,
+                        })}
+                      </Text>
                     ) : null}
                   </View>
 
@@ -1865,7 +1874,9 @@ export default function DayView() {
                                 showTimeIndicator && styles.activeStatusText,
                               ]}
                             >
-                              {showTimeIndicator ? 'Now' : getUpcomingPeriodLabel(item, index)}
+                              {showTimeIndicator
+                                ? t('scheduleDetails').now
+                                : getUpcomingPeriodLabel(item, index)}
                             </Text>
                           </View>
                         </View>
@@ -1915,7 +1926,9 @@ export default function DayView() {
                                     </Text>
                                     {thesisEvent.subgroup ? (
                                       <Text style={styles.thesisInlineSubgroup}>
-                                        SG {thesisEvent.subgroup}
+                                        {formatMessage(t('scheduleDetails').subgroup, {
+                                          number: thesisEvent.subgroup,
+                                        })}
                                       </Text>
                                     ) : null}
                                   </View>
@@ -1938,13 +1951,15 @@ export default function DayView() {
                             exiting={FadeOut.duration(150)}
                           >
                             <View style={styles.assignmentsSeparator} />
-                            <Text style={styles.assignmentsSectionTitle}>{'Assignments'}</Text>
+                            <Text style={styles.assignmentsSectionTitle}>
+                              {t('assignments').title}
+                            </Text>
 
                             {loadingAssignments[item.period || ''] ? (
                               <View style={styles.loadingAssignments}>
                                 <ActivityIndicator size="small" color={Colors.dark.primary} />
                                 <Text style={styles.loadingAssignmentsText}>
-                                  {'Loading assignments...'}
+                                  {t('schedule').loadingAssignments}
                                 </Text>
                               </View>
                             ) : periodAssignmentsList.length > 0 ? (
@@ -2010,7 +2025,7 @@ export default function DayView() {
                             ) : (
                               <View style={styles.noAssignments}>
                                 <Text style={styles.noAssignmentsText}>
-                                  {'No assignments for this period'}
+                                  {t('scheduleDetails').noAssignments}
                                 </Text>
                               </View>
                             )}
@@ -2038,8 +2053,12 @@ export default function DayView() {
         {scheduleOverride && (
           <View style={styles.fixedRecoveryInfoContainer}>
             <ScheduleInfoBadge
-              label="Special"
-              title={scheduleOverride.isRecoveryDay ? 'Recovery Day Schedule' : 'Special Schedule'}
+              label={t('scheduleDetails').special}
+              title={
+                scheduleOverride.isRecoveryDay
+                  ? t('scheduleDetails').recoveryTitle
+                  : t('scheduleDetails').specialTitle
+              }
               reason={scheduleOverride.reason}
               details={[
                 formatDate(selectedDate, {
@@ -2048,8 +2067,13 @@ export default function DayView() {
                   day: 'numeric',
                 }),
                 scheduleOverride.replacedDayName
-                  ? `Replaces ${scheduleOverride.replacedDayName}`
-                  : 'Temporary schedule override',
+                  ? formatMessage(t('scheduleDetails').replaces, {
+                      day: formatTranslatedWeekday(
+                        scheduleOverride.replacedDayName,
+                        translations[scheduleService.getSettings().language],
+                      ),
+                    })
+                  : t('scheduleDetails').temporaryOverride,
               ]}
             />
           </View>

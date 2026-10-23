@@ -17,7 +17,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { Colors } from '@/constants/Colors';
-import { useTranslation } from '@/hooks/useTranslation';
+import { Translate, useTranslation } from '@/hooks/useTranslation';
 import { runWhenIdle } from '@/utils/runWhenIdle';
 
 import { Period } from '../../services/scheduleService';
@@ -39,7 +39,7 @@ interface EnhancedAssignment extends Assignment {
 }
 
 // Get day color based on day name - moved outside component
-const getDayColor = (title: string, t: any): [string, string] => {
+const getDayColor = (title: string, t: Translate): [string, string] => {
   if (title.includes(t('assignments').days.today)) {
     return Colors.dark.dayGradients.today as [string, string];
   } else if (title.includes(t('assignments').days.tomorrow)) {

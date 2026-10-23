@@ -2,6 +2,9 @@ import { Platform } from 'react-native';
 
 import Constants from 'expo-constants';
 
+import { fetchWithTimeout } from './fetchWithTimeout';
+import { isRecord } from './json';
+
 const LOCAL_BIND_ADDRESS = '0.0.0.0';
 const LOCAL_DEFAULT_PORT = '5000';
 const REMOTE_CUSTOM_API_BASE_URL = 'https://papi.jagged.site';
@@ -39,18 +42,23 @@ const extractHostFromUri = (uri?: string | null): string | null => {
 };
 
 const getExpoHostCandidates = (): string[] => {
-  const possibleHostUris: (string | undefined)[] = [
+  const legacy = (Constants as { manifest?: unknown }).manifest;
+  const manifest = isRecord(legacy) ? legacy : {};
+  const manifest2 = Constants.manifest2;
+  const extra = isRecord(manifest2?.extra) ? manifest2.extra : {};
+  const expoClient: Record<string, unknown> = isRecord(extra.expoClient) ? extra.expoClient : {};
+  const possibleHostUris = [
     Constants.expoConfig?.hostUri,
-    (Constants as any).manifest?.debuggerHost,
-    (Constants as any).manifest?.hostUri,
-    (Constants as any).manifest2?.extra?.expoClient?.hostUri,
+    manifest.debuggerHost,
+    manifest.hostUri,
+    expoClient.hostUri,
   ];
 
   const blockedHosts = new Set(['localhost', '127.0.0.1', '0.0.0.0']);
   const hosts = new Set<string>();
 
   possibleHostUris.forEach((uri) => {
-    const host = extractHostFromUri(uri);
+    const host = extractHostFromUri(typeof uri === 'string' ? uri : undefined);
     if (!host) return;
     if (blockedHosts.has(host)) return;
     hosts.add(host);
@@ -147,28 +155,6 @@ export const fetchCustomApi = async (
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   const developmentMode = isDevelopmentMode();
 
-  if (!developmentMode) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-    try {
-      return await fetch(`${REMOTE_CUSTOM_API_BASE_URL}${normalizedPath}`, {
-        ...requestInit,
-        signal: controller.signal,
-      });
-    } catch (error) {
-      clearTimeout(timeoutId);
-
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error('Request timeout');
-      }
-
-      throw error;
-    } finally {
-      clearTimeout(timeoutId);
-    }
-  }
-
   const baseUrls = getCustomApiBaseUrls();
   const remoteIndex = baseUrls.indexOf(REMOTE_CUSTOM_API_BASE_URL);
   const localCandidates = remoteIndex >= 0 ? baseUrls.slice(0, remoteIndex) : [];
@@ -189,16 +175,12 @@ export const fetchCustomApi = async (
       triedLocalDevelopmentEndpoint = true;
     }
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), requestTimeoutMs);
-
     try {
-      const response = await fetch(`${baseUrl}${normalizedPath}`, {
-        ...requestInit,
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
+      const response = await fetchWithTimeout(
+        `${baseUrl}${normalizedPath}`,
+        requestInit,
+        requestTimeoutMs,
+      );
 
       if (developmentMode && lastLoggedSuccessfulBaseUrl !== baseUrl) {
         lastLoggedSuccessfulBaseUrl = baseUrl;
@@ -211,7 +193,8 @@ export const fetchCustomApi = async (
 
       return response;
     } catch (error) {
-      clearTimeout(timeoutId);
+      // Cancellation belongs to the caller; never turn it into a fallback request.
+      if (requestInit.signal?.aborted) throw error;
       lastError = error;
 
       if (

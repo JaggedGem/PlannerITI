@@ -10,7 +10,6 @@ import {
   Animated,
   DeviceEventEmitter,
   FlatList,
-  Image,
   Linking,
   Modal,
   Platform,
@@ -23,11 +22,14 @@ import {
 } from 'react-native';
 
 import * as Haptics from 'expo-haptics';
+import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
 
 import { BottomModalPortal } from '@/components/BottomModalPortal';
+import { TimePicker } from '@/components/TimePicker';
 import { useAuthContext } from '@/components/auth/AuthContext';
 import { Colors } from '@/constants/Colors';
+import { translations } from '@/constants/Translations';
 import { useTranslation } from '@/hooks/useTranslation';
 import authService, { getGravatarProfile } from '@/services/authService';
 import {
@@ -39,6 +41,8 @@ import {
 } from '@/services/scheduleService';
 import { secureStorageService } from '@/services/secureStorageService';
 import { updateService } from '@/services/updateService';
+import { getAvatarImageUrl } from '@/utils/avatarImage';
+import { formatReleaseChannel } from '@/utils/localization';
 
 import { StorageViewer } from '../../components/StorageViewer';
 import {
@@ -158,7 +162,7 @@ const getGroupMatchScore = (query: string, group: Group): number => {
 };
 
 // Array of theme-appropriate colors for random selection
-const THEME_COLORS = Colors.dark.randomColors as unknown as string[];
+const THEME_COLORS = Colors.dark.randomColors;
 
 const MODAL_ITEM_COLORS = {
   surface: Colors.dark.surfaceSecondary,
@@ -171,316 +175,8 @@ const MODAL_ITEM_COLORS = {
   successIcon: Colors.dark.green,
 } as const;
 
-const getRandomColor = () => {
+const getRandomColor = (): string => {
   return THEME_COLORS[Math.floor(Math.random() * THEME_COLORS.length)];
-};
-
-// Custom TimePicker component
-const TimePicker = ({
-  value,
-  onChange,
-  label,
-  onClose,
-  onConfirm,
-  use12HourFormat = false,
-  translations = { cancel: 'Cancel', confirm: 'Confirm' },
-}: {
-  value: Date;
-  onChange: (date: Date) => void;
-  label: string;
-  onClose: () => void;
-  onConfirm?: (date: Date) => void;
-  use12HourFormat?: boolean;
-  translations?: { cancel: string; confirm: string };
-}) => {
-  const { formatTimeFromDate } = useTranslation();
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.95)).current;
-  const [localValue, setLocalValue] = useState(value);
-  const [period, setPeriod] = useState(value.getHours() >= 12 ? 'PM' : 'AM');
-  const hoursRef = useRef<any>(null);
-  const minutesRef = useRef<any>(null);
-  const itemHeight = 56;
-  const visibleItems = 5;
-  const [, setIsScrolling] = useState(false);
-
-  const hours = useMemo(() => {
-    if (use12HourFormat) {
-      return Array.from({ length: 12 }, (_, i) => (i === 0 ? 12 : i));
-    }
-    return Array.from({ length: 24 }, (_, i) => i);
-  }, [use12HourFormat]);
-
-  const minutes = useMemo(() => {
-    return Array.from({ length: 60 }, (_, i) => i);
-  }, []);
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(scaleAnim, {
-        toValue: 1,
-        duration: 250,
-        useNativeDriver: true,
-      }),
-    ]).start();
-
-    const timeout = setTimeout(() => {
-      let hour = localValue.getHours();
-
-      if (use12HourFormat) {
-        hour = hour % 12;
-        if (hour === 0) hour = 12;
-      }
-
-      const minute = localValue.getMinutes();
-
-      hoursRef.current?.scrollTo({
-        y: hour * itemHeight,
-        animated: false,
-      });
-
-      minutesRef.current?.scrollTo({
-        y: minute * itemHeight,
-        animated: false,
-      });
-    }, 50);
-
-    return () => clearTimeout(timeout);
-  }, [localValue, use12HourFormat, fadeAnim, scaleAnim]);
-
-  const formatNumber = (num: number, padLength = 2) => {
-    return num.toString().padStart(padLength, '0');
-  };
-
-  const handleHourScroll = (event: any) => {
-    if (!event.nativeEvent) return;
-
-    const offsetY = event.nativeEvent.contentOffset.y;
-    const selectedHour = Math.round(offsetY / itemHeight);
-
-    if (selectedHour >= 0 && selectedHour < (use12HourFormat ? 12 : 24)) {
-      let newHour = selectedHour;
-      if (use12HourFormat) {
-        if (newHour === 12) newHour = 0;
-        if (period === 'PM') newHour += 12;
-      }
-
-      const newDate = new Date(localValue);
-      if (newDate.getHours() !== newHour) {
-        newDate.setHours(newHour);
-        setLocalValue(newDate);
-      }
-    }
-  };
-
-  const handleMinuteScroll = (event: any) => {
-    if (!event.nativeEvent) return;
-
-    const offsetY = event.nativeEvent.contentOffset.y;
-    const selectedMinute = Math.round(offsetY / itemHeight);
-
-    if (selectedMinute >= 0 && selectedMinute < 60) {
-      const newDate = new Date(localValue);
-      if (newDate.getMinutes() !== selectedMinute) {
-        newDate.setMinutes(selectedMinute);
-        setLocalValue(newDate);
-      }
-    }
-  };
-
-  const handleScrollBeginDrag = () => {
-    setIsScrolling(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  };
-
-  const handleScrollEndDrag = (event: any, type: 'hours' | 'minutes') => {
-    setIsScrolling(false);
-    if (type === 'hours') {
-      handleHourScroll(event);
-    } else {
-      handleMinuteScroll(event);
-    }
-  };
-
-  const togglePeriod = () => {
-    const newPeriod = period === 'AM' ? 'PM' : 'AM';
-    setPeriod(newPeriod);
-
-    const newDate = new Date(localValue);
-    const currentHours = newDate.getHours();
-    const newHours = newPeriod === 'PM' ? (currentHours + 12) % 24 : (currentHours - 12 + 24) % 24;
-
-    newDate.setHours(newHours);
-    setLocalValue(newDate);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  };
-
-  const handleConfirm = () => {
-    onChange(localValue);
-    if (onConfirm) {
-      onConfirm(localValue);
-    }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    onClose();
-  };
-
-  return (
-    <Modal
-      transparent
-      visible
-      animationType="none"
-      statusBarTranslucent={true}
-      navigationBarTranslucent={true}
-      onRequestClose={onClose}
-    >
-      <View style={styles.timePickerOverlay}>
-        <Animated.View
-          style={[
-            styles.timePickerContainer,
-            {
-              opacity: fadeAnim,
-              transform: [{ scale: scaleAnim }],
-            },
-          ]}
-        >
-          <View style={styles.timePickerHeader}>
-            <Text style={styles.timePickerTitle}>{label}</Text>
-            <Text style={styles.timePickerValue}>{formatTimeFromDate(localValue)}</Text>
-          </View>
-
-          <View style={styles.timePickerContent}>
-            <View style={styles.timePickerColumn}>
-              <ScrollView
-                ref={hoursRef}
-                showsVerticalScrollIndicator={false}
-                snapToInterval={itemHeight}
-                decelerationRate={Platform.select({
-                  ios: 0.992,
-                  android: 0.985,
-                })}
-                onScroll={handleHourScroll}
-                onScrollBeginDrag={handleScrollBeginDrag}
-                onScrollEndDrag={(e) => handleScrollEndDrag(e, 'hours')}
-                onMomentumScrollEnd={() => Haptics.selectionAsync()}
-                scrollEventThrottle={16}
-                style={{ height: itemHeight * visibleItems }}
-                contentContainerStyle={{
-                  paddingVertical: itemHeight * 2,
-                }}
-                nestedScrollEnabled={true}
-              >
-                {hours.map((hour) => (
-                  <View
-                    key={`hour-${hour}`}
-                    style={[styles.timePickerItem, { height: itemHeight }]}
-                  >
-                    <Text
-                      style={[
-                        styles.timePickerItemText,
-                        hour ===
-                          (use12HourFormat
-                            ? localValue.getHours() % 12 || 12
-                            : localValue.getHours()) && styles.timePickerItemTextSelected,
-                      ]}
-                    >
-                      {formatNumber(hour, use12HourFormat ? 1 : 2)}
-                    </Text>
-                  </View>
-                ))}
-              </ScrollView>
-            </View>
-
-            <Text style={styles.timePickerSeparator}>:</Text>
-
-            <View style={styles.timePickerColumn}>
-              <ScrollView
-                ref={minutesRef}
-                showsVerticalScrollIndicator={false}
-                snapToInterval={itemHeight}
-                decelerationRate={Platform.select({
-                  ios: 0.992,
-                  android: 0.985,
-                })}
-                onScroll={handleMinuteScroll}
-                onScrollBeginDrag={handleScrollBeginDrag}
-                onScrollEndDrag={(e) => handleScrollEndDrag(e, 'minutes')}
-                onMomentumScrollEnd={() => Haptics.selectionAsync()}
-                scrollEventThrottle={16}
-                style={{ height: itemHeight * visibleItems }}
-                contentContainerStyle={{
-                  paddingVertical: itemHeight * 2,
-                }}
-                nestedScrollEnabled={true}
-              >
-                {minutes.map((minute) => (
-                  <View
-                    key={`minute-${minute}`}
-                    style={[styles.timePickerItem, { height: itemHeight }]}
-                  >
-                    <Text
-                      style={[
-                        styles.timePickerItemText,
-                        minute === localValue.getMinutes() && styles.timePickerItemTextSelected,
-                      ]}
-                    >
-                      {formatNumber(minute)}
-                    </Text>
-                  </View>
-                ))}
-              </ScrollView>
-            </View>
-
-            {use12HourFormat && (
-              <TouchableOpacity style={styles.timePickerPeriodButton} onPress={togglePeriod}>
-                <Text
-                  style={[
-                    styles.timePickerPeriodText,
-                    {
-                      color: period === 'AM' ? Colors.dark.white : Colors.dark.mutedText,
-                    },
-                  ]}
-                >
-                  AM
-                </Text>
-                <Text
-                  style={[
-                    styles.timePickerPeriodText,
-                    {
-                      color: period === 'PM' ? Colors.dark.white : Colors.dark.mutedText,
-                    },
-                  ]}
-                >
-                  PM
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          <View style={styles.timePickerActions}>
-            <TouchableOpacity
-              style={[styles.timePickerButton, styles.timePickerCancelButton]}
-              onPress={onClose}
-            >
-              <Text style={styles.timePickerButtonText}>{translations.cancel}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.timePickerButton, styles.timePickerConfirmButton]}
-              onPress={handleConfirm}
-            >
-              <Text style={[styles.timePickerButtonText, styles.timePickerConfirmText]}>
-                {translations.confirm}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
-      </View>
-    </Modal>
-  );
 };
 
 // Custom Toggle Switch component
@@ -557,9 +253,10 @@ const CustomToggle = ({
 };
 
 export default function Settings() {
-  const { t, formatCompactDate, formatTimeFromDate } = useTranslation();
+  const { t, currentLanguage, formatCompactDate, formatTime, formatTimeFromDate } =
+    useTranslation();
   const router = useRouter();
-  const { user, logout, reloadUser } = useAuthContext();
+  const { user, logout } = useAuthContext();
 
   // State hooks
   const [settings, setSettings] = useState(scheduleService.getSettings());
@@ -639,15 +336,15 @@ export default function Settings() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        Alert.alert('Offline', 'Using cached schedule');
+        Alert.alert(t('scheduleDetails').offline, t('scheduleDetails').usingCache);
       }
     } catch {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Schedule', 'Failed to refresh schedule');
+      Alert.alert(t('settings').schedule.title, t('scheduleDetails').refreshFailed);
     } finally {
       setIsRefreshingSchedule(false);
     }
-  }, [isRefreshingSchedule]);
+  }, [isRefreshingSchedule, t]);
 
   // todo: Handle orphaned assignments when changing groups - either move them to the new group if they have the same subject, or delete them with confirmation
   // const handleClearScheduleCache = useCallback(async () => {
@@ -668,16 +365,14 @@ export default function Settings() {
       DeviceEventEmitter.emit(DEV_GRADE_TOGGLE_EVENT, next);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert(
-        next ? 'Injected' : 'Removed',
-        next
-          ? 'Added 5 random grades immediately. Tap again to remove.'
-          : 'Removed injected grades. Tap again to add back.',
+        next ? t('developer').injected : t('developer').removed,
+        next ? t('developer').gradesAdded : t('developer').gradesRemoved,
       );
     } catch {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Error', 'Could not toggle grade injection');
+      Alert.alert(t('common').error, t('developer').gradeInjectionFailed);
     }
-  }, [devGradeActive]);
+  }, [devGradeActive, t]);
 
   // Add useEffect to load IDNP and listen for updates
   useEffect(() => {
@@ -712,10 +407,6 @@ export default function Settings() {
         if (typeof authState.skipped === 'boolean') {
           setSkipLogin(authState.skipped);
         }
-        // Reload user data when auth state changes to true
-        if (authState.isAuthenticated) {
-          reloadUser();
-        }
       },
     );
 
@@ -724,7 +415,7 @@ export default function Settings() {
       idnpSubscription.remove();
       authSubscription.remove();
     };
-  }, [reloadUser]);
+  }, []);
 
   // Update authentication state when user changes
   useEffect(() => {
@@ -1083,7 +774,7 @@ export default function Settings() {
     setPasswordError(null);
 
     if (!passwordForDeletion.trim()) {
-      setPasswordError('Please enter your password');
+      setPasswordError(t('accountDeletion').passwordRequired);
       return;
     }
 
@@ -1114,17 +805,17 @@ export default function Settings() {
       // Check if it's a network error or authentication error
       if (error instanceof Error) {
         if (error.message === 'Request timeout' || error.message.includes('network')) {
-          setPasswordError('Network error. Please check your connection.');
+          setPasswordError(t('accountDeletion').networkError);
         } else {
-          setPasswordError('Incorrect password. Please try again.');
+          setPasswordError(t('accountDeletion').incorrectPassword);
         }
       } else {
-        setPasswordError('Something went wrong. Please try again.');
+        setPasswordError(t('accountDeletion').genericError);
       }
     } finally {
       setDeletingAccount(false);
     }
-  }, [passwordForDeletion, logout]);
+  }, [passwordForDeletion, logout, t]);
 
   const openEmailApp = useCallback(() => {
     // Try to open the default email app
@@ -1147,25 +838,6 @@ export default function Settings() {
     router.replace('/auth');
   }, [router]);
 
-  // todo: Add "Refresh Account" button that calls reloadUser to sync with server - useful for users who choose to skip login but later want to log in without restarting the app. This will ensure we have the latest user data and auth state without needing a full app restart. We can place this button in the account section when the user is authenticated but has limited functionality due to skipping login.
-  // const handleRefreshAccount = async () => {
-  //     setIsRefreshingAccount(true);
-  //     try {
-  //         await reloadUser();
-  //         // Immediately update local state based on user context
-  //         setIsAuthenticated(!!user);
-  //         // Broadcast auth state change
-  //         DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, {
-  //             isAuthenticated: !!user,
-  //         });
-  //         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  //     } catch (error) {
-  //         console.error('Refresh error:', error);
-  //     } finally {
-  //         setIsRefreshingAccount(false);
-  //     }
-  // };
-
   // Memoized Gravatar profile component - defined at component level to prevent unnecessary re-creation
   const MemoizedGravatarProfile = useMemo(() => {
     const GravatarProfile = memo(
@@ -1186,16 +858,15 @@ export default function Settings() {
         } | null>(null);
 
         useEffect(() => {
-          if (!userEmail) {
-            setGravatarProfile(null);
-            return;
-          }
-
+          let isActive = true;
           const loadGravatarProfile = async () => {
             const profile = await getGravatarProfile(userEmail);
-            setGravatarProfile(profile);
+            if (isActive) setGravatarProfile(profile);
           };
           void loadGravatarProfile();
+          return () => {
+            isActive = false;
+          };
         }, [userEmail]);
 
         return (
@@ -1213,10 +884,14 @@ export default function Settings() {
               {gravatarProfile?.avatar_url ? (
                 <Image
                   source={{
-                    uri: gravatarProfile.avatar_url,
+                    uri: getAvatarImageUrl(gravatarProfile.avatar_url),
                   }}
                   style={styles.avatarImage}
-                  defaultSource={require('../../assets/images/default-avatar.jpg')}
+                  placeholder={require('../../assets/images/default-avatar.jpg')}
+                  contentFit="cover"
+                  cachePolicy="memory-disk"
+                  allowDownscaling
+                  recyclingKey={userEmail}
                 />
               ) : (
                 <Text style={styles.avatarText}>{userEmail.charAt(0).toUpperCase()}</Text>
@@ -1286,6 +961,7 @@ export default function Settings() {
         </View>
         <View style={styles.accountInfo}>
           <MemoizedGravatarProfile
+            key={user?.email}
             userEmail={user?.email || ''}
             isVerified={user?.is_verified || false}
             displayName={user?.email?.split('@')[0] || user?.email || ''}
@@ -1309,7 +985,7 @@ export default function Settings() {
             color={Colors.dark.purple}
             style={styles.sectionIcon}
           />
-          <Text style={styles.sectionTitle}>Developer Tools</Text>
+          <Text style={styles.sectionTitle}>{t('developer').title}</Text>
         </View>
 
         <View style={styles.devToolsList}>
@@ -1318,11 +994,11 @@ export default function Settings() {
             onPress={async () => {
               await AsyncStorage.clear();
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              Alert.alert('Success', 'AsyncStorage has been cleared');
+              Alert.alert(t('common').success, t('developer').storageCleared);
             }}
           >
             <MaterialIcons name="delete-sweep" size={24} color={Colors.dark.red} />
-            <Text style={styles.devToolText}>Clear AsyncStorage</Text>
+            <Text style={styles.devToolText}>{t('developer').clearStorage}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -1330,11 +1006,11 @@ export default function Settings() {
             onPress={() => {
               scheduleService.resetSettings();
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              Alert.alert('Success', 'Schedule settings have been reset');
+              Alert.alert(t('common').success, t('developer').scheduleReset);
             }}
           >
             <MaterialIcons name="restart-alt" size={24} color={Colors.dark.yellow} />
-            <Text style={styles.devToolText}>Reset Schedule Settings</Text>
+            <Text style={styles.devToolText}>{t('developer').resetSchedule}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -1342,10 +1018,7 @@ export default function Settings() {
             onPress={async () => {
               try {
                 if (!areNotificationsAvailable()) {
-                  Alert.alert(
-                    'Unavailable in Expo Go',
-                    'Notifications are disabled in Expo Go. Use a development build to test notifications.',
-                  );
+                  Alert.alert(t('developer').expoGoUnavailable, t('developer').expoGoNotifications);
                   return;
                 }
 
@@ -1371,18 +1044,15 @@ export default function Settings() {
                 await scheduleAllNotifications(assignments);
 
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                Alert.alert(
-                  'Success',
-                  'Notification system reset. This can resolve issues with timing.',
-                );
+                Alert.alert(t('common').success, t('developer').notificationsReset);
               } catch (error) {
                 console.error('Error resetting notification system:', error);
-                Alert.alert('Error', 'Failed to reset notification system');
+                Alert.alert(t('common').error, t('developer').notificationsResetFailed);
               }
             }}
           >
             <MaterialIcons name="refresh" size={24} color={Colors.dark.purple} />
-            <Text style={styles.devToolText}>Reset Notification System</Text>
+            <Text style={styles.devToolText}>{t('developer').resetNotifications}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -1402,12 +1072,12 @@ export default function Settings() {
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               } catch (error) {
                 console.error('Error viewing AsyncStorage:', error);
-                Alert.alert('Error', 'Failed to view AsyncStorage contents');
+                Alert.alert(t('common').error, t('developer').viewStorageFailed);
               }
             }}
           >
             <MaterialIcons name="storage" size={24} color={Colors.dark.randomColors[5]} />
-            <Text style={styles.devToolText}>View AsyncStorage</Text>
+            <Text style={styles.devToolText}>{t('developer').viewStorage}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -1421,10 +1091,10 @@ export default function Settings() {
             />
             <View style={styles.devToolTextGroup}>
               <Text style={[styles.devToolText, styles.devToolTextLeft]}>
-                {devGradeActive ? 'Remove injected grades' : 'Inject 5 random grades'}
+                {devGradeActive ? t('developer').removeGrades : t('developer').injectGrades}
               </Text>
               <Text style={styles.devToolSubtext}>
-                {devGradeActive ? 'Injected now • tap to remove' : 'Tap to add instantly'}
+                {devGradeActive ? t('developer').tapToRemove : t('developer').tapToAdd}
               </Text>
             </View>
           </TouchableOpacity>
@@ -2226,7 +1896,7 @@ export default function Settings() {
               color={Colors.dark.primaryStrong}
               style={styles.sectionIcon}
             />
-            <Text style={styles.sectionTitle}>App Version & OTA</Text>
+            <Text style={styles.sectionTitle}>{t('appInfo').title}</Text>
           </View>
           <View style={[styles.card, styles.updateCard]}>
             <View style={styles.updateDetails}>
@@ -2238,7 +1908,7 @@ export default function Settings() {
                   style={styles.scheduleDetailIcon}
                 />
                 <View style={styles.scheduleDetailTextGroup}>
-                  <Text style={styles.scheduleDetailLabel}>Current Version</Text>
+                  <Text style={styles.scheduleDetailLabel}>{t('appInfo').currentVersion}</Text>
                   <Text style={styles.scheduleDetailValue}>
                     {updateService.getCurrentVersion()}
                   </Text>
@@ -2253,7 +1923,7 @@ export default function Settings() {
                   style={styles.scheduleDetailIcon}
                 />
                 <View style={styles.scheduleDetailTextGroup}>
-                  <Text style={styles.scheduleDetailLabel}>Current OTA Version</Text>
+                  <Text style={styles.scheduleDetailLabel}>{t('appInfo').currentOta}</Text>
                   <Text style={styles.scheduleDetailValue}>
                     {updateService.getCurrentOtaVersionShort()}
                   </Text>
@@ -2268,9 +1938,12 @@ export default function Settings() {
                   style={styles.scheduleDetailIcon}
                 />
                 <View style={styles.scheduleDetailTextGroup}>
-                  <Text style={styles.scheduleDetailLabel}>Release Channel</Text>
+                  <Text style={styles.scheduleDetailLabel}>{t('appInfo').releaseChannel}</Text>
                   <Text style={[styles.scheduleDetailValue, styles.channelBadge]}>
-                    {updateService.getChannelDisplay()}
+                    {formatReleaseChannel(
+                      updateService.getChannelDisplay(),
+                      translations[currentLanguage],
+                    )}
                   </Text>
                 </View>
               </View>
@@ -2335,7 +2008,9 @@ export default function Settings() {
                       },
                     ]}
                   />
-                  <Text style={styles.periodName}>{period.name || 'Custom Period'}</Text>
+                  <Text style={styles.periodName}>
+                    {period.name || t('scheduleDetails').customPeriod}
+                  </Text>
                   <CustomToggle
                     value={period.isEnabled}
                     onValueChange={(value) => {
@@ -2348,11 +2023,11 @@ export default function Settings() {
 
                 <View style={styles.periodItemContent}>
                   <Text style={styles.periodTime}>
-                    {period.starttime} - {period.endtime}
+                    {formatTime(period.starttime)} - {formatTime(period.endtime)}
                   </Text>
                   <Text style={styles.periodDays}>
                     {period.daysOfWeek?.map((day) => t('weekdays').long[day]).join(', ') ||
-                      'All weekdays'}
+                      t('scheduleDetails').allWeekdays}
                   </Text>
                 </View>
 
@@ -2556,7 +2231,6 @@ export default function Settings() {
           onChange={handleTimePickerChange('start')}
           label={t('settings').customPeriods.time}
           onClose={() => setShowStartPicker(false)}
-          onConfirm={handleTimePickerChange('start')}
           use12HourFormat={settings.language === 'en'}
           translations={{
             cancel: t('settings').customPeriods.cancel,
@@ -2570,7 +2244,6 @@ export default function Settings() {
           onChange={handleTimePickerChange('end')}
           label={t('settings').customPeriods.time}
           onClose={() => setShowEndPicker(false)}
-          onConfirm={handleTimePickerChange('end')}
           use12HourFormat={settings.language === 'en'}
           translations={{
             cancel: t('settings').customPeriods.cancel,
@@ -2775,10 +2448,8 @@ export default function Settings() {
         }}
       >
         <View style={styles.confirmDialogContent}>
-          <Text style={styles.confirmTitle}>Confirm Account Deletion</Text>
-          <Text style={styles.confirmMessage}>
-            Please enter your password to confirm account deletion.
-          </Text>
+          <Text style={styles.confirmTitle}>{t('accountDeletion').title}</Text>
+          <Text style={styles.confirmMessage}>{t('accountDeletion').message}</Text>
 
           <View
             style={[
@@ -2788,7 +2459,7 @@ export default function Settings() {
           >
             <TextInput
               style={styles.passwordInput}
-              placeholder="Your password"
+              placeholder={t('accountDeletion').password}
               placeholderTextColor={MODAL_ITEM_COLORS.textSecondary}
               secureTextEntry
               value={passwordForDeletion}
@@ -2812,7 +2483,7 @@ export default function Settings() {
               }}
               disabled={deletingAccount}
             >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
+              <Text style={styles.cancelButtonText}>{t('common').cancel}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -2823,7 +2494,7 @@ export default function Settings() {
               {deletingAccount ? (
                 <ActivityIndicator size="small" color={Colors.dark.white} />
               ) : (
-                <Text style={styles.deleteButtonText}>Delete</Text>
+                <Text style={styles.deleteButtonText}>{t('common').delete}</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -2840,20 +2511,16 @@ export default function Settings() {
             <MaterialIcons name="check-circle" size={64} color={MODAL_ITEM_COLORS.successIcon} />
           </View>
 
-          <Text style={styles.confirmTitle}>Deletion Request Sent</Text>
-          <Text style={styles.confirmMessage}>
-            {
-              "We've sent a confirmation email to verify your account deletion request. Please check your email inbox and follow the instructions to complete the process."
-            }
-          </Text>
+          <Text style={styles.confirmTitle}>{t('accountDeletion').requestSent}</Text>
+          <Text style={styles.confirmMessage}>{t('accountDeletion').emailMessage}</Text>
 
           <TouchableOpacity style={styles.emailButton} onPress={openEmailApp}>
             <MaterialIcons name="email" size={20} color={Colors.dark.white} />
-            <Text style={styles.emailButtonText}>Open Email App</Text>
+            <Text style={styles.emailButtonText}>{t('accountDeletion').openEmail}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.doneButton} onPress={completeAccountDeletion}>
-            <Text style={styles.doneButtonText}>Done</Text>
+            <Text style={styles.doneButtonText}>{t('common').done}</Text>
           </TouchableOpacity>
         </View>
       </BottomModalPortal>
@@ -3015,6 +2682,7 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   sectionTitle: {
+    flexShrink: 1,
     fontSize: 20,
     fontWeight: 'bold',
     color: Colors.dark.white,
@@ -3305,117 +2973,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  timePickerOverlay: {
-    flex: 1,
-    backgroundColor: Colors.dark.overlayBlack70,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  timePickerContainer: {
-    backgroundColor: Colors.dark.backgroundTertiary,
-    borderRadius: 20,
-    padding: 24,
-    width: '90%',
-    maxWidth: 400,
-    elevation: 5,
-    shadowColor: Colors.dark.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-  },
-  timePickerHeader: {
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  timePickerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: Colors.dark.white,
-    marginBottom: 8,
-  },
-  timePickerValue: {
-    fontSize: 16,
-    color: Colors.dark.mutedText,
-  },
-  timePickerContent: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24,
-    marginTop: 12,
-  },
-  timePickerColumn: {
-    flex: 1,
-    alignItems: 'center',
-    backgroundColor: Colors.dark.surfaceSecondary,
-    borderRadius: 12,
-    overflow: 'hidden',
-    minWidth: 100,
-  },
-  timePickerItem: {
-    height: 56,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  timePickerItemText: {
-    fontSize: 38,
-    color: Colors.dark.mutedText,
-    opacity: 0.15,
-    fontWeight: '400',
-  },
-  timePickerItemTextSelected: {
-    fontSize: 44,
-    color: Colors.dark.white,
-    opacity: 1,
-    fontWeight: '600',
-  },
-  timePickerSeparator: {
-    fontSize: 52,
-    color: Colors.dark.white,
-    marginHorizontal: 20,
-    opacity: 0.8,
-    fontWeight: '300',
-  },
-  timePickerPeriodButton: {
-    marginLeft: 20,
-    backgroundColor: Colors.dark.surfaceSecondary,
-    borderRadius: 12,
-    padding: 12,
-    width: 60,
-    height: 80,
-    justifyContent: 'space-evenly',
-  },
-  timePickerPeriodText: {
-    fontSize: 20,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  timePickerActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 12,
-    marginTop: 20,
-  },
-  timePickerButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-  },
-  timePickerCancelButton: {
-    backgroundColor: Colors.dark.surfaceSecondary,
-  },
-  timePickerConfirmButton: {
-    backgroundColor: Colors.dark.primaryStrong,
-  },
-  timePickerButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.dark.white,
-  },
-  timePickerConfirmText: {
-    color: Colors.dark.white,
-    fontWeight: '600',
-  },
+
   periodSelector: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -205,7 +205,7 @@ export default function LoginNotification() {
           ]}
         >
           <View style={styles.settingsHighlight}>
-            <Text style={styles.signInText}>Sign in to your account</Text>
+            <Text style={styles.signInText}>{t('settings').account.signIn}</Text>
             <MaterialIcons name="arrow-forward" size={20} color={theme.white} />
           </View>
         </Animated.View>

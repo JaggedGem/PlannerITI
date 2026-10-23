@@ -1,0 +1,501 @@
+diff --git a/src/components/bottomSheet/BottomSheet.tsx b/src/components/bottomSheet/BottomSheet.tsx
+index fc520337115ce7a2c7aacb0f81f16b9046ce2c89..a646ab4c03251edb76c884c75c58addd044e84f8 100644
+--- a/src/components/bottomSheet/BottomSheet.tsx
++++ b/src/components/bottomSheet/BottomSheet.tsx
+@@ -1,3 +1,4 @@
++import { getAnimationDependencies } from '../../utilities/getAnimationDependencies';
+ import invariant from 'invariant';
+ import React, {
+   forwardRef,
+@@ -211,7 +212,7 @@ const BottomSheetComponent = forwardRef<BottomSheet, BottomSheetProps>(
+       }
+ 
+       return containerHeight - highestDetentPosition;
+-    }, [animatedLayoutState, animatedDetentsState]);
++    }, getAnimationDependencies([animatedLayoutState, animatedDetentsState]));
+     const animatedCurrentIndex = useReactiveSharedValue(
+       animateOnMount ? -1 : _providedIndex
+     );
+@@ -255,7 +256,7 @@ const BottomSheetComponent = forwardRef<BottomSheet, BottomSheetProps>(
+         isHandleHeightCalculated &&
+         isSnapPointsNormalized
+       );
+-    }, [animatedLayoutState, animatedDetentsState, handleComponent]);
++    }, getAnimationDependencies([animatedLayoutState, animatedDetentsState, handleComponent]));
+     const isInTemporaryPosition = useSharedValue(false);
+     const animatedContainerHeightDidChange = useSharedValue(false);
+ 
+@@ -340,7 +341,7 @@ const BottomSheetComponent = forwardRef<BottomSheet, BottomSheetProps>(
+       }
+ 
+       return SHEET_STATE.OPENED;
+-    }, [
++    }, getAnimationDependencies([
+       animatedLayoutState,
+       animatedDetentsState,
+       animatedKeyboardState,
+@@ -348,7 +349,7 @@ const BottomSheetComponent = forwardRef<BottomSheet, BottomSheetProps>(
+       animatedSheetHeight,
+       isInTemporaryPosition,
+       keyboardBehavior,
+-    ]);
++    ]));
+     const {
+       state: animatedScrollableState,
+       status: animatedScrollableStatus,
+@@ -422,7 +423,7 @@ const BottomSheetComponent = forwardRef<BottomSheet, BottomSheetProps>(
+       }
+ 
+       return currentIndex;
+-    }, [
++    }, getAnimationDependencies([
+       android_keyboardInputMode,
+       animatedAnimationState,
+       animatedLayoutState,
+@@ -431,7 +432,7 @@ const BottomSheetComponent = forwardRef<BottomSheet, BottomSheetProps>(
+       animatedDetentsState,
+       isInTemporaryPosition,
+       isLayoutCalculated,
+-    ]);
++    ]));
+     //#endregion
+ 
+     //#region private methods
+@@ -1570,11 +1571,11 @@ const BottomSheetComponent = forwardRef<BottomSheet, BottomSheetProps>(
+           animateToPosition(closedDetentPosition, ANIMATION_SOURCE.GESTURE);
+         }
+       },
+-      [
++      getAnimationDependencies([
+         animatedContainerHeightDidChange,
+         animatedAnimationState,
+         animatedDetentsState,
+-      ]
++      ])
+     );
+ 
+     /**
+@@ -1617,7 +1618,7 @@ const BottomSheetComponent = forwardRef<BottomSheet, BottomSheetProps>(
+ 
+         evaluatePosition(ANIMATION_SOURCE.SNAP_POINT_CHANGE);
+       },
+-      [isLayoutCalculated, didAnimateOnMount, animatedDetentsState]
++      getAnimationDependencies([isLayoutCalculated, didAnimateOnMount, animatedDetentsState])
+     );
+ 
+     /**
+@@ -1737,7 +1738,7 @@ const BottomSheetComponent = forwardRef<BottomSheet, BottomSheetProps>(
+         const animationConfigs = getKeyboardAnimationConfigs(easing, duration);
+         evaluatePosition(ANIMATION_SOURCE.KEYBOARD, animationConfigs);
+       },
+-      [
++      getAnimationDependencies([
+         $modal,
+         bottomInset,
+         keyboardBehavior,
+@@ -1746,7 +1747,7 @@ const BottomSheetComponent = forwardRef<BottomSheet, BottomSheetProps>(
+         animatedKeyboardState,
+         animatedLayoutState,
+         getEvaluatedPosition,
+-      ]
++      ])
+     );
+ 
+     /**
+@@ -1759,7 +1760,7 @@ const BottomSheetComponent = forwardRef<BottomSheet, BottomSheetProps>(
+           _providedAnimatedPosition.value = _animatedPosition + topInset;
+         }
+       },
+-      [_providedAnimatedPosition, topInset]
++      getAnimationDependencies([_providedAnimatedPosition, topInset])
+     );
+ 
+     /**
+@@ -1772,7 +1773,7 @@ const BottomSheetComponent = forwardRef<BottomSheet, BottomSheetProps>(
+           _providedAnimatedIndex.value = _animatedIndex;
+         }
+       },
+-      [_providedAnimatedIndex]
++      getAnimationDependencies([_providedAnimatedIndex])
+     );
+ 
+     /**
+diff --git a/src/components/bottomSheet/BottomSheetBody.tsx b/src/components/bottomSheet/BottomSheetBody.tsx
+index 91b6a6a6291bbd3ef8df100b21f328e591ae180a..dfd75b3105d4e78ba209537f1305393bda47e8fb 100644
+--- a/src/components/bottomSheet/BottomSheetBody.tsx
++++ b/src/components/bottomSheet/BottomSheetBody.tsx
+@@ -1,3 +1,4 @@
++import { getAnimationDependencies } from '../../utilities/getAnimationDependencies';
+ import React, { memo, useMemo } from 'react';
+ import { Platform } from 'react-native';
+ import Animated, { useAnimatedStyle } from 'react-native-reanimated';
+@@ -25,7 +26,7 @@ function BottomSheetBodyComponent({ style, children }: BottomSheetBodyProps) {
+         },
+       ],
+     }),
+-    [animatedPosition, animatedIndex]
++    getAnimationDependencies([animatedPosition, animatedIndex])
+   );
+   const containerStyle = useMemo(
+     () => [style, styles.container, containerAnimatedStyle],
+diff --git a/src/components/bottomSheet/BottomSheetContent.tsx b/src/components/bottomSheet/BottomSheetContent.tsx
+index 4a69a6892ff553836b72216b598451c56f6284cc..6b2dbf5edf3016114ea54326d94a651e1e6fe563 100644
+--- a/src/components/bottomSheet/BottomSheetContent.tsx
++++ b/src/components/bottomSheet/BottomSheetContent.tsx
+@@ -1,3 +1,4 @@
++import { getAnimationDependencies } from '../../utilities/getAnimationDependencies';
+ import React, { memo, useMemo } from 'react';
+ import type { ViewProps, ViewStyle } from 'react-native';
+ import Animated, {
+@@ -123,13 +124,13 @@ function BottomSheetContentComponent({
+      * @link (https://github.com/gorhom/react-native-bottom-sheet/issues/470)
+      */
+     return Math.max(contentHeight, 0);
+-  }, [
++  }, getAnimationDependencies([
+     animatedLayoutState,
+     animatedKeyboardState,
+     animatedSheetHeight,
+     isInTemporaryPosition,
+     keyboardBehavior,
+-  ]);
++  ]));
+   const animatedPaddingBottom = useDerivedValue(() => {
+     const containerHeight = animatedLayoutState.get().containerHeight;
+     /**
+@@ -169,13 +170,13 @@ function BottomSheetContentComponent({
+     }
+ 
+     return paddingBottom;
+-  }, [
++  }, getAnimationDependencies([
+     overDragResistanceFactor,
+     animatedPosition,
+     animatedLayoutState,
+     animatedDetentsState,
+     animatedKeyboardState,
+-  ]);
++  ]));
+   //#endregion
+ 
+   //#region styles
+@@ -211,7 +212,7 @@ function BottomSheetContentComponent({
+         overrideReduceMotion,
+       }),
+     };
+-  }, [
++  }, getAnimationDependencies([
+     overDragResistanceFactor,
+     enableDynamicSizing,
+     detached,
+@@ -220,7 +221,7 @@ function BottomSheetContentComponent({
+     animatedLayoutState,
+     animatedContentHeightMax,
+     animatedLayoutState,
+-  ]);
++  ]));
+   const contentContainerStyle = useMemo(
+     () => [
+       detached
+diff --git a/src/components/bottomSheetBackdrop/BottomSheetBackdrop.tsx b/src/components/bottomSheetBackdrop/BottomSheetBackdrop.tsx
+index a0345b013904e92e0c00ba55ff23ba191d96a395..3ecf304e61156d05c4dff4a71c83a1b15b9428bc 100644
+--- a/src/components/bottomSheetBackdrop/BottomSheetBackdrop.tsx
++++ b/src/components/bottomSheetBackdrop/BottomSheetBackdrop.tsx
+@@ -1,3 +1,4 @@
++import { getAnimationDependencies } from '../../utilities/getAnimationDependencies';
+ import React, {
+   memo,
+   useCallback,
+@@ -105,7 +106,7 @@ const BottomSheetBackdropComponent = ({
+         Extrapolation.CLAMP
+       ),
+     }),
+-    [animatedIndex, appearsOnIndex, disappearsOnIndex, opacity]
++    getAnimationDependencies([animatedIndex, appearsOnIndex, disappearsOnIndex, opacity])
+   );
+   const containerStyle = useMemo(
+     () => [
+@@ -127,7 +128,7 @@ const BottomSheetBackdropComponent = ({
+       }
+       runOnJS(handleContainerTouchability)(shouldDisableTouchability);
+     },
+-    [disappearsOnIndex]
++    getAnimationDependencies([disappearsOnIndex])
+   );
+ 
+   // addressing updating the state after unmounting.
+diff --git a/src/components/bottomSheetDebugView/ReText.tsx b/src/components/bottomSheetDebugView/ReText.tsx
+index 3091565187fd02297a289cdce2c80152570ce81a..192d554e1d12afe2e77c1626cbae67dace024120 100644
+--- a/src/components/bottomSheetDebugView/ReText.tsx
++++ b/src/components/bottomSheetDebugView/ReText.tsx
+@@ -1,3 +1,4 @@
++import { getAnimationDependencies } from '../../utilities/getAnimationDependencies';
+ import React from 'react';
+ import { type TextProps as RNTextProps, TextInput } from 'react-native';
+ import Animated, {
+@@ -50,12 +51,12 @@ const ReText = ({ text, value: _providedValue, style }: TextProps) => {
+     }
+ 
+     return `${text}: ${rawValue}`;
+-  }, [text, _providedValue]);
++  }, getAnimationDependencies([text, _providedValue]));
+   const animatedProps = useAnimatedProps(() => {
+     return {
+       text: providedValue.get(),
+     };
+-  }, [providedValue]);
++  }, getAnimationDependencies([providedValue]));
+   return (
+     <AnimatedTextInput
+       underlineColorAndroid="transparent"
+diff --git a/src/components/bottomSheetDebugView/ReText.webx.tsx b/src/components/bottomSheetDebugView/ReText.webx.tsx
+index db9b483f34f2fb7ad0132f0f24020e201c330645..247d5112b18d297ea87c5c9ac34ba84e78c098dc 100644
+--- a/src/components/bottomSheetDebugView/ReText.webx.tsx
++++ b/src/components/bottomSheetDebugView/ReText.webx.tsx
+@@ -1,3 +1,4 @@
++import { getAnimationDependencies } from '../../utilities/getAnimationDependencies';
+ import React, { useRef } from 'react';
+ import { type TextProps as RNTextProps, TextInput } from 'react-native';
+ import Animated, {
+@@ -28,7 +29,7 @@ const ReText = (props: TextProps) => {
+           : _providedValue.value;
+ 
+     return `${text}: ${value}`;
+-  }, [_providedValue, text]);
++  }, getAnimationDependencies([_providedValue, text]));
+ 
+   //region effects
+   useAnimatedReaction(
+@@ -38,7 +39,7 @@ const ReText = (props: TextProps) => {
+         text: result,
+       });
+     },
+-    []
++    getAnimationDependencies([])
+   );
+   //endregion
+ 
+diff --git a/src/components/bottomSheetFooter/BottomSheetFooter.tsx b/src/components/bottomSheetFooter/BottomSheetFooter.tsx
+index 639f2af3fdd106a6147972d9f2c853ab39b94b53..e90bd1b4bdb854e253baa78fc44ffd5e7e785e7b 100644
+--- a/src/components/bottomSheetFooter/BottomSheetFooter.tsx
++++ b/src/components/bottomSheetFooter/BottomSheetFooter.tsx
+@@ -1,3 +1,4 @@
++import { getAnimationDependencies } from '../../utilities/getAnimationDependencies';
+ import React, { memo, useCallback, useMemo, useRef } from 'react';
+ import type { LayoutChangeEvent } from 'react-native';
+ import Animated, { useAnimatedStyle } from 'react-native-reanimated';
+@@ -44,7 +45,7 @@ function BottomSheetFooterComponent({
+         },
+       ],
+     };
+-  }, [bottomInset, animatedKeyboardState, animatedFooterPosition]);
++  }, getAnimationDependencies([bottomInset, animatedKeyboardState, animatedFooterPosition]));
+   const containerStyle = useMemo(
+     () => [styles.container, style, containerAnimatedStyle],
+     [style, containerAnimatedStyle]
+diff --git a/src/components/bottomSheetFooter/BottomSheetFooterContainer.tsx b/src/components/bottomSheetFooter/BottomSheetFooterContainer.tsx
+index 183903f7b9fb350646a44fa642c4f865f48a6ed1..480a6271db61464c7cb845717667562d377d968e 100644
+--- a/src/components/bottomSheetFooter/BottomSheetFooterContainer.tsx
++++ b/src/components/bottomSheetFooter/BottomSheetFooterContainer.tsx
+@@ -1,3 +1,4 @@
++import { getAnimationDependencies } from '../../utilities/getAnimationDependencies';
+ import React, { memo } from 'react';
+ import { useDerivedValue } from 'react-native-reanimated';
+ import { INITIAL_LAYOUT_VALUE, KEYBOARD_STATUS } from '../../constants';
+@@ -31,7 +32,7 @@ const BottomSheetFooterContainerComponent = ({
+ 
+     footerTranslateY = footerTranslateY - footerHeight - handleHeight;
+     return footerTranslateY;
+-  }, [animatedKeyboardState, animatedPosition, animatedLayoutState]);
++  }, getAnimationDependencies([animatedKeyboardState, animatedPosition, animatedLayoutState]));
+   //#endregion
+ 
+   return <FooterComponent animatedFooterPosition={animatedFooterPosition} />;
+diff --git a/src/components/bottomSheetRefreshControl/BottomSheetRefreshControl.android.tsx b/src/components/bottomSheetRefreshControl/BottomSheetRefreshControl.android.tsx
+index 36a1a60ba1028f032823e13fc345e333a9d4bf88..ff7af7967a6358690910fc31441a36f959d77b0f 100644
+--- a/src/components/bottomSheetRefreshControl/BottomSheetRefreshControl.android.tsx
++++ b/src/components/bottomSheetRefreshControl/BottomSheetRefreshControl.android.tsx
+@@ -1,3 +1,4 @@
++import { getAnimationDependencies } from '../../utilities/getAnimationDependencies';
+ import React, { memo, useContext, useMemo } from 'react';
+ import { RefreshControl, type RefreshControlProps } from 'react-native';
+ import {
+@@ -38,7 +39,7 @@ function BottomSheetRefreshControlComponent({
+     () => ({
+       enabled: animatedScrollableState.value === SCROLLABLE_STATUS.UNLOCKED,
+     }),
+-    [animatedScrollableState.value]
++    getAnimationDependencies([animatedScrollableState.value])
+   );
+ 
+   const gesture = useMemo(
+diff --git a/src/components/bottomSheetScrollable/createBottomSheetScrollableComponent.tsx b/src/components/bottomSheetScrollable/createBottomSheetScrollableComponent.tsx
+index 6a57f511ff52a732ace18a27a0370f695fd01b8e..10847cc18136bf6840c60892730be2112c5e58c1 100644
+--- a/src/components/bottomSheetScrollable/createBottomSheetScrollableComponent.tsx
++++ b/src/components/bottomSheetScrollable/createBottomSheetScrollableComponent.tsx
+@@ -1,3 +1,4 @@
++import { getAnimationDependencies } from '../../utilities/getAnimationDependencies';
+ import React, {
+   forwardRef,
+   useContext,
+@@ -82,7 +83,7 @@ export function createBottomSheetScrollableComponent<T, P>(
+           ? animatedScrollableState.value === SCROLLABLE_STATUS.UNLOCKED
+           : showsVerticalScrollIndicator,
+       }),
+-      [animatedScrollableState, showsVerticalScrollIndicator]
++      getAnimationDependencies([animatedScrollableState, showsVerticalScrollIndicator])
+     );
+ 
+     const scrollableGesture = useMemo(
+diff --git a/src/hooks/useAnimatedDetents.ts b/src/hooks/useAnimatedDetents.ts
+index cc34d3b059a6faab964392eb20b04711308c8e01..8ecadac2aac1cb71a92cb432ddebf01f9170c620 100644
+--- a/src/hooks/useAnimatedDetents.ts
++++ b/src/hooks/useAnimatedDetents.ts
+@@ -1,3 +1,4 @@
++import { getAnimationDependencies } from '../utilities/getAnimationDependencies';
+ import { type SharedValue, useDerivedValue } from 'react-native-reanimated';
+ import type { BottomSheetProps } from '../components/bottomSheet';
+ import { INITIAL_LAYOUT_VALUE } from '../constants';
+@@ -106,7 +107,7 @@ export const useAnimatedDetents = (
+       highestDetentPosition,
+       closedDetentPosition,
+     };
+-  }, [
++  }, getAnimationDependencies([
+     detents,
+     layoutState,
+     enableDynamicSizing,
+@@ -114,6 +115,6 @@ export const useAnimatedDetents = (
+     detached,
+     $modal,
+     bottomInset,
+-  ]);
++  ]));
+   return state;
+ };
+diff --git a/src/hooks/useAnimatedKeyboard.ts b/src/hooks/useAnimatedKeyboard.ts
+index d7051bfb9d2c623a3e1d4ed7cc4f862a26bfeea7..deb475cef409425a71108af911d20b812657da79 100644
+--- a/src/hooks/useAnimatedKeyboard.ts
++++ b/src/hooks/useAnimatedKeyboard.ts
+@@ -1,3 +1,4 @@
++import { getAnimationDependencies } from '../utilities/getAnimationDependencies';
+ import { useCallback, useEffect, useRef } from 'react';
+ import {
+   Dimensions,
+@@ -168,7 +169,7 @@ export const useAnimatedKeyboard = () => {
+         cachedState.easing
+       );
+     },
+-    [temporaryCachedState, handleKeyboardEvent]
++    getAnimationDependencies([temporaryCachedState, handleKeyboardEvent])
+   );
+   //#endregion
+ 
+diff --git a/src/hooks/useAnimatedLayout.ts b/src/hooks/useAnimatedLayout.ts
+index 68c674de6287b89a97be778f7e5273f6b6b1c929..24e75f67a8eaf758ce3ff2b4288294c858414810 100644
+--- a/src/hooks/useAnimatedLayout.ts
++++ b/src/hooks/useAnimatedLayout.ts
+@@ -1,3 +1,4 @@
++import { getAnimationDependencies } from '../utilities/getAnimationDependencies';
+ import { useEffect, useMemo, useState } from 'react';
+ import { Dimensions } from 'react-native';
+ import {
+@@ -85,7 +86,7 @@ export function useAnimatedLayout(
+         return _state;
+       });
+     },
+-    [state, verticalInset, modal]
++    getAnimationDependencies([state, verticalInset, modal])
+   );
+   useAnimatedReaction(
+     () => containerLayoutState?.get().height,
+@@ -103,7 +104,7 @@ export function useAnimatedLayout(
+         return _state;
+       });
+     },
+-    [state, verticalInset, modal]
++    getAnimationDependencies([state, verticalInset, modal])
+   );
+   useEffect(() => {
+     Dimensions.addEventListener('change', ({ window }) => {
+diff --git a/src/hooks/useBottomSheetContentContainerStyle.ts b/src/hooks/useBottomSheetContentContainerStyle.ts
+index 6c0bffe15dc3496066c3aba248f54e54ca22f0d3..ce7492dc413ae4c9b9996cf0bb1c52d5d9a73fda 100644
+--- a/src/hooks/useBottomSheetContentContainerStyle.ts
++++ b/src/hooks/useBottomSheetContentContainerStyle.ts
+@@ -1,3 +1,4 @@
++import { getAnimationDependencies } from '../utilities/getAnimationDependencies';
+ import { useMemo, useState } from 'react';
+ import {
+   Platform,
+@@ -81,7 +82,7 @@ export function useBottomSheetContentContainerStyle(
+         }
+       }
+     },
+-    [animatedLayoutState, enableFooterMarginAdjustment]
++    getAnimationDependencies([animatedLayoutState, enableFooterMarginAdjustment])
+   );
+   //#endregion
+   return style;
+diff --git a/src/hooks/useScrollHandler.ts b/src/hooks/useScrollHandler.ts
+index a7910834920a83cfc49cb52b338a656c2aef4e07..719526d59588dcbf0e69855946cb5bee03b3601c 100644
+--- a/src/hooks/useScrollHandler.ts
++++ b/src/hooks/useScrollHandler.ts
+@@ -1,3 +1,4 @@
++import { getAnimationDependencies } from '../utilities/getAnimationDependencies';
+ import {
+   runOnJS,
+   useAnimatedRef,
+@@ -56,7 +57,7 @@ export const useScrollHandler = (
+       onMomentumBegin: handleOnMomentumBegin,
+       onMomentumEnd: handleOnMomentumEnd,
+     },
+-    [
++    getAnimationDependencies([
+       handleOnScroll,
+       handleOnBeginDrag,
+       handleOnEndDrag,
+@@ -65,7 +66,7 @@ export const useScrollHandler = (
+       onScroll,
+       onScrollBeginDrag,
+       onScrollEndDrag,
+-    ]
++    ])
+   );
+ 
+   return { scrollHandler, scrollableRef, scrollableContentOffsetY };
+diff --git a/src/hooks/useScrollable.ts b/src/hooks/useScrollable.ts
+index 9c19051d146e3f90bfb639af53d7767f66582a98..8300c63046e4b53365d754594d4672fe38aa9ccb 100644
+--- a/src/hooks/useScrollable.ts
++++ b/src/hooks/useScrollable.ts
+@@ -1,3 +1,4 @@
++import { getAnimationDependencies } from '../utilities/getAnimationDependencies';
+ import { type RefObject, useCallback, useRef } from 'react';
+ import type { NodeHandle } from 'react-native';
+ import {
+@@ -74,13 +75,13 @@ export const useScrollable = (
+     }
+ 
+     return SCROLLABLE_STATUS.LOCKED;
+-  }, [
++  }, getAnimationDependencies([
+     enableContentPanningGesture,
+     animatedSheetState,
+     animatedKeyboardState,
+     animatedAnimationState,
+     state,
+-  ]);
++  ]));
+   //#endregion
+ 
+   //#region callbacks
+diff --git a/src/utilities/getAnimationDependencies.ts b/src/utilities/getAnimationDependencies.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..ee9076c5cbe2daf8def7a404d911a5ed1c6ac7d7
+--- /dev/null
++++ b/src/utilities/getAnimationDependencies.ts
+@@ -0,0 +1,5 @@
++import { Platform } from 'react-native';
++
++// Reanimated 4.7 ignores explicit dependencies on native; web still needs them without the Babel plugin.
++export const getAnimationDependencies = <T>(dependencies: T): T | undefined =>
++  Platform.OS === 'web' ? dependencies : undefined;

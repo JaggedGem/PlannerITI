@@ -6,6 +6,7 @@ import React, { useCallback, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { Colors } from '@/constants/Colors';
+import { useTranslation } from '@/hooks/useTranslation';
 
 import { BottomModalPortal } from './BottomModalPortal';
 
@@ -24,6 +25,7 @@ const MODAL_STORAGE_COLORS = {
 } as const;
 
 export const StorageViewer = ({ visible, onClose, items }: StorageViewerProps) => {
+  const { t } = useTranslation();
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
   const toggleItemExpansion = useCallback((key: string) => {
@@ -70,11 +72,11 @@ export const StorageViewer = ({ visible, onClose, items }: StorageViewerProps) =
                   {value}
                 </Text>
                 {!expandedItems.has(key) && value.length > 150 && (
-                  <Text style={styles.showMoreText}>Tap to expand</Text>
+                  <Text style={styles.showMoreText}>{t('common').tapToExpand}</Text>
                 )}
               </View>
             ) : (
-              <Text style={styles.nullValue}>null</Text>
+              <Text style={styles.nullValue}>{t('common').noValue}</Text>
             )}
           </View>
         ))}

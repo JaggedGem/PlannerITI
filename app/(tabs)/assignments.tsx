@@ -15,6 +15,8 @@ import React, {
 
 import {
   ActivityIndicator,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   Platform,
   Pressable,
   ScrollView,
@@ -28,7 +30,7 @@ import * as Haptics from 'expo-haptics';
 import { router, useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 
-import { useTranslation } from '@/hooks/useTranslation';
+import { Translate, useTranslation } from '@/hooks/useTranslation';
 import { runWhenIdle } from '@/utils/runWhenIdle';
 
 import { BottomModalPortal } from '../../components/BottomModalPortal';
@@ -104,7 +106,7 @@ const groupAssignmentsByCourse = (assignments: Assignment[]): { [key: string]: A
 };
 
 // Memoized empty state display
-const EmptyState = memo(({ t }: { t: any }) => (
+const EmptyState = memo(({ t }: { t: Translate }) => (
   <Animated.View style={styles.emptyContainer} entering={FadeInDown.duration(150)}>
     <Text style={styles.emptyText}>{t('assignments').empty}</Text>
   </Animated.View>
@@ -112,7 +114,7 @@ const EmptyState = memo(({ t }: { t: any }) => (
 EmptyState.displayName = 'EmptyState';
 
 // Memoized loading state display
-const LoadingState = memo(({ t }: { t: any }) => (
+const LoadingState = memo(({ t }: { t: Translate }) => (
   <View style={styles.loadingContainer}>
     <ActivityIndicator size="large" color={Colors.dark.primary} />
     <Text style={styles.loadingText}>{t('assignments').loading}</Text>
@@ -212,7 +214,7 @@ const CoursesView = memo(
 
     // Load more courses when user scrolls near the bottom
     const handleScroll = useCallback(
-      ({ nativeEvent }: any) => {
+      ({ nativeEvent }: NativeSyntheticEvent<NativeScrollEvent>) => {
         const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
         const paddingToBottom = 200;
 
@@ -253,7 +255,9 @@ const CoursesView = memo(
           >
             <CourseSection
               courseCode={courseCode}
-              courseName={courseGroups[courseCode][0].courseName || 'Uncategorized'}
+              courseName={
+                courseGroups[courseCode][0].courseName || t('assignments').common.uncategorized
+              }
               assignments={courseGroups[courseCode]}
               onToggleAssignment={onToggle}
               onDeleteAssignment={onDelete}
@@ -376,8 +380,7 @@ const ArchivedAssignmentsView = memo(
   }) => {
     const { t, formatFullDate } = useTranslation();
     const [visibleItems, setVisibleItems] = useState(10);
-    const [hasMore, setHasMore] = useState(true);
-    const isLoadingMoreRef = useRef(false);
+    const hasMore = visibleItems < assignments.length;
 
     // Sort assignments by due date, newest first
     const sortedAssignments = useMemo(() => {
@@ -388,26 +391,12 @@ const ArchivedAssignmentsView = memo(
 
     // Handle loading more items
     const loadMoreItems = useCallback(() => {
-      if (isLoadingMoreRef.current || !hasMore) return;
-
-      isLoadingMoreRef.current = true;
-
-      // Simulate delay to avoid UI jank
-      setTimeout(() => {
-        setVisibleItems((prev: number) => {
-          const newValue = prev + 10;
-          if (newValue >= sortedAssignments.length) {
-            setHasMore(false);
-          }
-          return newValue;
-        });
-        isLoadingMoreRef.current = false;
-      }, 100);
-    }, [hasMore, sortedAssignments.length]);
+      if (hasMore) setVisibleItems((count) => count + 10);
+    }, [hasMore]);
 
     // Handle scroll to detect when to load more
     const handleScroll = useCallback(
-      ({ nativeEvent }: any) => {
+      ({ nativeEvent }: NativeSyntheticEvent<NativeScrollEvent>) => {
         const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
         const paddingToBottom = 200;
 
@@ -498,7 +487,7 @@ const AssignmentsErrorFallback = ({ errorCount }: { errorCount: number }) => {
         <Text style={styles.errorMessage}>{t('assignments').errors.recovering}</Text>
         {errorCount > 2 && (
           <Text style={styles.errorHint}>
-            {t('assignments').errors.tip}: Avoid rapid switching between tabs
+            {t('assignments').errors.tip}: {t('assignments').errors.switchingTip}
           </Text>
         )}
       </View>
@@ -562,6 +551,8 @@ class AssignmentsErrorBoundary extends React.Component<ErrorBoundaryProps, Error
   }
 }
 
+type AssignmentStyles = typeof styles;
+
 // Add this new component before the Assignments component
 const ModernDropdown = memo(
   ({
@@ -577,7 +568,7 @@ const ModernDropdown = memo(
     segments: string[];
     selectedIndex: number;
     onSelect: (index: number) => void;
-    styles: any;
+    styles: AssignmentStyles;
   }) => {
     const handleSelect = (index: number) => {
       // Trigger haptic feedback
@@ -1092,7 +1083,10 @@ const Assignments = () => {
                 <View>
                   <CourseSection
                     courseCode={courseCode}
-                    courseName={courseGroups[courseCode][0]?.courseName || 'Uncategorized'}
+                    courseName={
+                      courseGroups[courseCode][0]?.courseName ||
+                      t('assignments').common.uncategorized
+                    }
                     assignments={courseGroups[courseCode]}
                     onToggleAssignment={onToggle}
                     onDeleteAssignment={onDelete}
@@ -1103,7 +1097,10 @@ const Assignments = () => {
                 <Animated.View entering={FadeInDown.duration(150).delay(index * 20)}>
                   <CourseSection
                     courseCode={courseCode}
-                    courseName={courseGroups[courseCode][0]?.courseName || 'Uncategorized'}
+                    courseName={
+                      courseGroups[courseCode][0]?.courseName ||
+                      t('assignments').common.uncategorized
+                    }
                     assignments={courseGroups[courseCode]}
                     onToggleAssignment={onToggle}
                     onDeleteAssignment={onDelete}
@@ -1213,7 +1210,9 @@ const Assignments = () => {
             styles={styles}
           />
 
-          {isSafeMode && <Text style={styles.safeModeIndicator}>Stability mode active</Text>}
+          {isSafeMode && (
+            <Text style={styles.safeModeIndicator}>{t('assignments').errors.stabilityMode}</Text>
+          )}
         </View>
       </View>
 

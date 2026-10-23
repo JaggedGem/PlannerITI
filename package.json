@@ -1,14 +1,14 @@
 {
   "name": "planneriti",
   "main": "expo-router/entry",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "scripts": {
     "dev": "expo start --dev-client",
     "dev:clear": "expo start --clear --dev-client",
     "dev:go": "expo start --go",
     "test": "jest --watchAll=false",
     "test:watch": "jest --watchAll",
-    "lint": "expo lint",
+    "lint": "expo lint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "build": "eas build --profile production --platform android",
     "build:ios": "eas build --profile production --platform ios",
@@ -26,12 +26,15 @@
     "preset": "jest-expo",
     "moduleNameMapper": {
       "^@/(.*)$": "<rootDir>/$1"
-    }
+    },
+    "modulePathIgnorePatterns": [
+      "<rootDir>/work/"
+    ]
   },
   "dependencies": {
     "@expo/dom-webview": "~58.0.2",
     "@expo/metro-runtime": "~58.0.14",
-    "@gorhom/bottom-sheet": "^5.2.14",
+    "@gorhom/bottom-sheet": "5.2.14",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-vector-icons/feather": "^13.1.4",
     "@react-native-vector-icons/fontawesome": "^13.1.4",
@@ -50,6 +53,7 @@
     "expo-device": "~58.0.5",
     "expo-font": "~58.0.9",
     "expo-haptics": "~58.0.7",
+    "expo-image": "~58.0.16",
     "expo-linear-gradient": "~58.0.3",
     "expo-linking": "~58.0.13",
     "expo-navigation-bar": "~58.0.4",

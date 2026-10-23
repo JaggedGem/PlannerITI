@@ -11,12 +11,14 @@ export function useAssignments() {
   const [allAssignments, setAllAssignments] = useState<Assignment[]>([]);
   const [archivedAssignments, setArchivedAssignments] = useState<Assignment[]>([]);
   const isMountedRef = useRef(true);
+  const requestVersion = useRef(0);
 
   // Fetch assignments
   const fetchAssignments = useCallback(async () => {
+    const version = ++requestVersion.current;
     try {
       const assignments = await getAssignments();
-      if (!isMountedRef.current) {
+      if (!isMountedRef.current || version !== requestVersion.current) {
         return;
       }
 
@@ -46,9 +48,11 @@ export function useAssignments() {
 
   // Load assignments on mount
   useEffect(() => {
-    fetchAssignments();
+    isMountedRef.current = true;
+    void Promise.resolve().then(fetchAssignments);
     return () => {
       isMountedRef.current = false;
+      requestVersion.current += 1;
     };
   }, [fetchAssignments]);
 

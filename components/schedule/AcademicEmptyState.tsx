@@ -11,6 +11,7 @@ import { useTranslation } from '@/hooks/useTranslation';
 import type { ExamScheduleEvent } from '@/services/scheduleService';
 import { GraficPePeriod, GraficPePeriodType, NextScheduledClass } from '@/types/academicCalendar';
 import { isExamAcademicPeriod } from '@/utils/academicCalendarUtils';
+import { formatMessage } from '@/utils/localization';
 
 interface AcademicEmptyStateProps {
   variant: 'day' | 'week';
@@ -105,7 +106,9 @@ export const ExamAgendaCard = memo(function ExamAgendaCard({ events }: ExamAgend
                     formatExamTime(event.time),
                     event.room ? `${scheduleText.room} ${event.room}` : '',
                     event.teacher || '',
-                    event.subgroup ? `SG ${event.subgroup}` : '',
+                    event.subgroup
+                      ? formatMessage(t('scheduleDetails').subgroup, { number: event.subgroup })
+                      : '',
                   ]
                     .filter(Boolean)
                     .join(' • ')}

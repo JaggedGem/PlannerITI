@@ -9,7 +9,7 @@ const USER_CACHE_KEY = '@planner_user_cache';
 
 export default function Index() {
   // Default to schedule to avoid any flashing - worst case we show schedule briefly and redirect if needed
-  const [destination, setDestination] = useState<string>('/(tabs)/schedule');
+  const [destination, setDestination] = useState<'/(tabs)/schedule' | '/auth'>('/(tabs)/schedule');
 
   // Using a layout effect equivalent for React Native to run before painting
   useEffect(() => {
@@ -44,5 +44,5 @@ export default function Index() {
   }, []);
 
   // Always return a redirect with no delay, preventing any UI flashing
-  return <Redirect href={destination as any} />;
+  return <Redirect href={destination} />;
 }

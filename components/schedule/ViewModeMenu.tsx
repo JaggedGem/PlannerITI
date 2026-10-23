@@ -87,14 +87,14 @@ export default function ViewModeMenu({
     return {
       opacity: p,
       transform: [{ scale }, { translateY }],
-      pointerEvents: p > 0.05 ? 'auto' : ('none' as any),
+      pointerEvents: p > 0.05 ? 'auto' : 'none',
     };
   });
 
   const overlayStyle = useAnimatedStyle(() => {
     return {
       opacity: progress.value,
-      pointerEvents: progress.value > 0.05 ? 'auto' : ('none' as any),
+      pointerEvents: progress.value > 0.05 ? 'auto' : 'none',
     };
   });
 
@@ -116,7 +116,9 @@ export default function ViewModeMenu({
     }, 60);
   };
 
-  const menuItems = useMemo(
+  const menuItems = useMemo<
+    { id: ScheduleView; icon: React.ComponentProps<typeof MaterialIcons>['name']; label: string }[]
+  >(
     () => [
       {
         id: 'day',
@@ -145,10 +147,10 @@ export default function ViewModeMenu({
               <TouchableOpacity
                 key={item.id}
                 style={[styles.menuItem, currentView === item.id && styles.menuItemActive]}
-                onPress={() => handleViewChange(item.id as ScheduleView)}
+                onPress={() => handleViewChange(item.id)}
               >
                 <MaterialIcons
-                  name={item.icon as any}
+                  name={item.icon}
                   size={24}
                   color={currentView === item.id ? Colors.dark.white : Colors.dark.neutral500}
                 />

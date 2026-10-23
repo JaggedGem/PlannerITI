@@ -46,41 +46,14 @@ import {
   updateAssignment,
 } from '../utils/assignmentStorage';
 
-// Import the components from new-assignment.tsx
-// For a real app, these would be separated into their own files
-// Interface for ExtendedSubject
 interface ExtendedSubject extends Subject {
   isCustomPeriod?: boolean;
   color?: string;
 }
 
-// ✂️ Custom toggle component and other components from new-assignment.tsx would be here
-// For brevity, I'm not including them in this example as they would be identical
-
 // Key to store highlighted assignment IDs
 // const HIGHLIGHTED_ASSIGNMENTS_KEY = 'highlighted_assignments';
 
-// Add Day names array for the mini calendar - will be replaced with translations inside component
-const DAYS_DEFAULT = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-
-// Basic structure for quick options, will be populated with translations inside component
-const QUICK_DATE_OPTIONS_DEFAULT = [
-  { label: 'Today', days: 0 },
-  { label: 'Tomorrow', days: 1 },
-  { label: 'Next Week', days: 7 },
-  { label: 'In 2 Weeks', days: 14 },
-];
-
-// Add TIME_PRESETS_DEFAULT after QUICK_DATE_OPTIONS_DEFAULT
-const TIME_PRESETS_DEFAULT = [
-  { label: '1st Period', hour: 8, minute: 0 },
-  { label: '2nd Period', hour: 9, minute: 30 },
-  { label: '3rd Period', hour: 11, minute: 20 },
-  { label: '4th Period', hour: 12, minute: 50 },
-  { label: '5th Period', hour: 14, minute: 20 },
-];
-
-// Extract QuickOption component outside DatePicker for better stability
 const QuickOption = React.memo(
   ({
     days,
@@ -144,15 +117,15 @@ const DatePicker = ({
   selectedDate,
   onDateChange,
   formatDate,
-  days = DAYS_DEFAULT,
-  quickDateOptions = QUICK_DATE_OPTIONS_DEFAULT,
+  days,
+  quickDateOptions,
   currentLanguage,
 }: {
   selectedDate: Date;
   onDateChange: (date: Date) => void;
   formatDate: (date: Date) => string;
-  days?: string[];
-  quickDateOptions?: { label: string; days: number }[];
+  days: string[];
+  quickDateOptions: { label: string; days: number }[];
   currentLanguage: string;
 }) => {
   const [calendarMonth, setCalendarMonth] = useState(new Date(selectedDate));
@@ -499,7 +472,7 @@ const DatePicker = ({
               }, 300);
             }}
           >
-            <Text style={styles.todayButtonText}>{quickDateOptions[0]?.label || 'Today'}</Text>
+            <Text style={styles.todayButtonText}>{quickDateOptions[0].label}</Text>
           </TouchableOpacity>
         )}
       </Animated.View>
@@ -512,13 +485,13 @@ const DatePicker = ({
 const TimePicker = ({
   selectedTime,
   onTimeChange,
-  timePresets = TIME_PRESETS_DEFAULT,
+  timePresets,
 }: {
   selectedTime: Date;
   onTimeChange: (date: Date) => void;
-  timePresets?: { label: string; hour: number; minute: number }[];
+  timePresets: { label: string; hour: number; minute: number }[];
 }) => {
-  const { formatTimeFromDate, currentLanguage } = useTranslation();
+  const { t, formatTimeFromDate, currentLanguage } = useTranslation();
   const shouldUse24HourFormat = currentLanguage !== 'en';
 
   // Animation shared values
@@ -680,7 +653,7 @@ const TimePicker = ({
 
       <View style={styles.timeWheelContainer}>
         <View style={styles.timeWheelGroup}>
-          <Text style={styles.timeWheelLabel}>Hour</Text>
+          <Text style={styles.timeWheelLabel}>{t('common').hour}</Text>
           <View style={styles.timeWheel}>
             <TouchableOpacity
               style={styles.timeWheelButton}
@@ -731,7 +704,7 @@ const TimePicker = ({
         <Text style={styles.timeWheelSeparator}>:</Text>
 
         <View style={styles.timeWheelGroup}>
-          <Text style={styles.timeWheelLabel}>Minute</Text>
+          <Text style={styles.timeWheelLabel}>{t('common').minute}</Text>
           <View style={styles.timeWheel}>
             <TouchableOpacity
               style={styles.timeWheelButton}
@@ -766,7 +739,7 @@ const TimePicker = ({
 
         {!shouldUse24HourFormat && (
           <View style={styles.timeWheelGroup}>
-            <Text style={styles.timeWheelLabel}>AM/PM</Text>
+            <Text style={styles.timeWheelLabel}>{t('common').dayPeriod}</Text>
             <Animated.View style={amPmAnimStyle}>
               <TouchableOpacity style={styles.amPmToggle} onPress={toggleAmPm}>
                 <Text style={styles.amPmToggleText}>
@@ -899,7 +872,7 @@ export default function EditAssignmentScreen() {
   } | null>(null);
 
   // Refs for inputs
-  const titleInputRef = useRef<any>(null);
+  const titleInputRef = useRef<React.ComponentRef<typeof TextInput>>(null);
 
   // Translation hook
   const { t, currentLanguage, formatDate: formatDateFromHook } = useTranslation();
@@ -930,8 +903,8 @@ export default function EditAssignmentScreen() {
         const assignment = assignments.find((a) => a.id === id);
 
         if (!assignment) {
-          Alert.alert('Error', 'Assignment not found.', [
-            { text: 'OK', onPress: () => router.back() },
+          Alert.alert(t('common').error, t('assignmentEditor').notFound, [
+            { text: t('common').ok, onPress: () => router.back() },
           ]);
           return;
         }
@@ -976,8 +949,8 @@ export default function EditAssignmentScreen() {
         }
       } catch (error) {
         console.error('Error loading assignment:', error);
-        Alert.alert('Error', 'Failed to load assignment. Please try again.', [
-          { text: 'OK', onPress: () => router.back() },
+        Alert.alert(t('common').error, t('assignmentEditor').loadFailed, [
+          { text: t('common').ok, onPress: () => router.back() },
         ]);
       } finally {
         setIsLoading(false);
@@ -989,7 +962,7 @@ export default function EditAssignmentScreen() {
     } else {
       router.back();
     }
-  }, [id]);
+  }, [id, t]);
 
   // Helper function to check if any changes were made
   const hasChanges = () => {
@@ -1040,7 +1013,9 @@ export default function EditAssignmentScreen() {
   // Handle saving the updated assignment
   const handleUpdate = async () => {
     if (!title.trim()) {
-      Alert.alert('Error', 'Please enter a title for the assignment.', [{ text: 'OK' }]);
+      Alert.alert(t('common').error, t('assignmentEditor').titleRequired, [
+        { text: t('common').ok },
+      ]);
       return;
     }
 
@@ -1075,7 +1050,9 @@ export default function EditAssignmentScreen() {
       router.back();
     } catch (error) {
       console.error('Error updating assignment:', error);
-      Alert.alert('Error', 'Failed to update assignment. Please try again.', [{ text: 'OK' }]);
+      Alert.alert(t('common').error, t('assignmentEditor').updateFailed, [
+        { text: t('common').ok },
+      ]);
     } finally {
       setIsSaving(false);
     }
@@ -1115,7 +1092,7 @@ export default function EditAssignmentScreen() {
   };
 
   // Get icon for each assignment type
-  const getTypeIcon = (): any => {
+  const getTypeIcon = (): React.ComponentProps<typeof Ionicons>['name'] => {
     switch (assignmentType) {
       case AssignmentType.HOMEWORK:
         return 'book-outline';
@@ -1177,7 +1154,7 @@ export default function EditAssignmentScreen() {
               (!title.trim() || isSaving || !hasChanges()) && styles.saveButtonTextDisabled,
             ]}
           >
-            {isSaving ? t('assignments').updating || 'Updating...' : t('assignments').update}
+            {isSaving ? t('assignments').updating : t('assignments').update}
           </Text>
         </TouchableOpacity>
       </View>
@@ -1402,7 +1379,7 @@ export default function EditAssignmentScreen() {
           onClose={() => setIsTypeModalVisible(false)}
           items={Object.values(AssignmentType).map((type) => {
             // Get appropriate icon for this type
-            const getTypeSpecificIcon = () => {
+            const getTypeSpecificIcon = (): React.ComponentProps<typeof Ionicons>['name'] => {
               switch (type) {
                 case AssignmentType.HOMEWORK:
                   return 'book-outline';
@@ -1440,9 +1417,7 @@ export default function EditAssignmentScreen() {
                     | 'presentation'
                     | 'other'
                 ],
-              icon: (
-                <Ionicons name={getTypeSpecificIcon() as any} size={24} color={Colors.dark.white} />
-              ),
+              icon: <Ionicons name={getTypeSpecificIcon()} size={24} color={Colors.dark.white} />,
               isSelected: type === assignmentType,
             };
           })}

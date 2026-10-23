@@ -1,6 +1,8 @@
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import React from 'react';
 
-import { Linking, Platform, ScrollView, StatusBar, StyleSheet, Text } from 'react-native';
+import { Linking, ScrollView, StyleSheet, Text } from 'react-native';
 
 import { useThemeColor } from '@/hooks/useThemeColor';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -32,6 +34,7 @@ const renderContent = (content: string, textColor: string, linkColor: string) =>
 };
 
 export function PrivacyPolicyScreen() {
+  const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const policy = t('privacyPolicy');
   const textColor = useThemeColor({}, 'text');
@@ -39,7 +42,18 @@ export function PrivacyPolicyScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.contentContainer}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={[
+          styles.contentContainer,
+          {
+            paddingTop: insets.top + 16,
+            paddingBottom: insets.bottom + 16,
+            paddingLeft: insets.left + 16,
+            paddingRight: insets.right + 16,
+          },
+        ]}
+      >
         <ThemedText style={styles.title}>{policy.title}</ThemedText>
 
         {Object.entries(policy.sections).map(([key, section], index) => (
@@ -68,8 +82,6 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: 16,
-    paddingTop:
-      Platform.OS === 'ios' ? 60 : StatusBar.currentHeight ? StatusBar.currentHeight + 16 : 16,
   },
   title: {
     fontSize: 24,

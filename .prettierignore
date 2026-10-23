@@ -9,3 +9,4 @@ coverage
 *.jks
 *.pem
 pnpm-lock.yaml
+work

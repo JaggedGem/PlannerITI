@@ -1,86 +1,92 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+import { DeviceEventEmitter } from 'react-native';
 
 import { router } from 'expo-router';
 
 import authService, { UserData } from '@/services/authService';
+import { parseUserData } from '@/utils/authData';
 
-// Key for caching user data
 const USER_CACHE_KEY = '@planner_user_cache';
 
 export function useAuth() {
   const [user, setUser] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const mounted = useRef(false);
+  const generation = useRef(0);
 
-  // Load cached user data immediately and then fetch fresh data
-  useEffect(() => {
-    const loadCachedUser = async () => {
-      try {
-        // First try to get from cache for immediate display
-        const cachedUserData = await AsyncStorage.getItem(USER_CACHE_KEY);
-        if (cachedUserData) {
-          setUser(JSON.parse(cachedUserData));
-        }
-        // Start background loading of fresh data
-        loadUserInBackground();
-      } catch {
-        // If cache read fails, just load from network
-        loadUserInBackground();
-      } finally {
-        // Mark initial loading as complete even if data is still loading in background
-        setLoading(false);
-        setIsInitialLoad(false);
+  const loadUser = useCallback(async (forceRefresh = false) => {
+    const request = ++generation.current;
+    try {
+      const fresh = await authService.loadUserData({ forceRefresh });
+      if (!mounted.current || request !== generation.current) return;
+      if (fresh) {
+        setUser(fresh);
+        await AsyncStorage.setItem(USER_CACHE_KEY, JSON.stringify(fresh));
+      } else if (!authService.isAuthenticated()) {
+        setUser(null);
+        await AsyncStorage.removeItem(USER_CACHE_KEY);
       }
-    };
-
-    loadCachedUser();
+    } catch (error) {
+      console.warn('Could not refresh user data:', error);
+    } finally {
+      if (mounted.current && request === generation.current) setLoading(false);
+    }
   }, []);
 
-  const loadUserInBackground = async () => {
-    try {
-      const userData = await authService.loadUserData();
-      if (userData) {
-        // Update state with fresh data
-        setUser(userData);
-        // Cache the user data for future use
-        await AsyncStorage.setItem(USER_CACHE_KEY, JSON.stringify(userData));
+  useEffect(() => {
+    mounted.current = true;
+    const request = generation.current;
+    const listener = DeviceEventEmitter.addListener('auth_state_changed', () => {
+      if (!authService.isAuthenticated()) {
+        generation.current += 1;
+        setUser(null);
+        setLoading(false);
+        setIsInitialLoad(false);
+      } else {
+        const currentUser = authService.getCurrentUser();
+        if (currentUser) setUser(currentUser);
       }
-    } catch {
-      // Silent error handling in background
-    }
-  };
-
-  const loadUser = async () => {
-    setLoading(true);
-    try {
-      const userData = await authService.loadUserData();
-      setUser(userData);
-      if (userData) {
-        await AsyncStorage.setItem(USER_CACHE_KEY, JSON.stringify(userData));
+    });
+    const initialize = async () => {
+      try {
+        const raw = await AsyncStorage.getItem(USER_CACHE_KEY);
+        const cached = raw ? parseUserData(JSON.parse(raw)) : null;
+        if (mounted.current && request === generation.current && cached) {
+          setUser(authService.getCurrentUser() ?? cached);
+        }
+      } catch (error) {
+        console.warn('Could not load cached user data:', error);
+      } finally {
+        if (mounted.current && request === generation.current) {
+          setIsInitialLoad(false);
+          setLoading(false);
+          void loadUser();
+        }
       }
-    } catch {
-      // If there's an error loading user data, we'll just set user to null
-      setUser(null);
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
+    void initialize();
+    return () => {
+      mounted.current = false;
+      generation.current += 1;
+      listener.remove();
+    };
+  }, [loadUser]);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
+    generation.current += 1;
     await authService.logout();
-    setUser(null);
-    await AsyncStorage.removeItem(USER_CACHE_KEY);
+    if (mounted.current) setUser(null);
     router.replace('/auth');
-  };
+  }, []);
 
-  return {
-    user,
-    loading,
-    isAuthenticated: !!user,
-    isInitialLoad,
-    logout,
-    reloadUser: loadUser,
-  };
+  const reloadUser = useCallback(async () => {
+    setLoading(true);
+    await loadUser(true);
+  }, [loadUser]);
+
+  return { user, loading, isAuthenticated: !!user, isInitialLoad, logout, reloadUser };
 }

@@ -82,10 +82,13 @@ export function BottomModalPortal({
   useEffect(() => {
     if (isVisible) {
       if (!isPresentedRef.current) {
-        requestAnimationFrame(() => {
-          bottomSheetModalRef.current?.present();
-          isPresentedRef.current = true;
+        const frame = requestAnimationFrame(() => {
+          if (bottomSheetModalRef.current) {
+            bottomSheetModalRef.current.present();
+            isPresentedRef.current = true;
+          }
         });
+        return () => cancelAnimationFrame(frame);
       }
       return;
     }

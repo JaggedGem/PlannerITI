@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { NativeModules, Platform } from 'react-native';
 
 import { Colors } from '@/constants/Colors';
+import { translations } from '@/constants/Translations';
 import {
   GraficPeGroup,
   GraficPePeriod,
@@ -11,6 +12,8 @@ import {
   GraficPePeriodType,
   GraficPeTrackType,
 } from '@/types/academicCalendar';
+import { isRecord } from '@/utils/json';
+import { formatMessage, formatTranslatedWeekday } from '@/utils/localization';
 import { clearNextClassCache } from '@/utils/nextClassCache';
 
 import { fetchCustomApi } from '../utils/customApi';
@@ -63,6 +66,8 @@ export interface ScheduleItem {
     days: string;
   };
 }
+
+const WEEK_TYPES = ['both', 'par', 'impar'] as const;
 
 interface DaySchedule {
   par: ScheduleItem[];
@@ -546,6 +551,7 @@ export const scheduleService = {
   _debug: false,
   _ready: false,
   _initializing: false,
+  _initializationPromise: null as Promise<void> | null,
   _scheduleRefreshVersion: 0,
   _settingsSyncCallbacks: [] as (() => void)[],
   _isApplyingServerSettings: () => false, // optional callback provided by settingsService
@@ -554,7 +560,7 @@ export const scheduleService = {
   enableDebug(value: boolean) {
     this._debug = value;
   },
-  log(...args: any[]) {
+  log(...args: unknown[]) {
     if (this._debug) console.log('[scheduleService]', ...args);
   },
   isReady() {
@@ -568,24 +574,17 @@ export const scheduleService = {
     this.notifyListeners();
   },
   async ready(): Promise<void> {
-    if (this._ready) return;
-    if (this._initializing) {
-      return new Promise((res, rej) => {
-        const i = setInterval(() => {
-          if (this._ready) {
-            clearInterval(i);
-            clearTimeout(timeout);
-            res();
-          }
-        }, 50);
-        // Add timeout to prevent infinite waiting
-        const timeout = setTimeout(() => {
-          clearInterval(i);
-          rej(new Error('Timeout waiting for schedule service initialization'));
-        }, 30000); // 30 second timeout
-      });
-    }
     await this.initialize();
+  },
+
+  triggerSettingsSync() {
+    if (!this._isApplyingServerSettings()) {
+      try {
+        this._triggerExternalSync();
+      } catch (error) {
+        this.log('Settings sync failed', error);
+      }
+    }
   },
   registerSettingsSync(options: {
     triggerSync: () => void;
@@ -638,10 +637,17 @@ export const scheduleService = {
     this.settings = { ...this.settings, ...newSettings };
     this.saveSettings();
     this.notifyListeners();
+    this.triggerSettingsSync();
   },
 
   getSettings(): UserSettings {
-    return { ...this.settings };
+    return {
+      ...this.settings,
+      customPeriods: this.settings.customPeriods.map((period) => ({
+        ...period,
+        daysOfWeek: period.daysOfWeek ? [...period.daysOfWeek] : undefined,
+      })),
+    };
   },
 
   getDateKey(date: Date): string {
@@ -799,6 +805,7 @@ export const scheduleService = {
 
   buildOverrideInfoMessage(entry: DatePeriodTimesEntry | null): string {
     if (!entry?.isOverride) return '';
+    const text = translations[this.settings.language];
 
     const explicitReason = entry.override?.reason?.trim() || '';
     if (explicitReason) {
@@ -811,36 +818,43 @@ export const scheduleService = {
     const replacedWeekday =
       entry.override?.replaceWeekday || entry.override?.recoverySource?.weekday || '';
     const replacedWeekdayLabel = replacedWeekday
-      ? `${replacedWeekday.charAt(0).toUpperCase()}${replacedWeekday.slice(1)}`
+      ? formatTranslatedWeekday(replacedWeekday, text)
       : '';
 
     if (entry.dayState === 'empty' || (baseCount > 0 && activeCount === 0)) {
       return baseCount > 0
-        ? `All ${baseCount} periods were removed for this day.`
-        : 'No classes are scheduled for this day due to an override.';
+        ? formatMessage(text.scheduleDetails.allRemoved, { count: baseCount })
+        : text.scheduleDetails.emptyOverride;
     }
 
     const parts: string[] = [];
 
     if (removedDisplay.length > 0) {
-      parts.push(`Removed periods: ${removedDisplay.join(', ')}.`);
+      parts.push(
+        formatMessage(text.scheduleDetails.removedPeriods, { periods: removedDisplay.join(', ') }),
+      );
     }
 
     if (baseCount > 0 && activeCount !== baseCount) {
-      parts.push(`Showing ${activeCount} of ${baseCount} periods.`);
+      parts.push(
+        formatMessage(text.scheduleDetails.showingPeriods, {
+          count: activeCount,
+          total: baseCount,
+        }),
+      );
     } else if (entry.override?.hasCustomSchedule && activeCount > 0) {
-      parts.push(`Custom schedule with ${activeCount} periods.`);
+      parts.push(formatMessage(text.scheduleDetails.customSchedule, { count: activeCount }));
     }
 
     if (replacedWeekdayLabel) {
-      parts.push(`Follows ${replacedWeekdayLabel} classes.`);
+      parts.push(formatMessage(text.scheduleDetails.followsWeekday, { day: replacedWeekdayLabel }));
     }
 
     if (parts.length > 0) {
       return parts.join(' ');
     }
 
-    return 'Temporary schedule override is active for this day.';
+    return text.scheduleDetails.overrideActive;
   },
 
   resolveWeekSchedulePeriods(day?: WeekScheduleDay | null): PeriodTime[] {
@@ -1354,8 +1368,8 @@ export const scheduleService = {
         // Process each period in the day
         Object.values(daySchedule).forEach((schedules) => {
           // Process schedules for both, even and odd weeks
-          ['both', 'par', 'impar'].forEach((weekType) => {
-            const items = (schedules as any)[weekType] as ScheduleItem[];
+          WEEK_TYPES.forEach((weekType) => {
+            const items = schedules[weekType];
             items.forEach((item) => {
               const subjectName = item.subjectid.name;
               const subjectId = `subject_${subjectName.replace(/\s+/g, '_').toLowerCase()}`;
@@ -1699,8 +1713,13 @@ export const scheduleService = {
 
     try {
       const payload = await this.fetchJsonWithHistoricFallback(`${endpoint}?${params.toString()}`);
+      if (!isRecord(payload)) throw new Error('Invalid academic calendar response');
       if (!payload?.available || !Array.isArray(payload?.events)) {
-        throw new Error(payload?.reasonCode || 'academic_calendar_unavailable');
+        throw new Error(
+          typeof payload.reasonCode === 'string'
+            ? payload.reasonCode
+            : 'academic_calendar_unavailable',
+        );
       }
 
       const expectedGroup = this.normalizeAcademicCalendarComparisonGroup(requestGroup);
@@ -1742,7 +1761,7 @@ export const scheduleService = {
     return `${CACHE_KEYS.LAST_SPECIAL_FETCH_PREFIX}${type}_${this.getSpecialScheduleCacheScope(groupName)}`;
   },
 
-  async fetchJsonFromPathOrUrl(pathOrUrl: string): Promise<any> {
+  async fetchJsonFromPathOrUrl(pathOrUrl: string): Promise<unknown> {
     const target = normalizeHistoricHref(pathOrUrl) || String(pathOrUrl || '').trim();
     if (!target) {
       throw new Error('Empty request path');
@@ -1870,7 +1889,7 @@ export const scheduleService = {
   async fetchJsonWithHistoricFallback(
     pathOrUrl: string,
     visited: Set<string> = new Set<string>(),
-  ): Promise<any> {
+  ): Promise<unknown> {
     const target = normalizeHistoricHref(pathOrUrl) || String(pathOrUrl || '').trim();
     if (!target) {
       throw new Error('Empty request path');
@@ -1918,41 +1937,21 @@ export const scheduleService = {
     };
   },
 
-  normalizeSpecialScheduleDocument(document: any): SpecialScheduleDocument | null {
-    if (!document || typeof document !== 'object') {
-      return null;
-    }
-
-    const examStudyYearRaw = (document as { examStudyYear?: unknown }).examStudyYear;
-    const parsedExamStudyYear =
-      typeof examStudyYearRaw === 'number'
-        ? examStudyYearRaw
-        : typeof examStudyYearRaw === 'string' && examStudyYearRaw.trim().length > 0
-          ? Number(examStudyYearRaw)
+  normalizeSpecialScheduleDocument(document: unknown): SpecialScheduleDocument | null {
+    if (!isRecord(document)) return null;
+    const year =
+      typeof document.examStudyYear === 'number'
+        ? document.examStudyYear
+        : typeof document.examStudyYear === 'string' && document.examStudyYear.trim()
+          ? Number(document.examStudyYear)
           : null;
-
     return {
-      url:
-        typeof (document as { url?: unknown }).url === 'string'
-          ? (document as { url: string }).url
-          : '',
-      filename:
-        typeof (document as { filename?: unknown }).filename === 'string'
-          ? (document as { filename: string }).filename
-          : '',
-      semester:
-        typeof (document as { semester?: unknown }).semester === 'string'
-          ? (document as { semester: string }).semester
-          : null,
-      academicYear:
-        typeof (document as { academicYear?: unknown }).academicYear === 'string'
-          ? (document as { academicYear: string }).academicYear
-          : null,
-      examStudyYear: Number.isFinite(parsedExamStudyYear) ? Number(parsedExamStudyYear) : null,
-      source:
-        typeof (document as { source?: unknown }).source === 'string'
-          ? (document as { source: string }).source
-          : null,
+      url: typeof document.url === 'string' ? document.url : '',
+      filename: typeof document.filename === 'string' ? document.filename : '',
+      semester: typeof document.semester === 'string' ? document.semester : null,
+      academicYear: typeof document.academicYear === 'string' ? document.academicYear : null,
+      examStudyYear: year !== null && Number.isFinite(year) ? year : null,
+      source: typeof document.source === 'string' ? document.source : null,
     };
   },
 
@@ -2104,9 +2103,7 @@ export const scheduleService = {
       if (!allowedPeriods.has(period)) return;
 
       const bothItems = Array.isArray(schedules.both) ? schedules.both : [];
-      const weekItems = Array.isArray((schedules as any)[weekKey])
-        ? (schedules as any)[weekKey]
-        : [];
+      const weekItems = Array.isArray(schedules[weekKey]) ? schedules[weekKey] : [];
       const items = [...bothItems, ...weekItems];
 
       items.forEach((item) => {
@@ -2143,9 +2140,7 @@ export const scheduleService = {
       if (!allowedPeriods.has(period)) return;
 
       const bothItems = Array.isArray(schedules.both) ? schedules.both : [];
-      const weekItems = Array.isArray((schedules as any)[weekKey])
-        ? (schedules as any)[weekKey]
-        : [];
+      const weekItems = Array.isArray(schedules[weekKey]) ? schedules[weekKey] : [];
       const items = [...bothItems, ...weekItems];
 
       items.forEach((item) => {
@@ -2331,8 +2326,9 @@ export const scheduleService = {
   normalizeSpecialScheduleResponse(
     type: SpecialScheduleType,
     groupName: string | null,
-    payload: any,
+    raw: unknown,
   ): SpecialScheduleResponse {
+    const payload = isRecord(raw) ? raw : {};
     const rawGroup =
       typeof payload?.group === 'string' && payload.group.trim().length > 0
         ? payload.group.trim()
@@ -2341,8 +2337,8 @@ export const scheduleService = {
     const rawEvents = Array.isArray(payload?.events) ? payload.events : [];
 
     const events: SpecialScheduleEvent[] = rawEvents
-      .map((event: any): SpecialScheduleEvent | null => {
-        if (!event || typeof event !== 'object') return null;
+      .map((event: unknown): SpecialScheduleEvent | null => {
+        if (!isRecord(event)) return null;
 
         const base = {
           group: typeof event.group === 'string' ? event.group : rawGroup || '',
@@ -2832,7 +2828,10 @@ export const scheduleService = {
         period: 'recovery-info',
         startTime: '00:00',
         endTime: '00:01',
-        className: `Schedule Override: ${overrideReason}`,
+        className: formatMessage(
+          translations[this.settings.language].scheduleDetails.overrideLabel,
+          { reason: overrideReason },
+        ),
         teacherName: '',
         roomNumber: '',
         isCustom: true,
@@ -2916,7 +2915,10 @@ export const scheduleService = {
           period: periodId,
           startTime: period.start,
           endTime: period.end,
-          className: `Period ${period.index + 1}`,
+          className: formatMessage(
+            translations[this.settings.language].scheduleDetails.periodNumber,
+            { number: period.index + 1 },
+          ),
           teacherName: '',
           roomNumber: '',
           isRecoveryDay: Boolean(datePeriodTimes?.isWeekend && datePeriodTimes?.isOverride),
@@ -2936,7 +2938,7 @@ export const scheduleService = {
       const processScheduleItem = (
         item: ScheduleItem & {
           isRecoveryDay?: boolean;
-          recoveryInfo?: any;
+          recoveryInfo?: RecoveryDay;
         },
         isEvenWeek?: boolean,
       ) => {
@@ -3071,7 +3073,9 @@ export const scheduleService = {
             period: customPeriod._id,
             startTime: customPeriod.starttime,
             endTime: customPeriod.endtime,
-            className: customPeriod.name || 'Custom Period',
+            className:
+              customPeriod.name ||
+              translations[this.settings.language].scheduleDetails.customPeriod,
             teacherName: '',
             roomNumber: '',
             isCustom: true,
@@ -3116,6 +3120,7 @@ export const scheduleService = {
     this.settings.customPeriods.push(newPeriod);
     this.saveSettings();
     this.notifyListeners();
+    this.triggerSettingsSync();
     return newPeriod._id;
   },
 
@@ -3128,6 +3133,7 @@ export const scheduleService = {
       };
       this.saveSettings();
       this.notifyListeners();
+      this.triggerSettingsSync();
       return true;
     }
     return false;
@@ -3137,6 +3143,7 @@ export const scheduleService = {
     this.settings.customPeriods = this.settings.customPeriods.filter((p) => p._id !== periodId);
     this.saveSettings();
     this.notifyListeners();
+    this.triggerSettingsSync();
   },
 
   // Reset settings to defaults
@@ -3160,6 +3167,7 @@ export const scheduleService = {
 
     this.saveSettings();
     this.notifyListeners();
+    this.triggerSettingsSync();
   },
 
   // Force refresh subjects for a specific group
@@ -3217,12 +3225,10 @@ export const scheduleService = {
     return !Object.values(data.data).some((daySchedule) => {
       if (!daySchedule || typeof daySchedule !== 'object') return false;
 
-      return Object.values(daySchedule).some((periodSet: any) => {
+      return Object.values(daySchedule).some((periodSet) => {
         if (!periodSet || typeof periodSet !== 'object') return false;
 
-        return ['both', 'par', 'impar'].some(
-          (key) => Array.isArray(periodSet[key]) && periodSet[key].length > 0,
-        );
+        return WEEK_TYPES.some((key) => Array.isArray(periodSet[key]) && periodSet[key].length > 0);
       });
     });
   },
@@ -3332,9 +3338,19 @@ export const scheduleService = {
       return null;
     }
   },
-  async initialize() {
-    if (this._ready || this._initializing) return;
-    this._initializing = true;
+  async initialize(): Promise<void> {
+    if (this._ready) return;
+    if (!this._initializationPromise) {
+      this._initializing = true;
+      this._initializationPromise = this.loadInitialState().finally(() => {
+        this._initializing = false;
+        this._initializationPromise = null;
+      });
+    }
+    await this._initializationPromise;
+  },
+
+  async loadInitialState(): Promise<void> {
     await this.loadSettings();
     // Load caches
     const [cachedRecoveryDays, cachedPeriodTimes, cachedSubjects, cachedAssignmentCounts] =
@@ -3353,28 +3369,6 @@ export const scheduleService = {
     // Perform initial sync after selected group is resolved.
     await this.syncPeriodTimes(true);
     this._ready = true;
-    this._initializing = false;
     this.log('Initialization complete');
   },
 };
-
-// Monkey patch update methods to trigger external sync only if provided
-[
-  'updateSettings',
-  'addCustomPeriod',
-  'updateCustomPeriod',
-  'deleteCustomPeriod',
-  'resetSettings',
-].forEach((method) => {
-  const original = (scheduleService as any)[method];
-  if (!original) return;
-  (scheduleService as any)[method] = function (...args: any[]) {
-    const result = original.apply(this, args);
-    if (!this._isApplyingServerSettings()) {
-      try {
-        this._triggerExternalSync();
-      } catch {}
-    }
-    return result;
-  };
-});

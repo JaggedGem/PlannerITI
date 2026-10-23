@@ -1,13 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {
-  addDays,
-  addHours,
-  differenceInDays,
-  format,
-  formatDistanceToNow,
-  parseISO,
-  startOfDay,
-} from 'date-fns';
+import { addDays, addHours, differenceInDays, format, parseISO, startOfDay } from 'date-fns';
 
 import { Platform } from 'react-native';
 
@@ -15,6 +7,25 @@ import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 
 import { Colors } from '@/constants/Colors';
+import { translations } from '@/constants/Translations';
+import { scheduleService } from '@/services/scheduleService';
+import { Assignment, AssignmentType } from '@/types/assignment';
+import { DEFAULT_NOTIFICATION_SETTINGS, NotificationSettings } from '@/types/notification';
+import {
+  formatAssignmentCount,
+  formatLocalizedTime,
+  formatMessage,
+  formatRemainingTime,
+  languageLocales,
+} from '@/utils/localization';
+import { assignmentTypeLabel, reminderBody } from '@/utils/notificationLocalization';
+
+import { readStoredAssignments } from './assignmentRepository';
+
+export { DEFAULT_NOTIFICATION_SETTINGS } from '@/types/notification';
+export type { NotificationSettings } from '@/types/notification';
+export { AssignmentType } from '@/types/assignment';
+export type { Assignment } from '@/types/assignment';
 
 type NotificationsModule = typeof import('expo-notifications');
 
@@ -49,35 +60,6 @@ const getNotificationsModule = (): NotificationsModule | null => {
 
 export const areNotificationsAvailable = (): boolean => getNotificationsModule() !== null;
 
-// Types imported inline to avoid circular dependency
-export enum AssignmentType {
-  HOMEWORK = 'Homework',
-  TEST = 'Test',
-  EXAM = 'Exam',
-  PROJECT = 'Project',
-  QUIZ = 'Quiz',
-  LAB = 'Lab',
-  ESSAY = 'Essay',
-  PRESENTATION = 'Presentation',
-  OTHER = 'Other',
-}
-
-export interface Assignment {
-  id: string;
-  title: string;
-  description: string;
-  courseCode: string;
-  courseName: string;
-  dueDate: string;
-  isCompleted: boolean;
-  isPriority: boolean;
-  assignmentType: AssignmentType;
-  periodId?: string;
-  subjectId?: string;
-  isOrphaned?: boolean;
-  subtasks?: any[];
-}
-
 // Import the required types
 export enum SchedulableTriggerInputTypes {
   TIME_INTERVAL = 'timeInterval',
@@ -88,22 +70,6 @@ export enum SchedulableTriggerInputTypes {
 
 // Storage keys
 const NOTIFICATION_SETTINGS_KEY = '@planner_notification_settings';
-const ASSIGNMENTS_STORAGE_KEY = 'assignments'; // Match the key in assignmentStorage.ts
-
-// Define notification settings type
-export interface NotificationSettings {
-  enabled: boolean;
-  notificationTime: string; // ISO string
-  examReminderDays: number;
-  testReminderDays: number;
-  quizReminderDays: number;
-  projectReminderDays: number;
-  homeworkReminderDays: number;
-  otherReminderDays: number;
-  dailyRemindersForExams: boolean;
-  dailyRemindersForTests: boolean;
-  dailyRemindersForQuizzes: boolean;
-}
 
 // Interface for grouped notifications
 interface AssignmentDigest {
@@ -117,21 +83,6 @@ interface AssignmentDigest {
   }[];
   lastNotified: string; // ISO string of when we last sent a notification for this digest
 }
-
-// Default notification settings
-export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
-  enabled: true,
-  notificationTime: new Date(new Date().setHours(20, 0, 0, 0)).toISOString(), // 8:00 PM by default
-  examReminderDays: 7,
-  testReminderDays: 5,
-  quizReminderDays: 3,
-  projectReminderDays: 5,
-  homeworkReminderDays: 2,
-  otherReminderDays: 1,
-  dailyRemindersForExams: true,
-  dailyRemindersForTests: true,
-  dailyRemindersForQuizzes: true,
-};
 
 // Get emoji for assignment type
 function getAssignmentTypeEmoji(type: AssignmentType): string {
@@ -201,7 +152,8 @@ export async function registerForPushNotificationsAsync() {
 
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('default', {
-      name: 'default',
+      name: translations[scheduleService.getSettings().language].notificationMessages
+        .defaultChannel,
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: Colors.dark.systemPushLight,
@@ -209,8 +161,11 @@ export async function registerForPushNotificationsAsync() {
 
     // Create assignment-specific channel
     await Notifications.setNotificationChannelAsync('assignments', {
-      name: 'Assignments',
-      description: 'Notifications for assignment due dates and reminders',
+      name: translations[scheduleService.getSettings().language].notificationMessages
+        .assignmentChannel,
+      description:
+        translations[scheduleService.getSettings().language].notificationMessages
+          .assignmentChannelDescription,
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: Colors.dark.primary,
@@ -218,8 +173,10 @@ export async function registerForPushNotificationsAsync() {
 
     // Create daily digest channel
     await Notifications.setNotificationChannelAsync('daily-digest', {
-      name: 'Daily Assignment Digest',
-      description: 'Daily summary of upcoming assignments',
+      name: translations[scheduleService.getSettings().language].notificationMessages.digestChannel,
+      description:
+        translations[scheduleService.getSettings().language].notificationMessages
+          .digestChannelDescription,
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: Colors.dark.green,
@@ -318,7 +275,7 @@ async function scheduleNotification(
   title: string,
   body: string,
   triggerDate: Date,
-  data: any,
+  data: Record<string, unknown>,
   identifier: string,
   channelId: string = 'default',
 ) {
@@ -371,9 +328,7 @@ async function scheduleNotification(
 }
 
 // Get reminder days for an assignment type based on settings
-async function getReminderDaysForType(type: AssignmentType): Promise<number> {
-  const settings = await getNotificationSettings();
-
+function reminderDaysForType(type: AssignmentType, settings: NotificationSettings): number {
   switch (type) {
     case AssignmentType.EXAM:
       return settings.examReminderDays;
@@ -391,9 +346,7 @@ async function getReminderDaysForType(type: AssignmentType): Promise<number> {
 }
 
 // Check if daily reminders should be scheduled for an assignment type
-async function shouldSendDailyReminder(type: AssignmentType): Promise<boolean> {
-  const settings = await getNotificationSettings();
-
+function shouldSendDailyReminder(type: AssignmentType, settings: NotificationSettings): boolean {
   switch (type) {
     case AssignmentType.EXAM:
       return settings.dailyRemindersForExams;
@@ -407,9 +360,12 @@ async function shouldSendDailyReminder(type: AssignmentType): Promise<boolean> {
 }
 
 // Schedule individual critical notifications for an assignment (due soon, day before)
-async function scheduleIndividualNotifications(assignment: Assignment): Promise<void> {
+async function scheduleIndividualNotifications(
+  assignment: Assignment,
+  settings: NotificationSettings,
+): Promise<void> {
+  const language = scheduleService.getSettings().language;
   try {
-    const settings = await getNotificationSettings();
     const dueDate = parseISO(assignment.dueDate);
     const now = new Date();
 
@@ -430,8 +386,8 @@ async function scheduleIndividualNotifications(assignment: Assignment): Promise<
 
     if (dueNotificationTime > now) {
       await scheduleNotification(
-        `${typeEmoji} ${assignment.assignmentType}`,
-        `"${title}" (${courseInfo}) due in 1 hour.`,
+        `${typeEmoji} ${assignmentTypeLabel(assignment.assignmentType, language)}`,
+        reminderBody({ ...assignment, title, courseCode: courseInfo }, 'hour', language),
         dueNotificationTime,
         { assignmentId: assignment.id, type: 'due' },
         getNotificationId(assignment.id, 'due'),
@@ -444,8 +400,8 @@ async function scheduleIndividualNotifications(assignment: Assignment): Promise<
 
     if (reminderDate > now) {
       await scheduleNotification(
-        `⏰ ${assignment.assignmentType}`,
-        `"${title}" (${courseInfo}) due tomorrow at ${format(dueDate, 'h:mm a')}.`,
+        `⏰ ${assignmentTypeLabel(assignment.assignmentType, language)}`,
+        reminderBody({ ...assignment, title, courseCode: courseInfo }, 'tomorrow', language),
         reminderDate,
         { assignmentId: assignment.id, type: 'reminder' },
         getNotificationId(assignment.id, 'reminder'),
@@ -454,7 +410,7 @@ async function scheduleIndividualNotifications(assignment: Assignment): Promise<
     }
 
     // 3. Initial reminder at X days before (based on settings)
-    const reminderDays = await getReminderDaysForType(assignment.assignmentType);
+    const reminderDays = reminderDaysForType(assignment.assignmentType, settings);
     const initialReminderDate = addDays(dueDate, -reminderDays);
 
     // Only schedule if today is exactly reminderDays before due date (or we're exactly at that point)
@@ -463,8 +419,8 @@ async function scheduleIndividualNotifications(assignment: Assignment): Promise<
 
     if (isSameDay(today, reminderDay) && initialReminderDate > now) {
       await scheduleNotification(
-        `🔔 ${assignment.assignmentType}`,
-        `"${title}" (${courseInfo}) due in ${reminderDays} days.`,
+        `🔔 ${assignmentTypeLabel(assignment.assignmentType, language)}`,
+        reminderBody({ ...assignment, title, courseCode: courseInfo }, reminderDays, language),
         initialReminderDate,
         { assignmentId: assignment.id, type: 'early-reminder' },
         getNotificationId(assignment.id, 'early-reminder'),
@@ -473,7 +429,7 @@ async function scheduleIndividualNotifications(assignment: Assignment): Promise<
     }
 
     // 4. Daily reminders if enabled for this assignment type
-    const shouldSendDaily = await shouldSendDailyReminder(assignment.assignmentType);
+    const shouldSendDaily = shouldSendDailyReminder(assignment.assignmentType, settings);
 
     if (shouldSendDaily) {
       // Calculate days between now and due date
@@ -495,8 +451,8 @@ async function scheduleIndividualNotifications(assignment: Assignment): Promise<
         // Only schedule if it's still in the future
         if (todayNotificationTime > now) {
           await scheduleNotification(
-            `📅 ${assignment.assignmentType}`,
-            `"${title}" (${courseInfo}) due in ${daysUntilDue} days.`,
+            `📅 ${assignmentTypeLabel(assignment.assignmentType, language)}`,
+            reminderBody({ ...assignment, title, courseCode: courseInfo }, daysUntilDue, language),
             todayNotificationTime,
             { assignmentId: assignment.id, type: 'daily' },
             getNotificationId(assignment.id, 'daily'),
@@ -512,8 +468,8 @@ async function scheduleIndividualNotifications(assignment: Assignment): Promise<
 
       if (priorityReminderTime > now) {
         await scheduleNotification(
-          `⚠️ PRIORITY: ${assignment.assignmentType}`,
-          `"${title}" (${courseInfo}) due in 1 hour!`,
+          `⚠️ ${formatMessage(translations[language].notificationMessages.priority, { type: assignmentTypeLabel(assignment.assignmentType, language) })}`,
+          reminderBody({ ...assignment, title, courseCode: courseInfo }, 'hour', language),
           priorityReminderTime,
           { assignmentId: assignment.id, type: 'priority-reminder' },
           `assignment-${assignment.id}-priority-reminder`,
@@ -528,7 +484,9 @@ async function scheduleIndividualNotifications(assignment: Assignment): Promise<
 
 // Function to create a more visually structured digest message
 function createDigestMessage(assignments: AssignmentDigest['assignments']): string {
-  if (assignments.length === 0) return 'No assignments due soon.';
+  const language = scheduleService.getSettings().language;
+  const text = translations[language].notificationMessages;
+  if (assignments.length === 0) return text.noUpcoming;
 
   // Group by type for better organization
   const byType = assignments.reduce(
@@ -551,7 +509,7 @@ function createDigestMessage(assignments: AssignmentDigest['assignments']): stri
 
   for (const [type, items] of Object.entries(byType)) {
     const typeEmoji = getAssignmentTypeEmoji(type as AssignmentType);
-    message += `${typeEmoji} ${type}${items.length > 1 ? 's' : ''}: \n`;
+    message += `${typeEmoji} ${assignmentTypeLabel(type as AssignmentType, language)}: ${items.length}\n`;
 
     // If there are many assignments, only show the first few
     const maxItemsToShow = 5;
@@ -559,7 +517,7 @@ function createDigestMessage(assignments: AssignmentDigest['assignments']): stri
 
     displayItems.forEach((item) => {
       // Format just the time part of the due date
-      const dueTime = format(parseISO(item.dueDate), 'h:mm a');
+      const dueTime = formatLocalizedTime(parseISO(item.dueDate), language);
 
       // Extract just the course code for brevity
       const courseCode = item.courseInfo.split(' - ')[0];
@@ -568,12 +526,12 @@ function createDigestMessage(assignments: AssignmentDigest['assignments']): stri
       const truncatedTitle = truncateText(item.title, 60);
 
       // Simplified format: "Assignment name" (CourseCode) at Time
-      message += `  • "${truncatedTitle}" (${courseCode}) at ${dueTime}\n`;
+      message += `  • ${formatMessage(text.item, { title: truncatedTitle, course: courseCode ? `(${courseCode})` : '', time: dueTime })}\n`;
     });
 
     // If we truncated the list, add a note
     if (items.length > maxItemsToShow) {
-      message += `  • + ${items.length - maxItemsToShow} more...\n`;
+      message += `  • ${formatMessage(text.more, { count: items.length - maxItemsToShow })}\n`;
     }
 
     message += '\n';
@@ -593,9 +551,14 @@ export async function createAndScheduleDailyDigest(
     return;
   }
 
+  const language = scheduleService.getSettings().language;
+  const text = translations[language].notificationMessages;
   try {
     const settings = await getNotificationSettings();
-    if (!settings.enabled) return;
+    if (!settings.enabled) {
+      await Notifications.cancelScheduledNotificationAsync('daily-digest-notification');
+      return;
+    }
 
     const now = new Date();
     // Filter out completed assignments and assignments that are already overdue
@@ -627,45 +590,24 @@ export async function createAndScheduleDailyDigest(
           return todayNotificationTime;
         })();
 
-    // Group assignments by day for the next 14 days
     const assignmentsByDay: Record<string, Assignment[]> = {};
-
-    for (let i = 0; i < 14; i++) {
-      const targetDate = addDays(now, i);
-      const dateKey = format(targetDate, 'yyyy-MM-dd');
-
-      // Get assignments due on this day
-      const dueOnDay = incompleteAssignments.filter((assignment) => {
-        const dueDate = parseISO(assignment.dueDate);
-        return isSameDay(dueDate, targetDate);
-      });
-
-      // Filter assignments based on reminder day settings
-      const validAssignments = await Promise.all(
-        dueOnDay.map(async (assignment) => {
-          const reminderDays = await getReminderDaysForType(assignment.assignmentType);
-          const dueDate = parseISO(assignment.dueDate);
-          const daysUntilDue = differenceInDays(dueDate, now);
-
-          // Only include if it's within the reminder window
-          return daysUntilDue <= reminderDays ? assignment : null;
-        }),
-      );
-
-      // Filter out nulls and store the assignments for this day
-      const filteredAssignments = validAssignments.filter((a) => a !== null) as Assignment[];
-      if (filteredAssignments.length > 0) {
-        assignmentsByDay[dateKey] = filteredAssignments;
-      }
+    const endDate = startOfDay(addDays(now, 14));
+    for (const assignment of incompleteAssignments) {
+      const dueDate = parseISO(assignment.dueDate);
+      if (dueDate >= endDate) continue;
+      const reminderDays = reminderDaysForType(assignment.assignmentType, settings);
+      if (differenceInDays(dueDate, now) > reminderDays) continue;
+      const key = format(dueDate, 'yyyy-MM-dd');
+      (assignmentsByDay[key] ??= []).push(assignment);
     }
+
+    // Clear stale digests even when the last upcoming assignment was completed or deleted.
+    await Notifications.cancelScheduledNotificationAsync('daily-digest-notification');
 
     // If no upcoming assignments, don't schedule a notification
     if (Object.keys(assignmentsByDay).length === 0) {
       return;
     }
-
-    // Cancel any existing daily digest notification
-    await Notifications.cancelScheduledNotificationAsync('daily-digest-notification');
 
     // Prepare data for the notification
     const digestData: {
@@ -686,11 +628,15 @@ export async function createAndScheduleDailyDigest(
 
       // Format the day title
       if (isSameDay(date, now)) {
-        dayTitle = 'Today';
+        dayTitle = translations[language].assignments.days.today;
       } else if (isSameDay(date, addDays(now, 1))) {
-        dayTitle = 'Tomorrow';
+        dayTitle = translations[language].assignments.days.tomorrow;
       } else {
-        dayTitle = format(date, 'EEEE, MMM d'); // e.g., "Monday, Jan 15"
+        dayTitle = new Intl.DateTimeFormat(languageLocales[language], {
+          weekday: 'long',
+          month: 'short',
+          day: 'numeric',
+        }).format(date); // e.g., "Monday, Jan 15"
       }
 
       digestData.push({
@@ -719,7 +665,7 @@ export async function createAndScheduleDailyDigest(
     if (digestData.length === 1) {
       // Single day format
       const day = digestData[0];
-      title = `📚 ${day.assignments.length} Assignment${day.assignments.length > 1 ? 's' : ''} for ${day.dayTitle}`;
+      title = `📚 ${formatMessage(text.dayTitle, { assignments: formatAssignmentCount(day.assignments.length, language), day: day.dayTitle })}`;
 
       // If there are too many assignments, use a more compact format
       if (day.assignments.length <= 5) {
@@ -734,23 +680,23 @@ export async function createAndScheduleDailyDigest(
           {} as Record<string, number>,
         );
 
-        body = 'Assignment summary:\n';
+        body = `${text.summary}\n`;
 
         for (const [type, count] of Object.entries(countByType)) {
           const typeEmoji = getAssignmentTypeEmoji(type as AssignmentType);
-          body += `${typeEmoji} ${count} ${type}${count > 1 ? 's' : ''}\n`;
+          body += `${typeEmoji} ${assignmentTypeLabel(type as AssignmentType, language)}: ${count}\n`;
         }
 
         // Only add "tap to view details" if we're showing a summary rather than all assignments
-        body += '\nTap to view details.';
+        body += `\n${text.viewDetails}`;
       }
     } else {
       // Multiple days format - use a more summarized approach
-      title = `📚 ${totalAssignments} Assignment${totalAssignments > 1 ? 's' : ''} This Week`;
+      title = `📚 ${formatMessage(text.upcomingTitle, { assignments: formatAssignmentCount(totalAssignments, language) })}`;
 
       // Summarize by day
       for (const day of digestData) {
-        body += `📅 ${day.dayTitle}: ${day.assignments.length} assignment${day.assignments.length > 1 ? 's' : ''}\n`;
+        body += `📅 ${day.dayTitle}: ${formatAssignmentCount(day.assignments.length, language)}\n`;
 
         // Only show details for the first 2 days to keep it concise
         if (day === digestData[0] || day === digestData[1]) {
@@ -761,7 +707,7 @@ export async function createAndScheduleDailyDigest(
               acc[curr.type].push(curr);
               return acc;
             },
-            {} as Record<string, any[]>,
+            {} as Record<string, AssignmentDigest['assignments']>,
           );
 
           for (const [type, items] of Object.entries(typeGroups)) {
@@ -770,7 +716,7 @@ export async function createAndScheduleDailyDigest(
               const item = items[0];
               body += `  ${typeEmoji} "${truncateText(item.title, 50)}" (${item.courseInfo})\n`;
             } else {
-              body += `  ${typeEmoji} ${items.length} ${type}s\n`;
+              body += `  ${typeEmoji} ${assignmentTypeLabel(type as AssignmentType, language)}: ${items.length}\n`;
             }
           }
         }
@@ -787,7 +733,7 @@ export async function createAndScheduleDailyDigest(
             acc[curr.type].push(curr);
             return acc;
           },
-          {} as Record<string, any[]>,
+          {} as Record<string, AssignmentDigest['assignments']>,
         );
 
         return Object.values(typeGroups).some((items) => items.length > 1);
@@ -796,7 +742,7 @@ export async function createAndScheduleDailyDigest(
       body = truncateText(body.trim(), 700);
 
       if (hasMoreDays || hasHiddenAssignments) {
-        body += '\n\nTap to view all.';
+        body += `\n\n${text.viewAll}`;
       }
     }
 
@@ -826,19 +772,12 @@ export async function scheduleNotificationForAssignment(assignment: Assignment):
     }
 
     // Schedule critical individual notifications (due soon, day before)
-    await scheduleIndividualNotifications(assignment);
+    await scheduleIndividualNotifications(assignment, settings);
 
     // Update the daily digest to include this assignment
     // Use getAssignments directly from AsyncStorage to avoid dynamic imports
     try {
-      const assignmentsJson = await AsyncStorage.getItem(ASSIGNMENTS_STORAGE_KEY);
-      const allAssignments = assignmentsJson ? JSON.parse(assignmentsJson) : [];
-
-      // Map to ensure all assignments have a type (for backward compatibility)
-      const processedAssignments = allAssignments.map((a: any) => ({
-        ...a,
-        assignmentType: a.assignmentType || AssignmentType.HOMEWORK,
-      }));
+      const processedAssignments = await readStoredAssignments();
 
       await createAndScheduleDailyDigest(processedAssignments);
     } catch (storageError) {
@@ -874,7 +813,7 @@ export async function scheduleAllNotifications(assignments: Assignment[]): Promi
 
     // Schedule individual critical notifications for each assignment
     for (const assignment of incompleteAssignments) {
-      await scheduleIndividualNotifications(assignment);
+      await scheduleIndividualNotifications(assignment, settings);
     }
 
     // Create and schedule the daily digest
@@ -893,28 +832,27 @@ export async function cancelNotificationsForAssignment(assignmentId: string): Pr
 
   try {
     // Cancel all notification types for this assignment
-    const notificationTypes = ['due', 'reminder', 'early-reminder', 'priority-reminder', 'daily'];
+    const notificationTypes = [
+      'due',
+      'reminder',
+      'early-reminder',
+      'priority-reminder',
+      'daily',
+    ] as const;
     for (const type of notificationTypes) {
       const identifier =
         type === 'priority-reminder'
           ? `assignment-${assignmentId}-priority-reminder`
-          : getNotificationId(assignmentId, type as any);
+          : getNotificationId(assignmentId, type);
 
       await Notifications.cancelScheduledNotificationAsync(identifier);
     }
 
     // Get all assignments to update the daily digest
     try {
-      const assignmentsJson = await AsyncStorage.getItem(ASSIGNMENTS_STORAGE_KEY);
-      const allAssignments = assignmentsJson ? JSON.parse(assignmentsJson) : [];
-
-      // Map to ensure all assignments have a type (for backward compatibility)
-      const processedAssignments = allAssignments
-        .map((a: any) => ({
-          ...a,
-          assignmentType: a.assignmentType || AssignmentType.HOMEWORK,
-        }))
-        .filter((a: any) => a.id !== assignmentId); // Remove the deleted assignment
+      const processedAssignments = (await readStoredAssignments()).filter(
+        (assignment) => assignment.id !== assignmentId,
+      );
 
       // Reschedule the daily digest without this assignment
       await createAndScheduleDailyDigest(processedAssignments);
@@ -959,6 +897,7 @@ export async function checkAndRescheduleNotifications(assignments: Assignment[])
     return;
   }
 
+  const language = scheduleService.getSettings().language;
   try {
     // Get notification settings
     const settings = await getNotificationSettings();
@@ -1012,7 +951,7 @@ export async function checkAndRescheduleNotifications(assignments: Assignment[])
 
       const assignmentTypes = scheduledTypes.get(assignment.id) || new Set();
       const daysUntilDue = differenceInDays(dueDate, now);
-      const reminderDays = await getReminderDaysForType(assignment.assignmentType);
+      const reminderDays = reminderDaysForType(assignment.assignmentType, settings);
 
       // Check if we need to schedule the initial reminder
       if (
@@ -1025,14 +964,14 @@ export async function checkAndRescheduleNotifications(assignments: Assignment[])
         const reminderDay = startOfDay(addDays(dueDate, -reminderDays));
 
         if (isSameDay(today, reminderDay)) {
-          await scheduleIndividualNotifications(assignment);
+          await scheduleIndividualNotifications(assignment, settings);
           continue; // Skip to next assignment, all notifications scheduled
         }
       }
 
       // Check if we need to schedule day-before notification
       if (!assignmentTypes.has('reminder') && daysUntilDue <= 1 && daysUntilDue > 0) {
-        await scheduleIndividualNotifications(assignment);
+        await scheduleIndividualNotifications(assignment, settings);
         continue;
       }
 
@@ -1041,13 +980,13 @@ export async function checkAndRescheduleNotifications(assignments: Assignment[])
         const hoursTilDue = (dueDate.getTime() - now.getTime()) / (1000 * 60 * 60);
 
         if (hoursTilDue <= 1 && hoursTilDue > 0) {
-          await scheduleIndividualNotifications(assignment);
+          await scheduleIndividualNotifications(assignment, settings);
           continue;
         }
       }
 
       // Check if daily reminders are enabled and we need today's reminder
-      const shouldSendDaily = await shouldSendDailyReminder(assignment.assignmentType);
+      const shouldSendDaily = shouldSendDailyReminder(assignment.assignmentType, settings);
       if (
         shouldSendDaily &&
         !assignmentTypes.has('daily') &&
@@ -1070,8 +1009,12 @@ export async function checkAndRescheduleNotifications(assignments: Assignment[])
           const channelId = getChannelId(assignment.assignmentType);
 
           await scheduleNotification(
-            `📅 ${assignment.assignmentType}`,
-            `"${truncateText(assignment.title, 30)}" (${courseInfo}) due in ${daysUntilDue} days.`,
+            `📅 ${assignmentTypeLabel(assignment.assignmentType, language)}`,
+            reminderBody(
+              { ...assignment, title: truncateText(assignment.title, 30), courseCode: courseInfo },
+              daysUntilDue,
+              language,
+            ),
             todayNotificationTime,
             { assignmentId: assignment.id, type: 'daily' },
             getNotificationId(assignment.id, 'daily'),
@@ -1090,18 +1033,5 @@ export async function checkAndRescheduleNotifications(assignments: Assignment[])
 
 // Get remaining time text for an assignment
 export function getRemainingTimeText(dueDate: string): string {
-  try {
-    const date = parseISO(dueDate);
-    const now = new Date();
-
-    if (date < now) {
-      return '⏰ Overdue';
-    }
-
-    const timeRemaining = formatDistanceToNow(date, { addSuffix: true });
-    return `⏳ ${timeRemaining}`;
-  } catch (error) {
-    console.error('Error formatting remaining time:', error);
-    return 'Unknown';
-  }
+  return formatRemainingTime(dueDate, scheduleService.getSettings().language);
 }

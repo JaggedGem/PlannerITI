@@ -39,7 +39,7 @@ export function ForgotPasswordScreen() {
 
   const handleResetPassword = async () => {
     if (!email) {
-      showCustomAlert('Error', t('auth').forgotPassword.emailRequired);
+      showCustomAlert(t('common').error, t('auth').forgotPassword.emailRequired);
       return;
     }
 
@@ -48,7 +48,7 @@ export function ForgotPasswordScreen() {
       await authService.requestPasswordReset(email);
       showCustomAlert(t('auth').forgotPassword.success, t('auth').verifyEmail.message, true);
     } catch {
-      showCustomAlert('Error', t('auth').forgotPassword.error);
+      showCustomAlert(t('common').error, t('auth').forgotPassword.error);
     } finally {
       setLoading(false);
     }
@@ -133,7 +133,7 @@ export function ForgotPasswordScreen() {
               style={[styles.alertButton, { backgroundColor: actionColor }]}
               onPress={handleAlertConfirm}
             >
-              <ThemedText style={styles.alertButtonText}>OK</ThemedText>
+              <ThemedText style={styles.alertButtonText}>{t('common').ok}</ThemedText>
             </TouchableOpacity>
           </View>
         </View>

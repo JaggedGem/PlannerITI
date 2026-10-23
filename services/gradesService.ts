@@ -7,6 +7,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { DeviceEventEmitter } from 'react-native';
 
+import { translations } from '@/constants/Translations';
+import type { Language } from '@/services/scheduleService';
+
 import { secureStorageService } from './secureStorageService';
 
 const LOGIN_URL = 'https://api.ceiti.md/date/login';
@@ -19,7 +22,7 @@ const PLACEHOLDER_RESPONSE = '<planneriti-placeholder-grades />';
  * @param idnp The student's IDNP (13 digits)
  * @returns Promise with the login response
  */
-export const loginWithIdnp = async (idnp: string, signal?: AbortSignal): Promise<any> => {
+export const loginWithIdnp = async (idnp: string, signal?: AbortSignal): Promise<string> => {
   if (idnp === PLACEHOLDER_IDNP) {
     return PLACEHOLDER_RESPONSE;
   }
@@ -51,9 +54,6 @@ export const loginWithIdnp = async (idnp: string, signal?: AbortSignal): Promise
     }
 
     return await response.text();
-  } catch (error) {
-    // Silently handle errors
-    throw error;
   } finally {
     clearTimeout(timeoutId);
     if (signal) {
@@ -72,13 +72,7 @@ export const fetchStudentInfo = async (idnp: string, signal?: AbortSignal): Prom
     return PLACEHOLDER_RESPONSE;
   }
 
-  try {
-    // POST request returns the HTML directly
-    return await loginWithIdnp(idnp, signal);
-  } catch (error) {
-    // Silently handle errors
-    throw error;
-  }
+  return loginWithIdnp(idnp, signal);
 };
 
 // Interfaces for parsed data
@@ -225,7 +219,8 @@ const romanToArabic = (roman: string): number | undefined => {
  * @param html The HTML response from the API
  * @returns Student info object
  */
-const parseStudentInfo = (html: string): StudentInfo => {
+const parseStudentInfo = (html: string, language: Language): StudentInfo => {
+  const text = translations[language];
   try {
     // Extract from date-personale table
     const namePattern = /<tr>\s*<th>Numele<\/th>\s*<td>([^<]+)<\/td>\s*<\/tr>/;
@@ -253,8 +248,8 @@ const parseStudentInfo = (html: string): StudentInfo => {
     const yearNumber = studyYearStr ? romanToArabic(studyYearStr) : undefined;
 
     return {
-      name: nameMatch ? nameMatch[1].trim() : 'Unknown',
-      firstName: firstNameMatch ? firstNameMatch[1].trim() : 'Student',
+      name: nameMatch ? nameMatch[1].trim() : text.common.unknown,
+      firstName: firstNameMatch ? firstNameMatch[1].trim() : '',
       patronymic: patronymicMatch ? patronymicMatch[1].trim() : '',
       studyYear: studyYearStr,
       yearNumber: yearNumber,
@@ -266,11 +261,11 @@ const parseStudentInfo = (html: string): StudentInfo => {
     };
   } catch {
     return {
-      name: 'Error',
-      firstName: 'Loading',
+      name: text.common.unknown,
+      firstName: '',
       patronymic: '',
       studyYear: '',
-      group: 'Failed to parse',
+      group: '',
       specialization: '',
     };
   }
@@ -280,34 +275,36 @@ const parseStudentInfo = (html: string): StudentInfo => {
  * Create a simple mock data for testing
  * @returns Mock student grades data
  */
-const createMockData = (): StudentGrades => {
+const createMockData = (language: Language): StudentGrades => {
+  const text = translations[language];
+  const demo = text.demoGrades;
   return {
     studentInfo: {
-      name: 'Demo',
-      firstName: 'Student',
+      name: demo.familyName,
+      firstName: demo.firstName,
       patronymic: '',
       studyYear: '2023-2024',
       group: 'S-01',
-      specialization: 'Software Development',
+      specialization: demo.specialization,
     },
     currentGrades: [
       {
         semester: 1,
         subjects: [
           {
-            name: 'Mathematics',
+            name: demo.mathematics,
             grades: ['9', '8', '10', '9'],
             average: 9,
             displayedAverage: '9.00',
           },
           {
-            name: 'Programming',
+            name: demo.programming,
             grades: ['10', '10', '9', '10'],
             average: 9.75,
             displayedAverage: '9.75',
           },
           {
-            name: 'English',
+            name: demo.english,
             grades: ['8', '9', '8'],
             average: 8.33,
             displayedAverage: '8.33',
@@ -323,13 +320,13 @@ const createMockData = (): StudentGrades => {
     ],
     exams: [
       {
-        name: 'Mathematics Final',
+        name: demo.mathematicsFinal,
         type: 'Examen',
         grade: '9',
         semester: 1,
       },
       {
-        name: 'Programming Project',
+        name: demo.programmingProject,
         type: 'Practică',
         grade: '10',
         semester: 1,
@@ -340,7 +337,9 @@ const createMockData = (): StudentGrades => {
   };
 };
 
-const createPlaceholderData = (): StudentGrades => {
+const createPlaceholderData = (language: Language): StudentGrades => {
+  const text = translations[language];
+  const demo = text.demoGrades;
   const randomGrade = (): string => String(Math.floor(Math.random() * 6) + 5);
   const createSubject = (name: string, gradeCount: number): GradeSubject => {
     const grades = Array.from({ length: gradeCount }, randomGrade);
@@ -356,23 +355,23 @@ const createPlaceholderData = (): StudentGrades => {
 
   return {
     studentInfo: {
-      name: 'Demo',
-      firstName: 'Student',
+      name: demo.familyName,
+      firstName: demo.firstName,
       patronymic: '',
       studyYear: 'II',
       yearNumber: 2,
       group: 'DEMO-01',
-      specialization: 'Software Development',
-      status: 'Demo account',
+      specialization: demo.specialization,
+      status: demo.status,
     },
     currentGrades: [
       {
         semester: 3,
         subjects: [
-          createSubject('Mathematics', 4),
-          createSubject('Programming', 5),
-          createSubject('English', 3),
-          createSubject('Database Systems', 4),
+          createSubject(demo.mathematics, 4),
+          createSubject(demo.programming, 5),
+          createSubject(demo.english, 3),
+          createSubject(demo.databases, 4),
         ],
         absences: {
           total: 2,
@@ -384,7 +383,7 @@ const createPlaceholderData = (): StudentGrades => {
     ],
     exams: [
       {
-        name: 'Programming Final',
+        name: demo.programmingFinal,
         type: 'Examen',
         grade: randomGrade(),
         semester: 3,
@@ -670,23 +669,11 @@ const createFallbackSemesters = (): SemesterGrades[] => {
   return [
     {
       semester: 1,
-      subjects: [
-        {
-          name: 'Semester I data not available',
-          grades: [],
-          displayedAverage: '-',
-        },
-      ],
+      subjects: [],
     },
     {
       semester: 2,
-      subjects: [
-        {
-          name: 'Semester II data not available',
-          grades: [],
-          displayedAverage: '-',
-        },
-      ],
+      subjects: [],
     },
   ];
 };
@@ -768,7 +755,7 @@ const parseExams = (html: string): Exam[] => {
 
           // Try to extract the type from the name
           const typeMatch = fullName.match(/^\(([^)]+)\)/);
-          const type = typeMatch ? typeMatch[1] : 'Unknown';
+          const type = typeMatch ? typeMatch[1] : '';
           const name = typeMatch ? fullName.substring(typeMatch[0].length).trim() : fullName;
 
           result.push({
@@ -857,17 +844,17 @@ const determineCurrentSemester = (html: string): number | undefined => {
  * @param html The HTML response from the API
  * @returns Complete student grades information
  */
-export const parseStudentGradesData = (html: string): StudentGrades => {
+export const parseStudentGradesData = (html: string, language: Language = 'en'): StudentGrades => {
   try {
     if (!html || html.trim() === '') {
       throw new Error('Empty HTML content');
     }
 
     if (html.trim() === PLACEHOLDER_RESPONSE) {
-      return createPlaceholderData();
+      return createPlaceholderData(language);
     }
 
-    const studentInfo = parseStudentInfo(html);
+    const studentInfo = parseStudentInfo(html, language);
     const exams = parseExams(html);
     const currentGrades = parseCurrentGrades(html);
     applyExamGradesToAverages(currentGrades, exams, studentInfo);
@@ -882,7 +869,7 @@ export const parseStudentGradesData = (html: string): StudentGrades => {
       currentSemester,
     };
   } catch {
-    return createMockData();
+    return createMockData(language);
   }
 };
 
@@ -998,13 +985,7 @@ const ensureBothSemestersExist = (result: SemesterGrades[]): void => {
   if (!hasSemester1) {
     result.push({
       semester: 1,
-      subjects: [
-        {
-          name: 'No subjects available for Semester I',
-          grades: [],
-          displayedAverage: '-',
-        },
-      ],
+      subjects: [],
     });
   }
 
@@ -1012,13 +993,7 @@ const ensureBothSemestersExist = (result: SemesterGrades[]): void => {
   if (!hasSemester2) {
     result.push({
       semester: 2,
-      subjects: [
-        {
-          name: 'No subjects available for Semester II',
-          grades: [],
-          displayedAverage: '-',
-        },
-      ],
+      subjects: [],
     });
   }
 };
@@ -1028,6 +1003,14 @@ const GRADES_CACHE_TIME_KEY_PREFIX = '@grades_cache_time_';
 const GRADES_UPDATED_EVENT = 'grades_updated_event';
 export const GRADES_REFRESH_START_EVENT = 'grades_refresh_start_event';
 export const GRADES_REFRESH_END_EVENT = 'grades_refresh_end_event';
+
+export interface GradesRefreshEndEvent {
+  idnp: string;
+  updated: boolean;
+  duration: number;
+  aborted?: boolean;
+  error?: boolean;
+}
 
 // Toggle for console logging (can be flipped to false for production noise reduction)
 const GRADES_DEBUG_LOGS = __DEV__;
@@ -1134,7 +1117,7 @@ export const gradesDataService = {
               updated: false,
               aborted: true,
               duration: Date.now() - startTime,
-            });
+            } satisfies GradesRefreshEndEvent);
           } else if (freshHtml && freshHtml.trim()) {
             if (GRADES_DEBUG_LOGS) console.log('[grades] fetched fresh HTML, storing');
             await this.store(idnp, freshHtml);
@@ -1143,14 +1126,14 @@ export const gradesDataService = {
               idnp,
               updated: true,
               duration: Date.now() - startTime,
-            });
+            } satisfies GradesRefreshEndEvent);
           } else {
             if (GRADES_DEBUG_LOGS) console.log('[grades] fresh HTML empty, keeping cache');
             DeviceEventEmitter.emit(GRADES_REFRESH_END_EVENT, {
               idnp,
               updated: false,
               duration: Date.now() - startTime,
-            });
+            } satisfies GradesRefreshEndEvent);
           }
         } catch (err) {
           if (controller.signal.aborted) {
@@ -1160,7 +1143,7 @@ export const gradesDataService = {
               updated: false,
               aborted: true,
               duration: Date.now() - startTime,
-            });
+            } satisfies GradesRefreshEndEvent);
           } else {
             if (GRADES_DEBUG_LOGS) console.log('[grades] silentRefresh error', err);
             DeviceEventEmitter.emit(GRADES_REFRESH_END_EVENT, {
@@ -1168,7 +1151,7 @@ export const gradesDataService = {
               updated: false,
               error: true,
               duration: Date.now() - startTime,
-            });
+            } satisfies GradesRefreshEndEvent);
           }
         } finally {
           if (inflightControllers[idnp] === controller) {

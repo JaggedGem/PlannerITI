@@ -4,15 +4,17 @@ import { Link, Stack } from 'expo-router';
 
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export default function NotFoundScreen() {
+  const { t } = useTranslation();
   return (
     <>
-      <Stack.Screen options={{ title: 'Oops!' }} />
+      <Stack.Screen options={{ title: t('common').notFoundTitle }} />
       <ThemedView style={styles.container}>
-        <ThemedText type="title">This screen doesn&apos;t exist.</ThemedText>
+        <ThemedText type="title">{t('common').notFoundMessage}</ThemedText>
         <Link href="/" style={styles.link}>
-          <ThemedText type="link">Go to home screen!</ThemedText>
+          <ThemedText type="link">{t('common').goHome}</ThemedText>
         </Link>
       </ThemedView>
     </>

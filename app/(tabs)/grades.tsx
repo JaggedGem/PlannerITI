@@ -1,4 +1,4 @@
-import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
+import { BottomSheetScrollView, BottomSheetScrollViewMethods } from '@gorhom/bottom-sheet';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@react-native-vector-icons/material-icons';
 import {
@@ -37,12 +37,14 @@ import * as Haptics from 'expo-haptics';
 
 import { BottomModalPortal } from '@/components/BottomModalPortal';
 import { Colors } from '@/constants/Colors';
+import { Translation, translations } from '@/constants/Translations';
 import { useTranslation } from '@/hooks/useTranslation';
 import {
   Exam,
   GRADES_REFRESH_END_EVENT,
   GRADES_REFRESH_START_EVENT,
   GradeSubject,
+  GradesRefreshEndEvent,
   SemesterGrades,
   StudentGrades,
   StudentInfo,
@@ -58,6 +60,7 @@ import {
 } from '@/services/scheduleService';
 import { secureStorageService } from '@/services/secureStorageService';
 import { exportGradesPdf } from '@/utils/exportGrades';
+import { formatAssessmentType, formatMessage } from '@/utils/localization';
 import { runWhenIdle } from '@/utils/runWhenIdle';
 import {
   eventMatchesSelectedSubgroup,
@@ -416,17 +419,24 @@ const normalizeExamType = (type: string): 'exam' | 'thesis' | 'other' => {
   return 'other';
 };
 
-const formatOfficialEventSummary = (event: OfficialAssessmentEvent, roomLabel: string): string => {
+const formatOfficialEventSummary = (
+  event: OfficialAssessmentEvent,
+  text: Translation,
+  formatTime: (time: string) => string,
+): string => {
   const eventDate = parseEventDate(event.date);
   const dateLabel = Number.isFinite(eventDate.getTime())
     ? `${String(eventDate.getDate()).padStart(2, '0')}.${String(eventDate.getMonth() + 1).padStart(2, '0')}`
     : event.date;
 
-  const thesisTime = event.type === 'thesis' ? formatThesisTimeLabel(event) : '';
-  const thesisPeriod = event.type === 'thesis' && event.period ? `P${event.period}` : '';
+  const thesisTime = event.type === 'thesis' ? formatThesisTimeLabel(event, formatTime) : '';
+  const thesisPeriod =
+    event.type === 'thesis' && event.period
+      ? formatMessage(text.scheduleDetails.periodNumber, { number: event.period })
+      : '';
   const timingLabel =
-    event.type === 'exam' ? formatExamTimeLabel(event) : thesisTime || thesisPeriod;
-  const room = event.room ? `${roomLabel} ${event.room}` : '';
+    event.type === 'exam' ? formatExamTimeLabel(event, formatTime) : thesisTime || thesisPeriod;
+  const room = event.room ? `${text.schedule.room} ${event.room}` : '';
   const subgroup = event.subgroup ? `${event.subgroup}` : '';
 
   return [dateLabel, timingLabel, room, subgroup].filter(Boolean).join(' • ');
@@ -908,7 +918,7 @@ const ExamsView = ({
   officialSchedule: OfficialScheduleState;
   selectedSubgroup: 'Subgroup 1' | 'Subgroup 2';
 }) => {
-  const { t } = useTranslation();
+  const { t, currentLanguage, formatTime } = useTranslation();
   const safeExams = useMemo(() => exams ?? [], [exams]);
 
   // Get current semester based on date
@@ -1086,7 +1096,11 @@ const ExamsView = ({
               const normalizedType = normalizeExamType(exam.type);
               const officialMatch = officialMatchesByExam.get(exam) || null;
               const officialSummary = officialMatch
-                ? formatOfficialEventSummary(officialMatch, t('schedule').room)
+                ? formatOfficialEventSummary(
+                    officialMatch,
+                    translations[currentLanguage],
+                    formatTime,
+                  )
                 : '';
 
               return (
@@ -1111,7 +1125,9 @@ const ExamsView = ({
                         normalizedType === 'other' && styles.examTypePillOther,
                       ]}
                     >
-                      <Text style={styles.examTypePillText}>{exam.type}</Text>
+                      <Text style={styles.examTypePillText}>
+                        {formatAssessmentType(exam.type, translations[currentLanguage])}
+                      </Text>
                     </View>
                   </View>
                   <View style={styles.examDetails}>
@@ -1127,7 +1143,7 @@ const ExamsView = ({
                         {exam.grade}
                       </Text>
                     ) : (
-                      <Text style={styles.upcomingExamGrade}>TBD</Text>
+                      <Text style={styles.upcomingExamGrade}>{t('grades').subjects.pending}</Text>
                     )}
                   </View>
                   {exam.isUpcoming && (
@@ -1200,8 +1216,8 @@ const ExamsView = ({
                           <Text style={styles.officialDateTitle}>{dateLabel}</Text>
                           {events.map((event, eventIdx) => {
                             const timeLabel = event.type === 'exam'
-                              ? formatExamTimeLabel(event)
-                              : formatThesisTimeLabel(event);
+                              ? formatExamTimeLabel(event, formatTime)
+                              : formatThesisTimeLabel(event, formatTime);
                             const room = event.room ? `${t('schedule').room} ${event.room}` : '';
                             const subgroup = event.subgroup ? `${event.subgroup}` : '';
                             const meta = [timeLabel, room, subgroup, event.teacher].filter(Boolean).join(' \u2022 ');
@@ -1421,7 +1437,7 @@ const GradeCalculatorModal = ({
   const [calculatedGrades, setCalculatedGrades] = useState<number[]>([]);
   const [hasCalculated, setHasCalculated] = useState(false);
   const [isAnnualCalculation, setIsAnnualCalculation] = useState(false);
-  const scrollViewRef = useRef<any>(null);
+  const scrollViewRef = useRef<BottomSheetScrollViewMethods>(null);
 
   // Convert string grades to numbers
   const getNumericGrades = (subject: GradeSubject): number[] => {
@@ -1588,9 +1604,7 @@ const GradeCalculatorModal = ({
         {selectedSubject && showAnnualOption && (
           <View style={styles.formGroup}>
             <View style={styles.calculationTypeContainer}>
-              <Text style={styles.label}>
-                {t('grades').calculator.calculationType || 'Calculation Type:'}
-              </Text>
+              <Text style={styles.label}>{t('grades').calculator.calculationType}</Text>
               <View style={styles.calculationToggle}>
                 <TouchableOpacity
                   style={[styles.toggleOption, !isAnnualCalculation && styles.toggleOptionActive]}
@@ -1606,7 +1620,7 @@ const GradeCalculatorModal = ({
                       !isAnnualCalculation && styles.toggleOptionTextActive,
                     ]}
                   >
-                    {t('grades').calculator.semesterOnly || 'Current Semester'}
+                    {t('grades').calculator.semesterOnly}
                   </Text>
                 </TouchableOpacity>
 
@@ -1626,7 +1640,7 @@ const GradeCalculatorModal = ({
                       isAnnualCalculation && styles.toggleOptionTextActive,
                     ]}
                   >
-                    {t('grades').calculator.annualAverage || 'Annual Average'}
+                    {t('grades').calculator.annualAverage}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1639,7 +1653,7 @@ const GradeCalculatorModal = ({
           <View style={styles.formGroup}>
             <Text style={styles.label}>
               {isAnnualCalculation
-                ? t('grades').calculator.allGrades || 'All Grades'
+                ? t('grades').calculator.allGrades
                 : t('grades').calculator.currentGrades}
             </Text>
             <View style={styles.currentGradesContainer}>
@@ -1873,14 +1887,17 @@ const GradesScreen = ({
       setIsBackgroundRefreshing(true);
       setBackgroundJustUpdated(false);
     });
-    const endListener = DeviceEventEmitter.addListener(GRADES_REFRESH_END_EVENT, (payload: any) => {
-      setIsBackgroundRefreshing(false);
-      if (payload?.updated) {
-        setBackgroundJustUpdated(true);
-        // Fade out the updated state after a short period
-        setTimeout(() => setBackgroundJustUpdated(false), 2500);
-      }
-    });
+    const endListener = DeviceEventEmitter.addListener(
+      GRADES_REFRESH_END_EVENT,
+      (payload: GradesRefreshEndEvent | undefined) => {
+        setIsBackgroundRefreshing(false);
+        if (payload?.updated) {
+          setBackgroundJustUpdated(true);
+          // Fade out the updated state after a short period
+          setTimeout(() => setBackgroundJustUpdated(false), 2500);
+        }
+      },
+    );
     const sub = gradesDataService.subscribe(() => {
       // Data updated event also clears spinner if missed
       setIsBackgroundRefreshing(false);
@@ -2388,7 +2405,7 @@ const GradesScreen = ({
 export default function Grades() {
   // Fix: Use a ref to prevent duplicate API requests
   const fetchingRef = useRef(false);
-  const { t, formatFullDate } = useTranslation();
+  const { t, currentLanguage, formatFullDate } = useTranslation();
 
   const [idnp, setIdnp] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -2406,6 +2423,7 @@ export default function Grades() {
   const prevParsedRef = useRef<StudentGrades | null>(null);
   const lastHandledRefreshRef = useRef(-1);
   const prevResponseRef = useRef<string | null>(null);
+  const parsedLanguageRef = useRef(currentLanguage);
   const baseParsedRef = useRef<StudentGrades | null>(null);
 
   const persistHighlights = useCallback(
@@ -2607,11 +2625,14 @@ export default function Grades() {
     if (!responseHtml) return;
 
     const refreshChanged =
-      responseHtml !== prevResponseRef.current || refreshNonce !== lastHandledRefreshRef.current;
+      responseHtml !== prevResponseRef.current ||
+      refreshNonce !== lastHandledRefreshRef.current ||
+      currentLanguage !== parsedLanguageRef.current;
     if (!refreshChanged) return;
 
-    const baseParsed = parseStudentGradesData(responseHtml);
+    const baseParsed = parseStudentGradesData(responseHtml, currentLanguage);
     baseParsedRef.current = baseParsed;
+    parsedLanguageRef.current = currentLanguage;
 
     const displayData = devInjected ? injectRandomGrades(baseParsed) : baseParsed;
 
@@ -2648,7 +2669,7 @@ export default function Grades() {
     prevResponseRef.current = responseHtml;
     initialHydratedRef.current = true;
     lastHandledRefreshRef.current = refreshNonce;
-  }, [responseHtml, refreshNonce, devInjected, idnp, persistHighlights]);
+  }, [responseHtml, refreshNonce, devInjected, idnp, persistHighlights, currentLanguage]);
 
   const fetchStudentData = useCallback(
     async (studentIdnp: string) => {
@@ -2768,16 +2789,17 @@ export default function Grades() {
     if (displayGrades) return displayGrades;
     if (!responseHtml) return null;
     try {
-      return parseStudentGradesData(responseHtml);
+      return parseStudentGradesData(responseHtml, currentLanguage);
     } catch {
       return null;
     }
-  }, [displayGrades, responseHtml]);
+  }, [displayGrades, responseHtml, currentLanguage]);
 
   const recomputeDisplayFromToggle = useCallback(
     (active: boolean) => {
       const base =
-        baseParsedRef.current || (responseHtml ? parseStudentGradesData(responseHtml) : null);
+        baseParsedRef.current ||
+        (responseHtml ? parseStudentGradesData(responseHtml, currentLanguage) : null);
       if (!base) return;
       const nextDisplay = active ? injectRandomGrades(base) : base;
       const prev = prevParsedRef.current;
@@ -2790,7 +2812,7 @@ export default function Grades() {
       });
       prevParsedRef.current = nextDisplay;
     },
-    [responseHtml, idnp, persistHighlights],
+    [responseHtml, idnp, persistHighlights, currentLanguage],
   );
 
   useEffect(() => {
@@ -3411,7 +3433,8 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     backgroundColor: Colors.dark.overlayGray20,
     marginLeft: 8,
-    flexShrink: 0,
+    flexShrink: 1,
+    maxWidth: '50%',
     alignSelf: 'flex-start',
   },
   examTypePillThesis: {

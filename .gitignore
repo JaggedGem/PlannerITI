@@ -70,3 +70,6 @@ CLAUDE.md
 # Local CI build artifacts
 /artifacts/
 __pycache__/
+
+# Local review and verification scratch files
+/work/

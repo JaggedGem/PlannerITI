@@ -21,6 +21,7 @@ import * as Haptics from 'expo-haptics';
 
 import { Colors } from '@/constants/Colors';
 import { useTranslation } from '@/hooks/useTranslation';
+import { formatRemainingTime } from '@/utils/localization';
 import { runWhenIdle } from '@/utils/runWhenIdle';
 
 import { Period } from '../../services/scheduleService';
@@ -53,7 +54,9 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 const HIGHLIGHTED_ASSIGNMENTS_KEY = 'highlighted_assignments';
 
 // Function to get icon for each assignment type
-const getAssignmentTypeIcon = (type: AssignmentType): any => {
+const getAssignmentTypeIcon = (
+  type: AssignmentType,
+): React.ComponentProps<typeof Ionicons>['name'] => {
   switch (type) {
     case AssignmentType.HOMEWORK:
       return 'book-outline';
@@ -196,7 +199,7 @@ export default function AssignmentItem({
   // State for period information
   const [, setPeriod] = useState<Period | null>(null);
   const [remainingTime, setRemainingTime] = useState<string>('');
-  const { t, formatTimeFromDate } = useTranslation();
+  const { currentLanguage, t, formatTimeFromDate } = useTranslation();
   const { showOptionsMenu } = useAssignmentOptions();
 
   // Add state for subtasks
@@ -211,7 +214,7 @@ export default function AssignmentItem({
   // Add state for description expansion
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   // Add ref to measure if description is multiline (needs expansion)
-  const descriptionRef = useRef<any>(null);
+  const descriptionRef = useRef<React.ComponentRef<typeof Text>>(null);
   const [isDescriptionMultiline, setIsDescriptionMultiline] = useState(false);
 
   // Animated values for interactive feedback
@@ -277,46 +280,9 @@ export default function AssignmentItem({
   // Function to get remaining time text with translations
   const updateRemainingTimeText = useCallback(
     (dueDate: string): string => {
-      // Code from getRemainingTimeText function but with translated strings
-      const now = new Date();
-      const due = new Date(dueDate);
-
-      // If due date is in the past and not completed, show as overdue
-      if (due < now) {
-        return t('assignments').status.overdue;
-      }
-
-      const diffMs = due.getTime() - now.getTime();
-      const diffMinutes = Math.floor(diffMs / (1000 * 60));
-
-      // Less than a day
-      if (diffMinutes < 24 * 60) {
-        // Less than an hour
-        if (diffMinutes < 60) {
-          return `${t('assignments').status.in} ${diffMinutes} ${diffMinutes === 1 ? t('assignments').status.inMinute : t('assignments').status.inMinutes}`;
-        }
-
-        // A few hours
-        const hours = Math.floor(diffMinutes / 60);
-        return `${t('assignments').status.in} ${hours} ${hours === 1 ? t('assignments').status.inHour : t('assignments').status.inHours}`;
-      }
-
-      // Less than 2 days
-      if (diffMinutes < 48 * 60) {
-        return t('assignments').status.dueTomorrow;
-      }
-
-      // Less than a week
-      if (diffMinutes < 7 * 24 * 60) {
-        const days = Math.floor(diffMinutes / (24 * 60));
-        return `${t('assignments').status.in} ${days} ${days === 1 ? t('assignments').status.inDay : t('assignments').status.inDays}`;
-      }
-
-      // More than a week
-      const weeks = Math.floor(diffMinutes / (7 * 24 * 60));
-      return `${t('assignments').status.in} ${weeks} ${weeks === 1 ? t('assignments').status.inWeek : t('assignments').status.inWeeks}`;
+      return formatRemainingTime(dueDate, currentLanguage);
     },
-    [t],
+    [currentLanguage],
   );
 
   // Update remaining time text
@@ -395,7 +361,7 @@ export default function AssignmentItem({
   };
 
   // Use ref for options button
-  const optionsButtonRef = useRef<any>(null);
+  const optionsButtonRef = useRef<React.ComponentRef<typeof View>>(null);
 
   // Function to open options menu using context
   const handleOpenOptions = () => {
