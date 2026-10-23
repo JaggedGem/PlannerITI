@@ -69,7 +69,9 @@ export default function ScheduleViewButton({
         onClose={() => setSnapshot(null)}
         weekText={weekText}
         currentView={currentView}
-        alignLeft={currentView === 'day' ? hasDaySidebar : isTabletLandscape ? false : hasDaySidebar}
+        alignLeft={
+          currentView === 'day' ? hasDaySidebar : isTabletLandscape ? false : hasDaySidebar
+        }
       />
     </>
   );
