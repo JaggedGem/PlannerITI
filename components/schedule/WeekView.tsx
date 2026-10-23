@@ -11,7 +11,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   ActivityIndicator,
-  Dimensions,
   ScrollView,
   StyleSheet,
   Text,
@@ -19,11 +18,13 @@ import {
   TouchableOpacity,
   View,
   ViewStyle,
+  useWindowDimensions,
 } from 'react-native';
 
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { Colors } from '@/constants/Colors';
+import { translations } from '@/constants/Translations';
 import { useTimeUpdate } from '@/hooks/useTimeUpdate';
 import { useTranslation } from '@/hooks/useTranslation';
 import {
@@ -45,6 +46,7 @@ import {
   isExamAcademicPeriod,
   toLocalDateKey,
 } from '@/utils/academicCalendarUtils';
+import { formatMessage, formatTranslatedWeekday } from '@/utils/localization';
 import {
   buildNextClassCacheKey,
   peekNextClassCache,
@@ -229,6 +231,7 @@ const RecoveryDayInfo = ({
   align?: 'left' | 'center' | 'right';
   details?: string[];
 }) => {
+  const { t } = useTranslation();
   const [showInfo, setShowInfo] = useState(false);
   const tooltipPositionStyle = {
     left: align === 'left' ? 0 : align === 'right' ? 'auto' : '50%',
@@ -306,7 +309,9 @@ const RecoveryDayInfo = ({
               <Text style={styles.closeTooltipText as TextStyle}>✕</Text>
             </TouchableOpacity>
           </View>
-          <Text style={styles.recoveryDayTooltipReason}>{reason || 'No reason provided'}</Text>
+          <Text style={styles.recoveryDayTooltipReason}>
+            {reason || t('scheduleDetails').noReason}
+          </Text>
           {details.map((detail, idx) => (
             <Text key={idx} style={styles.recoveryDayTooltipReason}>
               {detail}
@@ -674,7 +679,7 @@ export default function WeekView() {
         void loadCachedSpecialSchedules(scheduleService.getSettings().selectedGroupName);
         setIsLoading(false);
       } catch {
-        setError(t('schedule').error || 'Failed to load schedule');
+        setError(t('schedule').error);
         setIsLoading(false);
       }
     },
@@ -1176,7 +1181,7 @@ export default function WeekView() {
   const timeSlots = generateTimeSlots(firstHour, lastHour);
 
   // Calculate timetable dimensions
-  const windowWidth = Dimensions.get('window').width;
+  const { width: windowWidth } = useWindowDimensions();
   const hourHeight = 65; // Slightly more compact
   const timeColumnWidth = 30; // Even narrower time column
   const dayColumnWidth = (windowWidth - timeColumnWidth - 8) / Math.min(totalDays, 6); // Limit to 6 columns max for readability
@@ -1283,7 +1288,7 @@ export default function WeekView() {
           slideAnim.value = withTiming(0, { duration: 150 });
           fadeAnim.value = withTiming(1, { duration: 150 });
         } catch {
-          setError(t('schedule').error || 'Failed to load schedule');
+          setError(t('schedule').error);
           // Reset animations on error
           slideAnim.value = withTiming(0, { duration: 150 });
           fadeAnim.value = withTiming(1, { duration: 150 });
@@ -1386,7 +1391,7 @@ export default function WeekView() {
           slideAnim.value = withTiming(0, { duration: 150 });
           fadeAnim.value = withTiming(1, { duration: 150 });
         } catch {
-          setError(t('schedule').error || 'Failed to load schedule');
+          setError(t('schedule').error);
           // Reset animations on error
           slideAnim.value = withTiming(0, { duration: 150 });
           fadeAnim.value = withTiming(1, { duration: 150 });
@@ -1543,12 +1548,18 @@ export default function WeekView() {
                   <View style={styles.daySpecialBadges}>
                     {dayExamEvents.length > 0 && (
                       <View style={[styles.daySpecialBadge, styles.daySpecialBadgeExam]}>
-                        <Text style={styles.daySpecialBadgeText}>E {dayExamEvents.length}</Text>
+                        <Text style={styles.daySpecialBadgeText}>
+                          {t('scheduleDetails').examBadge}
+                          {dayExamEvents.length}
+                        </Text>
                       </View>
                     )}
                     {dayThesisEvents.length > 0 && (
                       <View style={[styles.daySpecialBadge, styles.daySpecialBadgeThesis]}>
-                        <Text style={styles.daySpecialBadgeText}>T {dayThesisEvents.length}</Text>
+                        <Text style={styles.daySpecialBadgeText}>
+                          {t('scheduleDetails').thesisBadge}
+                          {dayThesisEvents.length}
+                        </Text>
                       </View>
                     )}
                     {isSpecialScheduleLoading && index === 0 && (
@@ -1561,8 +1572,12 @@ export default function WeekView() {
                 {Boolean(dayReason) && (
                   <View style={styles.recoveryDayInfoHeader}>
                     <RecoveryDayInfo
-                      label="Special"
-                      title={day.recoveryDay ? 'Recovery Day Schedule' : 'Special Schedule'}
+                      label={t('scheduleDetails').special}
+                      title={
+                        day.recoveryDay
+                          ? t('scheduleDetails').recoveryTitle
+                          : t('scheduleDetails').specialTitle
+                      }
                       reason={dayReason}
                       align={
                         index <= 1 ? 'left' : index >= dayDates.length - 2 ? 'right' : 'center'
@@ -1570,8 +1585,13 @@ export default function WeekView() {
                       details={[
                         `${day.dayName} ${day.dayNumber}`,
                         dayReasonItem?.replacedDayName
-                          ? `Replaces ${dayReasonItem.replacedDayName}`
-                          : 'Temporary schedule override',
+                          ? formatMessage(t('scheduleDetails').replaces, {
+                              day: formatTranslatedWeekday(
+                                dayReasonItem.replacedDayName,
+                                translations[scheduleService.getSettings().language],
+                              ),
+                            })
+                          : t('scheduleDetails').temporaryOverride,
                       ]}
                     />
                   </View>

@@ -3,7 +3,14 @@ import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import React, { useMemo } from 'react';
 
-import { Dimensions, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 
 import { router } from 'expo-router';
 
@@ -26,7 +33,7 @@ export function AssignmentOptionsMenu({
   position = { top: 100, right: 20 },
 }: AssignmentOptionsMenuProps) {
   const { t } = useTranslation();
-  const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
   // Calculate an appropriate position if none provided
   const menuPosition = useMemo(() => {

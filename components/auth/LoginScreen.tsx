@@ -195,13 +195,13 @@ export function LoginScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContainer, { backgroundColor }]}>
-            <ThemedText style={styles.alertTitle}>Alert</ThemedText>
+            <ThemedText style={styles.alertTitle}>{t('common').alert}</ThemedText>
             <ThemedText style={styles.alertMessage}>{alertMessage}</ThemedText>
             <TouchableOpacity
               style={[styles.alertButton, { backgroundColor: actionColor }]}
               onPress={() => setShowAlert(false)}
             >
-              <ThemedText style={styles.alertButtonText}>OK</ThemedText>
+              <ThemedText style={styles.alertButtonText}>{t('common').ok}</ThemedText>
             </TouchableOpacity>
           </View>
         </View>

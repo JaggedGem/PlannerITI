@@ -2,7 +2,7 @@ import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { useColorScheme } from 'react-native';
 
@@ -17,6 +17,7 @@ import LoginNotification from '@/components/LoginNotification';
 import NativeUpdateBanner from '@/components/NativeUpdateBanner';
 import { AuthProvider } from '@/components/auth/AuthContext';
 import { Colors } from '@/constants/Colors';
+import { useTranslation } from '@/hooks/useTranslation';
 import { gradesDataService } from '@/services/gradesService';
 import { scheduleService } from '@/services/scheduleService';
 import { secureStorageService } from '@/services/secureStorageService';
@@ -44,6 +45,8 @@ const SKIP_LOGIN_KEY = '@planner_skip_login';
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
+  const { currentLanguage } = useTranslation();
+  const notificationSetup = useRef(Promise.resolve());
   const [loaded, error] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   });
@@ -77,25 +80,27 @@ export default function RootLayout() {
     preloadAuthState();
   }, []);
 
-  // Initialize notifications
+  // Rebuild scheduled copy and channel names when the language changes. Serialize work so
+  // an older language cannot overwrite newer notifications after asynchronous storage reads.
   useEffect(() => {
-    if (loaded) {
-      const setupNotifications = async () => {
-        try {
-          // Initialize notification system
-          await initializeNotifications();
-
-          // Schedule notifications for existing assignments
-          const assignments = await getAssignments();
-          await scheduleAllNotifications(assignments);
-        } catch (error) {
-          console.error('Error setting up notifications:', error);
-        }
-      };
-
-      setupNotifications();
-    }
-  }, [loaded]);
+    if (!loaded) return;
+    let active = true;
+    notificationSetup.current = notificationSetup.current.then(async () => {
+      try {
+        await scheduleService.ready();
+        if (!active) return;
+        await initializeNotifications();
+        const assignments = await getAssignments();
+        if (!active) return;
+        await scheduleAllNotifications(assignments);
+      } catch (error) {
+        console.error('Error setting up notifications:', error);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [loaded, currentLanguage]);
 
   // Setup period times sync interval at a random offset to avoid server stress
   useEffect(() => {

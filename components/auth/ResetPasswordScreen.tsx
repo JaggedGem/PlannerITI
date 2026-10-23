@@ -41,17 +41,17 @@ export function ResetPasswordScreen() {
 
   const handleResetPassword = async () => {
     if (!newPassword || !confirmPassword) {
-      showCustomAlert('Error', t('auth').resetPassword.emptyFields);
+      showCustomAlert(t('common').error, t('auth').resetPassword.emptyFields);
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      showCustomAlert('Error', t('auth').resetPassword.passwordMismatch);
+      showCustomAlert(t('common').error, t('auth').resetPassword.passwordMismatch);
       return;
     }
 
     if (!token) {
-      showCustomAlert('Error', t('auth').resetPassword.invalidToken);
+      showCustomAlert(t('common').error, t('auth').resetPassword.invalidToken);
       return;
     }
 
@@ -64,7 +64,7 @@ export function ResetPasswordScreen() {
         throw new Error('Reset failed');
       }
     } catch {
-      showCustomAlert('Error', t('auth').resetPassword.error);
+      showCustomAlert(t('common').error, t('auth').resetPassword.error);
     } finally {
       setLoading(false);
     }
@@ -165,7 +165,7 @@ export function ResetPasswordScreen() {
               style={[styles.alertButton, { backgroundColor: actionColor }]}
               onPress={handleAlertConfirm}
             >
-              <ThemedText style={styles.alertButtonText}>OK</ThemedText>
+              <ThemedText style={styles.alertButtonText}>{t('common').ok}</ThemedText>
             </TouchableOpacity>
           </View>
         </View>

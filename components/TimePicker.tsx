@@ -27,7 +27,7 @@ export const TimePicker = ({
   onClose,
   onConfirm,
   use12HourFormat = false,
-  translations = { cancel: 'Cancel', confirm: 'Confirm' },
+  translations,
 }: {
   value: Date;
   onChange: (date: Date) => void;
@@ -37,7 +37,8 @@ export const TimePicker = ({
   use12HourFormat?: boolean;
   translations?: { cancel: string; confirm: string };
 }) => {
-  const { formatTimeFromDate } = useTranslation();
+  const { t, formatTimeFromDate } = useTranslation();
+  const labels = translations ?? { cancel: t('common').cancel, confirm: t('common').confirm };
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
   const [localValue, setLocalValue] = useState(value);
@@ -298,14 +299,14 @@ export const TimePicker = ({
               style={[styles.timePickerButton, styles.timePickerCancelButton]}
               onPress={onClose}
             >
-              <Text style={styles.timePickerButtonText}>{translations.cancel}</Text>
+              <Text style={styles.timePickerButtonText}>{labels.cancel}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.timePickerButton, styles.timePickerConfirmButton]}
               onPress={handleConfirm}
             >
               <Text style={[styles.timePickerButtonText, styles.timePickerConfirmText]}>
-                {translations.confirm}
+                {labels.confirm}
               </Text>
             </TouchableOpacity>
           </View>

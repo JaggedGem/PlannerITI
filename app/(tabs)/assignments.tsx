@@ -255,7 +255,9 @@ const CoursesView = memo(
           >
             <CourseSection
               courseCode={courseCode}
-              courseName={courseGroups[courseCode][0].courseName || 'Uncategorized'}
+              courseName={
+                courseGroups[courseCode][0].courseName || t('assignments').common.uncategorized
+              }
               assignments={courseGroups[courseCode]}
               onToggleAssignment={onToggle}
               onDeleteAssignment={onDelete}
@@ -485,7 +487,7 @@ const AssignmentsErrorFallback = ({ errorCount }: { errorCount: number }) => {
         <Text style={styles.errorMessage}>{t('assignments').errors.recovering}</Text>
         {errorCount > 2 && (
           <Text style={styles.errorHint}>
-            {t('assignments').errors.tip}: Avoid rapid switching between tabs
+            {t('assignments').errors.tip}: {t('assignments').errors.switchingTip}
           </Text>
         )}
       </View>
@@ -1081,7 +1083,10 @@ const Assignments = () => {
                 <View>
                   <CourseSection
                     courseCode={courseCode}
-                    courseName={courseGroups[courseCode][0]?.courseName || 'Uncategorized'}
+                    courseName={
+                      courseGroups[courseCode][0]?.courseName ||
+                      t('assignments').common.uncategorized
+                    }
                     assignments={courseGroups[courseCode]}
                     onToggleAssignment={onToggle}
                     onDeleteAssignment={onDelete}
@@ -1092,7 +1097,10 @@ const Assignments = () => {
                 <Animated.View entering={FadeInDown.duration(150).delay(index * 20)}>
                   <CourseSection
                     courseCode={courseCode}
-                    courseName={courseGroups[courseCode][0]?.courseName || 'Uncategorized'}
+                    courseName={
+                      courseGroups[courseCode][0]?.courseName ||
+                      t('assignments').common.uncategorized
+                    }
                     assignments={courseGroups[courseCode]}
                     onToggleAssignment={onToggle}
                     onDeleteAssignment={onDelete}
@@ -1202,7 +1210,9 @@ const Assignments = () => {
             styles={styles}
           />
 
-          {isSafeMode && <Text style={styles.safeModeIndicator}>Stability mode active</Text>}
+          {isSafeMode && (
+            <Text style={styles.safeModeIndicator}>{t('assignments').errors.stabilityMode}</Text>
+          )}
         </View>
       </View>
 

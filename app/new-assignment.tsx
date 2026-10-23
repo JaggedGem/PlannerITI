@@ -39,6 +39,7 @@ import { ModernDropdown, SegmentItem } from '@/components/ModernDropdown';
 import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
 import { Colors } from '@/constants/Colors';
 import { useTranslation } from '@/hooks/useTranslation';
+import { formatMessage, formatRelativeTime } from '@/utils/localization';
 import { runWhenIdle } from '@/utils/runWhenIdle';
 
 import { CustomPeriod, Subject, scheduleService } from '../services/scheduleService';
@@ -129,27 +130,6 @@ const CustomToggle = ({
   );
 };
 
-// Add Day names array for the mini calendar - will be replaced with translations inside component
-const DAYS_DEFAULT = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-
-// Basic structure for quick options, will be populated with translations inside component
-const QUICK_DATE_OPTIONS_DEFAULT = [
-  { label: 'Today', days: 0 },
-  { label: 'Tomorrow', days: 1 },
-  { label: 'Next Week', days: 7 },
-  { label: 'In 2 Weeks', days: 14 },
-];
-
-// Basic structure for time presets, will be populated with translations inside component
-const TIME_PRESETS_DEFAULT = [
-  { label: '1st Period', hour: 8, minute: 0 },
-  { label: '2nd Period', hour: 9, minute: 30 },
-  { label: '3rd Period', hour: 11, minute: 20 },
-  { label: '4th Period', hour: 12, minute: 50 },
-  { label: '5th Period', hour: 14, minute: 20 },
-];
-
-// Extract QuickOption component outside DatePicker for better stability
 const QuickOption = React.memo(
   ({
     days,
@@ -197,15 +177,15 @@ const DatePicker = ({
   selectedDate,
   onDateChange,
   formatDate,
-  days = DAYS_DEFAULT,
-  quickDateOptions = QUICK_DATE_OPTIONS_DEFAULT,
+  days,
+  quickDateOptions,
   currentLanguage,
 }: {
   selectedDate: Date;
   onDateChange: (date: Date) => void;
   formatDate: (date: Date) => string;
-  days?: string[];
-  quickDateOptions?: { label: string; days: number }[];
+  days: string[];
+  quickDateOptions: { label: string; days: number }[];
   currentLanguage: string;
 }) => {
   const [calendarMonth, setCalendarMonth] = useState(new Date(selectedDate));
@@ -547,7 +527,7 @@ const DatePicker = ({
                 }, 300);
               }}
             >
-              <Text style={styles.todayButtonText}>Today</Text>
+              <Text style={styles.todayButtonText}>{quickDateOptions[0].label}</Text>
             </TouchableOpacity>
           )}
         </Animated.View>
@@ -560,13 +540,13 @@ const DatePicker = ({
 const TimePicker = ({
   selectedTime,
   onTimeChange,
-  timePresets = TIME_PRESETS_DEFAULT,
+  timePresets,
 }: {
   selectedTime: Date;
   onTimeChange: (date: Date) => void;
-  timePresets?: { label: string; hour: number; minute: number }[];
+  timePresets: { label: string; hour: number; minute: number }[];
 }) => {
-  const { formatTimeFromDate, currentLanguage } = useTranslation();
+  const { t, formatTimeFromDate, currentLanguage } = useTranslation();
   const shouldUse24HourFormat = currentLanguage !== 'en';
 
   // Animation shared values
@@ -710,7 +690,7 @@ const TimePicker = ({
 
       <View style={styles.timeWheelContainer}>
         <View style={styles.timeWheelGroup}>
-          <Text style={styles.timeWheelLabel}>Hour</Text>
+          <Text style={styles.timeWheelLabel}>{t('common').hour}</Text>
           <View style={styles.timeWheel}>
             <TouchableOpacity
               style={styles.timeWheelButton}
@@ -761,7 +741,7 @@ const TimePicker = ({
         <Text style={styles.timeWheelSeparator}>:</Text>
 
         <View style={styles.timeWheelGroup}>
-          <Text style={styles.timeWheelLabel}>Minute</Text>
+          <Text style={styles.timeWheelLabel}>{t('common').minute}</Text>
           <View style={styles.timeWheel}>
             <TouchableOpacity
               style={styles.timeWheelButton}
@@ -796,7 +776,7 @@ const TimePicker = ({
 
         {!shouldUse24HourFormat && (
           <View style={styles.timeWheelGroup}>
-            <Text style={styles.timeWheelLabel}>AM/PM</Text>
+            <Text style={styles.timeWheelLabel}>{t('common').dayPeriod}</Text>
             <Animated.View style={amPmAnimStyle}>
               <TouchableOpacity style={styles.amPmToggle} onPress={toggleAmPm}>
                 <Text style={styles.amPmToggleText}>
@@ -1314,7 +1294,7 @@ export default function NewAssignmentScreen() {
         .filter((period) => period.isEnabled)
         .map((period) => ({
           id: period._id,
-          name: period.name || 'Custom Period',
+          name: period.name || t('scheduleDetails').customPeriod,
           isCustom: true,
           isCustomPeriod: true, // Flag to identify this is from a custom period
           color: period.color,
@@ -1461,7 +1441,7 @@ export default function NewAssignmentScreen() {
           const weekDifference = Math.ceil(
             (nextDateCopy.getTime() - currentWeekMonday.getTime()) / (7 * 24 * 60 * 60 * 1000),
           );
-          weekText = `${t('assignments').days.in} ${weekDifference} ${t('assignments').days.weeks}`;
+          weekText = formatRelativeTime(weekDifference, 'week', currentLanguage);
         }
 
         // Format day name with "this" prefix for current week in English
@@ -1475,7 +1455,7 @@ export default function NewAssignmentScreen() {
             nextDateCopy >= currentWeekMonday && nextDateCopy <= currentWeekFriday;
           if (isCurrentWeek && currentLanguage.startsWith('en')) {
             // Add "this" prefix for English
-            dayDisplay = `this ${dayName}`;
+            dayDisplay = formatMessage(t('assignmentEditor').thisDay, { day: dayName });
           } else {
             dayDisplay = dayName;
           }
@@ -1632,7 +1612,7 @@ export default function NewAssignmentScreen() {
                 (searchDateCopy.getTime() - currentWeekMonday.getTime()) /
                   (7 * 24 * 60 * 60 * 1000),
               );
-              weekText = `${t('assignments').days.in} ${weekDifference} ${t('assignments').days.weeks}`;
+              weekText = formatRelativeTime(weekDifference, 'week', currentLanguage);
             }
 
             // Determine if we need to prefix the day with "this" for current week
@@ -1723,7 +1703,7 @@ export default function NewAssignmentScreen() {
   const handleSave = async () => {
     if (!title || !courseName || isSaving) {
       if (!title || !courseName) {
-        Alert.alert('Error', 'Please enter a title and select a course');
+        Alert.alert(t('common').error, t('assignmentEditor').titleAndCourseRequired);
       }
       return;
     }
@@ -1754,7 +1734,7 @@ export default function NewAssignmentScreen() {
       console.error('Error saving assignment:', error);
       // Reset saving state if there's an error
       setIsSaving(false);
-      Alert.alert('Error', 'Failed to save assignment. Please try again.');
+      Alert.alert(t('common').error, t('assignmentEditor').saveFailed);
     }
   };
 
@@ -2060,7 +2040,7 @@ export default function NewAssignmentScreen() {
                     (!title || !courseName || isSaving) && styles.saveButtonTextDisabled,
                   ]}
                 >
-                  {isSaving ? t('assignments').saving || 'Saving...' : t('assignments').save}
+                  {isSaving ? t('assignments').saving : t('assignments').save}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -2455,7 +2435,7 @@ export default function NewAssignmentScreen() {
                       .filter((period) => period.isEnabled)
                       .map((period) => ({
                         id: period._id,
-                        label: period.name || 'Custom Period',
+                        label: period.name || t('scheduleDetails').customPeriod,
                         isCustomPeriod: true,
                         color: period.color,
                         isSelected: period._id === selectedSubjectId,
@@ -2476,7 +2456,7 @@ export default function NewAssignmentScreen() {
                                 }}
                               >
                                 <Text style={styles.settingsLinkButtonText}>
-                                  {'Go to Settings'}
+                                  {t('assignmentEditor').goToSettings}
                                 </Text>
                               </TouchableOpacity>
                             </View>

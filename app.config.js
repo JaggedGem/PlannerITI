@@ -26,7 +26,7 @@ module.exports = () => {
       name: appName,
       slug: 'PlannerITI',
       version: appVersion,
-      orientation: 'portrait',
+      orientation: 'default',
       icon: 'assets/images/ios-light.png',
       scheme: 'planneriti',
       userInterfaceStyle: 'automatic',
@@ -51,6 +51,7 @@ module.exports = () => {
       plugins: [
         'expo-router',
         'expo-font',
+        'expo-image',
         'expo-secure-store',
         'expo-sharing',
         'expo-status-bar',
@@ -69,6 +70,8 @@ module.exports = () => {
           {
             android: {
               usePrecompiledHeaders: true,
+              enableMinifyInReleaseBuilds: true,
+              enableShrinkResourcesInReleaseBuilds: true,
               // rnforge 1.0.2 looks this class up by name from JNI but omits @Keep/consumer rules.
               extraProguardRules: '-keep class dev.rnforge.inappupdates.HybridInAppUpdates { *; }',
             },

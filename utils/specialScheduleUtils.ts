@@ -104,10 +104,17 @@ export const buildSpecialEventKey = (event: SpecialScheduleEvent): string => {
   return `${shared}-${event.period ?? ''}-${event.startTime || ''}-${event.endTime || ''}`;
 };
 
-export const formatThesisTimeLabel = (event: ThesisScheduleEvent): string => {
-  if (event.startTime && event.endTime) return `${event.startTime} - ${event.endTime}`;
-  if (event.startTime) return event.startTime;
+export const formatThesisTimeLabel = (
+  event: ThesisScheduleEvent,
+  formatTime: (time: string) => string = (time) => time,
+): string => {
+  if (event.startTime && event.endTime)
+    return `${formatTime(event.startTime)} - ${formatTime(event.endTime)}`;
+  if (event.startTime) return formatTime(event.startTime);
   return '';
 };
 
-export const formatExamTimeLabel = (event: ExamScheduleEvent): string => event.time || '';
+export const formatExamTimeLabel = (
+  event: ExamScheduleEvent,
+  formatTime: (time: string) => string = (time) => time,
+): string => (event.time ? formatTime(event.time) : '');

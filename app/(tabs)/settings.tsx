@@ -10,7 +10,6 @@ import {
   Animated,
   DeviceEventEmitter,
   FlatList,
-  Image,
   Linking,
   Modal,
   Platform,
@@ -23,12 +22,14 @@ import {
 } from 'react-native';
 
 import * as Haptics from 'expo-haptics';
+import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
 
 import { BottomModalPortal } from '@/components/BottomModalPortal';
 import { TimePicker } from '@/components/TimePicker';
 import { useAuthContext } from '@/components/auth/AuthContext';
 import { Colors } from '@/constants/Colors';
+import { translations } from '@/constants/Translations';
 import { useTranslation } from '@/hooks/useTranslation';
 import authService, { getGravatarProfile } from '@/services/authService';
 import {
@@ -40,6 +41,8 @@ import {
 } from '@/services/scheduleService';
 import { secureStorageService } from '@/services/secureStorageService';
 import { updateService } from '@/services/updateService';
+import { getAvatarImageUrl } from '@/utils/avatarImage';
+import { formatReleaseChannel } from '@/utils/localization';
 
 import { StorageViewer } from '../../components/StorageViewer';
 import {
@@ -250,7 +253,8 @@ const CustomToggle = ({
 };
 
 export default function Settings() {
-  const { t, formatCompactDate, formatTimeFromDate } = useTranslation();
+  const { t, currentLanguage, formatCompactDate, formatTime, formatTimeFromDate } =
+    useTranslation();
   const router = useRouter();
   const { user, logout } = useAuthContext();
 
@@ -332,15 +336,15 @@ export default function Settings() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        Alert.alert('Offline', 'Using cached schedule');
+        Alert.alert(t('scheduleDetails').offline, t('scheduleDetails').usingCache);
       }
     } catch {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Schedule', 'Failed to refresh schedule');
+      Alert.alert(t('settings').schedule.title, t('scheduleDetails').refreshFailed);
     } finally {
       setIsRefreshingSchedule(false);
     }
-  }, [isRefreshingSchedule]);
+  }, [isRefreshingSchedule, t]);
 
   // todo: Handle orphaned assignments when changing groups - either move them to the new group if they have the same subject, or delete them with confirmation
   // const handleClearScheduleCache = useCallback(async () => {
@@ -361,16 +365,14 @@ export default function Settings() {
       DeviceEventEmitter.emit(DEV_GRADE_TOGGLE_EVENT, next);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert(
-        next ? 'Injected' : 'Removed',
-        next
-          ? 'Added 5 random grades immediately. Tap again to remove.'
-          : 'Removed injected grades. Tap again to add back.',
+        next ? t('developer').injected : t('developer').removed,
+        next ? t('developer').gradesAdded : t('developer').gradesRemoved,
       );
     } catch {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Error', 'Could not toggle grade injection');
+      Alert.alert(t('common').error, t('developer').gradeInjectionFailed);
     }
-  }, [devGradeActive]);
+  }, [devGradeActive, t]);
 
   // Add useEffect to load IDNP and listen for updates
   useEffect(() => {
@@ -772,7 +774,7 @@ export default function Settings() {
     setPasswordError(null);
 
     if (!passwordForDeletion.trim()) {
-      setPasswordError('Please enter your password');
+      setPasswordError(t('accountDeletion').passwordRequired);
       return;
     }
 
@@ -803,17 +805,17 @@ export default function Settings() {
       // Check if it's a network error or authentication error
       if (error instanceof Error) {
         if (error.message === 'Request timeout' || error.message.includes('network')) {
-          setPasswordError('Network error. Please check your connection.');
+          setPasswordError(t('accountDeletion').networkError);
         } else {
-          setPasswordError('Incorrect password. Please try again.');
+          setPasswordError(t('accountDeletion').incorrectPassword);
         }
       } else {
-        setPasswordError('Something went wrong. Please try again.');
+        setPasswordError(t('accountDeletion').genericError);
       }
     } finally {
       setDeletingAccount(false);
     }
-  }, [passwordForDeletion, logout]);
+  }, [passwordForDeletion, logout, t]);
 
   const openEmailApp = useCallback(() => {
     // Try to open the default email app
@@ -882,10 +884,14 @@ export default function Settings() {
               {gravatarProfile?.avatar_url ? (
                 <Image
                   source={{
-                    uri: gravatarProfile.avatar_url,
+                    uri: getAvatarImageUrl(gravatarProfile.avatar_url),
                   }}
                   style={styles.avatarImage}
-                  defaultSource={require('../../assets/images/default-avatar.jpg')}
+                  placeholder={require('../../assets/images/default-avatar.jpg')}
+                  contentFit="cover"
+                  cachePolicy="memory-disk"
+                  allowDownscaling
+                  recyclingKey={userEmail}
                 />
               ) : (
                 <Text style={styles.avatarText}>{userEmail.charAt(0).toUpperCase()}</Text>
@@ -979,7 +985,7 @@ export default function Settings() {
             color={Colors.dark.purple}
             style={styles.sectionIcon}
           />
-          <Text style={styles.sectionTitle}>Developer Tools</Text>
+          <Text style={styles.sectionTitle}>{t('developer').title}</Text>
         </View>
 
         <View style={styles.devToolsList}>
@@ -988,11 +994,11 @@ export default function Settings() {
             onPress={async () => {
               await AsyncStorage.clear();
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              Alert.alert('Success', 'AsyncStorage has been cleared');
+              Alert.alert(t('common').success, t('developer').storageCleared);
             }}
           >
             <MaterialIcons name="delete-sweep" size={24} color={Colors.dark.red} />
-            <Text style={styles.devToolText}>Clear AsyncStorage</Text>
+            <Text style={styles.devToolText}>{t('developer').clearStorage}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -1000,11 +1006,11 @@ export default function Settings() {
             onPress={() => {
               scheduleService.resetSettings();
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              Alert.alert('Success', 'Schedule settings have been reset');
+              Alert.alert(t('common').success, t('developer').scheduleReset);
             }}
           >
             <MaterialIcons name="restart-alt" size={24} color={Colors.dark.yellow} />
-            <Text style={styles.devToolText}>Reset Schedule Settings</Text>
+            <Text style={styles.devToolText}>{t('developer').resetSchedule}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -1012,10 +1018,7 @@ export default function Settings() {
             onPress={async () => {
               try {
                 if (!areNotificationsAvailable()) {
-                  Alert.alert(
-                    'Unavailable in Expo Go',
-                    'Notifications are disabled in Expo Go. Use a development build to test notifications.',
-                  );
+                  Alert.alert(t('developer').expoGoUnavailable, t('developer').expoGoNotifications);
                   return;
                 }
 
@@ -1041,18 +1044,15 @@ export default function Settings() {
                 await scheduleAllNotifications(assignments);
 
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                Alert.alert(
-                  'Success',
-                  'Notification system reset. This can resolve issues with timing.',
-                );
+                Alert.alert(t('common').success, t('developer').notificationsReset);
               } catch (error) {
                 console.error('Error resetting notification system:', error);
-                Alert.alert('Error', 'Failed to reset notification system');
+                Alert.alert(t('common').error, t('developer').notificationsResetFailed);
               }
             }}
           >
             <MaterialIcons name="refresh" size={24} color={Colors.dark.purple} />
-            <Text style={styles.devToolText}>Reset Notification System</Text>
+            <Text style={styles.devToolText}>{t('developer').resetNotifications}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -1072,12 +1072,12 @@ export default function Settings() {
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               } catch (error) {
                 console.error('Error viewing AsyncStorage:', error);
-                Alert.alert('Error', 'Failed to view AsyncStorage contents');
+                Alert.alert(t('common').error, t('developer').viewStorageFailed);
               }
             }}
           >
             <MaterialIcons name="storage" size={24} color={Colors.dark.randomColors[5]} />
-            <Text style={styles.devToolText}>View AsyncStorage</Text>
+            <Text style={styles.devToolText}>{t('developer').viewStorage}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -1091,10 +1091,10 @@ export default function Settings() {
             />
             <View style={styles.devToolTextGroup}>
               <Text style={[styles.devToolText, styles.devToolTextLeft]}>
-                {devGradeActive ? 'Remove injected grades' : 'Inject 5 random grades'}
+                {devGradeActive ? t('developer').removeGrades : t('developer').injectGrades}
               </Text>
               <Text style={styles.devToolSubtext}>
-                {devGradeActive ? 'Injected now • tap to remove' : 'Tap to add instantly'}
+                {devGradeActive ? t('developer').tapToRemove : t('developer').tapToAdd}
               </Text>
             </View>
           </TouchableOpacity>
@@ -1896,7 +1896,7 @@ export default function Settings() {
               color={Colors.dark.primaryStrong}
               style={styles.sectionIcon}
             />
-            <Text style={styles.sectionTitle}>App Version & OTA</Text>
+            <Text style={styles.sectionTitle}>{t('appInfo').title}</Text>
           </View>
           <View style={[styles.card, styles.updateCard]}>
             <View style={styles.updateDetails}>
@@ -1908,7 +1908,7 @@ export default function Settings() {
                   style={styles.scheduleDetailIcon}
                 />
                 <View style={styles.scheduleDetailTextGroup}>
-                  <Text style={styles.scheduleDetailLabel}>Current Version</Text>
+                  <Text style={styles.scheduleDetailLabel}>{t('appInfo').currentVersion}</Text>
                   <Text style={styles.scheduleDetailValue}>
                     {updateService.getCurrentVersion()}
                   </Text>
@@ -1923,7 +1923,7 @@ export default function Settings() {
                   style={styles.scheduleDetailIcon}
                 />
                 <View style={styles.scheduleDetailTextGroup}>
-                  <Text style={styles.scheduleDetailLabel}>Current OTA Version</Text>
+                  <Text style={styles.scheduleDetailLabel}>{t('appInfo').currentOta}</Text>
                   <Text style={styles.scheduleDetailValue}>
                     {updateService.getCurrentOtaVersionShort()}
                   </Text>
@@ -1938,9 +1938,12 @@ export default function Settings() {
                   style={styles.scheduleDetailIcon}
                 />
                 <View style={styles.scheduleDetailTextGroup}>
-                  <Text style={styles.scheduleDetailLabel}>Release Channel</Text>
+                  <Text style={styles.scheduleDetailLabel}>{t('appInfo').releaseChannel}</Text>
                   <Text style={[styles.scheduleDetailValue, styles.channelBadge]}>
-                    {updateService.getChannelDisplay()}
+                    {formatReleaseChannel(
+                      updateService.getChannelDisplay(),
+                      translations[currentLanguage],
+                    )}
                   </Text>
                 </View>
               </View>
@@ -2005,7 +2008,9 @@ export default function Settings() {
                       },
                     ]}
                   />
-                  <Text style={styles.periodName}>{period.name || 'Custom Period'}</Text>
+                  <Text style={styles.periodName}>
+                    {period.name || t('scheduleDetails').customPeriod}
+                  </Text>
                   <CustomToggle
                     value={period.isEnabled}
                     onValueChange={(value) => {
@@ -2018,11 +2023,11 @@ export default function Settings() {
 
                 <View style={styles.periodItemContent}>
                   <Text style={styles.periodTime}>
-                    {period.starttime} - {period.endtime}
+                    {formatTime(period.starttime)} - {formatTime(period.endtime)}
                   </Text>
                   <Text style={styles.periodDays}>
                     {period.daysOfWeek?.map((day) => t('weekdays').long[day]).join(', ') ||
-                      'All weekdays'}
+                      t('scheduleDetails').allWeekdays}
                   </Text>
                 </View>
 
@@ -2443,10 +2448,8 @@ export default function Settings() {
         }}
       >
         <View style={styles.confirmDialogContent}>
-          <Text style={styles.confirmTitle}>Confirm Account Deletion</Text>
-          <Text style={styles.confirmMessage}>
-            Please enter your password to confirm account deletion.
-          </Text>
+          <Text style={styles.confirmTitle}>{t('accountDeletion').title}</Text>
+          <Text style={styles.confirmMessage}>{t('accountDeletion').message}</Text>
 
           <View
             style={[
@@ -2456,7 +2459,7 @@ export default function Settings() {
           >
             <TextInput
               style={styles.passwordInput}
-              placeholder="Your password"
+              placeholder={t('accountDeletion').password}
               placeholderTextColor={MODAL_ITEM_COLORS.textSecondary}
               secureTextEntry
               value={passwordForDeletion}
@@ -2480,7 +2483,7 @@ export default function Settings() {
               }}
               disabled={deletingAccount}
             >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
+              <Text style={styles.cancelButtonText}>{t('common').cancel}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -2491,7 +2494,7 @@ export default function Settings() {
               {deletingAccount ? (
                 <ActivityIndicator size="small" color={Colors.dark.white} />
               ) : (
-                <Text style={styles.deleteButtonText}>Delete</Text>
+                <Text style={styles.deleteButtonText}>{t('common').delete}</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -2508,20 +2511,16 @@ export default function Settings() {
             <MaterialIcons name="check-circle" size={64} color={MODAL_ITEM_COLORS.successIcon} />
           </View>
 
-          <Text style={styles.confirmTitle}>Deletion Request Sent</Text>
-          <Text style={styles.confirmMessage}>
-            {
-              "We've sent a confirmation email to verify your account deletion request. Please check your email inbox and follow the instructions to complete the process."
-            }
-          </Text>
+          <Text style={styles.confirmTitle}>{t('accountDeletion').requestSent}</Text>
+          <Text style={styles.confirmMessage}>{t('accountDeletion').emailMessage}</Text>
 
           <TouchableOpacity style={styles.emailButton} onPress={openEmailApp}>
             <MaterialIcons name="email" size={20} color={Colors.dark.white} />
-            <Text style={styles.emailButtonText}>Open Email App</Text>
+            <Text style={styles.emailButtonText}>{t('accountDeletion').openEmail}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.doneButton} onPress={completeAccountDeletion}>
-            <Text style={styles.doneButtonText}>Done</Text>
+            <Text style={styles.doneButtonText}>{t('common').done}</Text>
           </TouchableOpacity>
         </View>
       </BottomModalPortal>
@@ -2683,6 +2682,7 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   sectionTitle: {
+    flexShrink: 1,
     fontSize: 20,
     fontWeight: 'bold',
     color: Colors.dark.white,

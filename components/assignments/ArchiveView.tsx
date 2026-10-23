@@ -106,7 +106,7 @@ export default function ArchiveView({
           style={styles.closeButton}
           onPress={handleClose}
           accessibilityRole="button"
-          accessibilityLabel="Back"
+          accessibilityLabel={t('common').back}
         >
           <Ionicons name="arrow-back" size={24} color={Colors.dark.white} />
         </TouchableOpacity>

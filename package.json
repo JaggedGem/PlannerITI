@@ -1,7 +1,7 @@
 {
   "name": "planneriti",
   "main": "expo-router/entry",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "scripts": {
     "dev": "expo start --dev-client",
     "dev:clear": "expo start --clear --dev-client",
@@ -26,7 +26,10 @@
     "preset": "jest-expo",
     "moduleNameMapper": {
       "^@/(.*)$": "<rootDir>/$1"
-    }
+    },
+    "modulePathIgnorePatterns": [
+      "<rootDir>/work/"
+    ]
   },
   "dependencies": {
     "@expo/dom-webview": "~58.0.2",
@@ -50,6 +53,7 @@
     "expo-device": "~58.0.5",
     "expo-font": "~58.0.9",
     "expo-haptics": "~58.0.7",
+    "expo-image": "~58.0.16",
     "expo-linear-gradient": "~58.0.3",
     "expo-linking": "~58.0.13",
     "expo-navigation-bar": "~58.0.4",

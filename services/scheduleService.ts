@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { NativeModules, Platform } from 'react-native';
 
 import { Colors } from '@/constants/Colors';
+import { translations } from '@/constants/Translations';
 import {
   GraficPeGroup,
   GraficPePeriod,
@@ -12,6 +13,7 @@ import {
   GraficPeTrackType,
 } from '@/types/academicCalendar';
 import { isRecord } from '@/utils/json';
+import { formatMessage, formatTranslatedWeekday } from '@/utils/localization';
 import { clearNextClassCache } from '@/utils/nextClassCache';
 
 import { fetchCustomApi } from '../utils/customApi';
@@ -803,6 +805,7 @@ export const scheduleService = {
 
   buildOverrideInfoMessage(entry: DatePeriodTimesEntry | null): string {
     if (!entry?.isOverride) return '';
+    const text = translations[this.settings.language];
 
     const explicitReason = entry.override?.reason?.trim() || '';
     if (explicitReason) {
@@ -815,36 +818,43 @@ export const scheduleService = {
     const replacedWeekday =
       entry.override?.replaceWeekday || entry.override?.recoverySource?.weekday || '';
     const replacedWeekdayLabel = replacedWeekday
-      ? `${replacedWeekday.charAt(0).toUpperCase()}${replacedWeekday.slice(1)}`
+      ? formatTranslatedWeekday(replacedWeekday, text)
       : '';
 
     if (entry.dayState === 'empty' || (baseCount > 0 && activeCount === 0)) {
       return baseCount > 0
-        ? `All ${baseCount} periods were removed for this day.`
-        : 'No classes are scheduled for this day due to an override.';
+        ? formatMessage(text.scheduleDetails.allRemoved, { count: baseCount })
+        : text.scheduleDetails.emptyOverride;
     }
 
     const parts: string[] = [];
 
     if (removedDisplay.length > 0) {
-      parts.push(`Removed periods: ${removedDisplay.join(', ')}.`);
+      parts.push(
+        formatMessage(text.scheduleDetails.removedPeriods, { periods: removedDisplay.join(', ') }),
+      );
     }
 
     if (baseCount > 0 && activeCount !== baseCount) {
-      parts.push(`Showing ${activeCount} of ${baseCount} periods.`);
+      parts.push(
+        formatMessage(text.scheduleDetails.showingPeriods, {
+          count: activeCount,
+          total: baseCount,
+        }),
+      );
     } else if (entry.override?.hasCustomSchedule && activeCount > 0) {
-      parts.push(`Custom schedule with ${activeCount} periods.`);
+      parts.push(formatMessage(text.scheduleDetails.customSchedule, { count: activeCount }));
     }
 
     if (replacedWeekdayLabel) {
-      parts.push(`Follows ${replacedWeekdayLabel} classes.`);
+      parts.push(formatMessage(text.scheduleDetails.followsWeekday, { day: replacedWeekdayLabel }));
     }
 
     if (parts.length > 0) {
       return parts.join(' ');
     }
 
-    return 'Temporary schedule override is active for this day.';
+    return text.scheduleDetails.overrideActive;
   },
 
   resolveWeekSchedulePeriods(day?: WeekScheduleDay | null): PeriodTime[] {
@@ -2818,7 +2828,10 @@ export const scheduleService = {
         period: 'recovery-info',
         startTime: '00:00',
         endTime: '00:01',
-        className: `Schedule Override: ${overrideReason}`,
+        className: formatMessage(
+          translations[this.settings.language].scheduleDetails.overrideLabel,
+          { reason: overrideReason },
+        ),
         teacherName: '',
         roomNumber: '',
         isCustom: true,
@@ -2902,7 +2915,10 @@ export const scheduleService = {
           period: periodId,
           startTime: period.start,
           endTime: period.end,
-          className: `Period ${period.index + 1}`,
+          className: formatMessage(
+            translations[this.settings.language].scheduleDetails.periodNumber,
+            { number: period.index + 1 },
+          ),
           teacherName: '',
           roomNumber: '',
           isRecoveryDay: Boolean(datePeriodTimes?.isWeekend && datePeriodTimes?.isOverride),
@@ -3057,7 +3073,9 @@ export const scheduleService = {
             period: customPeriod._id,
             startTime: customPeriod.starttime,
             endTime: customPeriod.endtime,
-            className: customPeriod.name || 'Custom Period',
+            className:
+              customPeriod.name ||
+              translations[this.settings.language].scheduleDetails.customPeriod,
             teacherName: '',
             roomNumber: '',
             isCustom: true,

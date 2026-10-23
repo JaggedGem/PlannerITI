@@ -2,8 +2,10 @@ import { format, isSameDay, isToday, isTomorrow, parseISO } from 'date-fns';
 
 import * as Crypto from 'expo-crypto';
 
+import { translations } from '@/constants/Translations';
 import type { Translate } from '@/hooks/useTranslation';
 import { Assignment, AssignmentGroup, Subtask } from '@/types/assignment';
+import { formatClockTime, formatMessage, languageLocales } from '@/utils/localization';
 
 import { Period, PeriodAssignmentCount, scheduleService } from '../services/scheduleService';
 import { filterAssignments, matchesAssignmentClass } from './assignmentFiltering';
@@ -167,7 +169,7 @@ export const updateAssignment = async (id: string, updates: Partial<Assignment>)
 // Group assignments by date
 export const groupAssignmentsByDate = (
   assignments: Assignment[],
-  t?: Translate,
+  t: Translate = (key) => translations[scheduleService.getSettings().language][key],
   formatDate?: (date: Date, options: Intl.DateTimeFormatOptions) => string,
 ): AssignmentGroup[] => {
   // Create a map to group assignments by date
@@ -196,44 +198,16 @@ export const groupAssignmentsByDate = (
   groupMap.forEach((assignmentsForDate, dateKey) => {
     const date = parseISO(dateKey);
     let title;
-    let formattedDate;
 
-    // If translations are provided, use them
-    if (t) {
-      // Special handling for today and tomorrow
-      if (isToday(date)) {
-        title = t('assignments').days.today;
-      } else if (isTomorrow(date)) {
-        title = t('assignments').days.tomorrow;
-      } else {
-        // Get the day of the week
-        const dayOfWeek = t('weekdays').long[date.getDay()];
-        // Get the month
-        const month = t('months')[date.getMonth()];
-        // Format as "Day, Month Day"
-        title = `${dayOfWeek}, ${month} ${date.getDate()}`;
-      }
-
-      // Format the date with localization if formatDate is provided
-      if (formatDate) {
-        formattedDate = formatDate(date, {
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-        });
-      } else {
-        formattedDate = format(date, 'MMMM d, yyyy');
-      }
-    } else {
-      // Fallback to English formats if no translations are provided
-      title = format(date, 'EEEE, MMM d');
-      if (isToday(date)) {
-        title = 'Today';
-      } else if (isTomorrow(date)) {
-        title = 'Tomorrow';
-      }
-      formattedDate = format(date, 'MMMM d, yyyy');
-    }
+    const language = scheduleService.getSettings().language;
+    const dateFormatter =
+      formatDate ??
+      ((value: Date, options: Intl.DateTimeFormatOptions) =>
+        new Intl.DateTimeFormat(languageLocales[language], options).format(value));
+    if (isToday(date)) title = t('assignments').days.today;
+    else if (isTomorrow(date)) title = t('assignments').days.tomorrow;
+    else title = dateFormatter(date, { weekday: 'long', month: 'short', day: 'numeric' });
+    const formattedDate = dateFormatter(date, { year: 'numeric', month: 'long', day: 'numeric' });
 
     groups.push({
       title,
@@ -285,9 +259,11 @@ export const getSchedulePeriods = async (): Promise<Period[]> => {
 // Get a formatted list of periods for the assignment form
 export const getFormattedPeriods = async (): Promise<{ label: string; value: string }[]> => {
   const periods = await getSchedulePeriods();
+  const { language } = scheduleService.getSettings();
+  const periodTemplate = translations[language].scheduleDetails.periodNumber;
 
   return periods.map((period) => ({
-    label: `Period ${period._id}: ${period.starttime} - ${period.endtime}`,
+    label: `${formatMessage(periodTemplate, { number: period._id })}: ${formatClockTime(period.starttime, language)} - ${formatClockTime(period.endtime, language)}`,
     value: period._id,
   }));
 };

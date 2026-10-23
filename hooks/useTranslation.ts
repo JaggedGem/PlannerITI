@@ -2,6 +2,12 @@ import { useCallback, useSyncExternalStore } from 'react';
 
 import { Translation, translations } from '@/constants/Translations';
 import { scheduleService } from '@/services/scheduleService';
+import {
+  formatCompactDate as formatCompactDateForLanguage,
+  formatLocalizedDate,
+  formatLocalizedDateWithWeekday,
+} from '@/utils/dateLocalization';
+import { formatClockTime, formatLocalizedTime, languageLocales } from '@/utils/localization';
 
 export type Translate = <K extends keyof Translation>(key: K) => Translation[K];
 
@@ -16,160 +22,45 @@ export function useTranslation() {
   );
 
   const t = useCallback<Translate>(
-    <K extends keyof Translation>(key: K): Translation[K] => {
-      return translations[currentLanguage][key];
-    },
+    <K extends keyof Translation>(key: K): Translation[K] => translations[currentLanguage][key],
     [currentLanguage],
   );
-
   const formatDate = useCallback(
-    (date: Date, options: Intl.DateTimeFormatOptions) => {
-      let locale;
-      switch (currentLanguage) {
-        case 'en':
-          locale = 'en-US';
-          break;
-        case 'ru':
-          locale = 'ru-RU';
-          break;
-        default:
-          locale = 'ro-RO';
-      }
-      return date.toLocaleDateString(locale, options);
-    },
+    (date: Date, options: Intl.DateTimeFormatOptions) =>
+      date.toLocaleDateString(languageLocales[currentLanguage], options),
     [currentLanguage],
   );
-
-  /**
-   * Format a time string (HH:MM) to locale-specific format
-   * English: H:MM AM/PM (12-hour)
-   * Romanian/Russian: HH:MM (24-hour)
-   */
-  const formatTime = useCallback(
-    (timeString: string): string => {
-      const [hours, minutes] = timeString.split(':').map(Number);
-
-      if (currentLanguage === 'en') {
-        const period = hours >= 12 ? 'PM' : 'AM';
-        const hour12 = hours % 12 || 12;
-        return `${hour12}:${minutes.toString().padStart(2, '0')} ${period}`;
-      } else {
-        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-      }
-    },
-    [currentLanguage],
-  );
-
-  /**
-   * Format a Date object to locale-specific time format
-   * English: H:MM AM/PM (12-hour)
-   * Romanian/Russian: HH:MM (24-hour)
-   */
   const formatTimeFromDate = useCallback(
-    (date: Date): string => {
-      const hours = date.getHours();
-      const minutes = date.getMinutes();
-
-      if (currentLanguage === 'en') {
-        const period = hours >= 12 ? 'PM' : 'AM';
-        const hour12 = hours % 12 || 12;
-        return `${hour12}:${minutes.toString().padStart(2, '0')} ${period}`;
-      } else {
-        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-      }
-    },
+    (date: Date): string => formatLocalizedTime(date, currentLanguage),
     [currentLanguage],
   );
-
-  /**
-   * Format a single hour to locale-specific format
-   * English: { hour: "1-12", period: "AM/PM" }
-   * Romanian/Russian: "00-23" (string)
-   */
+  const formatTime = useCallback(
+    (timeString: string): string => formatClockTime(timeString, currentLanguage),
+    [currentLanguage],
+  );
   const formatHour = useCallback(
     (hour: number): string | { hour: string; period: string } => {
       if (currentLanguage === 'en') {
-        const period = hour >= 12 ? 'PM' : 'AM';
-        const hour12 = hour % 12 || 12;
-        return { hour: hour12.toString(), period };
-      } else {
-        return hour.toString().padStart(2, '0');
+        return { hour: String(hour % 12 || 12), period: hour >= 12 ? 'PM' : 'AM' };
       }
+      return String(hour).padStart(2, '0');
     },
     [currentLanguage],
   );
-
-  /**
-   * Format a full date with optional time
-   * @param date The date to format
-   * @param includeTime Whether to include time (default: true)
-   * @returns Localized date string (e.g., "15 January 2024" or "15 January 2024, 2:30 PM")
-   */
   const formatFullDate = useCallback(
-    (date: Date, includeTime: boolean = true): string => {
-      const t = translations[currentLanguage];
-      const day = date.getDate();
-      const month = date.getMonth();
-      const year = date.getFullYear();
-      const monthName = t.months[month];
-
-      if (includeTime) {
-        const timeStr = formatTimeFromDate(date);
-        return `${day} ${monthName} ${year}, ${timeStr}`;
-      } else {
-        return `${day} ${monthName} ${year}`;
-      }
-    },
-    [currentLanguage, formatTimeFromDate],
+    (date: Date, includeTime: boolean = true): string =>
+      formatLocalizedDate(date, currentLanguage, includeTime),
+    [currentLanguage],
   );
-
-  /**
-   * Format a date in compact format (numeric)
-   * English: "M/D/YYYY" or "M/D/YYYY, H:MM AM/PM"
-   * Romanian/Russian: "D.MM.YYYY" or "D.MM.YYYY, HH:MM"
-   */
   const formatCompactDate = useCallback(
-    (date: Date, includeTime: boolean = true): string => {
-      const day = date.getDate();
-      const month = date.getMonth() + 1; // 1-12
-      const year = date.getFullYear();
-
-      if (includeTime) {
-        const timeStr = formatTimeFromDate(date);
-        if (currentLanguage === 'en') {
-          return `${month}/${day}/${year}, ${timeStr}`;
-        } else {
-          return `${day}.${month.toString().padStart(2, '0')}.${year}, ${timeStr}`;
-        }
-      } else {
-        if (currentLanguage === 'en') {
-          return `${month}/${day}/${year}`;
-        } else {
-          return `${day}.${month.toString().padStart(2, '0')}.${year}`;
-        }
-      }
-    },
-    [currentLanguage, formatTimeFromDate],
+    (date: Date, includeTime: boolean = true): string =>
+      formatCompactDateForLanguage(date, currentLanguage, includeTime),
+    [currentLanguage],
   );
-
-  /**
-   * Format a date with weekday
-   * @param date The date to format
-   * @param useLongWeekday Whether to use long weekday names (default: false for short)
-   * @returns Localized date string with weekday (e.g., "Mon, 15 January 2024, 2:30 PM")
-   */
   const formatDateWithWeekday = useCallback(
-    (date: Date, useLongWeekday: boolean = false): string => {
-      const t = translations[currentLanguage];
-      const weekdayIndex = date.getDay();
-      const weekday = useLongWeekday
-        ? t.weekdays.long[weekdayIndex]
-        : t.weekdays.short[weekdayIndex];
-
-      const formattedDate = formatFullDate(date, true);
-      return `${weekday}, ${formattedDate}`;
-    },
-    [currentLanguage, formatFullDate],
+    (date: Date, useLongWeekday: boolean = false): string =>
+      formatLocalizedDateWithWeekday(date, currentLanguage, useLongWeekday),
+    [currentLanguage],
   );
 
   return {

@@ -6,7 +6,6 @@ import React, { memo, useEffect, useMemo, useState } from 'react';
 
 import {
   ActivityIndicator,
-  Dimensions,
   Platform,
   ScrollView,
   StyleSheet,
@@ -14,11 +13,13 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
 
 import * as Haptics from 'expo-haptics';
 
 import { Colors } from '@/constants/Colors';
+import { useTranslation } from '@/hooks/useTranslation';
 import { filterDropdownCategories, filterDropdownItems } from '@/utils/dropdownFiltering';
 
 export type SegmentItem = {
@@ -119,6 +120,7 @@ const MODAL_DROPDOWN_COLORS = {
 const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
 
 const ModernDropdown = memo((props: ModernDropdownProps) => {
+  const { t } = useTranslation();
   const {
     isVisible,
     items,
@@ -129,13 +131,13 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
     selectedTabId,
     onTabChange,
     showSearch = false,
-    searchPlaceholder = 'Search',
+    searchPlaceholder = t('common').search,
     searchBarPosition = 'top',
     searchPerTab = false,
     onSearch,
     isLoading = false,
-    loadingText = 'Loading...',
-    emptyResultsMessage = 'No results found',
+    loadingText = t('loading'),
+    emptyResultsMessage = t('common').noResults,
     maxHeight,
     disableScroll = false,
     animationType = 'fade',
@@ -148,7 +150,7 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
   const [activeTabId, setActiveTabId] = useState<string>(
     selectedTabId || (tabs && tabs.length > 0 ? tabs[0].id : ''),
   );
-  const screenHeight = Dimensions.get('window').height;
+  const { height: screenHeight } = useWindowDimensions();
   const query = searchText.trim().toLowerCase();
   const filteredItems = useMemo(() => filterDropdownItems(items || [], query), [items, query]);
   const filteredCategories = useMemo(
@@ -307,7 +309,10 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
                   ]}
                 >
                   <Text style={styles.badgeText}>
-                    {item.badge || (item.isCustomPeriod ? 'Period' : 'Custom')}
+                    {item.badge ||
+                      (item.isCustomPeriod
+                        ? t('assignments').common.period
+                        : t('assignments').custom)}
                   </Text>
                 </View>
               )}
@@ -461,7 +466,7 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
         />
         {searchText.length > 0 && (
           <TouchableOpacity style={styles.clearButton} onPress={() => setSearchText('')}>
-            <Text style={styles.clearButtonText}>Clear</Text>
+            <Text style={styles.clearButtonText}>{t('common').clear}</Text>
           </TouchableOpacity>
         )}
       </View>
