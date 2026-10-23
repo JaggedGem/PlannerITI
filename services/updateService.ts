@@ -16,7 +16,7 @@ import {
 } from './nativeUpdateClient';
 
 export type NativeUpdateSnapshot = {
-  phase: 'idle' | 'available' | 'downloading' | 'ready' | 'recovery' | 'error';
+  phase: 'idle' | 'available' | 'downloading' | 'ready' | 'installing' | 'recovery' | 'error';
   busy: boolean;
   dismissed: boolean;
   storeFallback: boolean;
@@ -46,6 +46,7 @@ export class UpdateService {
   private startup: Promise<void> | null = null;
   private nativePromptsEnabled = false;
   private nativePromptAttempted = false;
+  private nativeCompletionAttempted = false;
   private lastNativeCheck = 0;
   private installEventRevision = 0;
   private lifecycleUsers = 0;
@@ -136,12 +137,15 @@ export class UpdateService {
     if (!this.lifecycleUsers) return;
     this.installEventRevision += 1;
     if (event.installStatus === 'downloaded') {
+      // Repeated downloaded notifications must not retry a failed/in-flight installation.
+      if (this.nativeCompletionAttempted) return;
       this.publish({ phase: 'ready', dismissed: false, storeFallback: false });
+      void this.promptForNativeUpdate();
     } else if (event.installStatus === 'pending' || event.installStatus === 'downloading') {
       this.publish({ phase: 'downloading' });
     } else if (event.installStatus === 'installing') {
       if (!this.reloadRequested) this.disruptiveOperation = 'native-install';
-      this.publish({ busy: true });
+      this.publish({ phase: 'installing', busy: true, storeFallback: false });
     } else if (['failed', 'canceled', 'installed'].includes(event.installStatus)) {
       this.releaseOperation('native-install');
       if (event.installStatus === 'failed')
@@ -162,8 +166,9 @@ export class UpdateService {
         if (result.kind === 'in-progress' || result.kind === 'installing') {
           if (!this.reloadRequested) this.disruptiveOperation = 'native-install';
           this.publish({
-            phase: 'recovery',
-            storeFallback: this.native.canOpenStore(result.status),
+            phase: result.kind === 'installing' ? 'installing' : 'recovery',
+            busy: result.kind === 'installing' || this.snapshot.busy,
+            storeFallback: result.kind === 'in-progress' && this.native.canOpenStore(result.status),
           });
         } else if (result.kind !== 'failed') {
           if (!this.snapshot.busy) this.releaseOperation('native-install');
@@ -177,7 +182,12 @@ export class UpdateService {
             // Passive checks must preserve the retry action after a failed Play flow.
             phase = canStart && this.snapshot.phase === 'error' ? 'error' : 'available';
           } else if (result.kind === 'ready' || result.kind === 'downloading') {
-            phase = result.kind;
+            phase =
+              result.kind === 'ready' &&
+              this.nativeCompletionAttempted &&
+              this.snapshot.phase === 'error'
+                ? 'error'
+                : result.kind;
           }
           this.publish({
             phase,
@@ -194,7 +204,7 @@ export class UpdateService {
     return this.nativeCheck;
   }
 
-  /** One startup workflow, shared by remounts and all callers. Never reload on foreground. */
+  /** One startup workflow, shared by remounts and all callers. Never reload OTA on foreground. */
   initializeUpdates(): Promise<void> {
     this.startup ??= this.runStartupUpdates();
     return this.startup;
@@ -208,15 +218,17 @@ export class UpdateService {
     void this.prepareOtaUpdateForNextLaunch();
   }
 
-  /** Called after the app has rendered, so Play consent never holds the splash screen open. */
+  /** Start consent or finish a downloaded Play update after the app has rendered. */
   enableNativeUpdatePrompts(): Promise<boolean> {
     this.nativePromptsEnabled = true;
     return this.promptForNativeUpdate();
   }
 
   private async promptForNativeUpdate(): Promise<boolean> {
+    if (!this.nativePromptsEnabled) return false;
+    if (this.snapshot.phase === 'ready' && !this.nativeCompletionAttempted)
+      return this.completeNativeUpdate();
     if (
-      !this.nativePromptsEnabled ||
       this.nativePromptAttempted ||
       this.nativeResult?.kind !== 'available' ||
       this.snapshot.dismissed ||
@@ -265,7 +277,8 @@ export class UpdateService {
         return true;
       }
       // Flow methods return pre-flow AppUpdateInfo. Events/foreground recovery supply fresh status.
-      if (this.snapshot.phase !== 'ready') this.publish({ phase: 'downloading' });
+      if (this.snapshot.phase !== 'ready' && this.snapshot.phase !== 'installing')
+        this.publish({ phase: 'downloading' });
       return true;
     } catch (error) {
       console.warn('Could not start Play update:', error);
@@ -276,6 +289,8 @@ export class UpdateService {
       this.publish({
         busy: this.disruptiveOperation === 'native-install' && this.snapshot.phase !== 'recovery',
       });
+      // A small download may finish while Google's consent promise still owns the gate.
+      void this.promptForNativeUpdate();
     }
   }
 
@@ -283,10 +298,14 @@ export class UpdateService {
     if (AppState.currentState !== 'active' || !this.acquireOperation('native-flow')) return false;
     this.publish({ busy: true });
     try {
-      const result = await this.checkForNativeUpdate();
-      if (result.kind !== 'ready' || AppState.currentState !== 'active') return false;
+      // A downloaded install event is authoritative; the native method rechecks Play itself.
+      const ready =
+        this.snapshot.phase === 'ready' || (await this.checkForNativeUpdate()).kind === 'ready';
+      if (!ready || AppState.currentState !== 'active') return false;
+      this.nativeCompletionAttempted = true;
       // completeFlexibleUpdate may resolve before the process restarts. Keep the gate closed on success.
       this.disruptiveOperation = 'native-install';
+      this.publish({ phase: 'installing', storeFallback: false });
       const revision = this.installEventRevision;
       const status = await this.native.complete();
       if (revision !== this.installEventRevision && this.snapshot.phase === 'error') return false;
@@ -471,7 +490,9 @@ export class UpdateService {
 
   private async applyOta(): Promise<boolean> {
     const native = this.nativeResult ?? (await this.checkForNativeUpdate());
-    if (native.kind === 'failed') return false;
+    // Apply an already downloaded Play binary before considering a JS-only reload.
+    if (native.kind === 'failed' || native.kind === 'ready' || this.snapshot.phase === 'ready')
+      return false;
     if (!this.acquireOperation('ota-reload')) return false;
     try {
       const pending = await this.getPendingOta();

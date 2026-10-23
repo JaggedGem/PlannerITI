@@ -18,38 +18,38 @@ export default function NativeUpdateBanner() {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const copy = t('nativeUpdate');
-  if (state.dismissed || state.phase === 'idle' || state.phase === 'downloading') return null;
-  // Play owns initial consent; keep the banner for installation, recovery and store fallback.
+  if (
+    state.dismissed ||
+    state.phase === 'idle' ||
+    state.phase === 'downloading' ||
+    state.phase === 'ready' ||
+    state.phase === 'installing'
+  )
+    return null;
+  // Play owns consent and installation; the banner only offers recovery actions.
   if (state.phase === 'available' && !state.storeFallback) return null;
-  const ready = state.phase === 'ready';
   const failed = state.phase === 'error';
-  const message = ready
-    ? copy.ready
-    : failed
-      ? copy.failed
-      : state.phase === 'recovery'
-        ? copy.recovery
-        : copy.recommended;
-  const label = state.storeFallback
-    ? copy.openStore
-    : ready
-      ? copy.install
-      : failed
-        ? copy.retry
-        : copy.update;
+  const message = failed
+    ? copy.failed
+    : state.phase === 'recovery'
+      ? copy.recovery
+      : copy.recommended;
+  const label = state.storeFallback ? copy.openStore : failed ? copy.retry : copy.update;
 
   const handleAction = () => {
     const action = state.storeFallback
       ? updateService.openNativeUpdateStore()
-      : ready
-        ? updateService.completeNativeUpdate()
-        : failed
-          ? updateService
-              .checkForNativeUpdate()
-              .then((result) =>
-                result.kind === 'available' ? updateService.startNativeUpdate() : false,
-              )
-          : updateService.startNativeUpdate();
+      : failed
+        ? updateService
+            .checkForNativeUpdate()
+            .then((result) =>
+              result.kind === 'ready'
+                ? updateService.completeNativeUpdate()
+                : result.kind === 'available'
+                  ? updateService.startNativeUpdate()
+                  : false,
+            )
+        : updateService.startNativeUpdate();
     void action.catch((error) => console.warn('Update action failed:', error));
   };
 

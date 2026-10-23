@@ -69,10 +69,12 @@ export class NativeUpdateClient {
   classify(status: UpdateStatus): NativeUpdateResult {
     const module = this.module;
     if (!status.supported) return { kind: 'unsupported', reason: status.reason };
-    if (status.reason === 'developer-triggered-update-in-progress')
-      return { kind: 'in-progress', status };
+    // Play can retain its in-progress availability flag after a flexible download.
+    // The install status determines whether we should complete it or wait for installation.
     if (module?.canCompleteFlexibleUpdate(status)) return { kind: 'ready', status };
     if (status.installStatus === 'installing') return { kind: 'installing', status };
+    if (status.reason === 'developer-triggered-update-in-progress')
+      return { kind: 'in-progress', status };
     if (status.installStatus === 'pending' || status.installStatus === 'downloading')
       return { kind: 'downloading', status };
     if (status.updateAvailable === true) {
