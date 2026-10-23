@@ -1,4 +1,4 @@
-import { Translation, translations } from '@/constants/Translations';
+import { RelativeTimeUnit, Translation, translations } from '@/constants/Translations';
 import type { Language } from '@/services/scheduleService';
 
 export const languageLocales: Record<Language, string> = {
@@ -19,11 +19,50 @@ export function formatMessage(template: string, values: Record<string, string | 
   );
 }
 
+/** Hermes builds may provide DateTimeFormat without the relative-time or plural APIs. */
+function selectPlural(count: number, language: Language): Intl.LDMLPluralRule {
+  if (typeof Intl.PluralRules === 'function') {
+    let rules = pluralRules.get(language);
+    if (!rules) {
+      rules = new Intl.PluralRules(languageLocales[language]);
+      pluralRules.set(language, rules);
+    }
+    return rules.select(count);
+  }
+  const value = Math.abs(count);
+  if (language === 'ru') {
+    if (!Number.isInteger(value)) return 'other';
+    if (value % 10 === 1 && value % 100 !== 11) return 'one';
+    if (value % 10 >= 2 && value % 10 <= 4 && (value % 100 < 12 || value % 100 > 14)) return 'few';
+    return 'many';
+  }
+  if (value === 1) return 'one';
+  if (
+    language === 'ro' &&
+    (!Number.isInteger(value) || value === 0 || (value % 100 >= 1 && value % 100 <= 19))
+  )
+    return 'few';
+  return 'other';
+}
+
 export function formatRelativeTime(
   count: number,
   unit: Intl.RelativeTimeFormatUnit,
   language: Language,
 ): string {
+  if (!Number.isFinite(count)) return translations[language].common.unknown;
+  if (typeof Intl.RelativeTimeFormat !== 'function') {
+    const text = translations[language].relativeTime;
+    const canonicalUnit = unit.replace(/s$/, '') as RelativeTimeUnit;
+    const forms = text.units[canonicalUnit];
+    const plural = selectPlural(Math.abs(count), language);
+    const label =
+      forms[plural === 'one' || plural === 'few' || plural === 'many' ? plural : 'other'];
+    return formatMessage(count < 0 ? text.past : text.future, {
+      count: Math.abs(count),
+      unit: label,
+    });
+  }
   let formatter = relativeTimeFormatters.get(language);
   if (!formatter) {
     formatter = new Intl.RelativeTimeFormat(languageLocales[language], { numeric: 'always' });
@@ -34,12 +73,7 @@ export function formatRelativeTime(
 
 export function formatAssignmentCount(count: number, language: Language): string {
   const forms = translations[language].notificationMessages.assignmentCount;
-  let rules = pluralRules.get(language);
-  if (!rules) {
-    rules = new Intl.PluralRules(languageLocales[language]);
-    pluralRules.set(language, rules);
-  }
-  const plural = rules.select(count);
+  const plural = selectPlural(count, language);
   const template =
     plural === 'one' || plural === 'few' || plural === 'many' ? forms[plural] : forms.other;
   return formatMessage(template, { count });

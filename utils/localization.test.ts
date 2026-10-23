@@ -96,3 +96,44 @@ it('formats clock values and preserves non-clock API labels', () => {
   expect(formatClockTime('08:00', 'ro')).toBe('08:00');
   expect(formatClockTime('time pending', 'en')).toBe('time pending');
 });
+
+describe('Hermes without optional Intl constructors', () => {
+  const relativeTimeDescriptor = Object.getOwnPropertyDescriptor(Intl, 'RelativeTimeFormat')!;
+  const pluralDescriptor = Object.getOwnPropertyDescriptor(Intl, 'PluralRules')!;
+  beforeEach(() => {
+    Object.defineProperty(Intl, 'RelativeTimeFormat', { configurable: true, value: undefined });
+    Object.defineProperty(Intl, 'PluralRules', { configurable: true, value: undefined });
+  });
+  afterEach(() => {
+    Object.defineProperty(Intl, 'RelativeTimeFormat', relativeTimeDescriptor);
+    Object.defineProperty(Intl, 'PluralRules', pluralDescriptor);
+  });
+  it.each([
+    [1, 'minute', 'ru', 'через 1 минуту'],
+    [22, 'minutes', 'ru', 'через 22 минуты'],
+    [11, 'day', 'ru', 'через 11 дней'],
+    [-5, 'day', 'ru', '5 дней назад'],
+    [1, 'hour', 'ro', 'peste 1 oră'],
+    [20, 'hour', 'ro', 'peste 20 de ore'],
+    [2, 'week', 'en', 'in 2 weeks'],
+    [0, 'minute', 'en', 'in 0 minutes'],
+  ] as const)(
+    'formats %i %s in %s without native Intl support',
+    (count, unit, language, expected) => {
+      expect(formatRelativeTime(count, unit, language)).toBe(expected);
+    },
+  );
+  it('keeps assignment countdowns usable through timer updates', () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-10-23T10:00:00Z'));
+    try {
+      expect(formatRemainingTime('2026-10-23T12:00:00Z', 'ro')).toBe('peste 2 ore');
+      jest.advanceTimersByTime(60_000);
+      expect(formatRemainingTime('2026-10-23T12:00:00Z', 'ro')).toBe('peste 1 oră');
+      expect(formatAssignmentCount(22, 'ru')).toBe('22 задания');
+      expect(formatAssignmentCount(20, 'ro')).toBe('20 de teme');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+});

@@ -1,4 +1,5 @@
 import { MaterialIcons } from '@react-native-vector-icons/material-icons';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 
 import React, { useState } from 'react';
 
@@ -7,7 +8,9 @@ import { Modal, Platform, StyleSheet, TextInput, TouchableOpacity, View } from '
 import { Link, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 
+import { contentLayout } from '@/components/ui/ContentLayout';
 import { Colors } from '@/constants/Colors';
+import { MODAL_ORIENTATIONS } from '@/constants/Layout';
 
 import { useThemeColor } from '../../hooks/useThemeColor';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -64,7 +67,11 @@ export function ForgotPasswordScreen() {
   return (
     <ThemedView style={styles.container}>
       <StatusBar style="auto" />
-      <View style={styles.innerContainer}>
+      <KeyboardAwareScrollView
+        contentContainerStyle={[styles.innerContainer, contentLayout.auth]}
+        enableOnAndroid
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.header}>
           <ThemedText style={styles.title}>{t('auth').forgotPassword.title}</ThemedText>
           <ThemedText style={styles.subtitle}>{t('auth').verifyEmail.message}</ThemedText>
@@ -114,10 +121,11 @@ export function ForgotPasswordScreen() {
             </Link>
           </View>
         </View>
-      </View>
+      </KeyboardAwareScrollView>
 
       {/* Custom Alert Modal */}
       <Modal
+        supportedOrientations={MODAL_ORIENTATIONS}
         visible={showAlert}
         transparent={true}
         animationType="fade"
@@ -147,7 +155,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   innerContainer: {
-    flex: 1,
+    flexGrow: 1,
     paddingHorizontal: 20,
     paddingTop: Platform.OS === 'ios' ? 60 : 40,
     justifyContent: 'center',
@@ -222,6 +230,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalContainer: {
+    maxWidth: 400,
     width: '80%',
     padding: 20,
     borderRadius: 15,

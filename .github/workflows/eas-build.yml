@@ -114,8 +114,8 @@ jobs:
           ARTIFACT_PATH: ${{ steps.destination.outputs.artifact-path }}
           EAS_LOCAL_BUILD_WORKINGDIR: ${{ runner.temp }}/eas-local-build
           GRADLE_USER_HOME: ${{ runner.temp }}/gradle
-          # Bound native compilation parallelism on standard GitHub runners.
-          GRADLE_OPTS: -Dorg.gradle.workers.max=2 -Dorg.gradle.parallel=false
+          # Bound parallelism and disable persistent Gradle daemons.
+          GRADLE_OPTS: -Dorg.gradle.workers.max=2 -Dorg.gradle.parallel=false -Dorg.gradle.daemon=false
           CMAKE_BUILD_PARALLEL_LEVEL: 2
         run: |
           # Leave RELEASE_VERSION unset when no GitHub value was configured.
@@ -145,4 +145,15 @@ jobs:
       - name: Remove local build working files and signing material
         if: always()
         run: |
-          rm -rf -- "$RUNNER_TEMP/eas-local-build" "$RUNNER_TEMP/gradle"
+          # Gradle processes may still be finishing shutdown after EAS exits.
+          # Retry transient writes, but keep persistent cleanup failures visible.
+          for attempt in 1 2 3 4 5; do
+            if rm -rf -- "$RUNNER_TEMP/eas-local-build" "$RUNNER_TEMP/gradle"; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 5 ]; then
+              sleep 2
+            fi
+          done
+          echo "::error::Could not remove local build working files and signing material."
+          exit 1

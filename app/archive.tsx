@@ -13,7 +13,7 @@ export default function ArchiveScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: t('assignments').archive.title }} />
+      <Stack.Screen options={{ headerShown: false, title: t('assignments').archive.title }} />
       <ArchiveView
         assignments={archivedAssignments}
         onToggleAssignment={toggleAssignmentCompletion}

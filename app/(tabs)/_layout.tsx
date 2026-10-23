@@ -10,6 +10,7 @@ import { Tabs } from 'expo-router';
 
 import { HapticTab } from '@/components/HapticTab';
 import { Colors } from '@/constants/Colors';
+import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 import { useTranslation } from '@/hooks/useTranslation';
 
 export const unstable_settings = {
@@ -20,10 +21,11 @@ export const unstable_settings = {
 interface AnimatedTabBarLabelProps {
   focused: boolean;
   color: ColorValue;
+  position: 'below-icon' | 'beside-icon';
   children: React.ReactNode;
 }
 
-function AnimatedTabBarLabel({ focused, color, children }: AnimatedTabBarLabelProps) {
+function AnimatedTabBarLabel({ focused, color, children, position }: AnimatedTabBarLabelProps) {
   const animatedStyle = useAnimatedStyle(() => {
     return {
       transform: [{ scale: withSpring(focused ? 1.1 : 1) }],
@@ -38,9 +40,10 @@ function AnimatedTabBarLabel({ focused, color, children }: AnimatedTabBarLabelPr
           color,
           fontSize: 11,
           textAlign: 'center',
-          marginTop: 2,
-          height: 14,
-          lineHeight: 14,
+          marginTop: position === 'below-icon' ? 3 : 0,
+          marginLeft: position === 'beside-icon' ? 4 : 0,
+          height: 16,
+          lineHeight: 16,
         },
         animatedStyle,
       ]}
@@ -77,7 +80,8 @@ function AnimatedTabBarIcon({ focused, color, name }: AnimatedTabBarIconProps) {
     <View
       style={{
         alignItems: 'center',
-        height: 40,
+        height: 36,
+        width: 36,
         justifyContent: 'center',
       }}
     >
@@ -102,6 +106,7 @@ function AnimatedTabBarIcon({ focused, color, name }: AnimatedTabBarIconProps) {
 export default function TabLayout() {
   const { t } = useTranslation();
   const { bottom } = useSafeAreaInsets();
+  const { isCompactHeight } = useResponsiveLayout();
 
   const theme = Colors.dark;
   const backgroundColor = theme.backgroundApp;
@@ -125,9 +130,9 @@ export default function TabLayout() {
           headerShown: false,
           tabBarButton: (props: Parameters<typeof HapticTab>[0]) => <HapticTab {...props} />,
           tabBarStyle: {
-            height: 70 + bottom,
-            paddingBottom: Platform.OS === 'ios' ? 20 + bottom : 10 + bottom,
-            paddingTop: 10,
+            height: (isCompactHeight ? 54 : 78) + bottom,
+            paddingBottom: (isCompactHeight ? 4 : 8) + bottom,
+            paddingTop: isCompactHeight ? 4 : 6,
             backgroundColor: backgroundColor,
             borderTopWidth: 0,
             ...(Platform.OS === 'ios'
@@ -149,12 +154,13 @@ export default function TabLayout() {
           },
           tabBarItemStyle: {
             paddingVertical: 4,
-            height: 50,
+            height: isCompactHeight ? 46 : 60,
             justifyContent: 'center',
           },
-          tabBarLabelPosition: 'below-icon',
+          tabBarIconStyle: { width: 36, height: 36 },
+          tabBarLabelPosition: isCompactHeight ? 'beside-icon' : 'below-icon',
           tabBarLabel: ({ focused, color, children, position }: TabBarLabelProps) => (
-            <AnimatedTabBarLabel focused={focused} color={color}>
+            <AnimatedTabBarLabel focused={focused} color={color} position={position}>
               {children}
             </AnimatedTabBarLabel>
           ),

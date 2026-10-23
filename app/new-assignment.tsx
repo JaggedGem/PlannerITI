@@ -20,7 +20,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Platform,
   Animated as RNAnimated,
   ScrollView,
   StyleSheet,
@@ -36,8 +35,12 @@ import { StatusBar } from 'expo-status-bar';
 
 import { BottomModalPortal } from '@/components/BottomModalPortal';
 import { ModernDropdown, SegmentItem } from '@/components/ModernDropdown';
+import { AssignmentFormHeader } from '@/components/assignments/AssignmentFormHeader';
+import { AssignmentSubtasksField } from '@/components/assignments/AssignmentSubtasksField';
+import { contentLayout } from '@/components/ui/ContentLayout';
 import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
 import { Colors } from '@/constants/Colors';
+import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 import { useTranslation } from '@/hooks/useTranslation';
 import { formatMessage, formatRelativeTime } from '@/utils/localization';
 import { runWhenIdle } from '@/utils/runWhenIdle';
@@ -841,6 +844,7 @@ const ASSIGNMENT_TYPE_KEYWORDS = {
 };
 
 export default function NewAssignmentScreen() {
+  const { insets } = useResponsiveLayout();
   const {
     t,
     currentLanguage,
@@ -1984,33 +1988,9 @@ export default function NewAssignmentScreen() {
     setSubtasks(subtasks.filter((task) => task.id !== id));
   };
 
-  // Animation for add button
-  const addButtonScale = useSharedValue(1);
-
-  const animatedAddButtonStyle = useAnimatedStyle(() => {
-    return {
-      transform: [{ scale: addButtonScale.value }],
-    };
-  });
-
-  const handleAddButtonPress = () => {
-    if (!newSubtaskText.trim()) return;
-
-    // Animate button
-    addButtonScale.value = withSequence(
-      withTiming(0.8, { duration: 100 }),
-      withTiming(1, { duration: 100 }),
-    );
-
-    // Call actual add function with a slight delay
-    setTimeout(() => {
-      handleAddSubtask();
-    }, 100);
-  };
-
   return (
     <>
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['bottom']}>
         <StatusBar style="light" />
 
         <KeyboardAwareScrollView
@@ -2020,369 +2000,262 @@ export default function NewAssignmentScreen() {
           enableResetScrollToCoords={false}
           enableOnAndroid={true}
         >
-          <View style={styles.header}>
-            <Text style={styles.headerTitle}>{t('assignments').addNew}</Text>
-            <View style={styles.headerButtons}>
-              <TouchableOpacity onPress={handleCancel} style={styles.cancelButton}>
-                <Text style={styles.cancelButtonText}>{t('settings').customPeriods.cancel}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleSave}
-                style={[
-                  styles.saveButton,
-                  (!title || !courseName || isSaving) && styles.saveButtonDisabled,
-                ]}
-                disabled={!title || !courseName || isSaving}
-              >
-                <Text
-                  style={[
-                    styles.saveButtonText,
-                    (!title || !courseName || isSaving) && styles.saveButtonTextDisabled,
-                  ]}
-                >
-                  {isSaving ? t('assignments').saving : t('assignments').save}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+          <AssignmentFormHeader
+            title={t('assignments').addNew}
+            submitLabel={isSaving ? t('assignments').saving : t('assignments').save}
+            onCancel={handleCancel}
+            onSubmit={handleSave}
+            disabled={!title || !courseName || isSaving}
+          />
 
-          <View style={styles.formContainer}>
-            <Animated.View entering={FadeIn.duration(300).delay(50)}>
-              <Text style={styles.label}>{t('assignments').title}</Text>
-              <TextInput
-                style={styles.input}
-                placeholder={t('assignments').titlePlaceholder}
-                placeholderTextColor={Colors.dark.neutral500}
-                value={title}
-                onChangeText={handleTitleChange}
-                maxLength={50}
-              />
-              {autoDetectedType && (
-                <Text style={styles.autoDetectedNote}>{t('assignments').autoDetectedType}</Text>
-              )}
-            </Animated.View>
-
-            {/* Add Assignment Type Selector */}
-            <Animated.View entering={FadeIn.duration(300).delay(75)}>
-              <Text style={styles.label}>{t('assignments').type}</Text>
-              <TouchableOpacity
-                style={styles.typeSelector}
-                onPress={() => setIsTypeModalVisible(true)}
-              >
-                <View style={styles.typeDisplay}>
-                  <Ionicons
-                    name={getTypeIcon()}
-                    size={20}
-                    color={Colors.dark.white}
-                    style={styles.typeIcon}
-                  />
-                  <Text style={styles.typeText}>
-                    {
-                      t('assignments').types[
-                        assignmentType.toLowerCase() as
-                          | 'homework'
-                          | 'test'
-                          | 'exam'
-                          | 'project'
-                          | 'quiz'
-                          | 'lab'
-                          | 'essay'
-                          | 'presentation'
-                          | 'other'
-                      ]
-                    }
-                  </Text>
-                </View>
-                <Ionicons name="chevron-down" size={20} color={Colors.dark.neutral500} />
-              </TouchableOpacity>
-            </Animated.View>
-
-            <Animated.View entering={FadeIn.duration(300).delay(100)}>
-              <Text style={styles.label}>
-                {t('assignments').description} ({t('assignments').optional})
-              </Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                placeholder={t('assignments').descriptionPlaceholder}
-                placeholderTextColor={Colors.dark.neutral500}
-                value={description}
-                onChangeText={setDescription}
-                multiline
-                maxLength={200}
-              />
-            </Animated.View>
-
-            <Animated.View entering={FadeIn.duration(300).delay(150)}>
-              <Text style={styles.label}>{t('grades').form.subject}</Text>
-              <TouchableOpacity
-                style={styles.subjectSelector}
-                onPress={() => setIsSubjectsModalVisible(true)}
-              >
-                {selectedSubject ? (
-                  <View style={styles.selectedSubjectDisplay}>
-                    <Text style={styles.selectedSubjectText}>{selectedSubject.name}</Text>
-                    {selectedSubject.isCustom && (
-                      <Text style={styles.customBadgeSmall}>{t('assignments').custom}</Text>
-                    )}
-                  </View>
-                ) : (
-                  <Text style={styles.subjectPlaceholder}>{t('assignments').selectSubject}</Text>
+          <View style={{ paddingLeft: insets.left, paddingRight: insets.right }}>
+            <View style={[styles.formContainer, contentLayout.form]}>
+              <Animated.View entering={FadeIn.duration(300).delay(50)}>
+                <Text style={styles.label}>{t('assignments').title}</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder={t('assignments').titlePlaceholder}
+                  placeholderTextColor={Colors.dark.neutral500}
+                  value={title}
+                  onChangeText={handleTitleChange}
+                  maxLength={50}
+                />
+                {autoDetectedType && (
+                  <Text style={styles.autoDetectedNote}>{t('assignments').autoDetectedType}</Text>
                 )}
-                <Ionicons name="chevron-down" size={20} color={Colors.dark.neutral500} />
-              </TouchableOpacity>
-            </Animated.View>
+              </Animated.View>
 
-            {/* Next Period Option */}
-            {selectedSubjectId && (
-              <Animated.View
-                entering={FadeIn.duration(300).delay(200)}
-                style={styles.nextPeriodContainer}
-              >
-                <View style={styles.nextPeriodHeader}>
-                  <Text
-                    style={[
-                      styles.label,
-                      !nextPeriodInfo && styles.labelDisabled,
-                      { marginTop: 0, marginBottom: 0 },
-                    ]}
-                  >
-                    {t('assignments').useNextPeriod}
-                  </Text>
-                  <CustomToggle
-                    value={useNextPeriod}
-                    onValueChange={toggleNextPeriod}
-                    disabled={!nextPeriodInfo}
-                  />
-                </View>
-
-                {!nextPeriodInfo && selectedSubjectId && (
-                  <View style={styles.warningContainer}>
-                    <Ionicons name="alert-circle" size={16} color={Colors.dark.alertOrange} />
-                    <Text style={styles.warningText}>
-                      {t('assignments').noUpcomingClasses}{' '}
-                      {selectedSubject?.name || t('assignments').thisSubject}{' '}
-                      {t('assignments').inNextTwoWeeks}
+              {/* Add Assignment Type Selector */}
+              <Animated.View entering={FadeIn.duration(300).delay(75)}>
+                <Text style={styles.label}>{t('assignments').type}</Text>
+                <TouchableOpacity
+                  style={styles.typeSelector}
+                  onPress={() => setIsTypeModalVisible(true)}
+                >
+                  <View style={styles.typeDisplay}>
+                    <Ionicons
+                      name={getTypeIcon()}
+                      size={20}
+                      color={Colors.dark.white}
+                      style={styles.typeIcon}
+                    />
+                    <Text style={styles.typeText}>
+                      {
+                        t('assignments').types[
+                          assignmentType.toLowerCase() as
+                            | 'homework'
+                            | 'test'
+                            | 'exam'
+                            | 'project'
+                            | 'quiz'
+                            | 'lab'
+                            | 'essay'
+                            | 'presentation'
+                            | 'other'
+                        ]
+                      }
                     </Text>
                   </View>
-                )}
-
-                {useNextPeriod && (
-                  <Animated.View
-                    entering={FadeIn.duration(200)}
-                    exiting={FadeOut.duration(200)}
-                    layout={Layout.springify()}
-                    style={styles.nextPeriodInfo}
-                  >
-                    {loadingNextPeriod ? (
-                      <View style={styles.loadingNextPeriod}>
-                        <ActivityIndicator size="small" color={Colors.dark.primaryStrong} />
-                        <Text style={styles.nextPeriodText}>
-                          {t('assignments').findingNextClass}
-                        </Text>
-                      </View>
-                    ) : nextPeriodInfo ? (
-                      <Text style={styles.nextPeriodText}>
-                        {t('assignments').assignmentDueText}
-                        {nextPeriodInfo.isTomorrow ? (
-                          // Don't show weekText for tomorrow
-                          <Text> </Text>
-                        ) : nextPeriodInfo.weekText ? (
-                          <Text
-                            style={{
-                              color: Colors.dark.primaryStrong,
-                            }}
-                          >
-                            {' '}
-                            {nextPeriodInfo.weekText}
-                          </Text>
-                        ) : null}
-                        {nextPeriodInfo.isTomorrow
-                          ? ''
-                          : nextPeriodInfo.weekText
-                            ? ` ${t('assignments').on} `
-                            : ' '}
-                        {nextPeriodInfo.isTomorrow ? (
-                          <Text
-                            style={{
-                              color: Colors.dark.primaryStrong,
-                            }}
-                          >
-                            {t('assignments').days.tomorrow}
-                          </Text>
-                        ) : (
-                          <Text
-                            style={{
-                              color: Colors.dark.primaryStrong,
-                            }}
-                          >
-                            {nextPeriodInfo.day}
-                          </Text>
-                        )}{' '}
-                        {t('assignments').at}{' '}
-                        <Text
-                          style={{
-                            color: Colors.dark.primaryStrong,
-                          }}
-                        >
-                          {nextPeriodInfo.time}
-                        </Text>
-                      </Text>
-                    ) : (
-                      <Text style={styles.nextPeriodText}>
-                        {t('assignments').noUpcomingClassesFound}
-                      </Text>
-                    )}
-                  </Animated.View>
-                )}
+                  <Ionicons name="chevron-down" size={20} color={Colors.dark.neutral500} />
+                </TouchableOpacity>
               </Animated.View>
-            )}
 
-            {/* Advanced Options Panel (Due Date & Time) */}
-            {!useNextPeriod && (
-              <Animated.View
-                entering={FadeIn.duration(200)}
-                exiting={FadeOut.duration(200)}
-                layout={Layout.springify()}
-              >
-                <Animated.View entering={FadeIn.duration(200).delay(50)}>
-                  <Text style={styles.label}>{t('assignments').dueDate}</Text>
-                  <DatePicker
-                    selectedDate={dueDate}
-                    onDateChange={setDueDate}
-                    formatDate={formatDate}
-                    days={DAYS}
-                    quickDateOptions={QUICK_DATE_OPTIONS}
-                    currentLanguage={currentLanguage}
-                  />
-                </Animated.View>
-
-                <Animated.View entering={FadeIn.duration(200).delay(100)}>
-                  <Text style={styles.label}>{t('assignments').dueTime}</Text>
-                  <TimePicker
-                    selectedTime={dueDate}
-                    onTimeChange={setDueDate}
-                    timePresets={TIME_PRESETS}
-                  />
-                </Animated.View>
-              </Animated.View>
-            )}
-
-            <Animated.View
-              entering={FadeIn.duration(300).delay(400)}
-              style={styles.priorityContainer}
-            >
-              <Text style={styles.label}>{t('assignments').markAsPriority}</Text>
-              <CustomToggle value={isPriority} onValueChange={setIsPriority} />
-            </Animated.View>
-
-            {/* Subtasks Section - Redesigned */}
-            <Animated.View
-              entering={FadeIn.duration(300).delay(450)}
-              style={styles.subtasksContainer}
-            >
-              <View style={styles.subtasksHeader}>
-                <Ionicons
-                  name="layers-outline"
-                  size={22}
-                  color={Colors.dark.primaryStrong}
-                  style={styles.subtasksIcon}
+              <Animated.View entering={FadeIn.duration(300).delay(100)}>
+                <Text style={styles.label}>
+                  {t('assignments').description} ({t('assignments').optional})
+                </Text>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  placeholder={t('assignments').descriptionPlaceholder}
+                  placeholderTextColor={Colors.dark.neutral500}
+                  value={description}
+                  onChangeText={setDescription}
+                  multiline
+                  maxLength={200}
                 />
-                <Text style={styles.subtasksTitle}>{t('assignments').subtasks.title}</Text>
-              </View>
+              </Animated.View>
 
-              {subtasks.length > 0 && (
-                <View style={styles.subtasksList}>
-                  {subtasks.map((task, index) => (
-                    <Animated.View
-                      key={task.id}
-                      entering={FadeIn.duration(300).delay(50 * index)}
-                      exiting={FadeOut.duration(200)}
-                      layout={Layout.springify().damping(12)}
-                      style={styles.subtaskItemContainer}
+              <Animated.View entering={FadeIn.duration(300).delay(150)}>
+                <Text style={styles.label}>{t('grades').form.subject}</Text>
+                <TouchableOpacity
+                  style={styles.subjectSelector}
+                  onPress={() => setIsSubjectsModalVisible(true)}
+                >
+                  {selectedSubject ? (
+                    <View style={styles.selectedSubjectDisplay}>
+                      <Text style={styles.selectedSubjectText}>{selectedSubject.name}</Text>
+                      {selectedSubject.isCustom && (
+                        <Text style={styles.customBadgeSmall}>{t('assignments').custom}</Text>
+                      )}
+                    </View>
+                  ) : (
+                    <Text style={styles.subjectPlaceholder}>{t('assignments').selectSubject}</Text>
+                  )}
+                  <Ionicons name="chevron-down" size={20} color={Colors.dark.neutral500} />
+                </TouchableOpacity>
+              </Animated.View>
+
+              {/* Next Period Option */}
+              {selectedSubjectId && (
+                <Animated.View
+                  entering={FadeIn.duration(300).delay(200)}
+                  style={styles.nextPeriodContainer}
+                >
+                  <View style={styles.nextPeriodHeader}>
+                    <Text
+                      style={[
+                        styles.label,
+                        !nextPeriodInfo && styles.labelDisabled,
+                        { marginTop: 0, marginBottom: 0 },
+                      ]}
                     >
-                      <TouchableOpacity
-                        activeOpacity={0.8}
-                        style={styles.subtaskItem}
-                        onPress={() => {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        }}
-                      >
-                        <View style={styles.subtaskContent}>
-                          <View style={styles.subtaskBullet}>
-                            <View style={styles.subtaskBulletInner} />
-                          </View>
-                          <Text style={styles.subtaskText} numberOfLines={2}>
-                            {task.title}
+                      {t('assignments').useNextPeriod}
+                    </Text>
+                    <CustomToggle
+                      value={useNextPeriod}
+                      onValueChange={toggleNextPeriod}
+                      disabled={!nextPeriodInfo}
+                    />
+                  </View>
+
+                  {!nextPeriodInfo && selectedSubjectId && (
+                    <View style={styles.warningContainer}>
+                      <Ionicons name="alert-circle" size={16} color={Colors.dark.alertOrange} />
+                      <Text style={styles.warningText}>
+                        {t('assignments').noUpcomingClasses}{' '}
+                        {selectedSubject?.name || t('assignments').thisSubject}{' '}
+                        {t('assignments').inNextTwoWeeks}
+                      </Text>
+                    </View>
+                  )}
+
+                  {useNextPeriod && (
+                    <Animated.View
+                      entering={FadeIn.duration(200)}
+                      exiting={FadeOut.duration(200)}
+                      layout={Layout.springify()}
+                      style={styles.nextPeriodInfo}
+                    >
+                      {loadingNextPeriod ? (
+                        <View style={styles.loadingNextPeriod}>
+                          <ActivityIndicator size="small" color={Colors.dark.primaryStrong} />
+                          <Text style={styles.nextPeriodText}>
+                            {t('assignments').findingNextClass}
                           </Text>
                         </View>
-                        <TouchableOpacity
-                          style={styles.deleteSubtaskButton}
-                          onPress={() => {
-                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                            handleRemoveSubtask(task.id);
-                          }}
-                        >
-                          <Ionicons name="close-circle" size={22} color={Colors.dark.red} />
-                        </TouchableOpacity>
-                      </TouchableOpacity>
+                      ) : nextPeriodInfo ? (
+                        <Text style={styles.nextPeriodText}>
+                          {t('assignments').assignmentDueText}
+                          {nextPeriodInfo.isTomorrow ? (
+                            // Don't show weekText for tomorrow
+                            <Text> </Text>
+                          ) : nextPeriodInfo.weekText ? (
+                            <Text
+                              style={{
+                                color: Colors.dark.primaryStrong,
+                              }}
+                            >
+                              {' '}
+                              {nextPeriodInfo.weekText}
+                            </Text>
+                          ) : null}
+                          {nextPeriodInfo.isTomorrow
+                            ? ''
+                            : nextPeriodInfo.weekText
+                              ? ` ${t('assignments').on} `
+                              : ' '}
+                          {nextPeriodInfo.isTomorrow ? (
+                            <Text
+                              style={{
+                                color: Colors.dark.primaryStrong,
+                              }}
+                            >
+                              {t('assignments').days.tomorrow}
+                            </Text>
+                          ) : (
+                            <Text
+                              style={{
+                                color: Colors.dark.primaryStrong,
+                              }}
+                            >
+                              {nextPeriodInfo.day}
+                            </Text>
+                          )}{' '}
+                          {t('assignments').at}{' '}
+                          <Text
+                            style={{
+                              color: Colors.dark.primaryStrong,
+                            }}
+                          >
+                            {nextPeriodInfo.time}
+                          </Text>
+                        </Text>
+                      ) : (
+                        <Text style={styles.nextPeriodText}>
+                          {t('assignments').noUpcomingClassesFound}
+                        </Text>
+                      )}
                     </Animated.View>
-                  ))}
-                </View>
+                  )}
+                </Animated.View>
               )}
 
-              <View
-                style={[styles.subtaskInputWrapper, { marginTop: subtasks.length > 0 ? 16 : 8 }]}
-              >
-                <View style={styles.subtaskInputContainer}>
-                  <Ionicons
-                    name="add-outline"
-                    size={24}
-                    color={Colors.dark.neutral500}
-                    style={{ marginRight: 8 }}
-                  />
-                  <TextInput
-                    style={styles.subtaskInput}
-                    placeholder={
-                      subtasks.length === 0
-                        ? t('assignments').subtasks.addFirst
-                        : t('assignments').subtasks.add
-                    }
-                    placeholderTextColor={Colors.dark.neutral500}
-                    value={newSubtaskText}
-                    onChangeText={setNewSubtaskText}
-                    onSubmitEditing={handleAddButtonPress}
-                    returnKeyType="done"
-                    blurOnSubmit={false}
-                  />
-                  {newSubtaskText.trim().length > 0 && (
-                    <TouchableOpacity
-                      style={styles.addSubtaskButton}
-                      onPress={handleAddButtonPress}
-                      activeOpacity={0.7}
-                    >
-                      <Animated.View style={animatedAddButtonStyle}>
-                        <Ionicons
-                          name="checkmark-circle"
-                          size={26}
-                          color={Colors.dark.primaryStrong}
-                        />
-                      </Animated.View>
-                    </TouchableOpacity>
-                  )}
-                </View>
-
-                {subtasks.length === 0 && (
-                  <Animated.View entering={FadeIn.duration(400)}>
-                    <View style={styles.subtasksHintContainer}>
-                      <Text style={styles.subtasksHintText}>{t('assignments').subtasks.hint}</Text>
-                    </View>
+              {/* Advanced Options Panel (Due Date & Time) */}
+              {!useNextPeriod && (
+                <Animated.View
+                  entering={FadeIn.duration(200)}
+                  exiting={FadeOut.duration(200)}
+                  layout={Layout.springify()}
+                >
+                  <Animated.View entering={FadeIn.duration(200).delay(50)}>
+                    <Text style={styles.label}>{t('assignments').dueDate}</Text>
+                    <DatePicker
+                      selectedDate={dueDate}
+                      onDateChange={setDueDate}
+                      formatDate={formatDate}
+                      days={DAYS}
+                      quickDateOptions={QUICK_DATE_OPTIONS}
+                      currentLanguage={currentLanguage}
+                    />
                   </Animated.View>
-                )}
-              </View>
-            </Animated.View>
 
-            {/* Add spacing at the bottom for better scroll experience */}
-            <View style={[styles.bottomSpacing, { height: 40 + bottomTabOverflow }]} />
+                  <Animated.View entering={FadeIn.duration(200).delay(100)}>
+                    <Text style={styles.label}>{t('assignments').dueTime}</Text>
+                    <TimePicker
+                      selectedTime={dueDate}
+                      onTimeChange={setDueDate}
+                      timePresets={TIME_PRESETS}
+                    />
+                  </Animated.View>
+                </Animated.View>
+              )}
+
+              <Animated.View
+                entering={FadeIn.duration(300).delay(400)}
+                style={styles.priorityContainer}
+              >
+                <Text style={styles.label}>{t('assignments').markAsPriority}</Text>
+                <CustomToggle value={isPriority} onValueChange={setIsPriority} />
+              </Animated.View>
+
+              <AssignmentSubtasksField
+                subtasks={subtasks}
+                newTitle={newSubtaskText}
+                onTitleChange={setNewSubtaskText}
+                onAdd={handleAddSubtask}
+                onRemove={handleRemoveSubtask}
+                onToggle={(id) =>
+                  setSubtasks((previous) =>
+                    previous.map((task) =>
+                      task.id === id ? { ...task, isCompleted: !task.isCompleted } : task,
+                    ),
+                  )
+                }
+              />
+
+              {/* Add spacing at the bottom for better scroll experience */}
+              <View style={[styles.bottomSpacing, { height: 40 + bottomTabOverflow }]} />
+            </View>
           </View>
         </KeyboardAwareScrollView>
       </SafeAreaView>
@@ -2567,57 +2440,6 @@ const styles = StyleSheet.create({
   },
   dropdownSheetContent: {
     padding: 0,
-  },
-  header: {
-    padding: 20,
-    paddingTop: Platform.OS === 'android' ? 40 : 20,
-    backgroundColor: Colors.dark.backgroundTertiary,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
-    shadowColor: Colors.dark.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-    zIndex: 10,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: Colors.dark.white,
-    marginBottom: 16,
-    letterSpacing: 0.5,
-  },
-  headerButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  cancelButton: {
-    padding: 8,
-  },
-  cancelButtonText: {
-    color: Colors.dark.red,
-    fontSize: 17,
-    fontWeight: '600',
-  },
-  saveButton: {
-    backgroundColor: Colors.dark.primaryStrong,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  saveButtonDisabled: {
-    backgroundColor: Colors.dark.disabledBackground,
-    borderWidth: 1,
-    borderColor: Colors.dark.disabledBorder,
-  },
-  saveButtonText: {
-    color: Colors.dark.white,
-    fontSize: 17,
-    fontWeight: '600',
-  },
-  saveButtonTextDisabled: {
-    color: Colors.dark.neutral650,
   },
   formContainer: {
     flex: 1,
@@ -3278,83 +3100,6 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   // Subtask styles
-  subtasksContainer: {
-    marginTop: 28,
-    marginBottom: 16,
-  },
-  subtasksHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-    paddingHorizontal: 4,
-  },
-  subtasksIcon: {
-    marginRight: 10,
-  },
-  subtasksTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: Colors.dark.white,
-  },
-  subtaskInputWrapper: {
-    backgroundColor: Colors.dark.surfaceSecondary,
-    borderRadius: 12,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: Colors.dark.separatorBackground,
-    shadowColor: Colors.dark.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  subtaskInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: Colors.dark.surfaceSecondary,
-  },
-  subtaskInput: {
-    flex: 1,
-    fontSize: 16,
-    color: Colors.dark.white,
-    height: 40,
-    paddingRight: 8,
-    minWidth: '60%', // Ensure there's enough space for text
-  },
-  addSubtaskButton: {
-    padding: 6,
-    borderRadius: 20,
-  },
-  subtasksList: {
-    marginBottom: 8,
-  },
-  subtaskItemContainer: {
-    marginBottom: 12,
-  },
-  subtaskItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    backgroundColor: Colors.dark.surface,
-    borderRadius: 12,
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: Colors.dark.primaryHighlight20,
-    shadowColor: Colors.dark.primaryStrong,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  subtaskText: {
-    flex: 1,
-    fontSize: 16,
-    marginRight: 8,
-    color: Colors.dark.white,
-  },
   noSubtasksText: {
     color: Colors.dark.neutral500,
     fontSize: 14,
@@ -3391,44 +3136,5 @@ const styles = StyleSheet.create({
   noSubtasksIcon: {
     marginBottom: 12,
     opacity: 0.6,
-  },
-  subtaskContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  subtaskBullet: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: Colors.dark.primaryHighlight15,
-    marginRight: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.dark.primaryHighlight40,
-  },
-  subtaskBulletInner: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.dark.primaryStrong,
-  },
-  deleteSubtaskButton: {
-    padding: 4,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  subtasksHintContainer: {
-    padding: 16,
-    paddingTop: 0,
-    opacity: 0.8,
-  },
-  subtasksHintText: {
-    color: Colors.dark.neutral500,
-    fontSize: 14,
-    textAlign: 'center',
-    fontStyle: 'italic',
   },
 });

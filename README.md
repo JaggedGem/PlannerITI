@@ -269,7 +269,7 @@ The app uses `app.config.js` for configuration. Key settings:
 - **App Name**: PlannerITI
 - **Slug**: planneriti
 - **Version**: 1.6.1
-- **Orientation**: Portrait (locked)
+- **Orientation**: Portrait and landscape, with adaptive phone and tablet layouts ([layout notes](docs/responsive-layout.md))
 - **Splash Screen**: Custom splash with icon
 - **Theme**: Automatic light/dark
 - **Permissions**: Notifications

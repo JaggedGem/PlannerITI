@@ -17,7 +17,9 @@ import {
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 
+import { contentLayout } from '@/components/ui/ContentLayout';
 import { Colors } from '@/constants/Colors';
+import { MODAL_ORIENTATIONS } from '@/constants/Layout';
 
 import { useThemeColor } from '../../hooks/useThemeColor';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -101,7 +103,7 @@ export function LoginScreen() {
     <ThemedView style={styles.container}>
       <StatusBar style="auto" />
       <KeyboardAwareScrollView
-        contentContainerStyle={styles.innerContainer}
+        contentContainerStyle={[styles.innerContainer, contentLayout.auth]}
         enableOnAndroid
         extraScrollHeight={24}
         keyboardShouldPersistTaps="handled"
@@ -186,6 +188,7 @@ export function LoginScreen() {
 
       {/* Custom Alert Modal */}
       <Modal
+        supportedOrientations={MODAL_ORIENTATIONS}
         visible={showAlert}
         transparent={true}
         animationType="fade"
@@ -307,6 +310,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalContainer: {
+    maxWidth: 400,
     width: '80%',
     padding: 20,
     borderRadius: 15,
