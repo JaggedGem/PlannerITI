@@ -7,3 +7,6 @@ overrides:
   decode-uri-component: 0.5.0
   react-dom: 19.2.3
   uuid: 11.1.1
+
+patchedDependencies:
+  '@gorhom/bottom-sheet@5.2.14': patches/@gorhom__bottom-sheet@5.2.14.patch

@@ -55,6 +55,7 @@ import { runWhenIdle } from '@/utils/runWhenIdle';
 import { scheduleNavigation } from '@/utils/scheduleNavigation';
 import { filterExamEventsForDate, filterThesisEventsForDate } from '@/utils/specialScheduleUtils';
 
+import { getAnimationDependencies } from '../../utils/animationDependencies';
 import AcademicEmptyState, { ExamAgendaCard } from './AcademicEmptyState';
 import ViewModeMenu from './ViewModeMenu';
 
@@ -235,28 +236,34 @@ const RecoveryDayInfo = ({
     marginLeft: align === 'center' ? -90 : 0,
   } as const;
 
-  const popupAnimation = useAnimatedStyle(() => {
-    return {
-      opacity: withTiming(showInfo ? 1 : 0, { duration: 120 }),
-      transform: [
-        {
-          translateY: withTiming(showInfo ? 0 : -6, {
-            duration: 120,
-          }),
-        },
-      ],
-    };
-  }, [showInfo]);
+  const popupAnimation = useAnimatedStyle(
+    () => {
+      return {
+        opacity: withTiming(showInfo ? 1 : 0, { duration: 120 }),
+        transform: [
+          {
+            translateY: withTiming(showInfo ? 0 : -6, {
+              duration: 120,
+            }),
+          },
+        ],
+      };
+    },
+    getAnimationDependencies([showInfo]),
+  );
 
-  const buttonAnimation = useAnimatedStyle(() => {
-    return {
-      transform: [
-        {
-          scale: withTiming(showInfo ? 0.98 : 1, { duration: 100 }),
-        },
-      ],
-    };
-  }, [showInfo]);
+  const buttonAnimation = useAnimatedStyle(
+    () => {
+      return {
+        transform: [
+          {
+            scale: withTiming(showInfo ? 0.98 : 1, { duration: 100 }),
+          },
+        ],
+      };
+    },
+    getAnimationDependencies([showInfo]),
+  );
 
   return (
     <>

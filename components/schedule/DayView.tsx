@@ -70,6 +70,7 @@ import {
   thesisMatchesScheduleSlot,
 } from '@/utils/specialScheduleUtils';
 
+import { getAnimationDependencies } from '../../utils/animationDependencies';
 import AcademicEmptyState from './AcademicEmptyState';
 import ViewModeMenu from './ViewModeMenu';
 
@@ -173,28 +174,34 @@ interface ScheduleInfoBadgeProps {
 const ScheduleInfoBadge = ({ label, title, reason, details = [] }: ScheduleInfoBadgeProps) => {
   const [showInfo, setShowInfo] = useState(false);
 
-  const popupAnimation = useAnimatedStyle(() => {
-    return {
-      opacity: withTiming(showInfo ? 1 : 0, { duration: 120 }),
-      transform: [
-        {
-          translateY: withTiming(showInfo ? 0 : -6, {
-            duration: 120,
-          }),
-        },
-      ],
-    };
-  }, [showInfo]);
+  const popupAnimation = useAnimatedStyle(
+    () => {
+      return {
+        opacity: withTiming(showInfo ? 1 : 0, { duration: 120 }),
+        transform: [
+          {
+            translateY: withTiming(showInfo ? 0 : -6, {
+              duration: 120,
+            }),
+          },
+        ],
+      };
+    },
+    getAnimationDependencies([showInfo]),
+  );
 
-  const buttonAnimation = useAnimatedStyle(() => {
-    return {
-      transform: [
-        {
-          scale: withTiming(showInfo ? 0.98 : 1, { duration: 100 }),
-        },
-      ],
-    };
-  }, [showInfo]);
+  const buttonAnimation = useAnimatedStyle(
+    () => {
+      return {
+        transform: [
+          {
+            scale: withTiming(showInfo ? 0.98 : 1, { duration: 100 }),
+          },
+        ],
+      };
+    },
+    getAnimationDependencies([showInfo]),
+  );
 
   return (
     <View style={styles.recoveryDayInfoContainer}>
@@ -922,60 +929,66 @@ export default function DayView() {
   const currentTimestamp = currentTime.getTime();
 
   const TimeIndicator = (props: TimeIndicatorProps) => {
-    const animatedStyle = useAnimatedStyle(() => {
-      'worklet';
-      const date = new Date(props.timestamp);
-      const currentHours = date.getHours();
-      const currentMinutes = date.getMinutes();
-      const currentSeconds = date.getSeconds();
-      const currentTimeInMinutes = currentHours * 60 + currentMinutes + currentSeconds / 60;
+    const animatedStyle = useAnimatedStyle(
+      () => {
+        'worklet';
+        const date = new Date(props.timestamp);
+        const currentHours = date.getHours();
+        const currentMinutes = date.getMinutes();
+        const currentSeconds = date.getSeconds();
+        const currentTimeInMinutes = currentHours * 60 + currentMinutes + currentSeconds / 60;
 
-      const [startHours, startMinutes] = props.startTime.split(':').map(Number);
-      const [endHours, endMinutes] = props.endTime.split(':').map(Number);
+        const [startHours, startMinutes] = props.startTime.split(':').map(Number);
+        const [endHours, endMinutes] = props.endTime.split(':').map(Number);
 
-      const startTimeInMinutes = startHours * 60 + startMinutes;
-      const endTimeInMinutes = endHours * 60 + endMinutes;
-      const timeSlotDuration = endTimeInMinutes - startTimeInMinutes;
+        const startTimeInMinutes = startHours * 60 + startMinutes;
+        const endTimeInMinutes = endHours * 60 + endMinutes;
+        const timeSlotDuration = endTimeInMinutes - startTimeInMinutes;
 
-      if (currentTimeInMinutes < startTimeInMinutes) return { top: withTiming('0%') };
-      if (currentTimeInMinutes > endTimeInMinutes) return { top: withTiming('100%') };
+        if (currentTimeInMinutes < startTimeInMinutes) return { top: withTiming('0%') };
+        if (currentTimeInMinutes > endTimeInMinutes) return { top: withTiming('100%') };
 
-      const progress = (currentTimeInMinutes - startTimeInMinutes) / timeSlotDuration;
-      return {
-        top: withTiming(`${progress * 100}%`, { duration: 1000 }),
-      };
-    }, [props.timestamp]);
+        const progress = (currentTimeInMinutes - startTimeInMinutes) / timeSlotDuration;
+        return {
+          top: withTiming(`${progress * 100}%`, { duration: 1000 }),
+        };
+      },
+      getAnimationDependencies([props.timestamp]),
+    );
 
-    const animatedTimeStyle = useAnimatedStyle(() => {
-      'worklet';
-      const date = new Date(props.timestamp);
-      const currentHours = date.getHours();
-      const currentMinutes = date.getMinutes();
-      const currentSeconds = date.getSeconds();
-      const currentTimeInMinutes = currentHours * 60 + currentMinutes + currentSeconds / 60;
+    const animatedTimeStyle = useAnimatedStyle(
+      () => {
+        'worklet';
+        const date = new Date(props.timestamp);
+        const currentHours = date.getHours();
+        const currentMinutes = date.getMinutes();
+        const currentSeconds = date.getSeconds();
+        const currentTimeInMinutes = currentHours * 60 + currentMinutes + currentSeconds / 60;
 
-      const [startHours, startMinutes] = props.startTime.split(':').map(Number);
-      const [endHours, endMinutes] = props.endTime.split(':').map(Number);
+        const [startHours, startMinutes] = props.startTime.split(':').map(Number);
+        const [endHours, endMinutes] = props.endTime.split(':').map(Number);
 
-      const startTimeInMinutes = startHours * 60 + startMinutes;
-      const endTimeInMinutes = endHours * 60 + endMinutes;
-      const timeSlotDuration = endTimeInMinutes - startTimeInMinutes;
-      const progress = (currentTimeInMinutes - startTimeInMinutes) / timeSlotDuration;
+        const startTimeInMinutes = startHours * 60 + startMinutes;
+        const endTimeInMinutes = endHours * 60 + endMinutes;
+        const timeSlotDuration = endTimeInMinutes - startTimeInMinutes;
+        const progress = (currentTimeInMinutes - startTimeInMinutes) / timeSlotDuration;
 
-      // Improved positioning calculation to avoid overlap
-      // Calculate if the time indicator is in the top half or bottom half
-      const isInTopHalf = progress < 0.5;
+        // Improved positioning calculation to avoid overlap
+        // Calculate if the time indicator is in the top half or bottom half
+        const isInTopHalf = progress < 0.5;
 
-      return {
-        transform: [
-          {
-            translateY: withTiming(isInTopHalf ? 24 : -24, {
-              duration: 300,
-            }),
-          },
-        ],
-      };
-    }, [props.timestamp, props.containerHeight]);
+        return {
+          transform: [
+            {
+              translateY: withTiming(isInTopHalf ? 24 : -24, {
+                duration: 300,
+              }),
+            },
+          ],
+        };
+      },
+      getAnimationDependencies([props.timestamp, props.containerHeight]),
+    );
 
     return (
       <View style={styles.timeIndicatorContainer}>
@@ -1231,7 +1244,7 @@ export default function DayView() {
       opacity: firstTimeAnimValue.value,
       transform: [{ scale: 0.9 + firstTimeAnimValue.value * 0.1 }],
     };
-  }, []);
+  }, getAnimationDependencies([]));
 
   // Function to toggle period expansion
   const togglePeriodExpansion = async (

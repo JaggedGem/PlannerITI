@@ -31,7 +31,7 @@
   "dependencies": {
     "@expo/dom-webview": "~58.0.2",
     "@expo/metro-runtime": "~58.0.14",
-    "@gorhom/bottom-sheet": "^5.2.14",
+    "@gorhom/bottom-sheet": "5.2.14",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-vector-icons/feather": "^13.1.4",
     "@react-native-vector-icons/fontawesome": "^13.1.4",

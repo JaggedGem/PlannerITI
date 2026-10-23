@@ -77,3 +77,13 @@ it('reflects a login performed in another screen', async () => {
   expect(hook.current.user).toEqual(fresh);
   await hook.unmount();
 });
+
+it('uses cached automatic loads but requests fresh data for a manual reload', async () => {
+  const hook = await renderHook(useAuth);
+  expect(authService.loadUserData).toHaveBeenLastCalledWith({ forceRefresh: false });
+  await act(async () => {
+    await hook.current.reloadUser();
+  });
+  expect(authService.loadUserData).toHaveBeenLastCalledWith({ forceRefresh: true });
+  await hook.unmount();
+});

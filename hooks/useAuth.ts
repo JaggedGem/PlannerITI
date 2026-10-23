@@ -18,10 +18,10 @@ export function useAuth() {
   const mounted = useRef(false);
   const generation = useRef(0);
 
-  const loadUser = useCallback(async () => {
+  const loadUser = useCallback(async (forceRefresh = false) => {
     const request = ++generation.current;
     try {
-      const fresh = await authService.loadUserData();
+      const fresh = await authService.loadUserData({ forceRefresh });
       if (!mounted.current || request !== generation.current) return;
       if (fresh) {
         setUser(fresh);
@@ -85,7 +85,7 @@ export function useAuth() {
 
   const reloadUser = useCallback(async () => {
     setLoading(true);
-    await loadUser();
+    await loadUser(true);
   }, [loadUser]);
 
   return { user, loading, isAuthenticated: !!user, isInitialLoad, logout, reloadUser };

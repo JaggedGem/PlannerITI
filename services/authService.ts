@@ -3,7 +3,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DeviceEventEmitter } from 'react-native';
 
 import Constants from 'expo-constants';
-import * as Crypto from 'expo-crypto';
 
 import { AuthResponse, UserData } from '@/types/auth';
 import { ApiError } from '@/utils/apiError';
@@ -11,126 +10,27 @@ import { parseAuthResponse, parseUserData } from '@/utils/authData';
 import { isRecord } from '@/utils/json';
 
 import { fetchCustomApi } from '../utils/customApi';
+import { GravatarProfile, getGravatarProfile } from './gravatarService';
 import { secureStorageService } from './secureStorageService';
 
-export type { UserData } from '@/types/auth';
+export { getGravatarHash, getGravatarProfile } from './gravatarService';
 
-const GRAVATAR_AVATAR_BASE_URL = 'https://www.gravatar.com/avatar';
-const GRAVATAR_PROFILE_BASE_URL = 'https://gravatar.com';
+export type { UserData } from '@/types/auth';
 
 const AUTH_STATE_CHANGE_EVENT = 'auth_state_changed';
 const SKIP_LOGIN_KEY = '@planner_skip_login';
 const LOGIN_DISMISSED_KEY = '@login_notification_dismissed';
-const GRAVATAR_CACHE_KEY = '@gravatar_cache';
 const AUTH_VERSION_KEY = '@auth_version';
 const CURRENT_AUTH_VERSION = '3'; // Increment this when auth system changes
 
 // Add timeout constants for network requests
+const USER_PROFILE_TTL_MS = 5 * 60 * 1000;
+const PROFILE_RETRY_DELAY_MS = 30 * 1000;
 const REQUEST_TIMEOUT = 8000; // 8 seconds timeout
-
-interface GravatarProfile {
-  hash: string;
-  display_name?: string;
-  avatar_url?: string;
-  location?: string;
-  description?: string;
-  pronouns?: string;
-}
-
-interface GravatarCache {
-  timestamp: number;
-  profile: GravatarProfile;
-}
-
-interface GravatarJsonProfileEntry {
-  displayName?: string;
-  preferredUsername?: string;
-  thumbnailUrl?: string;
-  aboutMe?: string;
-  currentLocation?: string;
-  pronouns?: string;
-  photos?: {
-    type?: string;
-    value?: string;
-  }[];
-}
-
-interface GravatarJsonProfileResponse {
-  entry?: GravatarJsonProfileEntry[];
-}
-
-const CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
-
-const getGravatarCacheKey = (hash: string) => `${GRAVATAR_CACHE_KEY}:${hash}`;
 
 const getApiKey = (): string | null => {
   const apiKey = String(Constants.expoConfig?.extra?.apiKey || '').trim();
   return apiKey || null;
-};
-
-export const getGravatarHash = async (email: string): Promise<string> => {
-  const normalizedEmail = email.toLowerCase().trim();
-  return Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, normalizedEmail, {
-    encoding: Crypto.CryptoEncoding.HEX,
-  });
-};
-
-export const getGravatarProfile = async (email: string): Promise<GravatarProfile | null> => {
-  const normalizedEmail = email.toLowerCase().trim();
-  if (!normalizedEmail) {
-    return null;
-  }
-
-  const hash = await getGravatarHash(normalizedEmail);
-  const cacheKey = getGravatarCacheKey(hash);
-  const fallbackProfile: GravatarProfile = {
-    hash,
-    avatar_url: `${GRAVATAR_AVATAR_BASE_URL}/${hash}?d=mp`,
-  };
-
-  try {
-    // Check cache first
-    const cachedData = await AsyncStorage.getItem(cacheKey);
-    if (cachedData) {
-      const cache: GravatarCache = JSON.parse(cachedData);
-      // If cache is less than 24 hours old, use it
-      if (Date.now() - cache.timestamp < CACHE_EXPIRY) {
-        return cache.profile;
-      }
-    }
-
-    let profile: GravatarProfile = fallbackProfile;
-    const profileResponse = await fetch(`${GRAVATAR_PROFILE_BASE_URL}/${hash}.json`);
-
-    if (profileResponse.ok) {
-      const profileJson = (await profileResponse.json()) as GravatarJsonProfileResponse;
-      const entry = profileJson.entry?.[0];
-      const thumbnailPhoto = entry?.photos?.find((photo) => photo.type === 'thumbnail')?.value;
-
-      profile = {
-        ...fallbackProfile,
-        display_name: entry?.displayName?.trim() || entry?.preferredUsername?.trim() || undefined,
-        avatar_url: entry?.thumbnailUrl || thumbnailPhoto || fallbackProfile.avatar_url,
-        location: entry?.currentLocation || undefined,
-        description: entry?.aboutMe || undefined,
-        pronouns: entry?.pronouns || undefined,
-      };
-    } else if (profileResponse.status !== 404) {
-      console.warn(`Failed to load Gravatar profile metadata (status: ${profileResponse.status})`);
-    }
-
-    // Cache the profile
-    const cacheData: GravatarCache = {
-      timestamp: Date.now(),
-      profile,
-    };
-    await AsyncStorage.setItem(cacheKey, JSON.stringify(cacheData));
-
-    return profile;
-  } catch (error) {
-    console.error('Error fetching Gravatar profile:', error);
-    return fallbackProfile;
-  }
 };
 
 class AuthService {
@@ -143,6 +43,8 @@ class AuthService {
   private isLoading: boolean = false;
   private isReloginInProgress: boolean = false;
   private sessionGeneration = 0;
+  private profileFetchedAt: number | null = null;
+  private profileRetryAt = 0;
   private profileRequest: { generation: number; promise: Promise<UserData | null> } | null = null;
 
   private constructor() {}
@@ -334,6 +236,8 @@ class AuthService {
 
       if (accessToken) {
         this.sessionGeneration += 1;
+        this.profileFetchedAt = null;
+        this.profileRetryAt = 0;
         this.token = accessToken;
         this.lastLoginEmail = email;
         this.sessionPassword = password;
@@ -341,7 +245,7 @@ class AuthService {
         // Clear skip login flag when user explicitly logs in
         await AsyncStorage.removeItem(SKIP_LOGIN_KEY);
         this.skippedLogin = false;
-        await this.loadUserData();
+        await this.loadUserData({ forceRefresh: true });
         DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, {
           isAuthenticated: true,
           skipped: false,
@@ -402,7 +306,7 @@ class AuthService {
   async verifyEmail(token: string): Promise<boolean> {
     try {
       await this.makeAuthRequest(`/auth/verify-email?token=${encodeURIComponent(token)}`, 'POST');
-      await this.loadUserData();
+      await this.loadUserData({ forceRefresh: true });
       return true;
     } catch {
       return false;
@@ -454,6 +358,8 @@ class AuthService {
   async logout(): Promise<void> {
     this.sessionGeneration += 1;
     this.profileRequest = null;
+    this.profileFetchedAt = null;
+    this.profileRetryAt = 0;
     this.isLoading = false;
     this.token = null;
     this.userData = null;
@@ -483,6 +389,8 @@ class AuthService {
   async skipLogin(): Promise<void> {
     this.sessionGeneration += 1;
     this.profileRequest = null;
+    this.profileFetchedAt = null;
+    this.profileRetryAt = 0;
     this.isLoading = false;
     this.token = null;
     this.userData = null;
@@ -497,11 +405,20 @@ class AuthService {
     });
   }
 
-  async loadUserData(): Promise<UserData | null> {
+  async loadUserData(options: { forceRefresh?: boolean } = {}): Promise<UserData | null> {
     const generation = this.sessionGeneration;
     await this.checkAuthVersion();
     if (generation !== this.sessionGeneration) return null;
     if (this.profileRequest?.generation === generation) return this.profileRequest.promise;
+
+    const age = this.profileFetchedAt === null ? null : Date.now() - this.profileFetchedAt;
+    if (
+      !options.forceRefresh &&
+      ((this.userData && age !== null && age >= 0 && age < USER_PROFILE_TTL_MS) ||
+        Date.now() < this.profileRetryAt)
+    ) {
+      return this.userData;
+    }
 
     this.isLoading = true;
     const promise = this.fetchUserData(generation);
@@ -562,6 +479,8 @@ class AuthService {
         return null;
       }
       this.userData = userData;
+      this.profileFetchedAt = Date.now();
+      this.profileRetryAt = 0;
       DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, {
         isAuthenticated: true,
         skipped: false,
@@ -572,6 +491,7 @@ class AuthService {
       if (generation !== this.sessionGeneration) {
         return null;
       }
+      this.profileRetryAt = Date.now() + PROFILE_RETRY_DELAY_MS;
       // Connectivity and server failures do not invalidate a persisted session.
       if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
         await this.logout();

@@ -1,5 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { DeviceEventEmitter } from 'react-native';
+
 import { fetchCustomApi } from '@/utils/customApi';
 
 import authService from './authService';
@@ -21,9 +23,15 @@ jest.mock('./secureStorageService', () => ({
 jest.mock('@/utils/customApi', () => ({ fetchCustomApi: jest.fn() }));
 
 beforeEach(async () => {
+  jest.useFakeTimers();
+  jest.setSystemTime(new Date('2026-10-23T12:00:00Z'));
   await authService.logout();
   jest.clearAllMocks();
 });
+afterEach(() => {
+  jest.useRealTimers();
+});
+
 const user = { email: 'student@example.com', is_verified: true };
 const profileResponse = () =>
   new Response(JSON.stringify(user), { headers: { 'Content-Type': 'application/json' } });
@@ -41,7 +49,7 @@ it('retains the last successful profile on a transient server failure', async ()
   jest
     .mocked(fetchCustomApi)
     .mockResolvedValueOnce(new Response('temporarily unavailable', { status: 503 }));
-  expect(await authService.loadUserData()).toEqual(user);
+  expect(await authService.loadUserData({ forceRefresh: true })).toEqual(user);
   expect(authService.isAuthenticated()).toBe(true);
 });
 
@@ -96,7 +104,7 @@ it('re-authenticates an expired token without waiting on its own profile request
     .mockResolvedValueOnce(new Response('{}', { status: 401 }))
     .mockResolvedValueOnce(tokenResponse())
     .mockResolvedValueOnce(profileResponse());
-  expect(await authService.loadUserData()).toEqual(user);
+  expect(await authService.loadUserData({ forceRefresh: true })).toEqual(user);
   expect(authService.isAuthenticated()).toBe(true);
 });
 
@@ -148,4 +156,59 @@ it('does not complete a login that was cancelled by logout', async () => {
   );
   await expect(login).rejects.toThrow('Sign-in cancelled');
   expect(authService.isAuthenticated()).toBe(false);
+});
+
+it('caches sequential automatic profile loads until the five-minute TTL expires', async () => {
+  jest.mocked(fetchCustomApi).mockResolvedValueOnce(profileResponse());
+  const first = await authService.loadUserData();
+  for (let index = 0; index < 10; index += 1) {
+    expect(await authService.loadUserData()).toBe(first);
+  }
+  expect(fetchCustomApi).toHaveBeenCalledTimes(1);
+  jest.setSystemTime(Date.now() + 5 * 60 * 1000);
+  jest.mocked(fetchCustomApi).mockResolvedValueOnce(profileResponse());
+  await authService.loadUserData();
+  expect(fetchCustomApi).toHaveBeenCalledTimes(2);
+});
+
+it('allows explicit refreshes to bypass freshness while deduplicating concurrent refreshes', async () => {
+  jest
+    .mocked(fetchCustomApi)
+    .mockResolvedValueOnce(profileResponse())
+    .mockResolvedValueOnce(profileResponse());
+  await authService.loadUserData();
+  await Promise.all([
+    authService.loadUserData({ forceRefresh: true }),
+    authService.loadUserData({ forceRefresh: true }),
+  ]);
+  expect(fetchCustomApi).toHaveBeenCalledTimes(2);
+});
+
+it('does not start a request feedback loop when an auth subscriber reloads the profile', async () => {
+  const listener = DeviceEventEmitter.addListener('auth_state_changed', () => {
+    setTimeout(() => {
+      void authService.loadUserData();
+    }, 500);
+  });
+  try {
+    jest.mocked(fetchCustomApi).mockImplementation(async () => profileResponse());
+    await authService.loadUserData();
+    await jest.advanceTimersByTimeAsync(2500);
+    expect(fetchCustomApi).toHaveBeenCalledTimes(1);
+  } finally {
+    listener.remove();
+  }
+});
+
+it('backs off automatic retries after an offline failure', async () => {
+  jest
+    .mocked(fetchCustomApi)
+    .mockRejectedValueOnce(new Error('offline'))
+    .mockResolvedValueOnce(profileResponse());
+  await authService.loadUserData();
+  await authService.loadUserData();
+  expect(fetchCustomApi).toHaveBeenCalledTimes(1);
+  jest.setSystemTime(Date.now() + 30_000);
+  await authService.loadUserData();
+  expect(fetchCustomApi).toHaveBeenCalledTimes(2);
 });

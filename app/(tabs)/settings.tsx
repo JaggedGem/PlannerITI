@@ -252,7 +252,7 @@ const CustomToggle = ({
 export default function Settings() {
   const { t, formatCompactDate, formatTimeFromDate } = useTranslation();
   const router = useRouter();
-  const { user, logout, reloadUser } = useAuthContext();
+  const { user, logout } = useAuthContext();
 
   // State hooks
   const [settings, setSettings] = useState(scheduleService.getSettings());
@@ -405,10 +405,6 @@ export default function Settings() {
         if (typeof authState.skipped === 'boolean') {
           setSkipLogin(authState.skipped);
         }
-        // Reload user data when auth state changes to true
-        if (authState.isAuthenticated) {
-          reloadUser();
-        }
       },
     );
 
@@ -417,7 +413,7 @@ export default function Settings() {
       idnpSubscription.remove();
       authSubscription.remove();
     };
-  }, [reloadUser]);
+  }, []);
 
   // Update authentication state when user changes
   useEffect(() => {
@@ -840,25 +836,6 @@ export default function Settings() {
     router.replace('/auth');
   }, [router]);
 
-  // todo: Add "Refresh Account" button that calls reloadUser to sync with server - useful for users who choose to skip login but later want to log in without restarting the app. This will ensure we have the latest user data and auth state without needing a full app restart. We can place this button in the account section when the user is authenticated but has limited functionality due to skipping login.
-  // const handleRefreshAccount = async () => {
-  //     setIsRefreshingAccount(true);
-  //     try {
-  //         await reloadUser();
-  //         // Immediately update local state based on user context
-  //         setIsAuthenticated(!!user);
-  //         // Broadcast auth state change
-  //         DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, {
-  //             isAuthenticated: !!user,
-  //         });
-  //         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  //     } catch (error) {
-  //         console.error('Refresh error:', error);
-  //     } finally {
-  //         setIsRefreshingAccount(false);
-  //     }
-  // };
-
   // Memoized Gravatar profile component - defined at component level to prevent unnecessary re-creation
   const MemoizedGravatarProfile = useMemo(() => {
     const GravatarProfile = memo(
@@ -879,16 +856,15 @@ export default function Settings() {
         } | null>(null);
 
         useEffect(() => {
-          if (!userEmail) {
-            setGravatarProfile(null);
-            return;
-          }
-
+          let isActive = true;
           const loadGravatarProfile = async () => {
             const profile = await getGravatarProfile(userEmail);
-            setGravatarProfile(profile);
+            if (isActive) setGravatarProfile(profile);
           };
           void loadGravatarProfile();
+          return () => {
+            isActive = false;
+          };
         }, [userEmail]);
 
         return (
@@ -979,6 +955,7 @@ export default function Settings() {
         </View>
         <View style={styles.accountInfo}>
           <MemoizedGravatarProfile
+            key={user?.email}
             userEmail={user?.email || ''}
             isVerified={user?.is_verified || false}
             displayName={user?.email?.split('@')[0] || user?.email || ''}
