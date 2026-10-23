@@ -38,7 +38,7 @@ export type SegmentItem = {
   badge?: string;
   rightComponent?: React.ReactNode;
   leftComponent?: React.ReactNode;
-  metadata?: any;
+  metadata?: unknown;
 };
 
 export type Category = {
@@ -104,7 +104,7 @@ export type ModernDropdownProps = {
   footerComponent?: React.ReactNode;
 
   // Actions
-  onAction?: (actionId: string, data?: any) => void;
+  onAction?: (actionId: string, data?: unknown) => void;
 
   // New option for individual search bars per tab
   searchPerTab?: boolean;

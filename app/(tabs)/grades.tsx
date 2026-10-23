@@ -1,4 +1,4 @@
-import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
+import { BottomSheetScrollView, BottomSheetScrollViewMethods } from '@gorhom/bottom-sheet';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@react-native-vector-icons/material-icons';
 import {
@@ -43,6 +43,7 @@ import {
   GRADES_REFRESH_END_EVENT,
   GRADES_REFRESH_START_EVENT,
   GradeSubject,
+  GradesRefreshEndEvent,
   SemesterGrades,
   StudentGrades,
   StudentInfo,
@@ -1421,7 +1422,7 @@ const GradeCalculatorModal = ({
   const [calculatedGrades, setCalculatedGrades] = useState<number[]>([]);
   const [hasCalculated, setHasCalculated] = useState(false);
   const [isAnnualCalculation, setIsAnnualCalculation] = useState(false);
-  const scrollViewRef = useRef<any>(null);
+  const scrollViewRef = useRef<BottomSheetScrollViewMethods>(null);
 
   // Convert string grades to numbers
   const getNumericGrades = (subject: GradeSubject): number[] => {
@@ -1873,14 +1874,17 @@ const GradesScreen = ({
       setIsBackgroundRefreshing(true);
       setBackgroundJustUpdated(false);
     });
-    const endListener = DeviceEventEmitter.addListener(GRADES_REFRESH_END_EVENT, (payload: any) => {
-      setIsBackgroundRefreshing(false);
-      if (payload?.updated) {
-        setBackgroundJustUpdated(true);
-        // Fade out the updated state after a short period
-        setTimeout(() => setBackgroundJustUpdated(false), 2500);
-      }
-    });
+    const endListener = DeviceEventEmitter.addListener(
+      GRADES_REFRESH_END_EVENT,
+      (payload: GradesRefreshEndEvent | undefined) => {
+        setIsBackgroundRefreshing(false);
+        if (payload?.updated) {
+          setBackgroundJustUpdated(true);
+          // Fade out the updated state after a short period
+          setTimeout(() => setBackgroundJustUpdated(false), 2500);
+        }
+      },
+    );
     const sub = gradesDataService.subscribe(() => {
       // Data updated event also clears spinner if missed
       setIsBackgroundRefreshing(false);

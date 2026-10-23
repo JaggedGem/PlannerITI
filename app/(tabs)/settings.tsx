@@ -13,6 +13,8 @@ import {
   Image,
   Linking,
   Modal,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   Platform,
   ScrollView,
   StyleSheet,
@@ -198,8 +200,8 @@ const TimePicker = ({
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
   const [localValue, setLocalValue] = useState(value);
   const [period, setPeriod] = useState(value.getHours() >= 12 ? 'PM' : 'AM');
-  const hoursRef = useRef<any>(null);
-  const minutesRef = useRef<any>(null);
+  const hoursRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
+  const minutesRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const itemHeight = 56;
   const visibleItems = 5;
   const [, setIsScrolling] = useState(false);
@@ -257,7 +259,7 @@ const TimePicker = ({
     return num.toString().padStart(padLength, '0');
   };
 
-  const handleHourScroll = (event: any) => {
+  const handleHourScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (!event.nativeEvent) return;
 
     const offsetY = event.nativeEvent.contentOffset.y;
@@ -278,7 +280,7 @@ const TimePicker = ({
     }
   };
 
-  const handleMinuteScroll = (event: any) => {
+  const handleMinuteScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (!event.nativeEvent) return;
 
     const offsetY = event.nativeEvent.contentOffset.y;
@@ -298,7 +300,10 @@ const TimePicker = ({
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
-  const handleScrollEndDrag = (event: any, type: 'hours' | 'minutes') => {
+  const handleScrollEndDrag = (
+    event: NativeSyntheticEvent<NativeScrollEvent>,
+    type: 'hours' | 'minutes',
+  ) => {
     setIsScrolling(false);
     if (type === 'hours') {
       handleHourScroll(event);

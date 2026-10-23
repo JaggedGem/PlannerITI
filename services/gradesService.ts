@@ -1029,6 +1029,14 @@ const GRADES_UPDATED_EVENT = 'grades_updated_event';
 export const GRADES_REFRESH_START_EVENT = 'grades_refresh_start_event';
 export const GRADES_REFRESH_END_EVENT = 'grades_refresh_end_event';
 
+export interface GradesRefreshEndEvent {
+  idnp: string;
+  updated: boolean;
+  duration: number;
+  aborted?: boolean;
+  error?: boolean;
+}
+
 // Toggle for console logging (can be flipped to false for production noise reduction)
 const GRADES_DEBUG_LOGS = __DEV__;
 
@@ -1134,7 +1142,7 @@ export const gradesDataService = {
               updated: false,
               aborted: true,
               duration: Date.now() - startTime,
-            });
+            } satisfies GradesRefreshEndEvent);
           } else if (freshHtml && freshHtml.trim()) {
             if (GRADES_DEBUG_LOGS) console.log('[grades] fetched fresh HTML, storing');
             await this.store(idnp, freshHtml);
@@ -1143,14 +1151,14 @@ export const gradesDataService = {
               idnp,
               updated: true,
               duration: Date.now() - startTime,
-            });
+            } satisfies GradesRefreshEndEvent);
           } else {
             if (GRADES_DEBUG_LOGS) console.log('[grades] fresh HTML empty, keeping cache');
             DeviceEventEmitter.emit(GRADES_REFRESH_END_EVENT, {
               idnp,
               updated: false,
               duration: Date.now() - startTime,
-            });
+            } satisfies GradesRefreshEndEvent);
           }
         } catch (err) {
           if (controller.signal.aborted) {
@@ -1160,7 +1168,7 @@ export const gradesDataService = {
               updated: false,
               aborted: true,
               duration: Date.now() - startTime,
-            });
+            } satisfies GradesRefreshEndEvent);
           } else {
             if (GRADES_DEBUG_LOGS) console.log('[grades] silentRefresh error', err);
             DeviceEventEmitter.emit(GRADES_REFRESH_END_EVENT, {
@@ -1168,7 +1176,7 @@ export const gradesDataService = {
               updated: false,
               error: true,
               duration: Date.now() - startTime,
-            });
+            } satisfies GradesRefreshEndEvent);
           }
         } finally {
           if (inflightControllers[idnp] === controller) {

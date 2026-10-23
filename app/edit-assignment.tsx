@@ -899,7 +899,7 @@ export default function EditAssignmentScreen() {
   } | null>(null);
 
   // Refs for inputs
-  const titleInputRef = useRef<any>(null);
+  const titleInputRef = useRef<React.ComponentRef<typeof TextInput>>(null);
 
   // Translation hook
   const { t, currentLanguage, formatDate: formatDateFromHook } = useTranslation();
@@ -1115,7 +1115,7 @@ export default function EditAssignmentScreen() {
   };
 
   // Get icon for each assignment type
-  const getTypeIcon = (): any => {
+  const getTypeIcon = (): React.ComponentProps<typeof Ionicons>['name'] => {
     switch (assignmentType) {
       case AssignmentType.HOMEWORK:
         return 'book-outline';
@@ -1402,7 +1402,7 @@ export default function EditAssignmentScreen() {
           onClose={() => setIsTypeModalVisible(false)}
           items={Object.values(AssignmentType).map((type) => {
             // Get appropriate icon for this type
-            const getTypeSpecificIcon = () => {
+            const getTypeSpecificIcon = (): React.ComponentProps<typeof Ionicons>['name'] => {
               switch (type) {
                 case AssignmentType.HOMEWORK:
                   return 'book-outline';
@@ -1440,9 +1440,7 @@ export default function EditAssignmentScreen() {
                     | 'presentation'
                     | 'other'
                 ],
-              icon: (
-                <Ionicons name={getTypeSpecificIcon() as any} size={24} color={Colors.dark.white} />
-              ),
+              icon: <Ionicons name={getTypeSpecificIcon()} size={24} color={Colors.dark.white} />,
               isSelected: type === assignmentType,
             };
           })}

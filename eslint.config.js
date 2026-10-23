@@ -15,7 +15,7 @@ module.exports = defineConfig([
       'no-unreachable': 'error',
       'no-var': 'error',
       'prefer-const': 'error',
-      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-explicit-any': 'error',
       'react-hooks/immutability': 'off',
       'react-hooks/refs': 'off',
       'react-hooks/purity': 'error',

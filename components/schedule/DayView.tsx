@@ -414,7 +414,7 @@ export default function DayView() {
   const displayedScheduleMapRef = useRef<Record<string, ScheduleItem[]>>({});
   const selectedDateRef = useRef<Date>(selectedDate);
   const initialLoadAttemptedRef = useRef(false);
-  const scrollViewRef = useRef<any>(null);
+  const scrollViewRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const [showFirstTimeIndicator, setShowFirstTimeIndicator] = useState(false);
   const firstTimeAnimValue = useSharedValue(0);
   const hasShownFirstTimeIndicator = useRef(false);

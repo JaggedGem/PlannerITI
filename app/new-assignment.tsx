@@ -974,7 +974,7 @@ export default function NewAssignmentScreen() {
             // Get today's schedule with proper await
             const todaySchedule = await scheduleService.getScheduleForDay(
               scheduleData,
-              dayName as any,
+              dayName,
               today,
             );
 
@@ -1101,7 +1101,7 @@ export default function NewAssignmentScreen() {
             // Get Friday's schedule with proper await
             const fridaySchedule = await scheduleService.getScheduleForDay(
               scheduleData,
-              fridayName as any,
+              fridayName,
               fridayDate,
             );
 
@@ -1251,7 +1251,7 @@ export default function NewAssignmentScreen() {
           // Get today's schedule with proper await
           const todaySchedule = await scheduleService.getScheduleForDay(
             scheduleData,
-            dayName as any,
+            dayName,
             today,
           );
 
@@ -1545,7 +1545,7 @@ export default function NewAssignmentScreen() {
           // Get schedule for this day - now with proper await
           const daySchedule = await scheduleService.getScheduleForDay(
             scheduleData,
-            dayName as any,
+            dayName,
             searchDate,
           );
 

@@ -59,7 +59,7 @@ export function AssignmentOptionsMenu({
     router.push({
       pathname: '/edit-assignment',
       params: { id: assignmentId },
-    } as any);
+    });
   };
 
   // If not visible, don't render anything

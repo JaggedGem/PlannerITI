@@ -3,6 +3,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { Translation, translations } from '@/constants/Translations';
 import { scheduleService } from '@/services/scheduleService';
 
+export type Translate = <K extends keyof Translation>(key: K) => Translation[K];
+
 export function useTranslation() {
   const [currentLanguage, setCurrentLanguage] = useState(scheduleService.getSettings().language);
 
@@ -36,7 +38,7 @@ export function useTranslation() {
     };
   }, []);
 
-  const t = useCallback(
+  const t = useCallback<Translate>(
     <K extends keyof Translation>(key: K): Translation[K] => {
       return translations[currentLanguage][key];
     },

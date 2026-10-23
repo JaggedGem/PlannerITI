@@ -15,6 +15,8 @@ import React, {
 
 import {
   ActivityIndicator,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   Platform,
   Pressable,
   ScrollView,
@@ -28,7 +30,7 @@ import * as Haptics from 'expo-haptics';
 import { router, useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 
-import { useTranslation } from '@/hooks/useTranslation';
+import { Translate, useTranslation } from '@/hooks/useTranslation';
 import { runWhenIdle } from '@/utils/runWhenIdle';
 
 import { BottomModalPortal } from '../../components/BottomModalPortal';
@@ -104,7 +106,7 @@ const groupAssignmentsByCourse = (assignments: Assignment[]): { [key: string]: A
 };
 
 // Memoized empty state display
-const EmptyState = memo(({ t }: { t: any }) => (
+const EmptyState = memo(({ t }: { t: Translate }) => (
   <Animated.View style={styles.emptyContainer} entering={FadeInDown.duration(150)}>
     <Text style={styles.emptyText}>{t('assignments').empty}</Text>
   </Animated.View>
@@ -112,7 +114,7 @@ const EmptyState = memo(({ t }: { t: any }) => (
 EmptyState.displayName = 'EmptyState';
 
 // Memoized loading state display
-const LoadingState = memo(({ t }: { t: any }) => (
+const LoadingState = memo(({ t }: { t: Translate }) => (
   <View style={styles.loadingContainer}>
     <ActivityIndicator size="large" color={Colors.dark.primary} />
     <Text style={styles.loadingText}>{t('assignments').loading}</Text>
@@ -212,7 +214,7 @@ const CoursesView = memo(
 
     // Load more courses when user scrolls near the bottom
     const handleScroll = useCallback(
-      ({ nativeEvent }: any) => {
+      ({ nativeEvent }: NativeSyntheticEvent<NativeScrollEvent>) => {
         const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
         const paddingToBottom = 200;
 
@@ -407,7 +409,7 @@ const ArchivedAssignmentsView = memo(
 
     // Handle scroll to detect when to load more
     const handleScroll = useCallback(
-      ({ nativeEvent }: any) => {
+      ({ nativeEvent }: NativeSyntheticEvent<NativeScrollEvent>) => {
         const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
         const paddingToBottom = 200;
 
@@ -562,6 +564,8 @@ class AssignmentsErrorBoundary extends React.Component<ErrorBoundaryProps, Error
   }
 }
 
+type AssignmentStyles = typeof styles;
+
 // Add this new component before the Assignments component
 const ModernDropdown = memo(
   ({
@@ -577,7 +581,7 @@ const ModernDropdown = memo(
     segments: string[];
     selectedIndex: number;
     onSelect: (index: number) => void;
-    styles: any;
+    styles: AssignmentStyles;
   }) => {
     const handleSelect = (index: number) => {
       // Trigger haptic feedback

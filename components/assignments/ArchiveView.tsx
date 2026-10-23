@@ -6,6 +6,8 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 
 import {
   ActivityIndicator,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   Platform,
   ScrollView,
   StyleSheet,
@@ -95,7 +97,7 @@ export default function ArchiveView({
 
   // Handle scroll to detect when to load more
   const handleScroll = useCallback(
-    ({ nativeEvent }: any) => {
+    ({ nativeEvent }: NativeSyntheticEvent<NativeScrollEvent>) => {
       const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
       const paddingToBottom = 200;
 

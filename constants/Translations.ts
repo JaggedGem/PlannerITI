@@ -215,6 +215,7 @@ type TranslationType = {
       other: string;
     };
     days: {
+      yesterday: string;
       today: string;
       tomorrow: string;
       monday: string;
@@ -776,6 +777,7 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         other: 'Other',
       },
       days: {
+        yesterday: 'Yesterday',
         today: 'Today',
         tomorrow: 'Tomorrow',
         monday: 'Monday',
@@ -1366,6 +1368,7 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         other: 'Altele',
       },
       days: {
+        yesterday: 'Ieri',
         today: 'Astăzi',
         tomorrow: 'Mâine',
         monday: 'Luni',
@@ -1958,6 +1961,7 @@ export const translations: Record<'en' | 'ro' | 'ru', TranslationType> = {
         other: 'Другое',
       },
       days: {
+        yesterday: 'Вчера',
         today: 'Сегодня',
         tomorrow: 'Завтра',
         monday: 'Понедельник',

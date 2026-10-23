@@ -80,7 +80,7 @@ const getWeekStart = (date: Date): Date => {
 };
 
 // Get minimum and maximum hours from all periods
-const getTimeRange = (schedule: Record<string, any[]>): { min: number; max: number } => {
+const getTimeRange = (schedule: Record<string, ScheduleItem[]>): { min: number; max: number } => {
   let min = 24;
   let max = 0;
 
@@ -315,7 +315,7 @@ interface CurrentTimeIndicatorProps {
   hourHeight: number;
   firstHour: number;
   timestamp: number;
-  schedule: Record<string, any[]>;
+  schedule: Record<string, ScheduleItem[]>;
 }
 
 const CurrentTimeIndicator = ({
@@ -501,7 +501,7 @@ export default function WeekView() {
   });
   const { t, formatDate, formatHour } = useTranslation();
   const currentTime = useTimeUpdate();
-  const verticalScrollRef = useRef<any>(null);
+  const verticalScrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [, setSlideDirection] = useState<'left' | 'right' | null>(null);
   const fadeAnim = useSharedValue(1);

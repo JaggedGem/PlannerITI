@@ -53,7 +53,9 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 const HIGHLIGHTED_ASSIGNMENTS_KEY = 'highlighted_assignments';
 
 // Function to get icon for each assignment type
-const getAssignmentTypeIcon = (type: AssignmentType): any => {
+const getAssignmentTypeIcon = (
+  type: AssignmentType,
+): React.ComponentProps<typeof Ionicons>['name'] => {
   switch (type) {
     case AssignmentType.HOMEWORK:
       return 'book-outline';
@@ -211,7 +213,7 @@ export default function AssignmentItem({
   // Add state for description expansion
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   // Add ref to measure if description is multiline (needs expansion)
-  const descriptionRef = useRef<any>(null);
+  const descriptionRef = useRef<React.ComponentRef<typeof Text>>(null);
   const [isDescriptionMultiline, setIsDescriptionMultiline] = useState(false);
 
   // Animated values for interactive feedback
@@ -395,7 +397,7 @@ export default function AssignmentItem({
   };
 
   // Use ref for options button
-  const optionsButtonRef = useRef<any>(null);
+  const optionsButtonRef = useRef<React.ComponentRef<typeof View>>(null);
 
   // Function to open options menu using context
   const handleOpenOptions = () => {

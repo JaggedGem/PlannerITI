@@ -6,7 +6,7 @@ import React, { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '@/constants/Colors';
-import { useTranslation } from '@/hooks/useTranslation';
+import { Translate, useTranslation } from '@/hooks/useTranslation';
 
 import { Assignment } from '../../utils/assignmentStorage';
 import AssignmentItem from './AssignmentItem';
@@ -42,7 +42,7 @@ const getCourseColor = (courseCode: string, isOrphaned: boolean): string => {
 };
 
 // Helper to format due date label
-const formatDueDate = (dueDate: string, t: any): string => {
+const formatDueDate = (dueDate: string, t: Translate): string => {
   const date = new Date(dueDate);
   const now = new Date();
 
