@@ -5,6 +5,7 @@ import { useRef, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, useWindowDimensions } from 'react-native';
 
 import { Colors } from '@/constants/Colors';
+import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 import { useTranslation } from '@/hooks/useTranslation';
 import { ScheduleView } from '@/services/scheduleService';
 import { MenuAnchor } from '@/utils/anchoredMenu';
@@ -29,6 +30,7 @@ export default function ScheduleViewButton({
   } | null>(null);
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const { hasDaySidebar } = useResponsiveLayout();
   const weekText = isEvenWeek ? t('schedule').evenWeek : t('schedule').oddWeek;
   const anchor =
     snapshot?.windowWidth === width &&
@@ -37,6 +39,8 @@ export default function ScheduleViewButton({
     snapshot.topInset === insets.top
       ? snapshot.rect
       : null;
+
+  const isTabletLandscape = width > height && width >= 640;
 
   return (
     <>
@@ -65,6 +69,7 @@ export default function ScheduleViewButton({
         onClose={() => setSnapshot(null)}
         weekText={weekText}
         currentView={currentView}
+        alignLeft={currentView === 'day' ? hasDaySidebar : isTabletLandscape ? false : hasDaySidebar}
       />
     </>
   );

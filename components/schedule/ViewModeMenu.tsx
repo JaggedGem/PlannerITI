@@ -33,6 +33,7 @@ interface ViewModeMenuProps {
   anchor: MenuAnchor | null;
   weekText: string;
   currentView: ScheduleView;
+  alignLeft?: boolean;
 }
 
 export default function ViewModeMenu({
@@ -41,12 +42,14 @@ export default function ViewModeMenu({
   anchor,
   weekText,
   currentView,
+  alignLeft = false,
 }: ViewModeMenuProps) {
   const { t } = useTranslation();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const isPhoneLandscape = width > height && height < 600;
   const placement = anchor
-    ? getAnchoredMenuLayout(anchor, width, height, insets, width > height)
+    ? getAnchoredMenuLayout(anchor, width, height, insets, alignLeft || isPhoneLandscape)
     : undefined;
 
   // Shared progress value (0 -> closed, 1 -> open)

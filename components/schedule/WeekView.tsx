@@ -174,6 +174,7 @@ interface TimetableItemProps {
   hasDetailedCards: boolean;
   color: string;
   isActive: boolean;
+  isLandscape?: boolean;
 }
 
 const TimetableItem = ({
@@ -183,6 +184,7 @@ const TimetableItem = ({
   color,
   isActive,
   hasDetailedCards,
+  isLandscape = false,
 }: TimetableItemProps) => {
   // Safely handle assignment count
   const assignmentCount = item.assignmentCount || 0;
@@ -219,7 +221,19 @@ const TimetableItem = ({
         </View>
 
         {hasDetailedCards && height >= 90 && Boolean(item.teacherName) && (
-          <Text style={adaptiveStyles.teacherName} numberOfLines={1}>
+          <Text
+            style={[
+              adaptiveStyles.teacherName,
+              isLandscape && {
+                position: 'absolute',
+                right: 6,
+                bottom: 6,
+                maxWidth: '60%',
+                textAlign: 'right',
+              },
+            ]}
+            numberOfLines={1}
+          >
             {item.teacherName}
           </Text>
         )}
@@ -1846,6 +1860,7 @@ export default function WeekView() {
                               color={color}
                               isActive={isActive}
                               hasDetailedCards={hasDetailedCards}
+                              isLandscape={!isPortrait}
                             />
                           );
                         })}

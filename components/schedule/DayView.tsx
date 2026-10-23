@@ -1502,6 +1502,7 @@ export default function DayView() {
           adaptiveStyles.headerSurface,
           isLandscape && { borderBottomLeftRadius: 0, borderTopRightRadius: 32 },
           hasDaySidebar && { width: daySidebarWidth + insets.left },
+          hasDaySidebar && adaptiveStyles.sidebarSurface,
         ]}
       >
         <ScrollView
@@ -2282,11 +2283,6 @@ const styles = StyleSheet.create<Styles>({
     backgroundColor: Colors.dark.backgroundTertiary, // Subtle distinction from background
     borderBottomRightRadius: 32,
     borderBottomLeftRadius: 32,
-    shadowColor: Colors.dark.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
     zIndex: 10,
   },
   headerTop: {
@@ -3078,8 +3074,10 @@ const adaptiveStyles = StyleSheet.create({
     backgroundColor: Colors.dark.backgroundTertiary,
     borderBottomLeftRadius: 32,
     borderBottomRightRadius: 32,
+    alignItems: 'center',
     flexShrink: 0,
   },
+  sidebarSurface: { alignSelf: 'center' },
   compactHeader: { padding: 12 },
   sidebarTitle: { flexWrap: 'wrap', marginBottom: 16 },
   sidebarTitleText: { fontSize: 22, width: '100%' },
