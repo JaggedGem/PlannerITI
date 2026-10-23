@@ -1,29 +1,19 @@
 import { Ionicons } from '@react-native-vector-icons/ionicons';
-import Animated, { FadeInDown } from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 
-import {
-  ActivityIndicator,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { SectionList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 
 import { contentLayout } from '@/components/ui/ContentLayout';
+import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { Colors } from '@/constants/Colors';
+import type { Translation } from '@/constants/Translations';
+import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 import { useTranslation } from '@/hooks/useTranslation';
-
-import { Assignment } from '../../utils/assignmentStorage';
+import { Assignment } from '@/types/assignment';
 
 interface ArchiveViewProps {
   assignments: Assignment[];
@@ -31,302 +21,258 @@ interface ArchiveViewProps {
   onDeleteAssignment: (id: string) => void;
 }
 
+function ArchiveCard({
+  assignment,
+  onToggle,
+  onDelete,
+}: {
+  assignment: Assignment;
+  onToggle: () => void;
+  onDelete: () => void;
+}) {
+  const { t, formatFullDate } = useTranslation();
+  return (
+    <View style={styles.card}>
+      <View style={styles.cardTop}>
+        <TouchableOpacity
+          style={[styles.checkbox, assignment.isCompleted && styles.completedCheckbox]}
+          onPress={onToggle}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: assignment.isCompleted }}
+          accessibilityLabel={assignment.title}
+        >
+          {assignment.isCompleted && (
+            <Ionicons name="checkmark" size={18} color={Colors.dark.white} />
+          )}
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.copy}
+          onPress={() =>
+            router.push({ pathname: '/edit-assignment', params: { id: assignment.id } })
+          }
+          accessibilityRole="button"
+          accessibilityLabel={`${t('assignments').edit}: ${assignment.title}`}
+        >
+          <Text
+            style={[styles.title, assignment.isCompleted && styles.completedTitle]}
+            numberOfLines={2}
+          >
+            {assignment.title}
+          </Text>
+          <Text style={styles.course} numberOfLines={1}>
+            {assignment.courseName || t('assignments').common.uncategorized}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.deleteButton}
+          onPress={onDelete}
+          accessibilityRole="button"
+          accessibilityLabel={`${t('common').delete}: ${assignment.title}`}
+        >
+          <Ionicons name="trash-outline" size={18} color={Colors.dark.lightPink} />
+        </TouchableOpacity>
+      </View>
+      <View style={styles.cardFooter}>
+        <Ionicons name="calendar-outline" size={13} color={Colors.dark.neutral500} />
+        <Text style={styles.date}>{formatFullDate(new Date(assignment.dueDate), false)}</Text>
+        <View style={styles.typePill}>
+          <Text style={styles.typeText}>
+            {
+              t('assignments').types[
+                assignment.assignmentType.toLowerCase() as keyof Translation['assignments']['types']
+              ]
+            }
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 export default function ArchiveView({
   assignments,
   onToggleAssignment,
   onDeleteAssignment,
 }: ArchiveViewProps) {
-  const { t, formatFullDate } = useTranslation();
-
-  // State for lazy loading
-  const [visibleItems, setVisibleItems] = useState(15);
-  const hasMore = visibleItems < assignments.length;
-
-  // Group assignments by month
-  const groupedAssignments = useMemo(() => {
-    if (!assignments.length) {
-      return {};
-    }
-
-    const grouped: { [key: string]: Assignment[] } = {};
-
-    // Sort assignments by due date (newest first)
+  const { t } = useTranslation();
+  const { hasTwoColumns, isCompactHeight, insets } = useResponsiveLayout();
+  const sections = useMemo(() => {
+    const grouped = new Map<string, { title: string; assignments: Assignment[] }>();
     const sorted = [...assignments].sort(
-      (a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime(),
+      (first, second) => new Date(second.dueDate).getTime() - new Date(first.dueDate).getTime(),
     );
-
-    // Only take the visible items
-    const visibleAssignments = sorted.slice(0, visibleItems);
-
-    // Group by month
-    visibleAssignments.forEach((assignment) => {
+    sorted.forEach((assignment) => {
       const date = new Date(assignment.dueDate);
-      const monthIndex = date.getMonth();
-      const year = date.getFullYear();
-      // Use translated month names
-      const monthYear = `${t('months')[monthIndex]} ${year}`;
-
-      if (!grouped[monthYear]) {
-        grouped[monthYear] = [];
-      }
-
-      grouped[monthYear].push(assignment);
+      const key = `${date.getFullYear()}-${date.getMonth()}`;
+      const group = grouped.get(key) ?? {
+        title: `${t('months')[date.getMonth()]} ${date.getFullYear()}`,
+        assignments: [],
+      };
+      group.assignments.push(assignment);
+      grouped.set(key, group);
     });
-
-    return grouped;
-  }, [assignments, visibleItems, t]);
-
-  // Handle loading more items
-  const loadMoreItems = useCallback(() => {
-    if (hasMore) setVisibleItems((count) => count + 10);
-  }, [hasMore]);
-
-  // Handle scroll to detect when to load more
-  const handleScroll = useCallback(
-    ({ nativeEvent }: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
-      const paddingToBottom = 200;
-
-      if (layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom) {
-        loadMoreItems();
-      }
-    },
-    [loadMoreItems],
-  );
-
-  // Handle closing
-  const handleClose = useCallback(() => {
-    router.back();
-  }, []);
+    const columnCount = hasTwoColumns ? 2 : 1;
+    return [...grouped.entries()].map(([key, group]) => ({
+      key,
+      title: group.title,
+      data: Array.from({ length: Math.ceil(group.assignments.length / columnCount) }, (_, index) =>
+        group.assignments.slice(index * columnCount, (index + 1) * columnCount),
+      ),
+    }));
+  }, [assignments, hasTwoColumns, t]);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <StatusBar style="light" />
-      <View style={[styles.header, contentLayout.form]}>
+      <ScreenHeader contentStyle={[styles.header, isCompactHeight && { paddingVertical: 10 }]}>
         <TouchableOpacity
-          style={styles.closeButton}
-          onPress={handleClose}
+          style={styles.back}
+          onPress={() => router.back()}
           accessibilityRole="button"
           accessibilityLabel={t('common').back}
         >
-          <Ionicons name="arrow-back" size={24} color={Colors.dark.white} />
+          <Ionicons name="arrow-back" size={22} color={Colors.dark.white} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t('assignments').archive.title}</Text>
-        <View style={{ width: 40 }} />
-      </View>
-
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, contentLayout.form]}
-        showsVerticalScrollIndicator={false}
-        onScroll={handleScroll}
-        scrollEventThrottle={400}
+        <View style={styles.copy}>
+          <Text style={styles.pageTitle}>{t('assignments').archive.title}</Text>
+          {!isCompactHeight && (
+            <Text style={styles.course}>{t('assignments').archive.pastDue}</Text>
+          )}
+        </View>
+        <View style={styles.countPill}>
+          <Text style={styles.count}>{assignments.length}</Text>
+        </View>
+      </ScreenHeader>
+      <View
+        style={[
+          styles.list,
+          { paddingLeft: insets.left, paddingRight: insets.right, paddingBottom: insets.bottom },
+        ]}
       >
-        {assignments.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyTitle}>{t('assignments').archive.noItems}</Text>
-            <Text style={styles.emptySubtitle}>{t('assignments').archive.pastDue}</Text>
-          </View>
-        ) : (
-          <>
-            <Text style={styles.assignmentsCount}>
-              {t('general').found} {assignments.length}{' '}
-              {t('assignments').archive.title.toLowerCase()}
-            </Text>
-
-            {Object.entries(groupedAssignments).map(([monthYear, monthAssignments]) => (
-              <View key={monthYear} style={styles.monthSection}>
-                <Text style={styles.monthTitle}>{monthYear}</Text>
-                {monthAssignments.map((assignment) => (
-                  <Animated.View
-                    key={assignment.id}
-                    entering={FadeInDown.duration(150)}
-                    style={styles.assignmentCard}
-                  >
-                    <View style={styles.assignmentContent}>
-                      <TouchableOpacity
-                        style={styles.assignmentMain}
-                        onPress={() => onToggleAssignment(assignment.id)}
-                      >
-                        <View
-                          style={[
-                            styles.checkbox,
-                            assignment.isCompleted && styles.checkboxCompleted,
-                          ]}
-                        >
-                          {assignment.isCompleted && (
-                            <Ionicons name="checkmark" size={16} color={Colors.dark.white} />
-                          )}
-                        </View>
-
-                        <View style={styles.assignmentInfo}>
-                          <Text
-                            style={[
-                              styles.assignmentTitle,
-                              assignment.isCompleted && styles.assignmentTitleCompleted,
-                            ]}
-                          >
-                            {assignment.title}
-                          </Text>
-                          <Text style={styles.assignmentSubtitle}>
-                            {assignment.courseName || t('assignments').common.uncategorized} •{' '}
-                            {formatFullDate(new Date(assignment.dueDate), false)}
-                          </Text>
-                        </View>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.deleteButton}
-                        onPress={() => onDeleteAssignment(assignment.id)}
-                        accessibilityRole="button"
-                        accessibilityLabel={t('settings').account.actions.delete}
-                      >
-                        <Ionicons name="trash-outline" size={20} color={Colors.dark.red} />
-                      </TouchableOpacity>
-                    </View>
-                  </Animated.View>
-                ))}
+        <SectionList
+          sections={sections}
+          keyExtractor={(row) => row.map((assignment) => assignment.id).join(':')}
+          contentContainerStyle={[
+            contentLayout.page,
+            styles.listContent,
+            assignments.length === 0 && { flexGrow: 1 },
+          ]}
+          stickySectionHeadersEnabled={false}
+          initialNumToRender={8}
+          windowSize={7}
+          showsVerticalScrollIndicator={false}
+          renderSectionHeader={({ section }) => (
+            <View style={styles.monthHeader}>
+              <Text style={styles.monthTitle}>{section.title}</Text>
+              <View style={styles.monthRule} />
+            </View>
+          )}
+          renderItem={({ item }) => (
+            <View style={styles.row}>
+              {item.map((assignment) => (
+                <View style={styles.column} key={assignment.id}>
+                  <ArchiveCard
+                    assignment={assignment}
+                    onToggle={() => onToggleAssignment(assignment.id)}
+                    onDelete={() => onDeleteAssignment(assignment.id)}
+                  />
+                </View>
+              ))}
+              {hasTwoColumns && item.length === 1 && <View style={styles.column} />}
+            </View>
+          )}
+          ListEmptyComponent={
+            <View style={styles.empty}>
+              <View style={styles.emptyIcon}>
+                <Ionicons name="archive-outline" size={32} color={Colors.dark.primary} />
               </View>
-            ))}
-
-            {hasMore && visibleItems < assignments.length && (
-              <View style={styles.loadingMoreContainer}>
-                <ActivityIndicator color={Colors.dark.primary} />
-                <Text style={styles.loadingMoreText}>{t('loading')}...</Text>
-              </View>
-            )}
-          </>
-        )}
-      </ScrollView>
-    </SafeAreaView>
+              <Text style={styles.emptyTitle}>{t('assignments').archive.noItems}</Text>
+              <Text style={styles.course}>{t('assignments').archive.pastDue}</Text>
+            </View>
+          }
+        />
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.dark.backgroundSecondary,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 80 : 40,
-    paddingBottom: 20,
-    backgroundColor: Colors.dark.backgroundApp,
-  },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: '600',
-    color: Colors.dark.white,
-  },
-  closeButton: {
+  container: { flex: 1, backgroundColor: Colors.dark.backgroundSecondary },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 20 },
+  back: {
     width: 40,
     height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: 20,
-    backgroundColor: Colors.dark.overlayWhite10,
+    backgroundColor: Colors.dark.surfaceSecondary,
+  },
+  pageTitle: { color: Colors.dark.white, fontSize: 24, fontWeight: '700' },
+  copy: { flex: 1, minWidth: 0 },
+  countPill: {
+    minWidth: 38,
+    padding: 10,
+    borderRadius: 14,
+    backgroundColor: Colors.dark.primaryStrong10,
     alignItems: 'center',
-    justifyContent: 'center',
   },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 16,
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 100,
-  },
-  emptyTitle: {
-    color: Colors.dark.white,
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  emptySubtitle: {
-    color: Colors.dark.mutedText,
-    fontSize: 14,
-  },
-  assignmentsCount: {
-    color: Colors.dark.white,
-    fontSize: 18,
-    marginBottom: 16,
-  },
-  monthSection: {
-    marginBottom: 24,
-  },
-  monthTitle: {
-    color: Colors.dark.mutedText,
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 12,
-  },
-  assignmentCard: {
-    backgroundColor: Colors.dark.card,
-    borderRadius: 12,
-    marginBottom: 8,
-    overflow: 'hidden',
-  },
-  assignmentContent: {
+  count: { color: Colors.dark.primary, fontSize: 16, fontWeight: '700' },
+  list: { flex: 1 },
+  listContent: { paddingHorizontal: 20, paddingBottom: 24 },
+  monthHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    gap: 12,
+    paddingTop: 22,
+    paddingBottom: 12,
   },
-  assignmentMain: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+  monthTitle: { color: Colors.dark.neutral500, fontSize: 14, fontWeight: '600' },
+  monthRule: { height: 1, flex: 1, backgroundColor: Colors.dark.border },
+  row: { flexDirection: 'row', gap: 16, marginBottom: 12 },
+  column: { flex: 1, minWidth: 0 },
+  card: { backgroundColor: Colors.dark.surfaceSecondary, borderRadius: 18, padding: 14 },
+  cardTop: { flexDirection: 'row', gap: 12, alignItems: 'center' },
   checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 28,
+    height: 28,
     borderWidth: 2,
+    borderRadius: 9,
     borderColor: Colors.dark.primary,
-    marginRight: 12,
+    alignItems: 'center',
     justifyContent: 'center',
+  },
+  completedCheckbox: {
+    backgroundColor: Colors.dark.primaryStrong,
+    borderColor: Colors.dark.primaryStrong,
+  },
+  title: { color: Colors.dark.white, fontSize: 16, lineHeight: 22, fontWeight: '600' },
+  completedTitle: { textDecorationLine: 'line-through', color: Colors.dark.neutral500 },
+  course: { color: Colors.dark.neutral500, fontSize: 13, lineHeight: 18, marginTop: 4 },
+  deleteButton: { width: 36, height: 40, alignItems: 'center', justifyContent: 'center' },
+  cardFooter: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
+    borderTopWidth: 1,
+    borderTopColor: Colors.dark.overlayWhite05,
+    marginTop: 12,
+    paddingTop: 10,
   },
-  checkboxCompleted: {
-    backgroundColor: Colors.dark.primary,
-    borderColor: Colors.dark.primary,
+  date: { flex: 1, color: Colors.dark.neutral500, fontSize: 12 },
+  typePill: {
+    backgroundColor: Colors.dark.overlayPrimary10,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    maxWidth: '40%',
   },
-  assignmentInfo: {
-    flex: 1,
+  typeText: { color: Colors.dark.primarySoftText, fontSize: 11, fontWeight: '600' },
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 32 },
+  emptyIcon: {
+    padding: 20,
+    borderRadius: 24,
+    backgroundColor: Colors.dark.surfaceSecondary,
+    marginBottom: 8,
   },
-  assignmentTitle: {
-    color: Colors.dark.white,
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  assignmentTitleCompleted: {
-    textDecorationLine: 'line-through',
-    color: Colors.dark.mutedText,
-  },
-  assignmentSubtitle: {
-    color: Colors.dark.mutedText,
-    fontSize: 14,
-  },
-  deleteButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.dark.overlayBlack20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 12,
-  },
-  loadingMoreContainer: {
-    alignItems: 'center',
-    padding: 16,
-  },
-  loadingMoreText: {
-    color: Colors.dark.mutedText,
-    fontSize: 14,
-    marginTop: 8,
-  },
+  emptyTitle: { color: Colors.dark.white, fontSize: 20, fontWeight: '600', textAlign: 'center' },
 });

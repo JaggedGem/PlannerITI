@@ -33,9 +33,12 @@ import { StatusBar } from 'expo-status-bar';
 
 import { BottomModalPortal } from '@/components/BottomModalPortal';
 import { ModernDropdown, SegmentItem } from '@/components/ModernDropdown';
+import { AssignmentFormHeader } from '@/components/assignments/AssignmentFormHeader';
+import { AssignmentSubtasksField } from '@/components/assignments/AssignmentSubtasksField';
 import { contentLayout } from '@/components/ui/ContentLayout';
 import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
 import { Colors } from '@/constants/Colors';
+import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 import { useTranslation } from '@/hooks/useTranslation';
 import { runWhenIdle } from '@/utils/runWhenIdle';
 
@@ -836,6 +839,7 @@ const CustomToggle = ({
 
 // Modified to handle editing an existing assignment
 export default function EditAssignmentScreen() {
+  const { insets } = useResponsiveLayout();
   // Get assignment id from route params
   const { id } = useLocalSearchParams<{ id: string }>();
 
@@ -1128,247 +1132,203 @@ export default function EditAssignmentScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['bottom']}>
       <StatusBar style="light" />
 
-      {/* Header */}
-      <View style={[styles.header, contentLayout.form]}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={handleCancel}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Ionicons name="chevron-back" size={28} color={Colors.dark.primaryStrong} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t('assignments').editTitle}</Text>
-        <TouchableOpacity
-          style={[
-            styles.saveButton,
-            (!title.trim() || isSaving || !hasChanges()) && styles.saveButtonDisabled,
-          ]}
-          onPress={handleUpdate}
-          disabled={!title.trim() || isSaving || !hasChanges()}
-        >
-          <Text
-            style={[
-              styles.saveButtonText,
-              (!title.trim() || isSaving || !hasChanges()) && styles.saveButtonTextDisabled,
-            ]}
-          >
-            {isSaving ? t('assignments').updating : t('assignments').update}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Main Content */}
       <KeyboardAwareScrollView
         style={styles.scrollView}
-        contentContainerStyle={[
-          styles.formContainer,
-          contentLayout.form,
-          { paddingBottom: 24 + bottomTabOverflow },
-        ]}
         keyboardShouldPersistTaps="handled"
         extraScrollHeight={20}
+        enableOnAndroid
       >
-        {/* Title Input */}
-        <View style={styles.inputContainer}>
-          <TextInput
-            ref={titleInputRef}
-            style={styles.titleInput}
-            placeholder={t('assignments').titlePlaceholder}
-            placeholderTextColor={Colors.dark.neutral500}
-            value={title}
-            onChangeText={setTitle}
-            autoCapitalize="sentences"
-            autoCorrect={true}
-            maxLength={100}
-          />
-        </View>
-
-        {/* Description Input */}
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>
-            {t('assignments').description}
-            <Text style={styles.optionalText}> ({t('assignments').optional})</Text>
-          </Text>
-          <TextInput
-            style={styles.descriptionInput}
-            placeholder={t('assignments').descriptionPlaceholder}
-            placeholderTextColor={Colors.dark.neutral500}
-            value={description}
-            onChangeText={setDescription}
-            multiline
-            numberOfLines={4}
-            autoCapitalize="sentences"
-            autoCorrect={true}
-            maxLength={500}
-          />
-        </View>
-
-        {/* Assignment Type */}
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>{t('assignments').type}</Text>
-          <TouchableOpacity style={styles.typeSelector} onPress={() => setIsTypeModalVisible(true)}>
-            <View style={styles.typeDisplay}>
-              <Ionicons
-                name={getTypeIcon()}
-                size={20}
-                color={Colors.dark.white}
-                style={styles.typeIcon}
+        <AssignmentFormHeader
+          title={t('assignments').editTitle}
+          submitLabel={isSaving ? t('assignments').updating : t('assignments').update}
+          onCancel={handleCancel}
+          onSubmit={handleUpdate}
+          disabled={!title.trim() || isSaving || !hasChanges()}
+        />
+        <View style={{ paddingLeft: insets.left, paddingRight: insets.right }}>
+          <View
+            style={[
+              styles.formContainer,
+              contentLayout.form,
+              { paddingBottom: 24 + bottomTabOverflow },
+            ]}
+          >
+            {/* Title Input */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>{t('assignments').title}</Text>
+              <TextInput
+                ref={titleInputRef}
+                style={styles.titleInput}
+                placeholder={t('assignments').titlePlaceholder}
+                placeholderTextColor={Colors.dark.neutral500}
+                value={title}
+                onChangeText={setTitle}
+                autoCapitalize="sentences"
+                autoCorrect={true}
+                maxLength={100}
               />
-              <Text style={styles.typeText}>
-                {
-                  t('assignments').types[
-                    assignmentType.toLowerCase() as
-                      | 'homework'
-                      | 'test'
-                      | 'exam'
-                      | 'project'
-                      | 'quiz'
-                      | 'lab'
-                      | 'essay'
-                      | 'presentation'
-                      | 'other'
-                  ]
-                }
-              </Text>
             </View>
-            <Ionicons name="chevron-down" size={20} color={Colors.dark.neutral500} />
-          </TouchableOpacity>
-        </View>
 
-        {/* Due Date - show DatePicker immediately */}
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>{t('assignments').dueDate}</Text>
-          <DatePicker
-            selectedDate={dueDate}
-            onDateChange={setDueDate}
-            formatDate={formatDate}
-            currentLanguage={currentLanguage}
-            days={t('weekdays').short}
-            quickDateOptions={[
-              { label: t('assignments').days.today, days: 0 },
-              { label: t('assignments').days.tomorrow, days: 1 },
-              { label: t('assignments').days.nextWeek, days: 7 },
-              {
-                label: t('assignments').days.inTwoWeeks,
-                days: 14,
-              },
-            ]}
-          />
-        </View>
-
-        {/* Due Time - show TimePicker immediately */}
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>{t('assignments').dueTime}</Text>
-          <TimePicker
-            selectedTime={dueDate}
-            onTimeChange={(time) => {
-              const newDate = new Date(dueDate);
-              newDate.setHours(time.getHours(), time.getMinutes());
-              setDueDate(newDate);
-            }}
-            timePresets={[
-              {
-                label: t('assignments').periods.first,
-                hour: 8,
-                minute: 0,
-              },
-              {
-                label: t('assignments').periods.second,
-                hour: 9,
-                minute: 30,
-              },
-              {
-                label: t('assignments').periods.third,
-                hour: 11,
-                minute: 20,
-              },
-              {
-                label: t('assignments').periods.fourth,
-                hour: 12,
-                minute: 50,
-              },
-              {
-                label: t('assignments').periods.fifth,
-                hour: 14,
-                minute: 20,
-              },
-            ]}
-          />
-        </View>
-
-        {/* Priority Toggle */}
-        <View style={styles.inputContainer}>
-          <View style={styles.toggleRow}>
-            <Text style={styles.inputLabel}>{t('assignments').markAsPriority}</Text>
-            <CustomToggle value={isPriority} onValueChange={setIsPriority} />
-          </View>
-        </View>
-
-        {/* Subtasks */}
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>{t('assignments').subtasks.title}</Text>
-
-          {/* Existing Subtasks */}
-          {subtasks.map((subtask, index) => (
-            <View key={subtask.id} style={styles.subtaskItem}>
+            {/* Assignment Type */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>{t('assignments').type}</Text>
               <TouchableOpacity
-                style={styles.subtaskCheckbox}
-                onPress={() => {
-                  const updatedSubtasks = [...subtasks];
-                  updatedSubtasks[index].isCompleted = !updatedSubtasks[index].isCompleted;
-                  setSubtasks(updatedSubtasks);
+                style={styles.typeSelector}
+                onPress={() => setIsTypeModalVisible(true)}
+              >
+                <View style={styles.typeDisplay}>
+                  <Ionicons
+                    name={getTypeIcon()}
+                    size={20}
+                    color={Colors.dark.white}
+                    style={styles.typeIcon}
+                  />
+                  <Text style={styles.typeText}>
+                    {
+                      t('assignments').types[
+                        assignmentType.toLowerCase() as
+                          | 'homework'
+                          | 'test'
+                          | 'exam'
+                          | 'project'
+                          | 'quiz'
+                          | 'lab'
+                          | 'essay'
+                          | 'presentation'
+                          | 'other'
+                      ]
+                    }
+                  </Text>
+                </View>
+                <Ionicons name="chevron-down" size={20} color={Colors.dark.neutral500} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Description Input */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>
+                {t('assignments').description}
+                <Text style={styles.optionalText}> ({t('assignments').optional})</Text>
+              </Text>
+              <TextInput
+                style={styles.descriptionInput}
+                placeholder={t('assignments').descriptionPlaceholder}
+                placeholderTextColor={Colors.dark.neutral500}
+                value={description}
+                onChangeText={setDescription}
+                multiline
+                numberOfLines={4}
+                autoCapitalize="sentences"
+                autoCorrect={true}
+                maxLength={500}
+              />
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>{t('grades').form.subject}</Text>
+              <View style={styles.typeSelector}>
+                <View style={styles.typeDisplay}>
+                  <Ionicons
+                    name="book-outline"
+                    size={20}
+                    color={Colors.dark.white}
+                    style={styles.typeIcon}
+                  />
+                  <Text style={styles.typeText}>{selectedSubject?.name || courseName}</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Due Date - show DatePicker immediately */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>{t('assignments').dueDate}</Text>
+              <DatePicker
+                selectedDate={dueDate}
+                onDateChange={setDueDate}
+                formatDate={formatDate}
+                currentLanguage={currentLanguage}
+                days={t('weekdays').short}
+                quickDateOptions={[
+                  { label: t('assignments').days.today, days: 0 },
+                  { label: t('assignments').days.tomorrow, days: 1 },
+                  { label: t('assignments').days.nextWeek, days: 7 },
+                  {
+                    label: t('assignments').days.inTwoWeeks,
+                    days: 14,
+                  },
+                ]}
+              />
+            </View>
+
+            {/* Due Time - show TimePicker immediately */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>{t('assignments').dueTime}</Text>
+              <TimePicker
+                selectedTime={dueDate}
+                onTimeChange={(time) => {
+                  const newDate = new Date(dueDate);
+                  newDate.setHours(time.getHours(), time.getMinutes());
+                  setDueDate(newDate);
                 }}
-              >
-                {subtask.isCompleted && (
-                  <Ionicons name="checkmark" size={16} color={Colors.dark.primaryStrong} />
-                )}
-              </TouchableOpacity>
-              <Text
-                style={[styles.subtaskTitle, subtask.isCompleted && styles.subtaskTitleCompleted]}
-              >
-                {subtask.title}
-              </Text>
-              <TouchableOpacity
-                style={styles.subtaskDeleteButton}
-                onPress={() => handleRemoveSubtask(subtask.id)}
-              >
-                <Ionicons name="close-circle" size={18} color={Colors.dark.neutral500} />
-              </TouchableOpacity>
-            </View>
-          ))}
-
-          {/* Add New Subtask */}
-          <View style={styles.addSubtaskContainer}>
-            <TextInput
-              style={styles.subtaskInput}
-              placeholder={t('assignments').subtasks.placeholder}
-              placeholderTextColor={Colors.dark.neutral500}
-              value={newSubtaskTitle}
-              onChangeText={setNewSubtaskTitle}
-              onSubmitEditing={handleAddSubtask}
-            />
-            <TouchableOpacity
-              style={[
-                styles.addSubtaskButton,
-                newSubtaskTitle.trim() === '' && styles.addSubtaskButtonDisabled,
-              ]}
-              onPress={handleAddSubtask}
-              disabled={newSubtaskTitle.trim() === ''}
-            >
-              <Ionicons
-                name="add"
-                size={20}
-                color={newSubtaskTitle.trim() === '' ? Colors.dark.neutral500 : Colors.dark.white}
+                timePresets={[
+                  {
+                    label: t('assignments').periods.first,
+                    hour: 8,
+                    minute: 0,
+                  },
+                  {
+                    label: t('assignments').periods.second,
+                    hour: 9,
+                    minute: 30,
+                  },
+                  {
+                    label: t('assignments').periods.third,
+                    hour: 11,
+                    minute: 20,
+                  },
+                  {
+                    label: t('assignments').periods.fourth,
+                    hour: 12,
+                    minute: 50,
+                  },
+                  {
+                    label: t('assignments').periods.fifth,
+                    hour: 14,
+                    minute: 20,
+                  },
+                ]}
               />
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.subtaskHint}>{t('assignments').subtasks.hint}</Text>
-        </View>
+            </View>
 
-        <View style={{ height: 24 + bottomTabOverflow }} />
+            {/* Priority Toggle */}
+            <View style={styles.inputContainer}>
+              <View style={styles.toggleRow}>
+                <Text style={styles.inputLabel}>{t('assignments').markAsPriority}</Text>
+                <CustomToggle value={isPriority} onValueChange={setIsPriority} />
+              </View>
+            </View>
+
+            <AssignmentSubtasksField
+              subtasks={subtasks}
+              newTitle={newSubtaskTitle}
+              onTitleChange={setNewSubtaskTitle}
+              onAdd={handleAddSubtask}
+              onRemove={handleRemoveSubtask}
+              onToggle={(id) =>
+                setSubtasks((previous) =>
+                  previous.map((task) =>
+                    task.id === id ? { ...task, isCompleted: !task.isCompleted } : task,
+                  ),
+                )
+              }
+            />
+
+            <View style={{ height: 24 + bottomTabOverflow }} />
+          </View>
+        </View>
       </KeyboardAwareScrollView>
 
       {/* Assignment Type Selection Modal */}
@@ -1441,7 +1401,7 @@ export default function EditAssignmentScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.dark.backgroundTertiary,
+    backgroundColor: Colors.dark.backgroundSecondary,
   },
   dropdownSheetContent: {
     padding: 0,
@@ -1457,56 +1417,18 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.dark.border,
-  },
-  backButton: {
-    padding: 4,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: Colors.dark.white,
-  },
-  saveButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: Colors.dark.primaryStrong,
-    borderRadius: 8,
-    minWidth: 80,
-    alignItems: 'center',
-  },
-  saveButtonDisabled: {
-    backgroundColor: Colors.dark.disabledBackground,
-    borderWidth: 1,
-    borderColor: Colors.dark.disabledBorder,
-  },
-  saveButtonText: {
-    color: Colors.dark.white,
-    fontWeight: '600',
-    fontSize: 15,
-  },
-  saveButtonTextDisabled: {
-    color: Colors.dark.neutral650,
-  },
   scrollView: {
     flex: 1,
   },
   formContainer: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingBottom: 40,
   },
   inputContainer: {
     marginTop: 24,
   },
   inputLabel: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '600',
     color: Colors.dark.white,
     marginBottom: 8,
@@ -1799,70 +1721,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  subtaskItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    backgroundColor: Colors.dark.surfaceSecondary,
-    borderRadius: 8,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: Colors.dark.border,
-  },
-  subtaskCheckbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: Colors.dark.primaryStrong,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
-  subtaskTitle: {
-    flex: 1,
-    color: Colors.dark.white,
-    fontSize: 15,
-  },
-  subtaskTitleCompleted: {
-    textDecorationLine: 'line-through',
-    color: Colors.dark.neutral500,
-  },
-  subtaskDeleteButton: {
-    padding: 4,
-  },
-  addSubtaskContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.dark.surfaceSecondary,
-    padding: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.dark.border,
-  },
-  subtaskInput: {
-    flex: 1,
-    color: Colors.dark.white,
-    fontSize: 15,
-    padding: 4,
-  },
-  addSubtaskButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.dark.primaryStrong,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addSubtaskButtonDisabled: {
-    backgroundColor: Colors.dark.border,
-  },
-  subtaskHint: {
-    color: Colors.dark.neutral500,
-    fontSize: 12,
-    marginTop: 4,
-    fontStyle: 'italic',
   },
   quickDateButton: {
     paddingHorizontal: 16,
