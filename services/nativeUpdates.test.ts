@@ -340,7 +340,6 @@ test('app readiness in the background defers consent until the next foreground w
 test.each([
   ['unavailable', status()],
   ['unsupported', status({ supported: false, reason: 'unsupported-install-source' })],
-  ['downloaded', ready()],
   ['downloading', availableWithStatus('downloading')],
   ['store fallback', available({ immediate: true, flexible: false })],
 ] as const)('does not open consent automatically for %s', async (_label, nativeStatus) => {
@@ -364,23 +363,30 @@ test.each([
   expect(mockNative.startFlexibleUpdate).toHaveBeenCalledTimes(mode === 'flexible' ? 1 : 0);
 });
 
-test('flexible download can stage OTA, but only the explicit install action completes it', async () => {
+test('flexible download stages OTA and installs automatically when downloaded, even with stale check status', async () => {
+  jest.useFakeTimers();
   mockNative.getUpdateStatus.mockResolvedValue(availableWithStatus('downloading'));
   const service = new UpdateService();
   const detach = service.attachUpdateLifecycle();
   await service.initializeUpdates();
   expect(updates.checkForUpdateAsync).toHaveBeenCalled();
   expect(mockNative.completeFlexibleUpdate).not.toHaveBeenCalled();
+  await service.enableNativeUpdatePrompts();
   mockInstallListener?.({
     platform: 'android',
     supported: true,
     installStatus: 'downloaded',
     reason: 'flexible-update-downloaded',
   });
-  expect(service.getNativeUpdateSnapshot().phase).toBe('ready');
-  mockNative.getUpdateStatus.mockResolvedValue(ready());
-  expect(await service.completeNativeUpdate()).toBe(true);
+  await jest.advanceTimersByTimeAsync(0);
+  expect(service.getNativeUpdateSnapshot()).toMatchObject({
+    phase: 'installing',
+    busy: true,
+    storeFallback: false,
+  });
   expect(mockNative.completeFlexibleUpdate).toHaveBeenCalledTimes(1);
+  expect(mockNative.openStorePage).not.toHaveBeenCalled();
+  expect(updates.reloadAsync).not.toHaveBeenCalled();
   expect(await service.applyPreparedOtaUpdateOnLaunch()).toBe(false);
   detach();
 });
@@ -671,3 +677,133 @@ test.each(['read', 'clear'])(
     detach();
   },
 );
+
+test.each([
+  ['downloaded', 'ready'],
+  ['installing', 'installing'],
+  ['downloading', 'in-progress'],
+  ['pending', 'in-progress'],
+] as const)(
+  'Play in-progress availability with %s uses install state %s',
+  async (installStatus, kind) => {
+    mockNative.getUpdateStatus.mockResolvedValue({
+      ...availableWithStatus(installStatus),
+      reason: 'developer-triggered-update-in-progress',
+    });
+    expect((await new NativeUpdateClient().check()).kind).toBe(kind);
+  },
+);
+
+test.each(['update-available', 'developer-triggered-update-in-progress'] as const)(
+  'reopening with a downloaded update (%s) automatically installs before any OTA reload',
+  async (reason) => {
+    mockNative.getUpdateStatus.mockResolvedValue({ ...ready(), reason });
+    storage.getItem.mockResolvedValue(
+      JSON.stringify({
+        updateId: 'pending',
+        fetchedAt: 'now',
+        runtimeVersion: '1.6.0',
+        applicationId: Application.applicationId,
+        nativeBuildVersion: '42',
+      }),
+    );
+    const service = new UpdateService();
+    await service.initializeUpdates();
+    expect(mockNative.completeFlexibleUpdate).not.toHaveBeenCalled();
+    expect(updates.reloadAsync).not.toHaveBeenCalled();
+    expect(await service.enableNativeUpdatePrompts()).toBe(true);
+    expect(mockNative.completeFlexibleUpdate).toHaveBeenCalledTimes(1);
+    expect(service.getNativeUpdateSnapshot()).toMatchObject({
+      phase: 'installing',
+      busy: true,
+      storeFallback: false,
+    });
+    expect(mockNative.startFlexibleUpdate).not.toHaveBeenCalled();
+    expect(mockNative.openStorePage).not.toHaveBeenCalled();
+  },
+);
+
+test('a background download completes automatically on the next foreground', async () => {
+  jest.useFakeTimers();
+  mockNative.getUpdateStatus.mockResolvedValue(availableWithStatus('downloading'));
+  const service = new UpdateService();
+  const detach = service.attachUpdateLifecycle();
+  await service.initializeUpdates();
+  await service.enableNativeUpdatePrompts();
+  Object.assign(AppState, { currentState: 'background' });
+  mockAppStateListener?.('background');
+  mockInstallListener?.({
+    platform: 'android',
+    supported: true,
+    installStatus: 'downloaded',
+    reason: 'flexible-update-downloaded',
+  });
+  expect(mockNative.completeFlexibleUpdate).not.toHaveBeenCalled();
+  mockNative.getUpdateStatus.mockResolvedValue(ready());
+  Object.assign(AppState, { currentState: 'active' });
+  mockAppStateListener?.('active');
+  await jest.advanceTimersByTimeAsync(0);
+  expect(mockNative.completeFlexibleUpdate).toHaveBeenCalledTimes(1);
+  expect(mockNative.openStorePage).not.toHaveBeenCalled();
+  detach();
+});
+
+test('download completion during consent waits for its gate then automatically installs once', async () => {
+  jest.useFakeTimers();
+  mockNative.getUpdateStatus.mockResolvedValue(available());
+  const service = new UpdateService();
+  const detach = service.attachUpdateLifecycle();
+  await service.initializeUpdates();
+  mockNative.startFlexibleUpdate.mockImplementationOnce(async () => {
+    mockInstallListener?.({
+      platform: 'android',
+      supported: true,
+      installStatus: 'downloaded',
+      reason: 'flexible-update-downloaded',
+    });
+    expect(mockNative.completeFlexibleUpdate).not.toHaveBeenCalled();
+    return available();
+  });
+  await service.enableNativeUpdatePrompts();
+  await jest.advanceTimersByTimeAsync(0);
+  expect(mockNative.completeFlexibleUpdate).toHaveBeenCalledTimes(1);
+  mockInstallListener?.({
+    platform: 'android',
+    supported: true,
+    installStatus: 'downloaded',
+    reason: 'flexible-update-downloaded',
+  });
+  await service.enableNativeUpdatePrompts();
+  expect(mockNative.completeFlexibleUpdate).toHaveBeenCalledTimes(1);
+  expect(service.getNativeUpdateSnapshot()).toMatchObject({ phase: 'installing', busy: true });
+  expect(await service.applyPreparedOtaUpdateOnLaunch()).toBe(false);
+  expect(updates.reloadAsync).not.toHaveBeenCalled();
+  detach();
+});
+
+test('automatic completion failure retains retry without a restart loop or store redirect', async () => {
+  jest.useFakeTimers();
+  mockNative.getUpdateStatus.mockResolvedValue(ready());
+  mockNative.completeFlexibleUpdate.mockRejectedValueOnce(new Error('install failed'));
+  const service = new UpdateService();
+  const detach = service.attachUpdateLifecycle();
+  await service.initializeUpdates();
+  expect(await service.enableNativeUpdatePrompts()).toBe(false);
+  expect(service.getNativeUpdateSnapshot()).toMatchObject({ phase: 'error', busy: false });
+  mockInstallListener?.({
+    platform: 'android',
+    supported: true,
+    installStatus: 'downloaded',
+    reason: 'flexible-update-downloaded',
+  });
+  mockAppStateListener?.('background');
+  mockAppStateListener?.('active');
+  await jest.advanceTimersByTimeAsync(0);
+  expect(mockNative.completeFlexibleUpdate).toHaveBeenCalledTimes(1);
+  expect(service.getNativeUpdateSnapshot()).toMatchObject({ phase: 'error', busy: false });
+  expect(await service.completeNativeUpdate()).toBe(true);
+  expect(mockNative.completeFlexibleUpdate).toHaveBeenCalledTimes(2);
+  expect(mockNative.openStorePage).not.toHaveBeenCalled();
+  expect(updates.reloadAsync).not.toHaveBeenCalled();
+  detach();
+});
