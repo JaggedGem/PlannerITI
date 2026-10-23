@@ -29,7 +29,7 @@ The reported obfuscated entries (`t52.K`, `z21.j`, `zp1.r`, `zp1.z`, and the bit
 
 ## Build compatibility and release validation
 
-The `expo-image` native module and Android build changes require a **new native build**. Version and EAS runtimes advance to 1.6.2 (`1.6.2-dev.1` and `1.6.2-beta.1` for the other profiles) so this JavaScript is not delivered into the older 1.6.1 runtime. Set the selected EAS environment's `RELEASE_VERSION` to the intended displayed release before publishing. No release is published by this change.
+The `expo-image` native module and Android build changes require a **new native build**. Version and EAS runtimes advance to 1.6.5 (`1.6.5-dev.1` and `1.6.5-beta.1` for the other profiles) so this JavaScript is not delivered into the older 1.6.1 runtime. Set the selected EAS environment's `RELEASE_VERSION` to the intended displayed release before publishing. No release is published by this change.
 
 Generated Android configuration was inspected with `expo prebuild --platform android --no-install` in an isolated scratch project. It produced unrestricted orientation, `android.enableMinifyInReleaseBuilds=true`, `android.enableShrinkResourcesInReleaseBuilds=true`, and the JNI keep rule. An Android Metro export verifies JavaScript bundling; it does not compile or execute native image loading, R8, or window code.
 
