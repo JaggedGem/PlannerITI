@@ -16,6 +16,8 @@ import {
 import * as Haptics from 'expo-haptics';
 
 import { Colors } from '@/constants/Colors';
+import { MODAL_ORIENTATIONS } from '@/constants/Layout';
+import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 import { useTranslation } from '@/hooks/useTranslation';
 import { hourFromIndex, hourIndex } from '@/utils/time';
 
@@ -38,16 +40,19 @@ export const TimePicker = ({
   translations?: { cancel: string; confirm: string };
 }) => {
   const { t, formatTimeFromDate } = useTranslation();
+  const { isCompactHeight, availableHeight, insets } = useResponsiveLayout();
   const labels = translations ?? { cancel: t('common').cancel, confirm: t('common').confirm };
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
   const [localValue, setLocalValue] = useState(value);
   const period = localValue.getHours() >= 12 ? 'PM' : 'AM';
-  const initialValue = useRef(value).current;
+  const localValueRef = useRef(localValue);
+  localValueRef.current = localValue;
   const hoursRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const minutesRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
-  const itemHeight = 56;
-  const visibleItems = 5;
+  const itemHeight = isCompactHeight ? 36 : 56;
+  const visibleItems = isCompactHeight ? 3 : 5;
+  const wheelPadding = (itemHeight * (visibleItems - 1)) / 2;
 
   const hours = useMemo(() => {
     if (use12HourFormat) {
@@ -75,8 +80,8 @@ export const TimePicker = ({
     ]).start();
 
     const timeout = setTimeout(() => {
-      const hour = hourIndex(initialValue.getHours(), use12HourFormat);
-      const minute = initialValue.getMinutes();
+      const hour = hourIndex(localValueRef.current.getHours(), use12HourFormat);
+      const minute = localValueRef.current.getMinutes();
 
       hoursRef.current?.scrollTo({
         y: hour * itemHeight,
@@ -90,7 +95,7 @@ export const TimePicker = ({
     }, 50);
 
     return () => clearTimeout(timeout);
-  }, [initialValue, use12HourFormat, fadeAnim, scaleAnim]);
+  }, [use12HourFormat, fadeAnim, scaleAnim, itemHeight]);
 
   const formatNumber = (num: number, padLength = 2) => {
     return num.toString().padStart(padLength, '0');
@@ -164,6 +169,7 @@ export const TimePicker = ({
 
   return (
     <Modal
+      supportedOrientations={MODAL_ORIENTATIONS}
       transparent
       visible
       animationType="none"
@@ -171,22 +177,30 @@ export const TimePicker = ({
       navigationBarTranslucent={true}
       onRequestClose={onClose}
     >
-      <View style={styles.timePickerOverlay}>
+      <View
+        style={[styles.timePickerOverlay, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
+      >
         <Animated.View
           style={[
             styles.timePickerContainer,
+            isCompactHeight && { padding: 12, maxHeight: availableHeight },
             {
               opacity: fadeAnim,
               transform: [{ scale: scaleAnim }],
             },
           ]}
         >
-          <View style={styles.timePickerHeader}>
+          <View style={[styles.timePickerHeader, isCompactHeight && { marginBottom: 8 }]}>
             <Text style={styles.timePickerTitle}>{label}</Text>
             <Text style={styles.timePickerValue}>{formatTimeFromDate(localValue)}</Text>
           </View>
 
-          <View style={styles.timePickerContent}>
+          <View
+            style={[
+              styles.timePickerContent,
+              isCompactHeight && { marginTop: 4, marginBottom: 12 },
+            ]}
+          >
             <View style={styles.timePickerColumn}>
               <ScrollView
                 ref={hoursRef}
@@ -203,7 +217,7 @@ export const TimePicker = ({
                 scrollEventThrottle={16}
                 style={{ height: itemHeight * visibleItems }}
                 contentContainerStyle={{
-                  paddingVertical: itemHeight * 2,
+                  paddingVertical: wheelPadding,
                 }}
                 nestedScrollEnabled={true}
               >
@@ -219,6 +233,7 @@ export const TimePicker = ({
                           (use12HourFormat
                             ? localValue.getHours() % 12 || 12
                             : localValue.getHours()) && styles.timePickerItemTextSelected,
+                        isCompactHeight && { fontSize: 30 },
                       ]}
                     >
                       {formatNumber(hour, use12HourFormat ? 1 : 2)}
@@ -228,7 +243,14 @@ export const TimePicker = ({
               </ScrollView>
             </View>
 
-            <Text style={styles.timePickerSeparator}>:</Text>
+            <Text
+              style={[
+                styles.timePickerSeparator,
+                isCompactHeight && { fontSize: 36, marginHorizontal: 12 },
+              ]}
+            >
+              :
+            </Text>
 
             <View style={styles.timePickerColumn}>
               <ScrollView
@@ -246,7 +268,7 @@ export const TimePicker = ({
                 scrollEventThrottle={16}
                 style={{ height: itemHeight * visibleItems }}
                 contentContainerStyle={{
-                  paddingVertical: itemHeight * 2,
+                  paddingVertical: wheelPadding,
                 }}
                 nestedScrollEnabled={true}
               >
@@ -259,6 +281,7 @@ export const TimePicker = ({
                       style={[
                         styles.timePickerItemText,
                         minute === localValue.getMinutes() && styles.timePickerItemTextSelected,
+                        isCompactHeight && { fontSize: 30 },
                       ]}
                     >
                       {formatNumber(minute)}

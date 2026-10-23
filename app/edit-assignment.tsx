@@ -33,6 +33,7 @@ import { StatusBar } from 'expo-status-bar';
 
 import { BottomModalPortal } from '@/components/BottomModalPortal';
 import { ModernDropdown, SegmentItem } from '@/components/ModernDropdown';
+import { contentLayout } from '@/components/ui/ContentLayout';
 import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
 import { Colors } from '@/constants/Colors';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -1131,7 +1132,7 @@ export default function EditAssignmentScreen() {
       <StatusBar style="light" />
 
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, contentLayout.form]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={handleCancel}
@@ -1162,7 +1163,11 @@ export default function EditAssignmentScreen() {
       {/* Main Content */}
       <KeyboardAwareScrollView
         style={styles.scrollView}
-        contentContainerStyle={[styles.formContainer, { paddingBottom: 24 + bottomTabOverflow }]}
+        contentContainerStyle={[
+          styles.formContainer,
+          contentLayout.form,
+          { paddingBottom: 24 + bottomTabOverflow },
+        ]}
         keyboardShouldPersistTaps="handled"
         extraScrollHeight={20}
       >

@@ -36,6 +36,8 @@ import {
 import * as Haptics from 'expo-haptics';
 
 import { BottomModalPortal } from '@/components/BottomModalPortal';
+import { AdaptiveColumns } from '@/components/ui/AdaptiveColumns';
+import { contentLayout } from '@/components/ui/ContentLayout';
 import { Colors } from '@/constants/Colors';
 import { Translation, translations } from '@/constants/Translations';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -1089,7 +1091,10 @@ const ExamsView = ({
       </View>
 
       {/* Exams list */}
-      <ScrollView style={styles.examsList} contentContainerStyle={styles.examsListContent}>
+      <ScrollView
+        style={styles.examsList}
+        contentContainerStyle={[styles.examsListContent, contentLayout.page]}
+      >
         {Object.entries(examsByType).map(([type, examList]) => (
           <View key={type} style={styles.examTypeSection}>
             {examList.map((exam, index) => {
@@ -2149,7 +2154,7 @@ const GradesScreen = ({
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       {/* Header with student info and buttons */}
-      <View style={[styles.headerContainer, refreshing && { opacity: 0.7 }]}>
+      <View style={[styles.headerContainer, contentLayout.page, refreshing && { opacity: 0.7 }]}>
         <View style={styles.headerLeft}>
           <Text style={[styles.studentName, textOpacity]}>
             {studentGrades.studentInfo.firstName} {studentGrades.studentInfo.name}
@@ -2223,7 +2228,7 @@ const GradesScreen = ({
       {viewMode === 'grades' ? (
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollViewContent}
+          contentContainerStyle={[styles.scrollViewContent, contentLayout.page]}
         >
           {/* Overall Average Card if there are multiple semesters */}
           {allSemestersAverages.length > 1 && (
@@ -2308,21 +2313,23 @@ const GradesScreen = ({
                   )}
 
                   {/* Subject list for this semester */}
-                  {semester.subjects.map((subject, subjectIndex) => {
-                    const subjectKey = `${semester.semester}::${subject.name}`;
-                    const highlight = newHighlights[subjectKey];
-                    return (
-                      <SubjectCard
-                        key={`subject-${semester.semester}-${subject.name}-${subjectIndex}`}
-                        subject={subject}
-                        expanded={!!expandedSubjects[`${semester.semester}-${subject.name}`]}
-                        onToggle={() => toggleSubject(subject.name, semester.semester)}
-                        semesterNumber={semester.semester}
-                        newGradeIndices={highlight?.gradeIndices}
-                        hasNewExam={highlight?.newExam}
-                      />
-                    );
-                  })}
+                  <AdaptiveColumns>
+                    {semester.subjects.map((subject, subjectIndex) => {
+                      const subjectKey = `${semester.semester}::${subject.name}`;
+                      const highlight = newHighlights[subjectKey];
+                      return (
+                        <SubjectCard
+                          key={`subject-${semester.semester}-${subject.name}-${subjectIndex}`}
+                          subject={subject}
+                          expanded={!!expandedSubjects[`${semester.semester}-${subject.name}`]}
+                          onToggle={() => toggleSubject(subject.name, semester.semester)}
+                          semesterNumber={semester.semester}
+                          newGradeIndices={highlight?.gradeIndices}
+                          hasNewExam={highlight?.newExam}
+                        />
+                      );
+                    })}
+                  </AdaptiveColumns>
 
                   {/* Empty state if no subjects */}
                   {semester.subjects.length === 0 && (

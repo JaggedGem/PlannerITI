@@ -19,6 +19,7 @@ import {
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 
+import { contentLayout } from '@/components/ui/ContentLayout';
 import { Colors } from '@/constants/Colors';
 import { useTranslation } from '@/hooks/useTranslation';
 
@@ -101,7 +102,7 @@ export default function ArchiveView({
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="light" />
-      <View style={styles.header}>
+      <View style={[styles.header, contentLayout.form]}>
         <TouchableOpacity
           style={styles.closeButton}
           onPress={handleClose}
@@ -116,7 +117,7 @@ export default function ArchiveView({
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, contentLayout.form]}
         showsVerticalScrollIndicator={false}
         onScroll={handleScroll}
         scrollEventThrottle={400}

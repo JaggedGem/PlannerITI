@@ -30,6 +30,9 @@ import * as Haptics from 'expo-haptics';
 import { router, useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 
+import { AdaptiveColumns } from '@/components/ui/AdaptiveColumns';
+import { contentLayout } from '@/components/ui/ContentLayout';
+import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 import { Translate, useTranslation } from '@/hooks/useTranslation';
 import { runWhenIdle } from '@/utils/runWhenIdle';
 
@@ -241,7 +244,7 @@ const CoursesView = memo(
     return (
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, contentLayout.page]}
         showsVerticalScrollIndicator={false}
         removeClippedSubviews={true}
         onScroll={handleScroll}
@@ -341,7 +344,7 @@ const DateGroupedView = memo(
     return (
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, contentLayout.page]}
         showsVerticalScrollIndicator={false}
         removeClippedSubviews={true}
       >
@@ -417,7 +420,7 @@ const ArchivedAssignmentsView = memo(
     return (
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, contentLayout.page]}
         showsVerticalScrollIndicator={false}
         onScroll={handleScroll}
         scrollEventThrottle={400}
@@ -672,6 +675,7 @@ const AssignmentOptionsProvider = ({ children }: { children: React.ReactNode }) 
 
 // Define the main Assignments component - this needs to be before AssignmentsWithErrorBoundary
 const Assignments = () => {
+  const { isCompactHeight } = useResponsiveLayout();
   const { t, formatDate } = useTranslation();
 
   const [selectedSegmentIndex, setSelectedSegmentIndex] = useState(0);
@@ -981,70 +985,72 @@ const Assignments = () => {
       return (
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, contentLayout.page]}
           showsVerticalScrollIndicator={false}
           removeClippedSubviews={true}
         >
-          {groups.map((group, index) => {
-            // Determine if this day should be expanded
-            let shouldExpandDay = index === 0; // Default: expand first day
+          <AdaptiveColumns>
+            {groups.map((group, index) => {
+              // Determine if this day should be expanded
+              let shouldExpandDay = index === 0; // Default: expand first day
 
-            // If we have an assignment to expand and a date to expand
-            if (assignmentToExpandRef.current && dateToExpandRef.current) {
-              // Check if this group contains the target date
-              const groupDate = new Date(group.date);
-              const targetDate = new Date(dateToExpandRef.current);
+              // If we have an assignment to expand and a date to expand
+              if (assignmentToExpandRef.current && dateToExpandRef.current) {
+                // Check if this group contains the target date
+                const groupDate = new Date(group.date);
+                const targetDate = new Date(dateToExpandRef.current);
 
-              // If the dates match (same day), this group should be expanded
-              if (
-                groupDate.getFullYear() === targetDate.getFullYear() &&
-                groupDate.getMonth() === targetDate.getMonth() &&
-                groupDate.getDate() === targetDate.getDate()
-              ) {
-                shouldExpandDay = true;
+                // If the dates match (same day), this group should be expanded
+                if (
+                  groupDate.getFullYear() === targetDate.getFullYear() &&
+                  groupDate.getMonth() === targetDate.getMonth() &&
+                  groupDate.getDate() === targetDate.getDate()
+                ) {
+                  shouldExpandDay = true;
 
-                // If this is not the first iteration, scroll to this section
-                if (index > 0) {
-                  // Use setTimeout to ensure the section is rendered before scrolling
-                  setTimeout(() => {
-                    // We don't have a direct ref to the ScrollView from here,
-                    // but we can use scrollTo in the next frame
-                    // This is a simple approach - a more robust approach would use a ref
-                  }, 300);
+                  // If this is not the first iteration, scroll to this section
+                  if (index > 0) {
+                    // Use setTimeout to ensure the section is rendered before scrolling
+                    setTimeout(() => {
+                      // We don't have a direct ref to the ScrollView from here,
+                      // but we can use scrollTo in the next frame
+                      // This is a simple approach - a more robust approach would use a ref
+                    }, 300);
+                  }
                 }
               }
-            }
 
-            return (
-              <View key={`${group.date}-${index}`} style={{ marginBottom: 8 }}>
-                {disableAnimations ? (
-                  <View>
-                    <DaySection
-                      title={group.title}
-                      date={group.date}
-                      assignments={group.assignments}
-                      onToggleAssignment={onToggle}
-                      onDeleteAssignment={onDelete}
-                      defaultExpanded={shouldExpandDay}
-                      assignmentToHighlight={assignmentToExpandRef.current}
-                    />
-                  </View>
-                ) : (
-                  <Animated.View entering={FadeInDown.duration(150).delay(index * 20)}>
-                    <DaySection
-                      title={group.title}
-                      date={group.date}
-                      assignments={group.assignments}
-                      onToggleAssignment={onToggle}
-                      onDeleteAssignment={onDelete}
-                      defaultExpanded={shouldExpandDay}
-                      assignmentToHighlight={assignmentToExpandRef.current}
-                    />
-                  </Animated.View>
-                )}
-              </View>
-            );
-          })}
+              return (
+                <View key={`${group.date}-${index}`} style={{ marginBottom: 8 }}>
+                  {disableAnimations ? (
+                    <View>
+                      <DaySection
+                        title={group.title}
+                        date={group.date}
+                        assignments={group.assignments}
+                        onToggleAssignment={onToggle}
+                        onDeleteAssignment={onDelete}
+                        defaultExpanded={shouldExpandDay}
+                        assignmentToHighlight={assignmentToExpandRef.current}
+                      />
+                    </View>
+                  ) : (
+                    <Animated.View entering={FadeInDown.duration(150).delay(index * 20)}>
+                      <DaySection
+                        title={group.title}
+                        date={group.date}
+                        assignments={group.assignments}
+                        onToggleAssignment={onToggle}
+                        onDeleteAssignment={onDelete}
+                        defaultExpanded={shouldExpandDay}
+                        assignmentToHighlight={assignmentToExpandRef.current}
+                      />
+                    </Animated.View>
+                  )}
+                </View>
+              );
+            })}
+          </AdaptiveColumns>
         </ScrollView>
       );
     },
@@ -1073,43 +1079,45 @@ const Assignments = () => {
       return (
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, contentLayout.page]}
           showsVerticalScrollIndicator={false}
           removeClippedSubviews={true}
         >
-          {courseKeys.map((courseCode, index) => (
-            <View key={`course-${courseCode}`} style={{ marginBottom: 8 }}>
-              {disableAnimations ? (
-                <View>
-                  <CourseSection
-                    courseCode={courseCode}
-                    courseName={
-                      courseGroups[courseCode][0]?.courseName ||
-                      t('assignments').common.uncategorized
-                    }
-                    assignments={courseGroups[courseCode]}
-                    onToggleAssignment={onToggle}
-                    onDeleteAssignment={onDelete}
-                    showDueDate={true}
-                  />
-                </View>
-              ) : (
-                <Animated.View entering={FadeInDown.duration(150).delay(index * 20)}>
-                  <CourseSection
-                    courseCode={courseCode}
-                    courseName={
-                      courseGroups[courseCode][0]?.courseName ||
-                      t('assignments').common.uncategorized
-                    }
-                    assignments={courseGroups[courseCode]}
-                    onToggleAssignment={onToggle}
-                    onDeleteAssignment={onDelete}
-                    showDueDate={true}
-                  />
-                </Animated.View>
-              )}
-            </View>
-          ))}
+          <AdaptiveColumns>
+            {courseKeys.map((courseCode, index) => (
+              <View key={`course-${courseCode}`} style={{ marginBottom: 8 }}>
+                {disableAnimations ? (
+                  <View>
+                    <CourseSection
+                      courseCode={courseCode}
+                      courseName={
+                        courseGroups[courseCode][0]?.courseName ||
+                        t('assignments').common.uncategorized
+                      }
+                      assignments={courseGroups[courseCode]}
+                      onToggleAssignment={onToggle}
+                      onDeleteAssignment={onDelete}
+                      showDueDate={true}
+                    />
+                  </View>
+                ) : (
+                  <Animated.View entering={FadeInDown.duration(150).delay(index * 20)}>
+                    <CourseSection
+                      courseCode={courseCode}
+                      courseName={
+                        courseGroups[courseCode][0]?.courseName ||
+                        t('assignments').common.uncategorized
+                      }
+                      assignments={courseGroups[courseCode]}
+                      onToggleAssignment={onToggle}
+                      onDeleteAssignment={onDelete}
+                      showDueDate={true}
+                    />
+                  </Animated.View>
+                )}
+              </View>
+            ))}
+          </AdaptiveColumns>
         </ScrollView>
       );
     },
@@ -1166,8 +1174,8 @@ const Assignments = () => {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar style="light" />
 
-      <View style={styles.headerContainer}>
-        <View style={styles.header}>
+      <View style={[styles.headerContainer, contentLayout.page]}>
+        <View style={[styles.header, isCompactHeight && { paddingTop: 12, paddingBottom: 12 }]}>
           <View style={styles.headerTopRow}>
             <Text style={styles.headerTitle}>{t('assignments').title}</Text>
 

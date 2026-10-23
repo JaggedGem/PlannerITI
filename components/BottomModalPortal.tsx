@@ -11,6 +11,7 @@ import { BackHandler, Platform, StyleProp, StyleSheet, ViewStyle } from 'react-n
 
 import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 
 interface BottomModalPortalProps {
   isVisible: boolean;
@@ -46,6 +47,8 @@ export function BottomModalPortal({
   const modalId = useId();
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme];
+  const { availableWidth, availableHeight, insets } = useResponsiveLayout();
+  const horizontalMargin = Math.max(0, (availableWidth - 640) / 2);
   const resolvedSnapPoints = useMemo(
     () => (snapPoints && snapPoints.length > 0 ? snapPoints : undefined),
     [snapPoints],
@@ -126,6 +129,12 @@ export function BottomModalPortal({
       enablePanDownToClose={enablePanDownToClose}
       enableDynamicSizing={enableDynamicSizing}
       snapPoints={resolvedSnapPoints}
+      topInset={insets.top + 12}
+      maxDynamicContentSize={Math.max(0, availableHeight - 24)}
+      style={{
+        marginLeft: insets.left + horizontalMargin,
+        marginRight: insets.right + horizontalMargin,
+      }}
       handleComponent={showDragIndicator ? undefined : null}
       backgroundStyle={[
         styles.sheetBackground,
@@ -139,7 +148,14 @@ export function BottomModalPortal({
       backdropComponent={renderBackdrop}
       android_keyboardInputMode="adjustResize"
     >
-      <BottomSheetView style={[styles.sheetContent, sheetContentStyle, contentContainerStyle]}>
+      <BottomSheetView
+        style={[
+          styles.sheetContent,
+          sheetContentStyle,
+          { paddingBottom: Math.max(16, insets.bottom) },
+          contentContainerStyle,
+        ]}
+      >
         {children}
       </BottomSheetView>
     </BottomSheetModal>

@@ -10,6 +10,7 @@ import { Tabs } from 'expo-router';
 
 import { HapticTab } from '@/components/HapticTab';
 import { Colors } from '@/constants/Colors';
+import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 import { useTranslation } from '@/hooks/useTranslation';
 
 export const unstable_settings = {
@@ -102,6 +103,7 @@ function AnimatedTabBarIcon({ focused, color, name }: AnimatedTabBarIconProps) {
 export default function TabLayout() {
   const { t } = useTranslation();
   const { bottom } = useSafeAreaInsets();
+  const { isCompactHeight } = useResponsiveLayout();
 
   const theme = Colors.dark;
   const backgroundColor = theme.backgroundApp;
@@ -125,9 +127,13 @@ export default function TabLayout() {
           headerShown: false,
           tabBarButton: (props: Parameters<typeof HapticTab>[0]) => <HapticTab {...props} />,
           tabBarStyle: {
-            height: 70 + bottom,
-            paddingBottom: Platform.OS === 'ios' ? 20 + bottom : 10 + bottom,
-            paddingTop: 10,
+            height: (isCompactHeight ? 54 : 70) + bottom,
+            paddingBottom: isCompactHeight
+              ? 4 + bottom
+              : Platform.OS === 'ios'
+                ? 20 + bottom
+                : 10 + bottom,
+            paddingTop: isCompactHeight ? 4 : 10,
             backgroundColor: backgroundColor,
             borderTopWidth: 0,
             ...(Platform.OS === 'ios'
@@ -149,10 +155,10 @@ export default function TabLayout() {
           },
           tabBarItemStyle: {
             paddingVertical: 4,
-            height: 50,
+            height: isCompactHeight ? 46 : 50,
             justifyContent: 'center',
           },
-          tabBarLabelPosition: 'below-icon',
+          tabBarLabelPosition: isCompactHeight ? 'beside-icon' : 'below-icon',
           tabBarLabel: ({ focused, color, children, position }: TabBarLabelProps) => (
             <AnimatedTabBarLabel focused={focused} color={color}>
               {children}

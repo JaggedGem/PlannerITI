@@ -28,8 +28,11 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { BottomModalPortal } from '@/components/BottomModalPortal';
 import { TimePicker } from '@/components/TimePicker';
 import { useAuthContext } from '@/components/auth/AuthContext';
+import { contentLayout } from '@/components/ui/ContentLayout';
 import { Colors } from '@/constants/Colors';
+import { MODAL_ORIENTATIONS } from '@/constants/Layout';
 import { translations } from '@/constants/Translations';
+import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 import { useTranslation } from '@/hooks/useTranslation';
 import authService, { getGravatarProfile } from '@/services/authService';
 import {
@@ -253,6 +256,7 @@ const CustomToggle = ({
 };
 
 export default function Settings() {
+  const { hasTwoColumns } = useResponsiveLayout();
   const { t, currentLanguage, formatCompactDate, formatTime, formatTimeFromDate } =
     useTranslation();
   const router = useRouter();
@@ -1698,12 +1702,17 @@ export default function Settings() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        {/* Account Section */}
-        {renderAccountSection()}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.scrollContent, contentLayout.page]}
+      >
+        <View style={hasTwoColumns && contentLayout.columns}>
+          <View style={hasTwoColumns && contentLayout.column}>
+            {/* Account Section */}
+            {renderAccountSection()}
 
-        {/* IDNP Sync Settings - Temporarily disabled - To be implemented later */}
-        {/* <View style={styles.section}>
+            {/* IDNP Sync Settings - Temporarily disabled - To be implemented later */}
+            {/* <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('settings').idnp.syncTitle}</Text>
           
           <View style={styles.elevatedContainer}>
@@ -1756,309 +1765,323 @@ export default function Settings() {
           </View>
         </View> */}
 
-        {/* Add IDNP management section when IDNP is saved */}
-        {savedIdnp && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <MaterialIcons
-                name="security"
-                size={24}
-                color={Colors.dark.orange}
-                style={styles.sectionIcon}
-              />
-              <Text style={styles.sectionTitle}>{t('settings').idnp.title}</Text>
-            </View>
-            <View style={styles.idnpInfo}>
-              <Text style={styles.idnpValue}>
-                {savedIdnp.substring(0, 4) + '••••••' + savedIdnp.substring(10)}
-              </Text>
-              <TouchableOpacity style={styles.clearIdnpButton} onPress={handleClearIdnp}>
-                <MaterialIcons name="delete-outline" size={24} color={Colors.dark.lightPink} />
-                <Text style={styles.clearIdnpText}>{t('settings').idnp.clearButton}</Text>
+            {/* Add IDNP management section when IDNP is saved */}
+            {savedIdnp && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <MaterialIcons
+                    name="security"
+                    size={24}
+                    color={Colors.dark.orange}
+                    style={styles.sectionIcon}
+                  />
+                  <Text style={styles.sectionTitle}>{t('settings').idnp.title}</Text>
+                </View>
+                <View style={styles.idnpInfo}>
+                  <Text style={styles.idnpValue}>
+                    {savedIdnp.substring(0, 4) + '••••••' + savedIdnp.substring(10)}
+                  </Text>
+                  <TouchableOpacity style={styles.clearIdnpButton} onPress={handleClearIdnp}>
+                    <MaterialIcons name="delete-outline" size={24} color={Colors.dark.lightPink} />
+                    <Text style={styles.clearIdnpText}>{t('settings').idnp.clearButton}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            {/* Language Selection Section */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <MaterialIcons
+                  name="language"
+                  size={24}
+                  color={Colors.dark.lightBlue}
+                  style={styles.sectionIcon}
+                />
+                <Text style={styles.sectionTitle}>{t('settings').language}</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.languageSelector}
+                onPress={() => setShowLanguageModal(true)}
+              >
+                <View style={styles.languageSelectorContent}>
+                  <Text style={styles.selectedLanguageIcon}>
+                    {languages[settings.language].icon}
+                  </Text>
+                  <Text style={styles.selectedLanguageName}>
+                    {languages[settings.language].name}
+                  </Text>
+                  <MaterialIcons
+                    name="keyboard-arrow-down"
+                    size={24}
+                    color={Colors.dark.neutral500}
+                  />
+                </View>
               </TouchableOpacity>
             </View>
-          </View>
-        )}
 
-        {/* Language Selection Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <MaterialIcons
-              name="language"
-              size={24}
-              color={Colors.dark.lightBlue}
-              style={styles.sectionIcon}
-            />
-            <Text style={styles.sectionTitle}>{t('settings').language}</Text>
-          </View>
-          <TouchableOpacity
-            style={styles.languageSelector}
-            onPress={() => setShowLanguageModal(true)}
-          >
-            <View style={styles.languageSelectorContent}>
-              <Text style={styles.selectedLanguageIcon}>{languages[settings.language].icon}</Text>
-              <Text style={styles.selectedLanguageName}>{languages[settings.language].name}</Text>
-              <MaterialIcons name="keyboard-arrow-down" size={24} color={Colors.dark.neutral500} />
-            </View>
-          </TouchableOpacity>
-        </View>
-
-        {/* Manual Schedule Refresh Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <MaterialIcons
-              name="schedule"
-              size={24}
-              color={Colors.dark.primaryStrong}
-              style={styles.sectionIcon}
-            />
-            <Text style={styles.sectionTitle}>{t('settings').schedule.title}</Text>
-          </View>
-          <View style={[styles.card, styles.scheduleCard]}>
-            <View style={styles.scheduleDetails}>
-              {/* Group Selection Dropdown */}
-              <TouchableOpacity
-                style={styles.scheduleDetailRow}
-                onPress={() => setShowGroupScreen(true)}
-                activeOpacity={0.7}
-              >
+            {/* Manual Schedule Refresh Section */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
                 <MaterialIcons
-                  name="group"
-                  size={20}
-                  color={Colors.dark.neutral500}
-                  style={styles.scheduleDetailIcon}
+                  name="schedule"
+                  size={24}
+                  color={Colors.dark.primaryStrong}
+                  style={styles.sectionIcon}
                 />
-                <View style={styles.scheduleDetailTextGroup}>
-                  <Text style={styles.scheduleDetailLabel}>{t('settings').schedule.group}</Text>
-                  <View style={styles.scheduleGroupValueContainer}>
-                    <Text style={styles.scheduleDetailValue} numberOfLines={1}>
-                      {settings.selectedGroupName || t('settings').group.select}
-                    </Text>
+                <Text style={styles.sectionTitle}>{t('settings').schedule.title}</Text>
+              </View>
+              <View style={[styles.card, styles.scheduleCard]}>
+                <View style={styles.scheduleDetails}>
+                  {/* Group Selection Dropdown */}
+                  <TouchableOpacity
+                    style={styles.scheduleDetailRow}
+                    onPress={() => setShowGroupScreen(true)}
+                    activeOpacity={0.7}
+                  >
                     <MaterialIcons
-                      name="arrow-drop-down"
+                      name="group"
                       size={20}
                       color={Colors.dark.neutral500}
+                      style={styles.scheduleDetailIcon}
                     />
+                    <View style={styles.scheduleDetailTextGroup}>
+                      <Text style={styles.scheduleDetailLabel}>{t('settings').schedule.group}</Text>
+                      <View style={styles.scheduleGroupValueContainer}>
+                        <Text style={styles.scheduleDetailValue} numberOfLines={1}>
+                          {settings.selectedGroupName || t('settings').group.select}
+                        </Text>
+                        <MaterialIcons
+                          name="arrow-drop-down"
+                          size={20}
+                          color={Colors.dark.neutral500}
+                        />
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+
+                  {/* Last Updated */}
+                  <View style={[styles.scheduleDetailRow, styles.scheduleDetailRowLast]}>
+                    <MaterialIcons
+                      name="update"
+                      size={20}
+                      color={Colors.dark.neutral500}
+                      style={styles.scheduleDetailIcon}
+                    />
+                    <View style={styles.scheduleDetailTextGroup}>
+                      <Text style={styles.scheduleDetailLabel}>
+                        {t('settings').schedule.lastUpdated}
+                      </Text>
+                      <Text style={styles.scheduleDetailValue}>
+                        {lastScheduleRefresh
+                          ? formatCompactDate(lastScheduleRefresh, true)
+                          : t('settings').schedule.noRecentRefresh}
+                      </Text>
+                    </View>
                   </View>
                 </View>
-              </TouchableOpacity>
 
-              {/* Last Updated */}
-              <View style={[styles.scheduleDetailRow, styles.scheduleDetailRowLast]}>
-                <MaterialIcons
-                  name="update"
-                  size={20}
-                  color={Colors.dark.neutral500}
-                  style={styles.scheduleDetailIcon}
-                />
-                <View style={styles.scheduleDetailTextGroup}>
-                  <Text style={styles.scheduleDetailLabel}>
-                    {t('settings').schedule.lastUpdated}
-                  </Text>
-                  <Text style={styles.scheduleDetailValue}>
-                    {lastScheduleRefresh
-                      ? formatCompactDate(lastScheduleRefresh, true)
-                      : t('settings').schedule.noRecentRefresh}
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            <TouchableOpacity
-              style={[
-                styles.refreshButton,
-                styles.scheduleRefreshButton,
-                isRefreshingSchedule && { opacity: 0.7 },
-              ]}
-              onPress={handleManualScheduleRefresh}
-              disabled={isRefreshingSchedule}
-            >
-              {isRefreshingSchedule ? (
-                <ActivityIndicator size="small" color={Colors.dark.white} />
-              ) : (
-                <MaterialIcons name="refresh" size={20} color={Colors.dark.white} />
-              )}
-              <Text style={[styles.refreshButtonText, styles.scheduleRefreshButtonText]}>
-                {isRefreshingSchedule
-                  ? t('settings').schedule.refreshing
-                  : t('settings').schedule.refresh}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* App Updates Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <MaterialIcons
-              name="system-update"
-              size={24}
-              color={Colors.dark.primaryStrong}
-              style={styles.sectionIcon}
-            />
-            <Text style={styles.sectionTitle}>{t('appInfo').title}</Text>
-          </View>
-          <View style={[styles.card, styles.updateCard]}>
-            <View style={styles.updateDetails}>
-              <View style={styles.updateDetailRow}>
-                <MaterialIcons
-                  name="info-outline"
-                  size={20}
-                  color={Colors.dark.neutral500}
-                  style={styles.scheduleDetailIcon}
-                />
-                <View style={styles.scheduleDetailTextGroup}>
-                  <Text style={styles.scheduleDetailLabel}>{t('appInfo').currentVersion}</Text>
-                  <Text style={styles.scheduleDetailValue}>
-                    {updateService.getCurrentVersion()}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.updateDetailRow}>
-                <MaterialIcons
-                  name="fingerprint"
-                  size={20}
-                  color={Colors.dark.neutral500}
-                  style={styles.scheduleDetailIcon}
-                />
-                <View style={styles.scheduleDetailTextGroup}>
-                  <Text style={styles.scheduleDetailLabel}>{t('appInfo').currentOta}</Text>
-                  <Text style={styles.scheduleDetailValue}>
-                    {updateService.getCurrentOtaVersionShort()}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={[styles.updateDetailRow, styles.scheduleDetailRowLast]}>
-                <MaterialIcons
-                  name="label-outline"
-                  size={20}
-                  color={Colors.dark.neutral500}
-                  style={styles.scheduleDetailIcon}
-                />
-                <View style={styles.scheduleDetailTextGroup}>
-                  <Text style={styles.scheduleDetailLabel}>{t('appInfo').releaseChannel}</Text>
-                  <Text style={[styles.scheduleDetailValue, styles.channelBadge]}>
-                    {formatReleaseChannel(
-                      updateService.getChannelDisplay(),
-                      translations[currentLanguage],
-                    )}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* Subgroup Selection Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <MaterialIcons
-              name="groups"
-              size={24}
-              color={Colors.dark.green}
-              style={styles.sectionIcon}
-            />
-            <Text style={styles.sectionTitle}>{t('settings').subGroup}</Text>
-          </View>
-          <View style={styles.optionsContainer}>
-            {SUBGROUPS.map((group) => (
-              <TouchableOpacity
-                key={group}
-                style={[styles.optionButton, settings.group === group && styles.selectedOption]}
-                onPress={() => handleSubgroupChange(group)}
-              >
-                <Text
-                  style={[styles.optionText, settings.group === group && styles.selectedOptionText]}
+                <TouchableOpacity
+                  style={[
+                    styles.refreshButton,
+                    styles.scheduleRefreshButton,
+                    isRefreshingSchedule && { opacity: 0.7 },
+                  ]}
+                  onPress={handleManualScheduleRefresh}
+                  disabled={isRefreshingSchedule}
                 >
-                  {group === 'Subgroup 1' ? t('subgroup').group1 : t('subgroup').group2}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Custom Periods Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeaderWithAction}>
-            <View style={styles.sectionHeaderContent}>
-              <MaterialIcons
-                name="event"
-                size={24}
-                color={Colors.dark.lightPink}
-                style={styles.sectionIcon}
-              />
-              <Text style={styles.sectionTitle}>{t('settings').customPeriods.title}</Text>
+                  {isRefreshingSchedule ? (
+                    <ActivityIndicator size="small" color={Colors.dark.white} />
+                  ) : (
+                    <MaterialIcons name="refresh" size={20} color={Colors.dark.white} />
+                  )}
+                  <Text style={[styles.refreshButtonText, styles.scheduleRefreshButtonText]}>
+                    {isRefreshingSchedule
+                      ? t('settings').schedule.refreshing
+                      : t('settings').schedule.refresh}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
-            <TouchableOpacity style={styles.addButton} onPress={handleAddPeriod}>
-              <MaterialIcons name="add" size={24} color={Colors.dark.white} />
-            </TouchableOpacity>
-          </View>
 
-          <View style={styles.periodsListContainer}>
-            {settings.customPeriods.map((period) => (
-              <View key={period._id} style={styles.periodItem}>
-                <View style={styles.periodItemHeader}>
-                  <View
-                    style={[
-                      styles.colorDot,
-                      {
-                        backgroundColor: period.color || Colors.dark.primaryStrong,
-                      },
-                    ]}
-                  />
-                  <Text style={styles.periodName}>
-                    {period.name || t('scheduleDetails').customPeriod}
-                  </Text>
-                  <CustomToggle
-                    value={period.isEnabled}
-                    onValueChange={(value) => {
-                      scheduleService.updateCustomPeriod(period._id, {
-                        isEnabled: value,
-                      });
-                    }}
-                  />
-                </View>
+            {/* App Updates Section */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <MaterialIcons
+                  name="system-update"
+                  size={24}
+                  color={Colors.dark.primaryStrong}
+                  style={styles.sectionIcon}
+                />
+                <Text style={styles.sectionTitle}>{t('appInfo').title}</Text>
+              </View>
+              <View style={[styles.card, styles.updateCard]}>
+                <View style={styles.updateDetails}>
+                  <View style={styles.updateDetailRow}>
+                    <MaterialIcons
+                      name="info-outline"
+                      size={20}
+                      color={Colors.dark.neutral500}
+                      style={styles.scheduleDetailIcon}
+                    />
+                    <View style={styles.scheduleDetailTextGroup}>
+                      <Text style={styles.scheduleDetailLabel}>{t('appInfo').currentVersion}</Text>
+                      <Text style={styles.scheduleDetailValue}>
+                        {updateService.getCurrentVersion()}
+                      </Text>
+                    </View>
+                  </View>
 
-                <View style={styles.periodItemContent}>
-                  <Text style={styles.periodTime}>
-                    {formatTime(period.starttime)} - {formatTime(period.endtime)}
-                  </Text>
-                  <Text style={styles.periodDays}>
-                    {period.daysOfWeek?.map((day) => t('weekdays').long[day]).join(', ') ||
-                      t('scheduleDetails').allWeekdays}
-                  </Text>
-                </View>
+                  <View style={styles.updateDetailRow}>
+                    <MaterialIcons
+                      name="fingerprint"
+                      size={20}
+                      color={Colors.dark.neutral500}
+                      style={styles.scheduleDetailIcon}
+                    />
+                    <View style={styles.scheduleDetailTextGroup}>
+                      <Text style={styles.scheduleDetailLabel}>{t('appInfo').currentOta}</Text>
+                      <Text style={styles.scheduleDetailValue}>
+                        {updateService.getCurrentOtaVersionShort()}
+                      </Text>
+                    </View>
+                  </View>
 
-                <View style={styles.periodItemActions}>
-                  <TouchableOpacity
-                    style={styles.periodAction}
-                    onPress={() => handleEditPeriod(period)}
-                  >
-                    <MaterialIcons name="edit" size={20} color={Colors.dark.neutral500} />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.periodAction}
-                    onPress={() => handleDeletePeriod(period._id)}
-                  >
-                    <MaterialIcons name="delete" size={20} color={Colors.dark.lightPink} />
-                  </TouchableOpacity>
+                  <View style={[styles.updateDetailRow, styles.scheduleDetailRowLast]}>
+                    <MaterialIcons
+                      name="label-outline"
+                      size={20}
+                      color={Colors.dark.neutral500}
+                      style={styles.scheduleDetailIcon}
+                    />
+                    <View style={styles.scheduleDetailTextGroup}>
+                      <Text style={styles.scheduleDetailLabel}>{t('appInfo').releaseChannel}</Text>
+                      <Text style={[styles.scheduleDetailValue, styles.channelBadge]}>
+                        {formatReleaseChannel(
+                          updateService.getChannelDisplay(),
+                          translations[currentLanguage],
+                        )}
+                      </Text>
+                    </View>
+                  </View>
                 </View>
               </View>
-            ))}
+            </View>
+          </View>
+          <View style={hasTwoColumns && contentLayout.column}>
+            {/* Subgroup Selection Section */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <MaterialIcons
+                  name="groups"
+                  size={24}
+                  color={Colors.dark.green}
+                  style={styles.sectionIcon}
+                />
+                <Text style={styles.sectionTitle}>{t('settings').subGroup}</Text>
+              </View>
+              <View style={styles.optionsContainer}>
+                {SUBGROUPS.map((group) => (
+                  <TouchableOpacity
+                    key={group}
+                    style={[styles.optionButton, settings.group === group && styles.selectedOption]}
+                    onPress={() => handleSubgroupChange(group)}
+                  >
+                    <Text
+                      style={[
+                        styles.optionText,
+                        settings.group === group && styles.selectedOptionText,
+                      ]}
+                    >
+                      {group === 'Subgroup 1' ? t('subgroup').group1 : t('subgroup').group2}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
 
-            {settings.customPeriods.length === 0 && (
-              <Text style={styles.noPeriods}>{t('settings').customPeriods.noPeriodsYet}</Text>
-            )}
+            {/* Custom Periods Section */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeaderWithAction}>
+                <View style={styles.sectionHeaderContent}>
+                  <MaterialIcons
+                    name="event"
+                    size={24}
+                    color={Colors.dark.lightPink}
+                    style={styles.sectionIcon}
+                  />
+                  <Text style={styles.sectionTitle}>{t('settings').customPeriods.title}</Text>
+                </View>
+                <TouchableOpacity style={styles.addButton} onPress={handleAddPeriod}>
+                  <MaterialIcons name="add" size={24} color={Colors.dark.white} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.periodsListContainer}>
+                {settings.customPeriods.map((period) => (
+                  <View key={period._id} style={styles.periodItem}>
+                    <View style={styles.periodItemHeader}>
+                      <View
+                        style={[
+                          styles.colorDot,
+                          {
+                            backgroundColor: period.color || Colors.dark.primaryStrong,
+                          },
+                        ]}
+                      />
+                      <Text style={styles.periodName}>
+                        {period.name || t('scheduleDetails').customPeriod}
+                      </Text>
+                      <CustomToggle
+                        value={period.isEnabled}
+                        onValueChange={(value) => {
+                          scheduleService.updateCustomPeriod(period._id, {
+                            isEnabled: value,
+                          });
+                        }}
+                      />
+                    </View>
+
+                    <View style={styles.periodItemContent}>
+                      <Text style={styles.periodTime}>
+                        {formatTime(period.starttime)} - {formatTime(period.endtime)}
+                      </Text>
+                      <Text style={styles.periodDays}>
+                        {period.daysOfWeek?.map((day) => t('weekdays').long[day]).join(', ') ||
+                          t('scheduleDetails').allWeekdays}
+                      </Text>
+                    </View>
+
+                    <View style={styles.periodItemActions}>
+                      <TouchableOpacity
+                        style={styles.periodAction}
+                        onPress={() => handleEditPeriod(period)}
+                      >
+                        <MaterialIcons name="edit" size={20} color={Colors.dark.neutral500} />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.periodAction}
+                        onPress={() => handleDeletePeriod(period._id)}
+                      >
+                        <MaterialIcons name="delete" size={20} color={Colors.dark.lightPink} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+
+                {settings.customPeriods.length === 0 && (
+                  <Text style={styles.noPeriods}>{t('settings').customPeriods.noPeriodsYet}</Text>
+                )}
+              </View>
+            </View>
+
+            {/* Developer Section */}
+            {renderDeveloperSection()}
+
+            {/* Notification Settings Section */}
+            {renderNotificationSettings()}
           </View>
         </View>
-
-        {/* Developer Section */}
-        {renderDeveloperSection()}
-
-        {/* Notification Settings Section */}
-        {renderNotificationSettings()}
       </ScrollView>
 
       {/* Language Selection Modal */}
@@ -2099,6 +2122,7 @@ export default function Settings() {
       </BottomModalPortal>
 
       <Modal
+        supportedOrientations={MODAL_ORIENTATIONS}
         visible={showGroupScreen}
         animationType="slide"
         presentationStyle="fullScreen"
@@ -2107,7 +2131,7 @@ export default function Settings() {
         onRequestClose={closeGroupSelectionScreen}
       >
         <SafeAreaView style={styles.groupScreenContainer} edges={['top', 'left', 'right']}>
-          <View style={styles.groupScreenHeader}>
+          <View style={[styles.groupScreenHeader, contentLayout.form]}>
             <TouchableOpacity
               onPress={closeGroupSelectionScreen}
               style={styles.groupHeaderBackButton}
@@ -2123,7 +2147,7 @@ export default function Settings() {
             </View>
           </View>
 
-          <View style={styles.groupSearchInputContainer}>
+          <View style={[styles.groupSearchInputContainer, contentLayout.form]}>
             <MaterialIcons name="search" size={20} color={Colors.dark.neutral500} />
             <TextInput
               value={groupSearchQuery}
@@ -2152,7 +2176,7 @@ export default function Settings() {
               data={displayedGroups}
               keyExtractor={(item) => item._id}
               keyboardShouldPersistTaps="handled"
-              contentContainerStyle={styles.groupListContent}
+              contentContainerStyle={[styles.groupListContent, contentLayout.form]}
               showsVerticalScrollIndicator={false}
               renderItem={({ item }) => {
                 const isSelected = item._id === settings.selectedGroupId;

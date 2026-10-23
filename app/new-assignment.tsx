@@ -36,6 +36,7 @@ import { StatusBar } from 'expo-status-bar';
 
 import { BottomModalPortal } from '@/components/BottomModalPortal';
 import { ModernDropdown, SegmentItem } from '@/components/ModernDropdown';
+import { contentLayout } from '@/components/ui/ContentLayout';
 import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
 import { Colors } from '@/constants/Colors';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -2015,6 +2016,7 @@ export default function NewAssignmentScreen() {
 
         <KeyboardAwareScrollView
           style={styles.scrollContainer}
+          contentContainerStyle={contentLayout.form}
           keyboardShouldPersistTaps="handled"
           extraScrollHeight={100}
           enableResetScrollToCoords={false}
