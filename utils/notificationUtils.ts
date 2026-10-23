@@ -15,6 +15,15 @@ import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 
 import { Colors } from '@/constants/Colors';
+import { Assignment, AssignmentType } from '@/types/assignment';
+import { DEFAULT_NOTIFICATION_SETTINGS, NotificationSettings } from '@/types/notification';
+
+import { readStoredAssignments } from './assignmentRepository';
+
+export { DEFAULT_NOTIFICATION_SETTINGS } from '@/types/notification';
+export type { NotificationSettings } from '@/types/notification';
+export { AssignmentType } from '@/types/assignment';
+export type { Assignment } from '@/types/assignment';
 
 type NotificationsModule = typeof import('expo-notifications');
 
@@ -49,35 +58,6 @@ const getNotificationsModule = (): NotificationsModule | null => {
 
 export const areNotificationsAvailable = (): boolean => getNotificationsModule() !== null;
 
-// Types imported inline to avoid circular dependency
-export enum AssignmentType {
-  HOMEWORK = 'Homework',
-  TEST = 'Test',
-  EXAM = 'Exam',
-  PROJECT = 'Project',
-  QUIZ = 'Quiz',
-  LAB = 'Lab',
-  ESSAY = 'Essay',
-  PRESENTATION = 'Presentation',
-  OTHER = 'Other',
-}
-
-export interface Assignment {
-  id: string;
-  title: string;
-  description: string;
-  courseCode: string;
-  courseName: string;
-  dueDate: string;
-  isCompleted: boolean;
-  isPriority: boolean;
-  assignmentType: AssignmentType;
-  periodId?: string;
-  subjectId?: string;
-  isOrphaned?: boolean;
-  subtasks?: any[];
-}
-
 // Import the required types
 export enum SchedulableTriggerInputTypes {
   TIME_INTERVAL = 'timeInterval',
@@ -88,22 +68,6 @@ export enum SchedulableTriggerInputTypes {
 
 // Storage keys
 const NOTIFICATION_SETTINGS_KEY = '@planner_notification_settings';
-const ASSIGNMENTS_STORAGE_KEY = 'assignments'; // Match the key in assignmentStorage.ts
-
-// Define notification settings type
-export interface NotificationSettings {
-  enabled: boolean;
-  notificationTime: string; // ISO string
-  examReminderDays: number;
-  testReminderDays: number;
-  quizReminderDays: number;
-  projectReminderDays: number;
-  homeworkReminderDays: number;
-  otherReminderDays: number;
-  dailyRemindersForExams: boolean;
-  dailyRemindersForTests: boolean;
-  dailyRemindersForQuizzes: boolean;
-}
 
 // Interface for grouped notifications
 interface AssignmentDigest {
@@ -117,21 +81,6 @@ interface AssignmentDigest {
   }[];
   lastNotified: string; // ISO string of when we last sent a notification for this digest
 }
-
-// Default notification settings
-export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
-  enabled: true,
-  notificationTime: new Date(new Date().setHours(20, 0, 0, 0)).toISOString(), // 8:00 PM by default
-  examReminderDays: 7,
-  testReminderDays: 5,
-  quizReminderDays: 3,
-  projectReminderDays: 5,
-  homeworkReminderDays: 2,
-  otherReminderDays: 1,
-  dailyRemindersForExams: true,
-  dailyRemindersForTests: true,
-  dailyRemindersForQuizzes: true,
-};
 
 // Get emoji for assignment type
 function getAssignmentTypeEmoji(type: AssignmentType): string {
@@ -318,7 +267,7 @@ async function scheduleNotification(
   title: string,
   body: string,
   triggerDate: Date,
-  data: any,
+  data: Record<string, unknown>,
   identifier: string,
   channelId: string = 'default',
 ) {
@@ -371,9 +320,7 @@ async function scheduleNotification(
 }
 
 // Get reminder days for an assignment type based on settings
-async function getReminderDaysForType(type: AssignmentType): Promise<number> {
-  const settings = await getNotificationSettings();
-
+function reminderDaysForType(type: AssignmentType, settings: NotificationSettings): number {
   switch (type) {
     case AssignmentType.EXAM:
       return settings.examReminderDays;
@@ -391,9 +338,7 @@ async function getReminderDaysForType(type: AssignmentType): Promise<number> {
 }
 
 // Check if daily reminders should be scheduled for an assignment type
-async function shouldSendDailyReminder(type: AssignmentType): Promise<boolean> {
-  const settings = await getNotificationSettings();
-
+function shouldSendDailyReminder(type: AssignmentType, settings: NotificationSettings): boolean {
   switch (type) {
     case AssignmentType.EXAM:
       return settings.dailyRemindersForExams;
@@ -407,9 +352,11 @@ async function shouldSendDailyReminder(type: AssignmentType): Promise<boolean> {
 }
 
 // Schedule individual critical notifications for an assignment (due soon, day before)
-async function scheduleIndividualNotifications(assignment: Assignment): Promise<void> {
+async function scheduleIndividualNotifications(
+  assignment: Assignment,
+  settings: NotificationSettings,
+): Promise<void> {
   try {
-    const settings = await getNotificationSettings();
     const dueDate = parseISO(assignment.dueDate);
     const now = new Date();
 
@@ -454,7 +401,7 @@ async function scheduleIndividualNotifications(assignment: Assignment): Promise<
     }
 
     // 3. Initial reminder at X days before (based on settings)
-    const reminderDays = await getReminderDaysForType(assignment.assignmentType);
+    const reminderDays = reminderDaysForType(assignment.assignmentType, settings);
     const initialReminderDate = addDays(dueDate, -reminderDays);
 
     // Only schedule if today is exactly reminderDays before due date (or we're exactly at that point)
@@ -473,7 +420,7 @@ async function scheduleIndividualNotifications(assignment: Assignment): Promise<
     }
 
     // 4. Daily reminders if enabled for this assignment type
-    const shouldSendDaily = await shouldSendDailyReminder(assignment.assignmentType);
+    const shouldSendDaily = shouldSendDailyReminder(assignment.assignmentType, settings);
 
     if (shouldSendDaily) {
       // Calculate days between now and due date
@@ -595,7 +542,10 @@ export async function createAndScheduleDailyDigest(
 
   try {
     const settings = await getNotificationSettings();
-    if (!settings.enabled) return;
+    if (!settings.enabled) {
+      await Notifications.cancelScheduledNotificationAsync('daily-digest-notification');
+      return;
+    }
 
     const now = new Date();
     // Filter out completed assignments and assignments that are already overdue
@@ -627,45 +577,24 @@ export async function createAndScheduleDailyDigest(
           return todayNotificationTime;
         })();
 
-    // Group assignments by day for the next 14 days
     const assignmentsByDay: Record<string, Assignment[]> = {};
-
-    for (let i = 0; i < 14; i++) {
-      const targetDate = addDays(now, i);
-      const dateKey = format(targetDate, 'yyyy-MM-dd');
-
-      // Get assignments due on this day
-      const dueOnDay = incompleteAssignments.filter((assignment) => {
-        const dueDate = parseISO(assignment.dueDate);
-        return isSameDay(dueDate, targetDate);
-      });
-
-      // Filter assignments based on reminder day settings
-      const validAssignments = await Promise.all(
-        dueOnDay.map(async (assignment) => {
-          const reminderDays = await getReminderDaysForType(assignment.assignmentType);
-          const dueDate = parseISO(assignment.dueDate);
-          const daysUntilDue = differenceInDays(dueDate, now);
-
-          // Only include if it's within the reminder window
-          return daysUntilDue <= reminderDays ? assignment : null;
-        }),
-      );
-
-      // Filter out nulls and store the assignments for this day
-      const filteredAssignments = validAssignments.filter((a) => a !== null) as Assignment[];
-      if (filteredAssignments.length > 0) {
-        assignmentsByDay[dateKey] = filteredAssignments;
-      }
+    const endDate = startOfDay(addDays(now, 14));
+    for (const assignment of incompleteAssignments) {
+      const dueDate = parseISO(assignment.dueDate);
+      if (dueDate >= endDate) continue;
+      const reminderDays = reminderDaysForType(assignment.assignmentType, settings);
+      if (differenceInDays(dueDate, now) > reminderDays) continue;
+      const key = format(dueDate, 'yyyy-MM-dd');
+      (assignmentsByDay[key] ??= []).push(assignment);
     }
+
+    // Clear stale digests even when the last upcoming assignment was completed or deleted.
+    await Notifications.cancelScheduledNotificationAsync('daily-digest-notification');
 
     // If no upcoming assignments, don't schedule a notification
     if (Object.keys(assignmentsByDay).length === 0) {
       return;
     }
-
-    // Cancel any existing daily digest notification
-    await Notifications.cancelScheduledNotificationAsync('daily-digest-notification');
 
     // Prepare data for the notification
     const digestData: {
@@ -761,7 +690,7 @@ export async function createAndScheduleDailyDigest(
               acc[curr.type].push(curr);
               return acc;
             },
-            {} as Record<string, any[]>,
+            {} as Record<string, AssignmentDigest['assignments']>,
           );
 
           for (const [type, items] of Object.entries(typeGroups)) {
@@ -787,7 +716,7 @@ export async function createAndScheduleDailyDigest(
             acc[curr.type].push(curr);
             return acc;
           },
-          {} as Record<string, any[]>,
+          {} as Record<string, AssignmentDigest['assignments']>,
         );
 
         return Object.values(typeGroups).some((items) => items.length > 1);
@@ -826,19 +755,12 @@ export async function scheduleNotificationForAssignment(assignment: Assignment):
     }
 
     // Schedule critical individual notifications (due soon, day before)
-    await scheduleIndividualNotifications(assignment);
+    await scheduleIndividualNotifications(assignment, settings);
 
     // Update the daily digest to include this assignment
     // Use getAssignments directly from AsyncStorage to avoid dynamic imports
     try {
-      const assignmentsJson = await AsyncStorage.getItem(ASSIGNMENTS_STORAGE_KEY);
-      const allAssignments = assignmentsJson ? JSON.parse(assignmentsJson) : [];
-
-      // Map to ensure all assignments have a type (for backward compatibility)
-      const processedAssignments = allAssignments.map((a: any) => ({
-        ...a,
-        assignmentType: a.assignmentType || AssignmentType.HOMEWORK,
-      }));
+      const processedAssignments = await readStoredAssignments();
 
       await createAndScheduleDailyDigest(processedAssignments);
     } catch (storageError) {
@@ -874,7 +796,7 @@ export async function scheduleAllNotifications(assignments: Assignment[]): Promi
 
     // Schedule individual critical notifications for each assignment
     for (const assignment of incompleteAssignments) {
-      await scheduleIndividualNotifications(assignment);
+      await scheduleIndividualNotifications(assignment, settings);
     }
 
     // Create and schedule the daily digest
@@ -893,28 +815,27 @@ export async function cancelNotificationsForAssignment(assignmentId: string): Pr
 
   try {
     // Cancel all notification types for this assignment
-    const notificationTypes = ['due', 'reminder', 'early-reminder', 'priority-reminder', 'daily'];
+    const notificationTypes = [
+      'due',
+      'reminder',
+      'early-reminder',
+      'priority-reminder',
+      'daily',
+    ] as const;
     for (const type of notificationTypes) {
       const identifier =
         type === 'priority-reminder'
           ? `assignment-${assignmentId}-priority-reminder`
-          : getNotificationId(assignmentId, type as any);
+          : getNotificationId(assignmentId, type);
 
       await Notifications.cancelScheduledNotificationAsync(identifier);
     }
 
     // Get all assignments to update the daily digest
     try {
-      const assignmentsJson = await AsyncStorage.getItem(ASSIGNMENTS_STORAGE_KEY);
-      const allAssignments = assignmentsJson ? JSON.parse(assignmentsJson) : [];
-
-      // Map to ensure all assignments have a type (for backward compatibility)
-      const processedAssignments = allAssignments
-        .map((a: any) => ({
-          ...a,
-          assignmentType: a.assignmentType || AssignmentType.HOMEWORK,
-        }))
-        .filter((a: any) => a.id !== assignmentId); // Remove the deleted assignment
+      const processedAssignments = (await readStoredAssignments()).filter(
+        (assignment) => assignment.id !== assignmentId,
+      );
 
       // Reschedule the daily digest without this assignment
       await createAndScheduleDailyDigest(processedAssignments);
@@ -1012,7 +933,7 @@ export async function checkAndRescheduleNotifications(assignments: Assignment[])
 
       const assignmentTypes = scheduledTypes.get(assignment.id) || new Set();
       const daysUntilDue = differenceInDays(dueDate, now);
-      const reminderDays = await getReminderDaysForType(assignment.assignmentType);
+      const reminderDays = reminderDaysForType(assignment.assignmentType, settings);
 
       // Check if we need to schedule the initial reminder
       if (
@@ -1025,14 +946,14 @@ export async function checkAndRescheduleNotifications(assignments: Assignment[])
         const reminderDay = startOfDay(addDays(dueDate, -reminderDays));
 
         if (isSameDay(today, reminderDay)) {
-          await scheduleIndividualNotifications(assignment);
+          await scheduleIndividualNotifications(assignment, settings);
           continue; // Skip to next assignment, all notifications scheduled
         }
       }
 
       // Check if we need to schedule day-before notification
       if (!assignmentTypes.has('reminder') && daysUntilDue <= 1 && daysUntilDue > 0) {
-        await scheduleIndividualNotifications(assignment);
+        await scheduleIndividualNotifications(assignment, settings);
         continue;
       }
 
@@ -1041,13 +962,13 @@ export async function checkAndRescheduleNotifications(assignments: Assignment[])
         const hoursTilDue = (dueDate.getTime() - now.getTime()) / (1000 * 60 * 60);
 
         if (hoursTilDue <= 1 && hoursTilDue > 0) {
-          await scheduleIndividualNotifications(assignment);
+          await scheduleIndividualNotifications(assignment, settings);
           continue;
         }
       }
 
       // Check if daily reminders are enabled and we need today's reminder
-      const shouldSendDaily = await shouldSendDailyReminder(assignment.assignmentType);
+      const shouldSendDaily = shouldSendDailyReminder(assignment.assignmentType, settings);
       if (
         shouldSendDaily &&
         !assignmentTypes.has('daily') &&

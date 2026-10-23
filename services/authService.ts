@@ -5,8 +5,15 @@ import { DeviceEventEmitter } from 'react-native';
 import Constants from 'expo-constants';
 import * as Crypto from 'expo-crypto';
 
+import { AuthResponse, UserData } from '@/types/auth';
+import { ApiError } from '@/utils/apiError';
+import { parseAuthResponse, parseUserData } from '@/utils/authData';
+import { isRecord } from '@/utils/json';
+
 import { fetchCustomApi } from '../utils/customApi';
 import { secureStorageService } from './secureStorageService';
+
+export type { UserData } from '@/types/auth';
 
 const GRAVATAR_AVATAR_BASE_URL = 'https://www.gravatar.com/avatar';
 const GRAVATAR_PROFILE_BASE_URL = 'https://gravatar.com';
@@ -20,18 +27,6 @@ const CURRENT_AUTH_VERSION = '3'; // Increment this when auth system changes
 
 // Add timeout constants for network requests
 const REQUEST_TIMEOUT = 8000; // 8 seconds timeout
-
-interface AuthResponse {
-  token?: string;
-  access_token?: string;
-  message?: string;
-}
-
-export interface UserData {
-  email: string;
-  idnp?: string;
-  is_verified: boolean;
-}
 
 interface GravatarProfile {
   hash: string;
@@ -147,6 +142,8 @@ class AuthService {
   private skippedLogin: boolean = false;
   private isLoading: boolean = false;
   private isReloginInProgress: boolean = false;
+  private sessionGeneration = 0;
+  private profileRequest: { generation: number; promise: Promise<UserData | null> } | null = null;
 
   private constructor() {}
 
@@ -216,11 +213,11 @@ class AuthService {
   private async makeAuthRequest(
     endpoint: string,
     method: string,
-    body?: any,
+    body?: Record<string, unknown>,
     retry: boolean = true,
     useApiKey: boolean = false,
     useBearerToken: boolean = true,
-  ): Promise<any> {
+  ): Promise<unknown> {
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
     };
@@ -261,17 +258,21 @@ class AuthService {
 
         if (errorText) {
           try {
-            const errorData = JSON.parse(errorText) as {
-              detail?: string;
-              message?: string;
-            };
-            message = errorData.detail || errorData.message || fallbackMessage;
+            const errorData: unknown = JSON.parse(errorText);
+            if (isRecord(errorData)) {
+              message =
+                typeof errorData.detail === 'string'
+                  ? errorData.detail
+                  : typeof errorData.message === 'string'
+                    ? errorData.message
+                    : fallbackMessage;
+            }
           } catch {
             message = errorText;
           }
         }
 
-        throw new Error(message);
+        throw new ApiError(message, response.status);
       }
 
       // Check if response has content before parsing JSON
@@ -306,13 +307,14 @@ class AuthService {
         true,
         false, // Don't include bearer token for signup
       );
-      return response;
+      return parseAuthResponse(response);
     } catch (error) {
       throw error;
     }
   }
 
   async login(email: string, password: string): Promise<AuthResponse> {
+    const generation = this.sessionGeneration;
     try {
       const response = await this.makeAuthRequest(
         '/auth/login',
@@ -326,9 +328,12 @@ class AuthService {
         false, // Don't include bearer token for login
       );
 
-      const accessToken = response.access_token || response.token;
+      if (generation !== this.sessionGeneration) throw new Error('Sign-in cancelled');
+      const authResponse = parseAuthResponse(response);
+      const accessToken = authResponse.access_token || authResponse.token;
 
       if (accessToken) {
+        this.sessionGeneration += 1;
         this.token = accessToken;
         this.lastLoginEmail = email;
         this.sessionPassword = password;
@@ -344,13 +349,14 @@ class AuthService {
         });
       }
 
-      return response;
+      return authResponse;
     } catch (error) {
       throw error;
     }
   }
 
   private async attemptRelogin(): Promise<boolean> {
+    const generation = this.sessionGeneration;
     if (this.isReloginInProgress) {
       return false;
     }
@@ -374,12 +380,13 @@ class AuthService {
         false, // Don't include bearer token for relogin
       ); // Don't retry on this login attempt
 
-      const accessToken = response.access_token || response.token;
+      if (generation !== this.sessionGeneration) return false;
+      const authResponse = parseAuthResponse(response);
+      const accessToken = authResponse.access_token || authResponse.token;
 
       if (accessToken) {
         this.token = accessToken;
         await this.setPersistedToken(accessToken);
-        await this.loadUserData();
         this.isReloginInProgress = false;
         return true;
       }
@@ -445,6 +452,9 @@ class AuthService {
   }
 
   async logout(): Promise<void> {
+    this.sessionGeneration += 1;
+    this.profileRequest = null;
+    this.isLoading = false;
     this.token = null;
     this.userData = null;
     this.skippedLogin = false;
@@ -454,6 +464,7 @@ class AuthService {
       await this.clearPersistedToken();
       await AsyncStorage.removeItem(SKIP_LOGIN_KEY);
       await AsyncStorage.removeItem(LOGIN_DISMISSED_KEY);
+      await AsyncStorage.removeItem('@planner_user_cache');
 
       // Reset settings sync state keys directly
       await AsyncStorage.removeItem('@initial_settings_download_done');
@@ -470,6 +481,9 @@ class AuthService {
   }
 
   async skipLogin(): Promise<void> {
+    this.sessionGeneration += 1;
+    this.profileRequest = null;
+    this.isLoading = false;
     this.token = null;
     this.userData = null;
     this.skippedLogin = true;
@@ -484,19 +498,31 @@ class AuthService {
   }
 
   async loadUserData(): Promise<UserData | null> {
-    // Check auth version first before loading user data
+    const generation = this.sessionGeneration;
     await this.checkAuthVersion();
-
-    // Prevent multiple concurrent loading operations
-    if (this.isLoading) {
-      return this.userData;
-    }
+    if (generation !== this.sessionGeneration) return null;
+    if (this.profileRequest?.generation === generation) return this.profileRequest.promise;
 
     this.isLoading = true;
+    const promise = this.fetchUserData(generation);
+    this.profileRequest = { generation, promise };
+    try {
+      return await promise;
+    } finally {
+      if (this.profileRequest?.promise === promise) {
+        this.profileRequest = null;
+        this.isLoading = false;
+      }
+    }
+  }
 
+  private async fetchUserData(generation: number): Promise<UserData | null> {
     try {
       // First check if user has skipped login
       const hasSkippedLogin = await AsyncStorage.getItem(SKIP_LOGIN_KEY);
+      if (generation !== this.sessionGeneration) {
+        return null;
+      }
       if (hasSkippedLogin === 'true') {
         this.skippedLogin = true;
         // Emit auth state with skipped = true
@@ -505,7 +531,6 @@ class AuthService {
           skipped: true,
           freshLogin: false, // Not a fresh login
         });
-        this.isLoading = false;
         return null;
       }
     } catch (error) {
@@ -517,35 +542,41 @@ class AuthService {
       try {
         const storedToken = await this.getPersistedToken();
         if (!storedToken) {
-          this.isLoading = false;
+          return null;
+        }
+        if (generation !== this.sessionGeneration) {
           return null;
         }
         this.token = storedToken;
       } catch (error) {
         console.error('Error loading stored auth token:', error);
-        this.isLoading = false;
         return null;
       }
     }
 
     // Finally, try to fetch user data with timeout
     try {
-      const userData = await this.makeAuthRequest('/auth/me', 'GET', undefined, true, true);
+      const raw = await this.makeAuthRequest('/auth/me', 'GET', undefined, true, true);
+      const userData = parseUserData(raw);
+      if (generation !== this.sessionGeneration) {
+        return null;
+      }
       this.userData = userData;
       DeviceEventEmitter.emit(AUTH_STATE_CHANGE_EVENT, {
         isAuthenticated: true,
         skipped: false,
         freshLogin: false, // Not a fresh login, just loading existing auth
       });
-      this.isLoading = false;
       return userData;
-    } catch (error: any) {
-      // Only logout if it's not a timeout error
-      if (error.message !== 'Request timeout') {
+    } catch (error) {
+      if (generation !== this.sessionGeneration) {
+        return null;
+      }
+      // Connectivity and server failures do not invalidate a persisted session.
+      if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
         await this.logout();
       }
-      this.isLoading = false;
-      return null;
+      return this.userData;
     }
   }
 

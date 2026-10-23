@@ -378,8 +378,7 @@ const ArchivedAssignmentsView = memo(
   }) => {
     const { t, formatFullDate } = useTranslation();
     const [visibleItems, setVisibleItems] = useState(10);
-    const [hasMore, setHasMore] = useState(true);
-    const isLoadingMoreRef = useRef(false);
+    const hasMore = visibleItems < assignments.length;
 
     // Sort assignments by due date, newest first
     const sortedAssignments = useMemo(() => {
@@ -390,22 +389,8 @@ const ArchivedAssignmentsView = memo(
 
     // Handle loading more items
     const loadMoreItems = useCallback(() => {
-      if (isLoadingMoreRef.current || !hasMore) return;
-
-      isLoadingMoreRef.current = true;
-
-      // Simulate delay to avoid UI jank
-      setTimeout(() => {
-        setVisibleItems((prev: number) => {
-          const newValue = prev + 10;
-          if (newValue >= sortedAssignments.length) {
-            setHasMore(false);
-          }
-          return newValue;
-        });
-        isLoadingMoreRef.current = false;
-      }, 100);
-    }, [hasMore, sortedAssignments.length]);
+      if (hasMore) setVisibleItems((count) => count + 10);
+    }, [hasMore]);
 
     // Handle scroll to detect when to load more
     const handleScroll = useCallback(

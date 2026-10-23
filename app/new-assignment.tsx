@@ -1902,62 +1902,6 @@ export default function NewAssignmentScreen() {
   };
 
   // todo: Render a type item for selection
-  // const renderTypeItem = (type: AssignmentType) => {
-  //   // Get icon for this specific type
-  //   const getIconForType = () => {
-  //     switch (type) {
-  //       case AssignmentType.HOMEWORK:
-  //         return 'book-outline';
-  //       case AssignmentType.TEST:
-  //         return 'document-text-outline';
-  //       case AssignmentType.EXAM:
-  //         return 'school-outline';
-  //       case AssignmentType.PROJECT:
-  //         return 'construct-outline';
-  //       case AssignmentType.QUIZ:
-  //         return 'clipboard-outline';
-  //       case AssignmentType.LAB:
-  //         return 'flask-outline';
-  //       case AssignmentType.ESSAY:
-  //         return 'create-outline';
-  //       case AssignmentType.PRESENTATION:
-  //         return 'easel-outline';
-  //       default:
-  //         return 'ellipsis-horizontal-outline';
-  //     }
-  //   };
-
-  //   return (
-  //     <TouchableOpacity
-  //       key={type}
-  //       style={[
-  //         styles.typeCard,
-  //         assignmentType === type && styles.typeCardSelected
-  //       ]}
-  //       onPress={() => handleTypeSelection(type)}
-  //       activeOpacity={0.7}
-  //     >
-  //       <View style={styles.typeMainInfo}>
-  //         <Ionicons
-  //           name={getIconForType()}
-  //           size={24}
-  //           color={assignmentType === type ? Colors.dark.primaryStrong : Colors.dark.white}
-  //           style={{marginRight: 12}}
-  //         />
-  //         <Text style={[
-  //           styles.typeName,
-  //           assignmentType === type && {color: Colors.dark.primaryStrong, fontWeight: '600'}
-  //         ]}>
-  //           {t('assignments').types[type.toLowerCase() as 'homework' | 'test' | 'exam' | 'project' | 'quiz' | 'lab' | 'essay' | 'presentation' | 'other']}
-  //         </Text>
-  //       </View>
-  //       {assignmentType === type && (
-  //         <Ionicons name="checkmark-circle" size={24} color={Colors.dark.primaryStrong} />
-  //       )}
-  //     </TouchableOpacity>
-  //   );
-  // };
-
   // Get icon for current assignment type in the selector
   const getTypeIcon = () => {
     switch (assignmentType) {

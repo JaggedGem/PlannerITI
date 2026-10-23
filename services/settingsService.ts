@@ -1,18 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { DeviceEventEmitter, EmitterSubscription, Platform } from 'react-native';
+import { DeviceEventEmitter, EmitterSubscription } from 'react-native';
+
+import { DEFAULT_NOTIFICATION_SETTINGS, NotificationSettings } from '@/types/notification';
+import { isRecord } from '@/utils/json';
 
 import { fetchCustomApi } from '../utils/customApi';
 import authService from './authService';
 import { UserSettings, scheduleService as scheduleServiceImport } from './scheduleService';
-
-interface NotificationSettings {
-  enabled: boolean;
-  reminders: boolean;
-  assignments: boolean;
-  recoveryDays: boolean;
-  customSchedule: boolean;
-}
 
 interface SyncableSettings {
   userSettings: UserSettings;
@@ -32,18 +27,9 @@ const SYNC_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
 // Add debounce timeout
 const SYNC_DEBOUNCE_DELAY = 5000; // 5 seconds
 
-// Default notification settings
-const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
-  enabled: true,
-  reminders: true,
-  assignments: true,
-  recoveryDays: true,
-  customSchedule: true,
-};
-
 class SettingsService {
   private static instance: SettingsService;
-  private notificationSettings: NotificationSettings = DEFAULT_NOTIFICATION_SETTINGS;
+  private notificationSettings: NotificationSettings = { ...DEFAULT_NOTIFICATION_SETTINGS };
   private isSyncing: boolean = false;
   private syncDebounceTimeout: ReturnType<typeof setTimeout> | null = null;
   private pendingSync: boolean = false;
@@ -225,7 +211,6 @@ class SettingsService {
       if (success) {
         // Update last sync timestamp
         await AsyncStorage.setItem(LAST_SETTINGS_SYNC_KEY, Date.now().toString());
-      } else {
       }
 
       this.isSyncing = false;
@@ -238,7 +223,11 @@ class SettingsService {
   }
 
   // Make authenticated API request
-  async makeAuthRequest(endpoint: string, method: string, body?: any): Promise<any> {
+  async makeAuthRequest(
+    endpoint: string,
+    method: string,
+    body?: Record<string, unknown>,
+  ): Promise<unknown> {
     if (!authService.isAuthenticated()) {
       throw new Error('User not authenticated');
     }
@@ -262,7 +251,11 @@ class SettingsService {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.detail || 'Request failed');
+        throw new Error(
+          isRecord(errorData) && typeof errorData.detail === 'string'
+            ? errorData.detail
+            : 'Request failed',
+        );
       }
 
       return await response.json();
@@ -288,8 +281,7 @@ class SettingsService {
       }
 
       // Make authenticated request to encrypt and store settings
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const response = await this.makeAuthRequest('/secure/encrypt-data', 'POST', {
+      await this.makeAuthRequest('/secure/encrypt-data', 'POST', {
         data_label: SETTINGS_DATA_LABEL,
         plaintext: JSON.stringify(settings),
         password: encryptionPassword,
@@ -320,7 +312,9 @@ class SettingsService {
       // Data labels are objects with a data_label property, not strings
       if (
         !Array.isArray(dataLabels) ||
-        !dataLabels.some((item) => item.data_label === SETTINGS_DATA_LABEL)
+        !dataLabels.some(
+          (item: unknown) => isRecord(item) && item.data_label === SETTINGS_DATA_LABEL,
+        )
       ) {
         // No settings found on server
         return false;
@@ -338,7 +332,7 @@ class SettingsService {
         password: encryptionPassword,
       });
 
-      if (!response.plaintext) {
+      if (!isRecord(response) || typeof response.plaintext !== 'string' || !response.plaintext) {
         return false;
       }
 
@@ -480,7 +474,6 @@ class SettingsService {
         // Mark initial download as done even if we uploaded instead
         this.initialDownloadDone = true;
         await AsyncStorage.setItem(INITIAL_DOWNLOAD_DONE_KEY, 'true');
-      } else {
       }
 
       // Update last sync timestamp
@@ -530,11 +523,5 @@ const instance = SettingsService.getInstance();
 
 // Ensure registration happens
 instance.setScheduleService(scheduleServiceImport);
-
-// Handle cleanup on app termination
-if (Platform.OS !== 'web') {
-  // For React Native, we should handle cleanup in componentWillUnmount of the App component
-  // But we can at least prepare the method here
-}
 
 export default instance;

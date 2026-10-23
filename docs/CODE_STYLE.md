@@ -109,3 +109,12 @@ npx expo-doctor
 ```
 
 For changes to authentication, storage, notifications, navigation, or list rendering, add or update a focused test when the behavior can be exercised without a device.
+
+## 10. Shared data boundaries
+
+- Keep assignment, authentication, and notification models in `types/`. UI and notification code share the same assignment enum and model.
+- Read persisted assignments through `utils/assignmentRepository.ts`. Make read/modify/write changes through its serialized `mutateAssignments` callback; do not bypass it with independent storage writes. Callbacks are synchronous, and storage failures reject the caller before notifications are scheduled.
+- Keep date, period, and subject matching in `utils/assignmentFiltering.ts`; UI code should not perform asynchronous lookups inside array filters. Times are compared as minutes, with adjacent periods treated as non-overlapping.
+- Validate unknown JSON before using it as an application model. Malformed assignment storage must not be overwritten with an empty list during a failed read.
+- Use `fetchWithTimeout` when a request needs both a deadline and upstream cancellation. A caller's cancellation must stop fallback attempts.
+- `pnpm lint` checks the entire repository, including hooks, services, utilities, scripts, and tests, and rejects warnings. Keep regression tests beside the behavior they protect; shared test fixtures and hook rendering live in `test/`.

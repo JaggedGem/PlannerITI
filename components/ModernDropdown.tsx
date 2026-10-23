@@ -1,15 +1,8 @@
 import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { Ionicons } from '@react-native-vector-icons/ionicons';
-import Animated, {
-  FadeIn,
-  Layout,
-  SlideInDown,
-  useSharedValue,
-  withSequence,
-  withTiming,
-} from 'react-native-reanimated';
+import Animated, { FadeIn, Layout, SlideInDown } from 'react-native-reanimated';
 
-import React, { memo, useEffect, useState } from 'react';
+import React, { memo, useEffect, useMemo, useState } from 'react';
 
 import {
   ActivityIndicator,
@@ -26,6 +19,7 @@ import {
 import * as Haptics from 'expo-haptics';
 
 import { Colors } from '@/constants/Colors';
+import { filterDropdownCategories, filterDropdownItems } from '@/utils/dropdownFiltering';
 
 export type SegmentItem = {
   id: string;
@@ -151,97 +145,29 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
 
   // Local state
   const [searchText, setSearchText] = useState('');
-  const [filteredItems, setFilteredItems] = useState<SegmentItem[]>(items || []);
-  const [filteredCategories, setFilteredCategories] = useState<Category[]>(categories || []);
-  const [filteredTabs, setFilteredTabs] = useState<Tab[]>(tabs || []);
   const [activeTabId, setActiveTabId] = useState<string>(
     selectedTabId || (tabs && tabs.length > 0 ? tabs[0].id : ''),
   );
-  const [, setItemPress] = useState<string | null>(null);
-
-  // Animation values
-  const buttonScale = useSharedValue(1);
-
   const screenHeight = Dimensions.get('window').height;
+  const query = searchText.trim().toLowerCase();
+  const filteredItems = useMemo(() => filterDropdownItems(items || [], query), [items, query]);
+  const filteredCategories = useMemo(
+    () => filterDropdownCategories(categories || [], query),
+    [categories, query],
+  );
+  const filteredTabs = useMemo(
+    () =>
+      (tabs || []).map((tab) => ({
+        ...tab,
+        ...(tab.items ? { items: filterDropdownItems(tab.items, query) } : {}),
+        ...(tab.categories ? { categories: filterDropdownCategories(tab.categories, query) } : {}),
+      })),
+    [tabs, query],
+  );
 
-  // Filter items based on search text
   useEffect(() => {
-    // Filter items if in single list mode
-    if (items) {
-      if (searchText) {
-        const filtered = items.filter((item) =>
-          item.label.toLowerCase().includes(searchText.toLowerCase()),
-        );
-        setFilteredItems(filtered);
-      } else {
-        setFilteredItems(items);
-      }
-    }
-
-    // Filter categories if in category mode
-    if (categories) {
-      if (searchText) {
-        const filtered = categories
-          .map((category) => ({
-            ...category,
-            data: category.data.filter((item) =>
-              item.label.toLowerCase().includes(searchText.toLowerCase()),
-            ),
-          }))
-          .filter((category) => category.data.length > 0);
-        setFilteredCategories(filtered);
-      } else {
-        setFilteredCategories(categories);
-      }
-    }
-
-    // Filter tabs if in tab mode
-    if (tabs) {
-      if (searchText) {
-        const filtered = tabs.map((tab) => {
-          // Check if tab has categories
-          if (tab.categories) {
-            const filteredCategories = tab.categories
-              .map((category) => ({
-                ...category,
-                data: category.data.filter((item) =>
-                  item.label.toLowerCase().includes(searchText.toLowerCase()),
-                ),
-              }))
-              .filter((category) => category.data.length > 0);
-
-            return {
-              ...tab,
-              categories: filteredCategories,
-            };
-          }
-
-          // Check if tab has direct items
-          if (tab.items) {
-            const filteredItems = tab.items.filter((item) =>
-              item.label.toLowerCase().includes(searchText.toLowerCase()),
-            );
-
-            return {
-              ...tab,
-              items: filteredItems,
-            };
-          }
-
-          return tab;
-        });
-
-        setFilteredTabs(filtered);
-      } else {
-        setFilteredTabs(tabs);
-      }
-    }
-
-    // Call external search handler if provided
-    if (onSearch) {
-      onSearch(searchText);
-    }
-  }, [searchText, items, categories, tabs, onSearch]);
+    onSearch?.(searchText);
+  }, [onSearch, searchText]);
 
   // Update active tab when selectedTabId changes
   useEffect(() => {
@@ -313,16 +239,6 @@ const ModernDropdown = memo((props: ModernDropdownProps) => {
   const handleSelectItem = (item: SegmentItem) => {
     // Trigger haptic feedback
     Haptics.selectionAsync();
-
-    // Animate the pressed item
-    setItemPress(item.id);
-    setTimeout(() => setItemPress(null), 300);
-
-    // Animate button scale
-    buttonScale.value = withSequence(
-      withTiming(0.95, { duration: 100 }),
-      withTiming(1, { duration: 100 }),
-    );
 
     // Call the selection callback
     if (onSelectItem) {

@@ -21,7 +21,7 @@ import { gradesDataService } from '@/services/gradesService';
 import { scheduleService } from '@/services/scheduleService';
 import { secureStorageService } from '@/services/secureStorageService';
 import { updateService } from '@/services/updateService';
-import { getAssignments } from '@/utils/assignmentStorage';
+import { getAssignments, refreshAssignmentCounts } from '@/utils/assignmentStorage';
 import { initializeNotifications, scheduleAllNotifications } from '@/utils/notificationUtils';
 
 import authService from '../services/authService';
@@ -131,6 +131,7 @@ export default function RootLayout() {
     const bootstrapSchedule = async () => {
       try {
         await scheduleService.ready();
+        await refreshAssignmentCounts();
         await scheduleService.refreshGroups(true);
         await scheduleService.ensureSelectedGroup();
         await scheduleService.refreshSchedule(true);

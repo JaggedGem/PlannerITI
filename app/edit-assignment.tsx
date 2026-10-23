@@ -46,16 +46,10 @@ import {
   updateAssignment,
 } from '../utils/assignmentStorage';
 
-// Import the components from new-assignment.tsx
-// For a real app, these would be separated into their own files
-// Interface for ExtendedSubject
 interface ExtendedSubject extends Subject {
   isCustomPeriod?: boolean;
   color?: string;
 }
-
-// ✂️ Custom toggle component and other components from new-assignment.tsx would be here
-// For brevity, I'm not including them in this example as they would be identical
 
 // Key to store highlighted assignment IDs
 // const HIGHLIGHTED_ASSIGNMENTS_KEY = 'highlighted_assignments';

@@ -2,7 +2,7 @@ import { Ionicons } from '@react-native-vector-icons/ionicons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 
 import {
   ActivityIndicator,
@@ -39,8 +39,7 @@ export default function ArchiveView({
 
   // State for lazy loading
   const [visibleItems, setVisibleItems] = useState(15);
-  const [hasMore, setHasMore] = useState(true);
-  const isLoadingMoreRef = useRef(false);
+  const hasMore = visibleItems < assignments.length;
 
   // Group assignments by month
   const groupedAssignments = useMemo(() => {
@@ -78,22 +77,8 @@ export default function ArchiveView({
 
   // Handle loading more items
   const loadMoreItems = useCallback(() => {
-    if (isLoadingMoreRef.current || !hasMore) return;
-
-    isLoadingMoreRef.current = true;
-
-    // Simulate delay to avoid UI jank
-    setTimeout(() => {
-      setVisibleItems((prev) => {
-        const newValue = prev + 10;
-        if (newValue >= assignments.length) {
-          setHasMore(false);
-        }
-        return newValue;
-      });
-      isLoadingMoreRef.current = false;
-    }, 100);
-  }, [hasMore, assignments.length]);
+    if (hasMore) setVisibleItems((count) => count + 10);
+  }, [hasMore]);
 
   // Handle scroll to detect when to load more
   const handleScroll = useCallback(

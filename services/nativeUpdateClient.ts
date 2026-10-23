@@ -57,6 +57,7 @@ export class NativeUpdateClient {
     if (!this.module) {
       try {
         // require must remain inside this guard: the library creates a Nitro hybrid object on import.
+        // eslint-disable-next-line @typescript-eslint/no-require-imports -- Nitro must load only after the runtime guard.
         this.module = require('@rnforge/react-native-in-app-updates') as NativeModule;
       } catch (error) {
         this.moduleUnavailable = true;

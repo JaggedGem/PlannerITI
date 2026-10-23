@@ -1,42 +1,19 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
 
 import { Translation, translations } from '@/constants/Translations';
 import { scheduleService } from '@/services/scheduleService';
 
 export type Translate = <K extends keyof Translation>(key: K) => Translation[K];
 
+const subscribeToLanguage = (listener: () => void) => scheduleService.subscribe(listener);
+const getLanguageSnapshot = () => scheduleService.getSettings().language;
+
 export function useTranslation() {
-  const [currentLanguage, setCurrentLanguage] = useState(scheduleService.getSettings().language);
-
-  useEffect(() => {
-    let unsubscribe: (() => void) | null = null;
-
-    // Initial setup
-    setCurrentLanguage(scheduleService.getSettings().language);
-
-    // Subscribe to settings changes
-    try {
-      unsubscribe = scheduleService.subscribe(() => {
-        try {
-          setCurrentLanguage(scheduleService.getSettings().language);
-        } catch (error) {
-          console.error('Error updating current language:', error);
-        }
-      });
-    } catch (error) {
-      console.error('Error subscribing to schedule service:', error);
-    }
-
-    return () => {
-      if (unsubscribe) {
-        try {
-          unsubscribe();
-        } catch (error) {
-          console.error('Error unsubscribing from schedule service:', error);
-        }
-      }
-    };
-  }, []);
+  const currentLanguage = useSyncExternalStore(
+    subscribeToLanguage,
+    getLanguageSnapshot,
+    getLanguageSnapshot,
+  );
 
   const t = useCallback<Translate>(
     <K extends keyof Translation>(key: K): Translation[K] => {

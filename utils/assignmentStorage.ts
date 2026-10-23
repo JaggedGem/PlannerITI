@@ -1,12 +1,17 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { format, isSameDay, isToday, isTomorrow, parseISO } from 'date-fns';
 
+import * as Crypto from 'expo-crypto';
+
+import type { Translate } from '@/hooks/useTranslation';
+import { Assignment, AssignmentGroup, Subtask } from '@/types/assignment';
+
+import { Period, PeriodAssignmentCount, scheduleService } from '../services/scheduleService';
+import { filterAssignments, matchesAssignmentClass } from './assignmentFiltering';
 import {
-  Period,
-  PeriodAssignmentCount,
-  SubGroupType,
-  scheduleService,
-} from '../services/scheduleService';
+  mutateAssignments,
+  readStoredAssignments,
+  writeStoredAssignments,
+} from './assignmentRepository';
 import {
   cancelForDeletedAssignment,
   handleCompletionStateChange,
@@ -14,64 +19,13 @@ import {
   updateNotificationsForUpdatedAssignment,
 } from './notificationHelper';
 
-// Storage key
-const ASSIGNMENTS_STORAGE_KEY = 'assignments';
-
-// Assignment type enum
-export enum AssignmentType {
-  HOMEWORK = 'Homework',
-  TEST = 'Test',
-  EXAM = 'Exam',
-  PROJECT = 'Project',
-  QUIZ = 'Quiz',
-  LAB = 'Lab',
-  ESSAY = 'Essay',
-  PRESENTATION = 'Presentation',
-  OTHER = 'Other',
-}
-
-// Assignment interface
-export interface Assignment {
-  id: string;
-  title: string;
-  description: string;
-  courseCode: string;
-  courseName: string;
-  dueDate: string; // ISO date string
-  isCompleted: boolean;
-  isPriority: boolean;
-  assignmentType: AssignmentType; // Type of assignment
-  periodId?: string; // Optional period ID from scheduleService
-  subjectId?: string; // Optional subject ID from scheduleService
-  isOrphaned?: boolean; // Flag to mark if the assignment's subject no longer exists in current group
-  subtasks?: Subtask[]; // Optional array of subtasks
-}
-
-// Subtask interface
-export interface Subtask {
-  id: string;
-  title: string;
-  isCompleted: boolean;
-}
-
-// Assignment group interface for grouping by date
-export interface AssignmentGroup {
-  title: string;
-  date: string;
-  assignments: Assignment[];
-}
+export { AssignmentType } from '@/types/assignment';
+export type { Assignment, AssignmentGroup, Subtask } from '@/types/assignment';
 
 // Get all assignments
 export const getAssignments = async (): Promise<Assignment[]> => {
   try {
-    const assignmentsJson = await AsyncStorage.getItem(ASSIGNMENTS_STORAGE_KEY);
-    const assignments = assignmentsJson ? JSON.parse(assignmentsJson) : [];
-
-    // Ensure backward compatibility with older assignments without a type
-    return assignments.map((assignment: any) => ({
-      ...assignment,
-      assignmentType: assignment.assignmentType || AssignmentType.HOMEWORK, // Default to HOMEWORK for older entries
-    }));
+    return await readStoredAssignments();
   } catch (error) {
     console.error('Error getting assignments:', error);
     return [];
@@ -79,13 +33,7 @@ export const getAssignments = async (): Promise<Assignment[]> => {
 };
 
 // Save assignments
-export const saveAssignments = async (assignments: Assignment[]): Promise<void> => {
-  try {
-    await AsyncStorage.setItem(ASSIGNMENTS_STORAGE_KEY, JSON.stringify(assignments));
-  } catch (error) {
-    console.error('Error saving assignments:', error);
-  }
-};
+export const saveAssignments = writeStoredAssignments;
 
 // Helper function to update assignment counts in schedule service
 const updateAssignmentCountsInSchedule = async () => {
@@ -160,97 +108,66 @@ const updateAssignmentCountsInSchedule = async () => {
   }
 };
 
-// Add a new assignment
 export const addAssignment = async (
   assignment: Omit<Assignment, 'id' | 'isCompleted'>,
 ): Promise<Assignment> => {
   const newAssignment: Assignment = {
     ...assignment,
-    id: Date.now().toString(),
+    id: Crypto.randomUUID(),
     isCompleted: false,
     subtasks: assignment.subtasks || [],
   };
-
-  const assignments = await getAssignments();
-  assignments.push(newAssignment);
-  await saveAssignments(assignments);
-
-  // Schedule notifications for the new assignment only
+  await mutateAssignments((assignments) => assignments.push(newAssignment));
   await scheduleForNewAssignment(newAssignment);
-
-  // Update assignment counts
   await updateAssignmentCountsInSchedule();
-
   return newAssignment;
 };
 
-// Toggle assignment completion
 export const toggleAssignmentCompletion = async (id: string): Promise<void> => {
-  const assignments = await getAssignments();
-  const index = assignments.findIndex((a) => a.id === id);
-
-  if (index !== -1) {
-    const wasCompleted = assignments[index].isCompleted;
-    assignments[index].isCompleted = !wasCompleted;
-
-    // If marking as completed, also mark all subtasks as completed
-    if (!wasCompleted && assignments[index].subtasks && assignments[index].subtasks.length > 0) {
-      assignments[index].subtasks = assignments[index].subtasks.map((subtask) => ({
+  const result = await mutateAssignments((assignments) => {
+    const assignment = assignments.find((item) => item.id === id);
+    if (!assignment) return null;
+    const wasCompleted = assignment.isCompleted;
+    assignment.isCompleted = !wasCompleted;
+    if (!wasCompleted) {
+      assignment.subtasks = assignment.subtasks?.map((subtask) => ({
         ...subtask,
         isCompleted: true,
       }));
     }
-
-    await saveAssignments(assignments);
-
-    // Handle notifications based on completion state
-    await handleCompletionStateChange(assignments[index], wasCompleted, id);
-
-    // Update assignment counts
-    await updateAssignmentCountsInSchedule();
-  }
+    return { assignment, wasCompleted };
+  });
+  if (!result) return;
+  await handleCompletionStateChange(result.assignment, result.wasCompleted, id);
+  await updateAssignmentCountsInSchedule();
 };
 
-// Delete assignment
 export const deleteAssignment = async (id: string): Promise<void> => {
-  const assignments = await getAssignments();
-  const updatedAssignments = assignments.filter((a) => a.id !== id);
-  await saveAssignments(updatedAssignments);
-
-  // Cancel notifications for deleted assignment
+  await mutateAssignments((assignments) => {
+    const index = assignments.findIndex((assignment) => assignment.id === id);
+    if (index !== -1) assignments.splice(index, 1);
+  });
   await cancelForDeletedAssignment(id);
-
-  // Update assignment counts
   await updateAssignmentCountsInSchedule();
 };
 
-// Update an assignment
 export const updateAssignment = async (id: string, updates: Partial<Assignment>): Promise<void> => {
-  const assignments = await getAssignments();
-  const index = assignments.findIndex((a) => a.id === id);
-
-  if (index !== -1) {
-    const updatedAssignment = { ...assignments[index], ...updates };
-    assignments[index] = updatedAssignment;
-    await saveAssignments(assignments);
-
-    // Reschedule notifications for the updated assignment
-    await updateNotificationsForUpdatedAssignment(id, updatedAssignment);
-
-    // Update assignment counts
-    await updateAssignmentCountsInSchedule();
-  }
-};
-
-// Initialize the assignment counts when module is loaded
-(async () => {
+  const updated = await mutateAssignments((assignments) => {
+    const index = assignments.findIndex((assignment) => assignment.id === id);
+    if (index === -1) return null;
+    const assignment = { ...assignments[index], ...updates, id };
+    assignments[index] = assignment;
+    return assignment;
+  });
+  if (!updated) return;
+  await updateNotificationsForUpdatedAssignment(id, updated);
   await updateAssignmentCountsInSchedule();
-})();
+};
 
 // Group assignments by date
 export const groupAssignmentsByDate = (
   assignments: Assignment[],
-  t?: any,
+  t?: Translate,
   formatDate?: (date: Date, options: Intl.DateTimeFormatOptions) => string,
 ): AssignmentGroup[] => {
   // Create a map to group assignments by date
@@ -264,7 +181,7 @@ export const groupAssignmentsByDate = (
   // Group assignments by day
   sortedAssignments.forEach((assignment) => {
     const dueDate = new Date(assignment.dueDate);
-    let dateKey = format(dueDate, 'yyyy-MM-dd');
+    const dateKey = format(dueDate, 'yyyy-MM-dd');
 
     if (!groupMap.has(dateKey)) {
       groupMap.set(dateKey, []);
@@ -432,104 +349,33 @@ export const getAssignmentsForCourseAndDate = async (
   }
 };
 
-// Handle orphaned assignments when a group changes
-export const handleGroupChange = async (groupId?: string | SubGroupType): Promise<boolean> => {
+// Reconcile subjects against the latest persisted assignments, preserving concurrent edits.
+export const handleGroupChange = async (groupId?: string): Promise<boolean> => {
   try {
-    const assignments = await getAssignments();
-    let hasChanges = false;
-
-    // FORCE REFRESH the subjects for the new group
-    const currentSubjects = await scheduleService.refreshSubjects();
-
-    // Create subject ID and name sets for faster lookups
-    const subjectIds = new Set(currentSubjects.map((s) => s.id));
-    const subjectNames = new Set(currentSubjects.map((s) => s.name.toLowerCase()));
-
-    // Process each assignment
-    const updatedAssignments = await Promise.all(
-      assignments.map(async (assignment) => {
-        // First check if this is an orphaned assignment that should be restored
-        if (assignment.isOrphaned) {
-          // Check if subject ID exists in current group
-          const idExists = assignment.subjectId && subjectIds.has(assignment.subjectId);
-
-          // Check if subject name exists in current group
-          const nameExists =
-            assignment.courseName && subjectNames.has(assignment.courseName.toLowerCase());
-
-          // If either ID or name match, restore the assignment
-          if (idExists || nameExists) {
-            // If name matches but ID doesn't, update the ID
-            if (!idExists && nameExists && assignment.courseName) {
-              // Find the subject with matching name
-              const matchedSubject = currentSubjects.find(
-                (s) => s.name.toLowerCase() === assignment.courseName?.toLowerCase(),
-              );
-
-              if (matchedSubject) {
-                hasChanges = true;
-                return {
-                  ...assignment,
-                  subjectId: matchedSubject.id,
-                  isOrphaned: false,
-                };
-              }
-            } else {
-              // Direct ID match - just restore
-              hasChanges = true;
-              return {
-                ...assignment,
-                isOrphaned: false,
-              };
-            }
-          }
-
-          return assignment;
-        } else {
-          // For non-orphaned assignments, check if they should become orphaned
-          // Check if subject ID exists in current group
-          const idExists = assignment.subjectId && subjectIds.has(assignment.subjectId);
-
-          // Check if subject name exists in current group
-          const nameExists =
-            assignment.courseName && subjectNames.has(assignment.courseName.toLowerCase());
-
-          // If neither ID nor name match, mark as orphaned
-          if (!idExists && !nameExists) {
-            hasChanges = true;
-            return {
-              ...assignment,
-              isOrphaned: true,
-            };
-          } else if (!idExists && nameExists) {
-            // If name matches but ID doesn't, update the ID
-            const matchedSubject = currentSubjects.find(
-              (s) => s.name.toLowerCase() === assignment.courseName?.toLowerCase(),
-            );
-
-            if (matchedSubject) {
-              hasChanges = true;
-              return {
-                ...assignment,
-                subjectId: matchedSubject.id,
-                isOrphaned: false,
-              };
-            }
-          }
-
-          // Subject exists, no changes needed
-          return assignment;
-        }
-      }),
+    const subjects = await scheduleService.refreshSubjects(groupId);
+    // A failed/offline refresh also returns an empty list; preserve assignments in that case.
+    if (subjects.length === 0) return false;
+    const subjectIds = new Set(subjects.map((subject) => subject.id));
+    const subjectByName = new Map(
+      subjects.map((subject) => [subject.name.trim().toLowerCase(), subject]),
     );
-
-    // Save changes if any assignments were updated
-    if (hasChanges) {
-      await saveAssignments(updatedAssignments);
-    }
-
-    return hasChanges;
-  } catch {
+    return await mutateAssignments((assignments) => {
+      let changed = false;
+      for (let index = 0; index < assignments.length; index += 1) {
+        const assignment = assignments[index];
+        const idMatches = assignment.subjectId && subjectIds.has(assignment.subjectId);
+        const matched = subjectByName.get(assignment.courseName.trim().toLowerCase());
+        const isOrphaned = !idMatches && !matched;
+        const subjectId = idMatches ? assignment.subjectId : (matched?.id ?? assignment.subjectId);
+        if (Boolean(assignment.isOrphaned) !== isOrphaned || assignment.subjectId !== subjectId) {
+          assignments[index] = { ...assignment, subjectId, isOrphaned };
+          changed = true;
+        }
+      }
+      return changed;
+    });
+  } catch (error) {
+    console.error('Error reconciling assignment subjects:', error);
     return false;
   }
 };
@@ -539,229 +385,87 @@ export const refreshAssignmentCounts = async (): Promise<void> => {
   await updateAssignmentCountsInSchedule();
 };
 
-// Add a new subtask to an assignment
-export const addSubtask = async (
-  assignmentId: string,
-  subtaskTitle: string,
-): Promise<Subtask | null> => {
-  const assignments = await getAssignments();
-  const index = assignments.findIndex((a) => a.id === assignmentId);
+export const addSubtask = async (assignmentId: string, title: string): Promise<Subtask | null> =>
+  mutateAssignments((assignments) => {
+    const assignment = assignments.find((item) => item.id === assignmentId);
+    if (!assignment) return null;
+    const subtask: Subtask = { id: Crypto.randomUUID(), title, isCompleted: false };
+    assignment.subtasks = [...(assignment.subtasks || []), subtask];
+    return subtask;
+  });
 
-  if (index !== -1) {
-    const newSubtask: Subtask = {
-      id: Date.now().toString(),
-      title: subtaskTitle,
-      isCompleted: false,
-    };
-
-    // Initialize subtasks array if it doesn't exist
-    if (!assignments[index].subtasks) {
-      assignments[index].subtasks = [];
-    }
-
-    assignments[index].subtasks!.push(newSubtask);
-    await saveAssignments(assignments);
-
-    return newSubtask;
-  }
-
-  return null;
-};
-
-// Toggle subtask completion status
 export const toggleSubtaskCompletion = async (
   assignmentId: string,
   subtaskId: string,
 ): Promise<void> => {
-  const assignments = await getAssignments();
-  const assignmentIndex = assignments.findIndex((a) => a.id === assignmentId);
-
-  if (assignmentIndex !== -1 && assignments[assignmentIndex].subtasks) {
-    const subtaskIndex = assignments[assignmentIndex].subtasks!.findIndex(
-      (s) => s.id === subtaskId,
-    );
-
-    if (subtaskIndex !== -1) {
-      // Toggle completion status
-      assignments[assignmentIndex].subtasks![subtaskIndex].isCompleted =
-        !assignments[assignmentIndex].subtasks![subtaskIndex].isCompleted;
-
-      // NOTE: We're not automatically updating the assignment completion status here anymore,
-      // as this is now handled in the UI component
-
-      await saveAssignments(assignments);
-
-      // Update assignment counts
-      await updateAssignmentCountsInSchedule();
-    }
-  }
+  await mutateAssignments((assignments) => {
+    const subtask = assignments
+      .find((item) => item.id === assignmentId)
+      ?.subtasks?.find((item) => item.id === subtaskId);
+    if (subtask) subtask.isCompleted = !subtask.isCompleted;
+  });
 };
 
-// Delete a subtask
 export const deleteSubtask = async (assignmentId: string, subtaskId: string): Promise<void> => {
-  const assignments = await getAssignments();
-  const assignmentIndex = assignments.findIndex((a) => a.id === assignmentId);
-
-  if (assignmentIndex !== -1 && assignments[assignmentIndex].subtasks) {
-    assignments[assignmentIndex].subtasks = assignments[assignmentIndex].subtasks!.filter(
-      (subtask) => subtask.id !== subtaskId,
-    );
-
-    // We're not updating assignment completion status automatically anymore
-    // This will be handled by the UI component
-
-    await saveAssignments(assignments);
-  }
+  await mutateAssignments((assignments) => {
+    const assignment = assignments.find((item) => item.id === assignmentId);
+    if (assignment?.subtasks)
+      assignment.subtasks = assignment.subtasks.filter((item) => item.id !== subtaskId);
+  });
 };
 
-// Edit a subtask
 export const updateSubtask = async (
   assignmentId: string,
   subtaskId: string,
   updates: Partial<Subtask>,
 ): Promise<void> => {
-  const assignments = await getAssignments();
-  const assignmentIndex = assignments.findIndex((a) => a.id === assignmentId);
-
-  if (assignmentIndex !== -1 && assignments[assignmentIndex].subtasks) {
-    const subtaskIndex = assignments[assignmentIndex].subtasks!.findIndex(
-      (s) => s.id === subtaskId,
-    );
-
-    if (subtaskIndex !== -1) {
-      assignments[assignmentIndex].subtasks![subtaskIndex] = {
-        ...assignments[assignmentIndex].subtasks![subtaskIndex],
-        ...updates,
-      };
-
-      await saveAssignments(assignments);
-    }
-  }
+  await mutateAssignments((assignments) => {
+    const subtask = assignments
+      .find((item) => item.id === assignmentId)
+      ?.subtasks?.find((item) => item.id === subtaskId);
+    if (subtask) Object.assign(subtask, updates, { id: subtaskId });
+  });
 };
 
-// Update all subtasks completion status for an assignment
 export const updateAllSubtaskCompletion = async (
   assignmentId: string,
   isCompleted: boolean,
 ): Promise<void> => {
-  const assignments = await getAssignments();
-  const assignmentIndex = assignments.findIndex((a) => a.id === assignmentId);
-
-  if (
-    assignmentIndex !== -1 &&
-    assignments[assignmentIndex].subtasks &&
-    assignments[assignmentIndex].subtasks.length > 0
-  ) {
-    // Update all subtasks with the specified completion status
-    assignments[assignmentIndex].subtasks = assignments[assignmentIndex].subtasks.map(
-      (subtask) => ({
-        ...subtask,
-        isCompleted,
-      }),
-    );
-
-    await saveAssignments(assignments);
-  }
+  await mutateAssignments((assignments) => {
+    const assignment = assignments.find((item) => item.id === assignmentId);
+    if (assignment?.subtasks)
+      assignment.subtasks = assignment.subtasks.map((subtask) => ({ ...subtask, isCompleted }));
+  });
 };
 
-// Get all subtasks for a specific assignment directly from storage
 export const getSubtasksForAssignment = async (assignmentId: string): Promise<Subtask[]> => {
   const assignments = await getAssignments();
-  const assignment = assignments.find((a) => a.id === assignmentId);
-
-  if (assignment && assignment.subtasks) {
-    return assignment.subtasks;
-  }
-
-  return [];
+  return assignments.find((assignment) => assignment.id === assignmentId)?.subtasks || [];
 };
 
-// New function to get assignments with date, time, and subject filters
+interface AssignmentTimeRange {
+  startTime?: string;
+  endTime?: string;
+}
+
 export const getFilteredAssignments = async (
   dateFilter?: Date | null,
-  timeRange?: { startTime?: string; endTime?: string } | null,
+  timeRange?: AssignmentTimeRange | null,
   subjectId?: string | null,
 ): Promise<Assignment[]> => {
-  try {
-    const assignments = await getAssignments();
-
-    return assignments.filter((assignment) => {
-      // Apply date filter if provided
-      if (dateFilter) {
-        const assignmentDate = new Date(assignment.dueDate);
-        // Check if dates match (ignoring time)
-        if (!isSameDay(assignmentDate, dateFilter)) {
-          return false;
-        }
-      }
-
-      // Apply subject filter if provided
-      if (subjectId && assignment.subjectId !== subjectId) {
-        return false;
-      }
-
-      // Apply time range filter if provided
-      if (timeRange) {
-        // If we have a periodId, we can check if the period falls within the time range
-        if (assignment.periodId) {
-          // Get the period details
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const period = getPeriodById(assignment.periodId);
-          // This is a Promise, so we need to handle it differently
-          // For now, skip time filtering for period-based assignments
-          // A better approach would be to move this function outside the filter
-          return true;
-        } else {
-          // For assignments with no period, assume they match the time range
-          // This could be improved if assignments had a specific time field
-          return true;
-        }
-      }
-
-      // If all filters pass or no filters were provided, include the assignment
-      return true;
-    });
-  } catch (error) {
-    console.error('Error getting filtered assignments:', error);
-    return [];
-  }
+  const assignments = await getAssignments();
+  const periods = timeRange?.startTime || timeRange?.endTime ? await getSchedulePeriods() : [];
+  return filterAssignments(assignments, periods, { date: dateFilter, ...timeRange, subjectId });
 };
 
-// Get assignments for a specific date with time range filtering
 export const getAssignmentsForDate = async (
   date: Date,
-  timeRange?: { startTime?: string; endTime?: string },
+  timeRange?: AssignmentTimeRange,
 ): Promise<Assignment[]> => {
-  try {
-    const allAssignments = await getAssignments();
-
-    return allAssignments.filter((assignment) => {
-      const assignmentDate = new Date(assignment.dueDate);
-
-      // Check if the assignment is due on the specified date
-      if (!isSameDay(assignmentDate, date)) {
-        return false;
-      }
-
-      // Apply time range filter if provided
-      if (timeRange) {
-        // If we have a periodId, we can check if the period falls within the time range
-        if (assignment.periodId) {
-          // This would need async handling, which can't be done inside a filter
-          // For simplicity, we're skipping detailed time range filtering here
-          return true;
-        }
-      }
-
-      return !assignment.isCompleted;
-    });
-  } catch (error) {
-    console.error('Error getting assignments for date:', error);
-    return [];
-  }
+  const assignments = await getFilteredAssignments(date, timeRange);
+  return assignments.filter((assignment) => !assignment.isCompleted);
 };
 
-// Improved version that properly handles async period lookup
 export const getAssignmentsForTimeRange = async (
   date: Date,
   startTime?: string,
@@ -769,57 +473,18 @@ export const getAssignmentsForTimeRange = async (
   subjectId?: string,
   courseCode?: string,
 ): Promise<Assignment[]> => {
-  try {
-    const allAssignments = await getAssignments();
-    const periods = await getSchedulePeriods();
-
-    // Filter assignments
-    const filteredAssignments = [];
-
-    for (const assignment of allAssignments) {
-      // Skip completed assignments
-      if (assignment.isCompleted) continue;
-
-      // Check date match
-      const assignmentDate = new Date(assignment.dueDate);
-      if (!isSameDay(assignmentDate, date)) continue;
-
-      // Check subject match if specified
-      if (subjectId && assignment.subjectId && assignment.subjectId !== subjectId) continue;
-
-      // Check course code match if specified
-      if (courseCode && assignment.courseCode !== courseCode) continue;
-
-      // If both subject and course filters are provided, at least one should match
-      if (
-        subjectId &&
-        courseCode &&
-        assignment.subjectId !== subjectId &&
-        assignment.courseCode !== courseCode
-      )
-        continue;
-
-      // Check time range if specified
-      if (startTime && endTime && assignment.periodId) {
-        const period = periods.find((p) => p._id === assignment.periodId);
-        if (!period) continue;
-
-        // Check if period overlaps with the time range
-        if (period.starttime > endTime || period.endtime < startTime) continue;
-      }
-
-      // Assignment passed all filters
-      filteredAssignments.push(assignment);
-    }
-
-    return filteredAssignments;
-  } catch (error) {
-    console.error('Error getting assignments for time range:', error);
-    return [];
-  }
+  const assignments = await getAssignments();
+  const periods = startTime || endTime ? await getSchedulePeriods() : [];
+  return filterAssignments(assignments, periods, {
+    date,
+    startTime,
+    endTime,
+    subjectId,
+    courseCode,
+    incompleteOnly: true,
+  });
 };
 
-// Get assignments specifically for a class/subject on a specific date and time
 export const getAssignmentsForClass = async (
   date: Date,
   subjectId: string,
@@ -827,63 +492,8 @@ export const getAssignmentsForClass = async (
   startTime?: string,
   endTime?: string,
 ): Promise<Assignment[]> => {
-  try {
-    const allAssignments = await getAssignments();
-
-    // Normalize and clean class name for better matching
-    const normalizedClassName = className?.trim().toLowerCase() || '';
-
-    // Extract potential course code from the class name
-    // Typically, course codes are at the beginning of the class name (e.g., "CS101: Intro to Programming")
-    const potentialCourseCode = normalizedClassName.split(':')[0].trim();
-
-    // Filter assignments
-    return allAssignments.filter((assignment) => {
-      // Skip completed assignments
-      if (assignment.isCompleted) return false;
-
-      // Check date match
-      const assignmentDate = new Date(assignment.dueDate);
-      if (!isSameDay(assignmentDate, date)) return false;
-
-      // Normalize assignment values for comparison
-      const normalizedCourseName = assignment.courseName?.trim().toLowerCase() || '';
-      const normalizedCourseCode = assignment.courseCode?.trim().toLowerCase() || '';
-
-      // Subject matching - check with strict comparison
-      const subjectMatches =
-        // 1. Check subject ID (exact match)
-        (assignment.subjectId && assignment.subjectId === subjectId) ||
-        // 2. Check course name (exact match)
-        (normalizedCourseName &&
-          normalizedClassName &&
-          normalizedCourseName === normalizedClassName) ||
-        // 3. Check course code (exact match)
-        (normalizedCourseCode &&
-          potentialCourseCode &&
-          normalizedCourseCode === potentialCourseCode) ||
-        // 4. Check if the course code is contained in the class name (beginning of string)
-        (normalizedCourseCode &&
-          normalizedClassName &&
-          normalizedClassName.startsWith(normalizedCourseCode)) ||
-        // 5. Check if class name contains course name (more permissive, but still helpful)
-        (normalizedCourseName &&
-          normalizedClassName &&
-          normalizedClassName.includes(normalizedCourseName));
-
-      if (!subjectMatches) return false;
-
-      // If time range is specified, only include relevant assignments
-      if (startTime && endTime && assignment.periodId) {
-        // Simplified time matching logic - will add better time range checking in the future
-        // This is fine because we already matched the subject which is the primary concern
-        return true;
-      }
-
-      return true;
-    });
-  } catch (error) {
-    console.error('Error getting assignments for class:', error);
-    return [];
-  }
+  const assignments = await getAssignmentsForTimeRange(date, startTime, endTime);
+  return assignments.filter((assignment) =>
+    matchesAssignmentClass(assignment, subjectId, className),
+  );
 };

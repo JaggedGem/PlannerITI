@@ -19,7 +19,7 @@ const PLACEHOLDER_RESPONSE = '<planneriti-placeholder-grades />';
  * @param idnp The student's IDNP (13 digits)
  * @returns Promise with the login response
  */
-export const loginWithIdnp = async (idnp: string, signal?: AbortSignal): Promise<any> => {
+export const loginWithIdnp = async (idnp: string, signal?: AbortSignal): Promise<string> => {
   if (idnp === PLACEHOLDER_IDNP) {
     return PLACEHOLDER_RESPONSE;
   }
@@ -51,9 +51,6 @@ export const loginWithIdnp = async (idnp: string, signal?: AbortSignal): Promise
     }
 
     return await response.text();
-  } catch (error) {
-    // Silently handle errors
-    throw error;
   } finally {
     clearTimeout(timeoutId);
     if (signal) {
@@ -72,13 +69,7 @@ export const fetchStudentInfo = async (idnp: string, signal?: AbortSignal): Prom
     return PLACEHOLDER_RESPONSE;
   }
 
-  try {
-    // POST request returns the HTML directly
-    return await loginWithIdnp(idnp, signal);
-  } catch (error) {
-    // Silently handle errors
-    throw error;
-  }
+  return loginWithIdnp(idnp, signal);
 };
 
 // Interfaces for parsed data

@@ -5,7 +5,7 @@ const { defineConfig } = require('eslint/config');
 module.exports = defineConfig([
   expoConfig,
   {
-    ignores: ['dist/**'],
+    ignores: ['dist/**', 'work/**'],
   },
   {
     files: ['**/*.{js,jsx,ts,tsx}'],
@@ -15,12 +15,15 @@ module.exports = defineConfig([
       'no-unreachable': 'error',
       'no-var': 'error',
       'prefer-const': 'error',
-      '@typescript-eslint/no-explicit-any': 'error',
       'react-hooks/immutability': 'off',
       'react-hooks/refs': 'off',
       'react-hooks/purity': 'error',
       'react-hooks/set-state-in-effect': 'error',
     },
+  },
+  {
+    files: ['**/*.{ts,tsx}'],
+    rules: { '@typescript-eslint/no-explicit-any': 'error' },
   },
   eslintConfigPrettier,
 ]);

@@ -1008,21 +1008,6 @@ export default function DayView() {
       </View>
     );
   };
-  // todo: do something with this, maybe show in period details or something? currently unused
-  // const isCurrentTimeSlot = (startTime: string, endTime: string): boolean => {
-  //   const [startHours, startMinutes] = startTime.split(':').map(Number);
-  //   const [endHours, endMinutes] = endTime.split(':').map(Number);
-  //   const currentHours = currentTime.getHours();
-  //   const currentMinutes = currentTime.getMinutes();
-
-  //   const currentTimeInMinutes = currentHours * 60 + currentMinutes;
-  //   const startTimeInMinutes = startHours * 60 + startMinutes;
-  //   const endTimeInMinutes = endHours * 60 + endMinutes;
-
-  //   return currentTimeInMinutes >= startTimeInMinutes &&
-  //     currentTimeInMinutes <= endTimeInMinutes;
-  // };
-
   const isCurrentTimeInSchedule = (item: ScheduleItem): boolean => {
     // First check if selected date is today
     const today = new Date();
