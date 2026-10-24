@@ -21,7 +21,7 @@ const AUTH_STATE_CHANGE_EVENT = 'auth_state_changed';
 const SKIP_LOGIN_KEY = '@planner_skip_login';
 const LOGIN_DISMISSED_KEY = '@login_notification_dismissed';
 const AUTH_VERSION_KEY = '@auth_version';
-const CURRENT_AUTH_VERSION = '3'; // Increment this when auth system changes
+const CURRENT_AUTH_VERSION = '4'; // Increment this when auth system changes
 
 // Add timeout constants for network requests
 const USER_PROFILE_TTL_MS = 5 * 60 * 1000;

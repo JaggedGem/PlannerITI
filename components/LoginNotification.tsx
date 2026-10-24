@@ -151,7 +151,7 @@ export default function LoginNotification() {
         <LinearGradient
           colors={
             darkMode
-              ? [theme.primaryStrong, theme.loginTopDark]
+              ? [theme.primaryStrong, theme.loginTopLight]
               : [theme.loginTopLight, theme.primaryStrong]
           }
           start={{ x: 0, y: 0 }}
