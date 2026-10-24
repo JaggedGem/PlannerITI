@@ -31,6 +31,7 @@ import { contentLayout } from '@/components/ui/ContentLayout';
 import { Colors } from '@/constants/Colors';
 import { translations } from '@/constants/Translations';
 import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
+import { useSubjectColors } from '@/hooks/useSubjectColors';
 import { useTimeUpdate } from '@/hooks/useTimeUpdate';
 import { useTranslation } from '@/hooks/useTranslation';
 import {
@@ -158,6 +159,7 @@ type ScheduleItem = {
   period?: string;
   assignmentCount: number;
   subjectId?: string;
+  colorSubjectId?: string;
   group?: string;
   isEvenWeek?: boolean;
   isCustom?: boolean;
@@ -292,6 +294,7 @@ export default function DayView() {
   const [selectedDate, setSelectedDate] = useState(getInitialSelectedDate);
   const [settings, setSettings] = useState(scheduleService.getSettings());
   const [todaySchedule, setTodaySchedule] = useState<ScheduleItem[]>([]);
+  const getSubjectPresentation = useSubjectColors(scheduleData, settings, todaySchedule);
   const [thesisSchedule, setThesisSchedule] = useState<SpecialScheduleResponse | null>(null);
   const [examSchedule, setExamSchedule] = useState<SpecialScheduleResponse | null>(null);
   const [academicCalendar, setAcademicCalendar] = useState<GraficPeGroup | null>(null);
@@ -1785,7 +1788,7 @@ export default function DayView() {
               const isPeriodExpanded = item.period ? expandedPeriods[item.period] : false;
               const periodAssignmentsList = item.period ? periodAssignments[item.period] || [] : [];
               const thesisMatches = getThesisEventsForItem(item);
-              const periodColor = getSubjectColor(item.className);
+              const periodColor = getSubjectPresentation(item).accent;
 
               return (
                 <View
@@ -1855,18 +1858,14 @@ export default function DayView() {
                                 },
                               ]}
                             >
-                              <Ionicons
-                                name="chevron-down"
-                                size={14}
-                                color={getSubjectColor(item.className)}
-                              />
+                              <Ionicons name="chevron-down" size={14} color={periodColor} />
                             </Animated.View>
                           ) : (
                             <View
                               style={[
                                 styles.timeDot,
                                 {
-                                  backgroundColor: getSubjectColor(item.className),
+                                  backgroundColor: periodColor,
                                 },
                               ]}
                             />
@@ -2116,21 +2115,6 @@ export default function DayView() {
       </View>
     </View>
   );
-}
-
-// Function to generate consistent colors for subjects
-function getSubjectColor(subjectName: string): string {
-  const colors = Colors.dark.dayViewSubjectColors;
-
-  // Generate a number from the subject name
-  let hash = 0;
-  for (let i = 0; i < subjectName.length; i++) {
-    hash = subjectName.charCodeAt(i) + ((hash << 5) - hash);
-  }
-
-  // Use the hash to pick a color
-  const index = Math.abs(hash) % colors.length;
-  return colors[index];
 }
 
 function withAlpha(hexColor: string, alpha: number): string {

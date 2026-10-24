@@ -1,5 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { sampleSchedule } from '@/test/subjectColorFixtures';
+
 import { scheduleService } from './scheduleService';
 
 jest.mock('@react-native-async-storage/async-storage', () => ({
@@ -88,4 +90,18 @@ it('normalizes unknown schedule payloads and discards invalid events', () => {
   expect(
     scheduleService.normalizeSpecialScheduleDocument({ examStudyYear: 'bad' })?.examStudyYear,
   ).toBeNull();
+});
+
+it('carries upstream subject identity into rendered lessons without changing assignment identifiers', async () => {
+  const data = sampleSchedule();
+  data.data.monday['1'].both[0].subjectid._id = 'stable-subject';
+  const lessons = await scheduleService.getScheduleForDay(data, 'monday');
+  expect(lessons.find((lesson) => lesson.period === '1')?.colorSubjectId).toBe('id:stable-subject');
+  expect(lessons.find((lesson) => lesson.period === '2')?.colorSubjectId).toBe('name:creare web');
+});
+
+it('tags the timetable source group without mutating the cached source object', () => {
+  const data = sampleSchedule();
+  expect(scheduleService.transformScheduleData(data, 'group-a').colorGroupId).toBe('group-a');
+  expect(data.colorGroupId).toBeUndefined();
 });

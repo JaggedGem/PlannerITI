@@ -15,6 +15,7 @@ import {
 import { isRecord } from '@/utils/json';
 import { formatMessage, formatTranslatedWeekday } from '@/utils/localization';
 import { clearNextClassCache } from '@/utils/nextClassCache';
+import { subjectColorId } from '@/utils/subjectColors/semantics';
 
 import { fetchCustomApi } from '../utils/customApi';
 
@@ -49,6 +50,8 @@ export interface ScheduleItem {
   _id: string;
   subjectid: {
     name: string;
+    _id?: string;
+    id?: string;
   };
   teacherids: {
     name: string;
@@ -83,6 +86,8 @@ export interface PeriodAssignmentCount {
 }
 
 export interface ApiResponse {
+  /** Identifies the source dataset while a group switch is loading. */
+  colorGroupId?: string;
   data: {
     monday: { [key: string]: DaySchedule };
     tuesday: { [key: string]: DaySchedule };
@@ -1289,22 +1294,22 @@ export const scheduleService = {
 
       // Return cached data as schedule response
       if (cachedData) {
-        return this.transformScheduleData(cachedData);
+        return this.transformScheduleData(cachedData, id);
       }
 
       // If no cached data, try to fetch (this will only happen on first run)
       const freshData = await this.fetchAndCacheSchedule(id);
-      return this.transformScheduleData(freshData);
+      return this.transformScheduleData(freshData, id);
     } catch {
       const cachedData = await this.getCachedSchedule(id);
       if (cachedData) {
-        return this.transformScheduleData(cachedData);
+        return this.transformScheduleData(cachedData, id);
       }
-      return this.transformScheduleData(this.buildFallbackApiResponseFromDatePeriodTimes());
+      return this.transformScheduleData(this.buildFallbackApiResponseFromDatePeriodTimes(), id);
     }
   },
 
-  transformScheduleData(data: ApiResponse): ApiResponse {
+  transformScheduleData(data: ApiResponse, colorGroupId?: string): ApiResponse {
     // Validate input data
     if (!data || !data.data || !data.periods) {
       this.log('Invalid data passed to transformScheduleData');
@@ -1325,6 +1330,7 @@ export const scheduleService = {
     // Create a deep copy of the data
     const transformedData: ApiResponse = {
       ...data,
+      ...(colorGroupId ? { colorGroupId } : {}),
       data: { ...data.data },
     };
 
@@ -1344,7 +1350,7 @@ export const scheduleService = {
       await this.syncPeriodTimes();
 
       // Apply recovery day transformations
-      const transformedData = this.transformScheduleData(data);
+      const transformedData = this.transformScheduleData(data, groupId);
 
       // Extract and store unique subjects
       await this.extractAndStoreSubjects(transformedData);
@@ -2786,6 +2792,7 @@ export const scheduleService = {
       startTime: string;
       endTime: string;
       className: string;
+      colorSubjectId?: string;
       teacherName: string;
       roomNumber: string;
       isEvenWeek?: boolean;
@@ -3034,6 +3041,7 @@ export const scheduleService = {
           startTime: startTime,
           endTime: endTime,
           className: item.subjectid.name,
+          colorSubjectId: subjectColorId(item.subjectid),
           teacherName: item.teacherids.name,
           roomNumber: item.classroomids.name,
           isEvenWeek,
@@ -3086,6 +3094,7 @@ export const scheduleService = {
             roomNumber: '',
             isCustom: true,
             color: customPeriod.color || Colors.dark.customPeriodColor,
+            colorSubjectId: `custom:${customPeriod._id}`,
             assignmentCount,
           });
         }

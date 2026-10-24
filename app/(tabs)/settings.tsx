@@ -1904,6 +1904,37 @@ export default function Settings() {
               </View>
             </View>
 
+            {/* Subgroup Selection Section */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <MaterialIcons
+                  name="groups"
+                  size={24}
+                  color={Colors.dark.green}
+                  style={styles.sectionIcon}
+                />
+                <Text style={styles.sectionTitle}>{t('settings').subGroup}</Text>
+              </View>
+              <View style={styles.optionsContainer}>
+                {SUBGROUPS.map((group) => (
+                  <TouchableOpacity
+                    key={group}
+                    style={[styles.optionButton, settings.group === group && styles.selectedOption]}
+                    onPress={() => handleSubgroupChange(group)}
+                  >
+                    <Text
+                      style={[
+                        styles.optionText,
+                        settings.group === group && styles.selectedOptionText,
+                      ]}
+                    >
+                      {group === 'Subgroup 1' ? t('subgroup').group1 : t('subgroup').group2}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
             {/* App Updates Section */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
@@ -1969,37 +2000,6 @@ export default function Settings() {
             </View>
           </View>
           <View style={hasTwoColumns && contentLayout.column}>
-            {/* Subgroup Selection Section */}
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <MaterialIcons
-                  name="groups"
-                  size={24}
-                  color={Colors.dark.green}
-                  style={styles.sectionIcon}
-                />
-                <Text style={styles.sectionTitle}>{t('settings').subGroup}</Text>
-              </View>
-              <View style={styles.optionsContainer}>
-                {SUBGROUPS.map((group) => (
-                  <TouchableOpacity
-                    key={group}
-                    style={[styles.optionButton, settings.group === group && styles.selectedOption]}
-                    onPress={() => handleSubgroupChange(group)}
-                  >
-                    <Text
-                      style={[
-                        styles.optionText,
-                        settings.group === group && styles.selectedOptionText,
-                      ]}
-                    >
-                      {group === 'Subgroup 1' ? t('subgroup').group1 : t('subgroup').group2}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
             {/* Custom Periods Section */}
             <View style={styles.section}>
               <View style={styles.sectionHeaderWithAction}>

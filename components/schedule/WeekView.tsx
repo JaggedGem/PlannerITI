@@ -28,6 +28,7 @@ import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { Colors } from '@/constants/Colors';
 import { translations } from '@/constants/Translations';
 import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
+import { useSubjectColors } from '@/hooks/useSubjectColors';
 import { useTimeUpdate } from '@/hooks/useTimeUpdate';
 import { useTranslation } from '@/hooks/useTranslation';
 import {
@@ -61,6 +62,7 @@ import { getWeekLayout } from '@/utils/responsiveLayout';
 import { runWhenIdle } from '@/utils/runWhenIdle';
 import { scheduleNavigation } from '@/utils/scheduleNavigation';
 import { filterExamEventsForDate, filterThesisEventsForDate } from '@/utils/specialScheduleUtils';
+import { SubjectPresentation } from '@/utils/subjectColors/colorSpace';
 
 import { getAnimationDependencies } from '../../utils/animationDependencies';
 import AcademicEmptyState, { ExamAgendaCard } from './AcademicEmptyState';
@@ -172,7 +174,7 @@ interface TimetableItemProps {
   top: number;
   height: number;
   hasDetailedCards: boolean;
-  color: string;
+  presentation: SubjectPresentation;
   isActive: boolean;
   isLandscape?: boolean;
 }
@@ -181,7 +183,7 @@ const TimetableItem = ({
   item,
   top,
   height,
-  color,
+  presentation,
   isActive,
   hasDetailedCards,
   isLandscape = false,
@@ -196,24 +198,26 @@ const TimetableItem = ({
         {
           top,
           height: Math.max(height, 35), // Slightly taller minimum height
+          borderWidth: isActive ? 2 : 0,
+          borderColor: presentation.accent,
         },
       ]}
       entering={FadeIn.duration(200).springify().delay(50)}
       exiting={FadeOut.duration(150)}
     >
       <LinearGradient
-        colors={
-          isActive
-            ? [color, `${color}CC`] // More opacity for active
-            : [`${color}99`, `${color}66`]
-        } // Less opacity for inactive
+        colors={presentation.gradient}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={[styles.itemGradient, hasDetailedCards && adaptiveStyles.detailedGradient]}
       >
         <View style={styles.itemHeader}>
           <Text
-            style={[styles.className, hasDetailedCards && adaptiveStyles.detailedClassName]}
+            style={[
+              styles.className,
+              hasDetailedCards && adaptiveStyles.detailedClassName,
+              { color: presentation.foreground },
+            ]}
             numberOfLines={hasDetailedCards && height >= 65 ? 3 : 1}
           >
             {item.className}
@@ -224,6 +228,7 @@ const TimetableItem = ({
           <Text
             style={[
               adaptiveStyles.teacherName,
+              { color: presentation.foreground },
               isLandscape && {
                 position: 'absolute',
                 right: 6,
@@ -239,7 +244,11 @@ const TimetableItem = ({
         )}
         <View style={styles.itemFooter}>
           <Text
-            style={[styles.roomNumber, hasDetailedCards && adaptiveStyles.detailedRoom]}
+            style={[
+              styles.roomNumber,
+              hasDetailedCards && adaptiveStyles.detailedRoom,
+              { color: presentation.foreground },
+            ]}
             numberOfLines={1}
           >
             {item.roomNumber}
@@ -488,6 +497,7 @@ type ScheduleItem = {
   startTime: string;
   endTime: string;
   className: string;
+  colorSubjectId?: string;
   teacherName: string;
   roomNumber: string;
   isEvenWeek?: boolean;
@@ -526,6 +536,7 @@ export default function WeekView() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [settings, setSettings] = useState(scheduleService.getSettings());
+  const getSubjectPresentation = useSubjectColors(scheduleData, settings, weekSchedule);
   const now = new Date();
   const currentDay = now.getDay();
   const isWeekend = currentDay === 0 || currentDay === 6;
@@ -1465,20 +1476,6 @@ export default function WeekView() {
     }
   };
 
-  // Function to get color for a subject with improved color palette
-  const getSubjectColor = (subjectName: string): string => {
-    // More vibrant, design-friendly color palette
-    const colors = Colors.dark.subjectColors;
-
-    let hash = 0;
-    for (let i = 0; i < subjectName.length; i++) {
-      hash = subjectName.charCodeAt(i) + ((hash << 5) - hash);
-    }
-
-    const index = Math.abs(hash) % colors.length;
-    return colors[index];
-  };
-
   // Format week display text
   const weekDisplayText = () => {
     const weekStartFormatted = formatDate(weekStart, {
@@ -1844,10 +1841,7 @@ export default function WeekView() {
                             hourHeight,
                             firstHour,
                           );
-                          const color =
-                            item.isCustom && item.color
-                              ? item.color
-                              : getSubjectColor(item.className);
+                          const presentation = getSubjectPresentation(item);
                           const isActive =
                             isToday && isCurrentTimeSlot(item.startTime, item.endTime);
 
@@ -1857,7 +1851,7 @@ export default function WeekView() {
                               item={item}
                               top={top}
                               height={height}
-                              color={color}
+                              presentation={presentation}
                               isActive={isActive}
                               hasDetailedCards={hasDetailedCards}
                               isLandscape={!isPortrait}
@@ -2235,7 +2229,6 @@ const styles = StyleSheet.create<Styles>({
     color: Colors.dark.white,
     fontSize: 9,
     fontWeight: '500',
-    opacity: 0.9,
     textShadowColor: Colors.dark.overlayBlack50,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
@@ -2344,5 +2337,5 @@ const adaptiveStyles = StyleSheet.create({
   detailedGradient: { padding: 8 },
   detailedClassName: { fontSize: 13, lineHeight: 17 },
   detailedRoom: { fontSize: 11 },
-  teacherName: { color: Colors.dark.white, fontSize: 11, opacity: 0.9 },
+  teacherName: { color: Colors.dark.white, fontSize: 11 },
 });
