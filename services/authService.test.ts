@@ -8,7 +8,7 @@ import authService from './authService';
 import { secureStorageService } from './secureStorageService';
 
 jest.mock('@react-native-async-storage/async-storage', () => ({
-  getItem: jest.fn(async (key: string) => (key === '@auth_version' ? '3' : null)),
+  getItem: jest.fn(async (key: string) => (key === '@auth_version' ? '4' : null)),
   setItem: jest.fn(),
   removeItem: jest.fn(),
 }));
@@ -25,6 +25,11 @@ jest.mock('@/utils/customApi', () => ({ fetchCustomApi: jest.fn() }));
 beforeEach(async () => {
   jest.useFakeTimers();
   jest.setSystemTime(new Date('2026-10-23T12:00:00Z'));
+  jest.resetAllMocks();
+  jest
+    .mocked(AsyncStorage.getItem)
+    .mockImplementation(async (key) => (key === '@auth_version' ? '4' : null));
+  jest.mocked(secureStorageService.getAuthToken).mockResolvedValue('stored-token');
   await authService.logout();
   jest.clearAllMocks();
 });
@@ -141,20 +146,26 @@ it('loads a new login independently of an older in-flight profile request', asyn
 
 it('does not complete a login that was cancelled by logout', async () => {
   let finish!: (response: Response) => void;
-  jest.mocked(fetchCustomApi).mockImplementationOnce(
-    () =>
-      new Promise((resolve) => {
-        finish = resolve;
-      }),
-  );
+  let started!: () => void;
+  const fetching = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  jest.mocked(fetchCustomApi).mockImplementationOnce(() => {
+    started();
+    return new Promise((resolve) => {
+      finish = resolve;
+    });
+  });
   const login = authService.login(user.email, 'test-password');
+  const cancelled = expect(login).rejects.toThrow('Sign-in cancelled');
+  await fetching;
   await authService.logout();
   finish(
     new Response(JSON.stringify({ access_token: 'late-token' }), {
       headers: { 'Content-Type': 'application/json' },
     }),
   );
-  await expect(login).rejects.toThrow('Sign-in cancelled');
+  await cancelled;
   expect(authService.isAuthenticated()).toBe(false);
 });
 
